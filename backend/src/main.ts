@@ -42,6 +42,8 @@ async function bootstrap() {
     const allowedOrigins = configService.get<string>("CORS_ORIGINS")?.split(",") || [
         "http://localhost:3000",
         "http://localhost:5173",
+        "https://seniquapp.netlify.app",
+        "https://seniqu-webapp.netlify.app",
     ]
 
     app.enableCors({
