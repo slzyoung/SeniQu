@@ -49,7 +49,7 @@ async function bootstrap() {
         "https://seniquwebapp.onrender.com",
     ]
 
-    const allowedOrigins = cleanOrigins.length > 0 ? cleanOrigins : defaultOrigins
+    const allowedOrigins = [...new Set([...cleanOrigins, ...defaultOrigins])]
 
     logger.log(`Allowed CORS Origins: ${JSON.stringify(allowedOrigins)}`)
 
