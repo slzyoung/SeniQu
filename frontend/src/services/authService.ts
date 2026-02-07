@@ -467,7 +467,7 @@ class AuthService {
         secureRemove('pkce_verifier');
 
         try {
-            const response = await apiPost<AuthResponse>(API_ENDPOINTS.AUTH_CALLBACK, {
+            const rawResponse = await apiPost<any>(API_ENDPOINTS.AUTH_CALLBACK, {
                 code,
                 // provider: 'google', // Removed: Not expected by backend
                 redirectUri: import.meta.env.PROD
@@ -478,15 +478,26 @@ class AuthService {
                 headers: getSecurityHeaders(),
             });
 
+            // Backend wraps responses in {success, data, meta} envelope
+            // Extract the actual data from the envelope
+            const response = rawResponse?.data || rawResponse;
+
             // Validate response integrity
             if (!validateResponseIntegrity(response)) {
                 throw { message: 'Invalid server response', code: 'RESPONSE_INTEGRITY_ERROR' };
             }
 
-            // Store tokens securely
-            this.storeAuthTokens(response.accessToken, response.refreshToken);
+            // Map user
+            const authResponse: AuthResponse = {
+                user: this.mapBackendUserToFrontend(response.user),
+                accessToken: response.accessToken,
+                refreshToken: response.refreshToken
+            };
 
-            return response;
+            // Store tokens securely
+            this.storeAuthTokens(authResponse.accessToken, authResponse.refreshToken);
+
+            return authResponse;
         } catch (error) {
             throw sanitizeError(error);
         }
@@ -514,7 +525,7 @@ class AuthService {
         }
 
         try {
-            const response = await apiPost<AuthResponse>(
+            const rawResponse = await apiPost<any>(
                 '/auth/privy',
                 {},
                 {
@@ -525,15 +536,26 @@ class AuthService {
                 }
             );
 
+            // Backend wraps responses in {success, data, meta} envelope
+            // Extract the actual data from the envelope
+            const response = rawResponse?.data || rawResponse;
+
             // Validate response integrity
             if (!validateResponseIntegrity(response)) {
                 throw { message: 'Invalid server response', code: 'RESPONSE_INTEGRITY_ERROR' };
             }
 
-            // Store tokens securely
-            this.storeAuthTokens(response.accessToken, response.refreshToken);
+            // Map user
+            const authResponse: AuthResponse = {
+                user: this.mapBackendUserToFrontend(response.user),
+                accessToken: response.accessToken,
+                refreshToken: response.refreshToken
+            };
 
-            return response;
+            // Store tokens securely
+            this.storeAuthTokens(authResponse.accessToken, authResponse.refreshToken);
+
+            return authResponse;
         } catch (error) {
             throw sanitizeError(error);
         }
