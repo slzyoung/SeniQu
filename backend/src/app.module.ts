@@ -3,6 +3,8 @@ import { ConfigModule, ConfigService } from "@nestjs/config"
 import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler"
 import { APP_GUARD } from "@nestjs/core"
 import { configuration, validationSchema } from "./config/configuration"
+import { AppController } from "./app.controller"
+import { AppService } from "./app.service"
 
 // Core Modules
 import { DatabaseModule } from "./database/database.module"
@@ -93,7 +95,9 @@ import { ArtistModule } from "./artist/artist.module"
         NotificationsModule,
         ArtistModule,
     ],
+    controllers: [AppController],
     providers: [
+        AppService,
         // Global rate limiting guard
         {
             provide: APP_GUARD,
