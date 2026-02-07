@@ -8,6 +8,66 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useUIStore } from '../../stores/useUIStore';
 
+/**
+ * CloseButton - A mobile-optimized close button that prevents double-trigger
+ * issues when both touch and click events fire on touch devices.
+ */
+function CloseButton({ onClose }: { onClose?: () => void }) {
+    const touchHandledRef = React.useRef(false);
+
+    const handleClose = React.useCallback(() => {
+        if (onClose) {
+            onClose();
+        }
+    }, [onClose]);
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        e.stopPropagation();
+        // Mark that touch started - we'll handle this in touchEnd
+        touchHandledRef.current = true;
+    };
+
+    const handleTouchEnd = (e: React.TouchEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+
+        if (touchHandledRef.current) {
+            handleClose();
+            // Reset after a short delay to allow next interaction
+            setTimeout(() => {
+                touchHandledRef.current = false;
+            }, 300);
+        }
+    };
+
+    const handleClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+
+        // Only handle click if it wasn't already handled by touch
+        if (!touchHandledRef.current) {
+            handleClose();
+        } else {
+            // Reset the flag for click events that come after touch
+            touchHandledRef.current = false;
+        }
+    };
+
+    return (
+        <button
+            onClick={handleClick}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            type="button"
+            className="relative z-[999] flex items-center justify-center min-w-[48px] min-h-[48px] p-3 rounded-full bg-theme-elevated text-theme-muted hover:text-theme-text active:scale-90 active:bg-theme-surface transition-all touch-manipulation select-none cursor-pointer"
+            aria-label="Close sidebar"
+            style={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+            <ChevronLeft className="w-6 h-6 pointer-events-none" />
+        </button>
+    );
+}
+
 export interface SidebarItem {
     id: string;
     label: string;
@@ -56,17 +116,33 @@ export function Sidebar({
     const isParentActive = (item: SidebarItem) =>
         item.children?.some((child) => location.pathname === child.path);
 
-    const handleClose = async () => {
+    const handleClose = async (e?: React.MouseEvent | React.PointerEvent) => {
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+
+        // Small delay to ensure event propagation completes and UI is stable
+        // This 'async' behavior prevents ghost clicks and ensures reliable closing
+        await new Promise(resolve => setTimeout(resolve, 50));
+
         if (onClose) {
-            // Add small delay for mobile interactions/animations
-            await new Promise(resolve => setTimeout(resolve, 100));
             onClose();
         }
     };
 
     const handleItemClick = async () => {
-        if (variant === 'mobile' && onClose) {
+        if (variant === 'mobile') {
+            // Allow navigation to initiate before closing
+            await new Promise(resolve => setTimeout(resolve, 100));
             await handleClose();
+        }
+    };
+
+    const handleFooterClick = async (e: React.MouseEvent) => {
+        // Allow footer interactions (like logout) to close the sidebar on mobile
+        if (variant === 'mobile') {
+            await handleClose(e);
         }
     };
 
@@ -90,7 +166,7 @@ export function Sidebar({
             {/* Logo / Header */}
             <div className={`
                 flex items-center 
-                ${isMobile ? 'justify-center py-6 h-auto min-h-[64px]' : 'justify-between p-4 h-16 border-b border-theme-border'}
+                ${isMobile ? 'justify-center py-6 h-auto min-h-[64px] pointer-events-auto relative z-[1000]' : 'justify-between p-4 h-16 border-b border-theme-border'}
             `}>
                 {!sidebarCollapsed && !isMobile && (
                     <motion.div
@@ -105,13 +181,7 @@ export function Sidebar({
                 )}
 
                 {isMobile && (
-                    <button
-                        onClick={handleClose}
-                        type="button"
-                        className="p-2 rounded-full bg-theme-elevated text-theme-muted hover:text-theme-text transition-colors"
-                    >
-                        <ChevronLeft className="w-5 h-5" />
-                    </button>
+                    <CloseButton onClose={onClose} />
                 )}
 
                 {variant === 'desktop' && (
@@ -242,9 +312,11 @@ export function Sidebar({
 
             {/* Footer */}
             {footer && (
-                <div className={`
+                <div
+                    onClick={handleFooterClick}
+                    className={`
                     border-t border-theme-border
-                    ${isMobile ? 'p-4 w-full flex justify-center' : 'p-3'}
+                    ${isMobile ? 'p-4 w-full flex justify-center cursor-pointer' : 'p-3'}
                 `}>
                     {footer}
                 </div>

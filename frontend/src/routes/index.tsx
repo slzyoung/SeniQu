@@ -10,7 +10,7 @@ import {
     RouterProvider
 } from 'react-router-dom';
 import { ROUTES, ROLES } from '../lib/constants';
-import { ProtectedRoute } from '../components/common/ProtectedRoute';
+import { ProtectedRoute, PublicOnlyRoute } from '../components/common/ProtectedRoute';
 import { ErrorBoundary } from '../components/common/ErrorBoundary';
 
 // Landing page components (keep existing)
@@ -96,8 +96,12 @@ import { PublicLayout } from '../components/common/PublicLayout';
 const router = createBrowserRouter(
     createRoutesFromElements(
         <Route element={<GlobalLayout />} errorElement={<ErrorBoundary><div>Error loading page</div></ErrorBoundary>}>
-            {/* Public Routes - Landing */}
-            <Route path={ROUTES.HOME} element={<LandingPage />} />
+            {/* Public Routes - Landing - Redirects to dashboard if logged in */}
+            <Route path={ROUTES.HOME} element={
+                <PublicOnlyRoute>
+                    <LandingPage />
+                </PublicOnlyRoute>
+            } />
 
             {/* Auth Routes - Login/Register now use AuthModal on landing page */}
             {/* Redirect old login/register routes to home */}

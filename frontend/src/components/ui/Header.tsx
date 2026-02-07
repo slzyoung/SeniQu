@@ -33,7 +33,7 @@ interface HeaderProps {
 export function Header({ title, subtitle, actions, className = '' }: HeaderProps) {
     const navigate = useNavigate();
     const location = useLocation();
-    const { setSearchOpen, toggleMobileMenu } = useUIStore();
+    const { setSearchOpen, setMobileMenuOpen, mobileMenuOpen } = useUIStore();
     const { user, isAuthenticated, logout } = useAuthStore();
     const { toggleTheme, isDark } = useTheme();
     const [showUserMenu, setShowUserMenu] = React.useState(false);
@@ -52,6 +52,11 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const handleMobileMenuClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setMobileMenuOpen(true);
+    };
+
     return (
         <header
             className={`
@@ -66,8 +71,8 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
             <div className="flex items-center gap-4 flex-1 min-w-0">
                 {/* Mobile Menu Toggle */}
                 <button
-                    onClick={toggleMobileMenu}
-                    className="md:hidden p-2 -ml-2 rounded-full bg-theme-elevated text-theme-muted hover:text-theme-text transition-colors touch-manipulation"
+                    onClick={handleMobileMenuClick}
+                    className={`md:hidden flex items-center justify-center min-w-[44px] min-h-[44px] p-2.5 -ml-2 rounded-full bg-theme-elevated text-theme-muted hover:text-theme-text active:scale-95 transition-all touch-manipulation select-none ${mobileMenuOpen ? 'opacity-0 pointer-events-none' : ''}`}
                     aria-label="Open sidebar"
                     type="button"
                 >

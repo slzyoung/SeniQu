@@ -57,7 +57,7 @@ export function DashboardLayout({
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             onClick={() => setMobileMenuOpen(false)}
-                            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm md:hidden"
+                            className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm md:hidden"
                         />
 
                         {/* Drawer */}
@@ -66,7 +66,7 @@ export function DashboardLayout({
                             animate={{ x: 0 }}
                             exit={{ x: '-100%' }}
                             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                            className="fixed inset-y-0 left-0 z-50 w-[88px] bg-theme-surface shadow-2xl md:hidden border-r border-theme-border flex flex-col items-center"
+                            className="fixed inset-y-0 left-0 z-[65] w-[88px] bg-theme-surface shadow-2xl md:hidden border-r border-theme-border flex flex-col items-center pointer-events-auto"
                         >
                             <Sidebar
                                 sections={sections}
