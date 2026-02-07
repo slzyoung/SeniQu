@@ -32,6 +32,11 @@ const UserMyNFTs = lazy(() => import('../features/user/pages/MyNFTsPage'));
 const UserCommunity = lazy(() => import('../features/user/pages/CommunityPage'));
 
 // Lazy load gallery pages
+// Lazy load collections page
+const CollectionsPage = lazy(() => import('../features/gallery/pages/CollectionsPage'));
+
+// ... (in routes)
+
 const PublicGallery = lazy(() => import('../features/gallery/pages/PublicGallery'));
 const MuseumDetail = lazy(() => import('../features/gallery/pages/MuseumDetail'));
 const ArtworkView = lazy(() => import('../features/gallery/pages/ArtworkView'));
@@ -102,6 +107,7 @@ const router = createBrowserRouter(
             {/* Public Gallery Routes */}
             <Route element={<GalleryLayout />}>
                 <Route path={ROUTES.GALLERY} element={<PublicGallery />} />
+                <Route path='/collections' element={<CollectionsPage />} />
                 <Route path={ROUTES.GALLERY_MUSEUM} element={<MuseumDetail />} />
                 <Route path={ROUTES.GALLERY_ARTWORK} element={<ArtworkView />} />
                 <Route path={ROUTES.NEARBY} element={<NearbyMuseums />} />
