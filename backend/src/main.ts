@@ -39,12 +39,19 @@ async function bootstrap() {
     app.use(cookieParser())
 
     // CORS configuration
-    const allowedOrigins = configService.get<string>("CORS_ORIGINS")?.split(",") || [
+    const rawAllowedOrigins = configService.get<string>("CORS_ORIGINS")?.split(",") || []
+    const cleanOrigins = rawAllowedOrigins.map(origin => origin.trim()).filter(Boolean)
+
+    const defaultOrigins = [
         "http://localhost:3000",
         "http://localhost:5173",
         "https://seniquapp.netlify.app",
-        "https://seniqu-webapp.netlify.app",
+        "https://seniquwebapp.onrender.com",
     ]
+
+    const allowedOrigins = cleanOrigins.length > 0 ? cleanOrigins : defaultOrigins
+
+    logger.log(`Allowed CORS Origins: ${JSON.stringify(allowedOrigins)}`)
 
     app.enableCors({
         origin: allowedOrigins,
