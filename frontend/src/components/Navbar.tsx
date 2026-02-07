@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react';
-import { Wallet, Menu, X, User, LogOut, LayoutDashboard, Image, FolderHeart } from 'lucide-react';
+import { Wallet, User, LogOut, LayoutDashboard, Image, FolderHeart, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { QuickSearch } from './common/QuickSearch';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle } from './ThemeToggle';
 import { useAuthStore } from '../stores/useAuthStore';
 import { useAuthModalStore } from '../stores/useAuthModalStore';
+import { useUIStore } from '../stores/useUIStore';
 import { getDashboardRoute } from '../lib/utils';
 import { ROUTES } from '../lib/constants';
 import { useNavigate } from 'react-router-dom';
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  // Use global UI store for mobile menu state
+  const { mobileMenuOpen, toggleMobileMenu, setMobileMenuOpen } = useUIStore();
   const { openAuthModal } = useAuthModalStore();
   const { isAuthenticated, user, logout } = useAuthStore();
   const navigate = useNavigate();
@@ -26,7 +28,7 @@ export function Navbar() {
 
   const handleLogout = () => {
     logout();
-    setIsMobileMenuOpen(false);
+    setMobileMenuOpen(false);
     navigate(ROUTES.HOME);
   };
 
@@ -137,18 +139,51 @@ export function Navbar() {
             )}
           </div>
 
-          {/* Mobile Menu Toggle */}
+          {/* Mobile Menu Toggle - Animated Hamburger */}
           <div className="md:hidden flex items-center gap-4">
             <ThemeToggle />
             <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="text-theme-text hover:text-gold transition-colors">
-
-              {isMobileMenuOpen ?
-                <X className="w-6 h-6" /> :
-
-                <Menu className="w-6 h-6" />
-              }
+              onClick={toggleMobileMenu}
+              className="relative w-10 h-10 flex items-center justify-center text-theme-text hover:text-gold transition-colors focus:outline-none"
+              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            >
+              <AnimatePresence mode="wait">
+                {mobileMenuOpen ? (
+                  <motion.div
+                    key="close"
+                    initial={{ rotate: -90, opacity: 0 }}
+                    animate={{ rotate: 0, opacity: 1 }}
+                    exit={{ rotate: 90, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="w-10 h-10 rounded-full bg-theme-elevated flex items-center justify-center"
+                  >
+                    {isAuthenticated ? (
+                      <ChevronLeft className="w-6 h-6" />
+                    ) : (
+                      <X className="w-6 h-6" />
+                    )}
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="menu"
+                    initial={{ rotate: 90, opacity: 0 }}
+                    animate={{ rotate: 0, opacity: 1 }}
+                    exit={{ rotate: -90, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="w-10 h-10 rounded-full bg-theme-elevated flex items-center justify-center"
+                  >
+                    {isAuthenticated ? (
+                      <ChevronRight className="w-6 h-6" />
+                    ) : (
+                      <div className="relative w-6 h-5 flex flex-col justify-between">
+                        <span className="w-full h-0.5 bg-current rounded-full" />
+                        <span className="w-full h-0.5 bg-current rounded-full" />
+                        <span className="w-full h-0.5 bg-current rounded-full" />
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </button>
           </div>
         </div>
@@ -156,7 +191,7 @@ export function Navbar() {
 
       {/* Mobile Menu Overlay */}
       <AnimatePresence>
-        {isMobileMenuOpen &&
+        {mobileMenuOpen &&
           <motion.div
             initial={{
               opacity: 0,
@@ -192,7 +227,7 @@ export function Navbar() {
                     {isAuthenticated ? (
                       <button
                         onClick={() => {
-                          setIsMobileMenuOpen(false);
+                          setMobileMenuOpen(false);
                           navigate(item.path);
                         }}
                         className="flex items-center gap-4 text-2xl font-serif text-theme-text hover:text-gold transition-colors w-full text-left"
@@ -204,7 +239,7 @@ export function Navbar() {
                       <a
                         href={item.path}
                         className="text-3xl font-serif text-theme-text hover:text-gold transition-colors block"
-                        onClick={() => setIsMobileMenuOpen(false)}>
+                        onClick={() => setMobileMenuOpen(false)}>
                         {item.label}
                       </a>
                     )}
@@ -229,7 +264,7 @@ export function Navbar() {
                   <>
                     <button
                       onClick={() => {
-                        setIsMobileMenuOpen(false);
+                        setMobileMenuOpen(false);
                         openAuthModal();
                       }}
                       className="w-full flex items-center justify-center gap-2 px-6 py-3 border border-theme-border text-theme-text rounded-full font-medium">
@@ -239,7 +274,7 @@ export function Navbar() {
                     </button>
                     <button
                       onClick={() => {
-                        setIsMobileMenuOpen(false);
+                        setMobileMenuOpen(false);
                         openAuthModal();
                       }}
                       className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gold text-charcoal rounded-full font-medium shadow-lg shadow-gold/20">
@@ -261,5 +296,6 @@ export function Navbar() {
           </motion.div>
         }
       </AnimatePresence>
-    </>);
+    </>
+  );
 }

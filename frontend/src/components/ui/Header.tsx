@@ -14,7 +14,8 @@ import {
     Moon,
     ChevronDown,
     LogIn,
-    Menu
+    Menu,
+    ChevronRight,
 } from 'lucide-react';
 
 import { useUIStore } from '../../stores/useUIStore';
@@ -70,7 +71,11 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
                     aria-label="Open sidebar"
                     type="button"
                 >
-                    <Menu className="w-5 h-5" />
+                    {isAuthenticated ? (
+                        <ChevronRight className="w-5 h-5" />
+                    ) : (
+                        <Menu className="w-5 h-5" />
+                    )}
                 </button>
 
 

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useAuthModalStore } from '../../stores/useAuthModalStore';
+import { useUIStore } from '../../stores/useUIStore';
 import { ROUTES } from '../../lib/constants';
 
 interface NavItem {
@@ -93,6 +94,9 @@ export function MobileBottomNav() {
     }
 
     const handleNavClick = (item: NavItem) => {
+        // Ensure sidebar/mobile menu is closed when navigating via bottom nav
+        useUIStore.getState().setMobileMenuOpen(false);
+
         if (item.requiresAuth && !isAuthenticated) {
             openAuthModal();
         } else {
