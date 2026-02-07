@@ -1,0 +1,20 @@
+{
+    "name": "seniqu-monorepo",
+    "private": true,
+    "workspaces": [
+        "frontend",
+        "backend",
+        "contracts"
+    ],
+    "scripts": {
+        "dev:frontend": "npm run dev -w @seniqu/frontend",
+        "dev:backend": "npm run start:dev -w @seniqu/backend",
+        "build:frontend": "npm run build -w @seniqu/frontend",
+        "build:backend": "npm run build -w @seniqu/backend",
+        "build": "npm run build --workspaces",
+        "start": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\""
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    }
+}
