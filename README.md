@@ -47,7 +47,7 @@ This documentation is organized into the following sections:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/seniqu-webapp.git
+git clone https://github.com/siabang35/seniquwebapp.git
 
 # Install dependencies (Root)
 npm install
