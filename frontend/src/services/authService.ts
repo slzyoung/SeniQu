@@ -425,7 +425,10 @@ class AuthService {
         const codeChallenge = await generateCodeChallenge(codeVerifier);
         secureStore('pkce_verifier', codeVerifier);
 
-        const redirectUri = `${window.location.origin}/auth/callback`;
+        const redirectUri = import.meta.env.PROD
+            ? 'https://seniquapp.netlify.app/auth/callback'
+            : `${window.location.origin}/auth/callback`;
+
         const scope = 'openid email profile';
 
         const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -467,7 +470,9 @@ class AuthService {
             const response = await apiPost<AuthResponse>(API_ENDPOINTS.AUTH_CALLBACK, {
                 code,
                 // provider: 'google', // Removed: Not expected by backend
-                redirectUri: `${window.location.origin}/auth/callback`,
+                redirectUri: import.meta.env.PROD
+                    ? 'https://seniquapp.netlify.app/auth/callback'
+                    : `${window.location.origin}/auth/callback`,
                 codeVerifier: codeVerifier || undefined,
             }, {
                 headers: getSecurityHeaders(),

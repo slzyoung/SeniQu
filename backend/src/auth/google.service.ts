@@ -21,11 +21,12 @@ export class GoogleService {
     /**
      * Exchange code for tokens and get user profile
      */
-    async verifyGoogleUser(code: string, redirectUri: string) {
+    async verifyGoogleUser(code: string, redirectUri: string, codeVerifier?: string) {
         try {
             const { tokens } = await this.oauthClient.getToken({
                 code,
-                redirect_uri: redirectUri, // Must match exactly what the frontend used
+                redirect_uri: redirectUri,
+                code_verifier: codeVerifier,
             })
 
             if (!tokens.id_token) {
@@ -51,7 +52,11 @@ export class GoogleService {
             }
         } catch (error) {
             this.logger.error(`Google Auth Error: ${error.message}`, error.stack)
-            throw new UnauthorizedException("Failed to verify Google account")
+            // Throw specific error if available from Google
+            if (error.response?.data) {
+                this.logger.error(`Google API Error Data: ${JSON.stringify(error.response.data)}`)
+            }
+            throw new UnauthorizedException(`Failed to verify Google account: ${error.message}`)
         }
     }
 }

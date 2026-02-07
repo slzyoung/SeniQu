@@ -79,7 +79,7 @@ export function HeroSection() {
       <ParticleField />
 
       {/* Main Content Container */}
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center pt-20 pb-10">
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center pt-20 pb-32 lg:pb-24">
 
         {/* Left Column: Text Content */}
         <motion.div
@@ -226,7 +226,7 @@ export function HeroSection() {
       <motion.div
         animate={{ y: [0, 10, 0], opacity: [0.5, 1, 0.5] }}
         transition={{ duration: 2, repeat: Infinity }}
-        className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 cursor-pointer z-20"
+        className="absolute bottom-14 lg:bottom-20 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 cursor-pointer z-20"
         onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
       >
         <span className="text-[10px] uppercase tracking-[0.2em] text-charcoal/60 dark:text-gold/60 transition-colors duration-500">Scroll</span>

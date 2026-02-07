@@ -115,7 +115,7 @@ export class AuthService {
         // Exchange code for Google profile
         // Note: google-auth-library handles the code verifier internally if passed, 
         // but for now we just need the code and redirectUri to match what the frontend sent.
-        const googleProfile = await this.googleService.verifyGoogleUser(code, redirectUri)
+        const googleProfile = await this.googleService.verifyGoogleUser(code, redirectUri, codeVerifier)
 
         if (!googleProfile.email) {
             throw new UnauthorizedException("Google account must have an email address")
