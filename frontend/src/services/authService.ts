@@ -12,6 +12,8 @@ import {
     resetRateLimit,
     generateCSRFToken,
     generateFingerprint,
+    generateCodeVerifier,
+    generateCodeChallenge,
     secureStore,
     secureRetrieve,
     secureRemove,
@@ -418,6 +420,11 @@ class AuthService {
         const nonce = crypto.randomUUID();
         secureStore('oauth_nonce', nonce);
 
+        // Generate PKCE Verifier and Challenge
+        const codeVerifier = generateCodeVerifier();
+        const codeChallenge = await generateCodeChallenge(codeVerifier);
+        secureStore('pkce_verifier', codeVerifier);
+
         const redirectUri = `${window.location.origin}/auth/callback`;
         const scope = 'openid email profile';
 
@@ -428,6 +435,8 @@ class AuthService {
         authUrl.searchParams.set('scope', scope);
         authUrl.searchParams.set('state', state);
         authUrl.searchParams.set('nonce', nonce);
+        authUrl.searchParams.set('code_challenge', codeChallenge);
+        authUrl.searchParams.set('code_challenge_method', 'S256');
         authUrl.searchParams.set('access_type', 'offline');
         authUrl.searchParams.set('prompt', 'consent');
 
@@ -440,6 +449,8 @@ class AuthService {
     async handleGoogleCallback(code: string, state: string): Promise<AuthResponse> {
         // Verify state to prevent CSRF
         const storedState = secureRetrieve('oauth_state');
+        const codeVerifier = secureRetrieve('pkce_verifier');
+
         if (!storedState || storedState !== state) {
             throw {
                 message: 'Invalid OAuth state',
@@ -450,12 +461,14 @@ class AuthService {
         // Clean up stored state
         secureRemove('oauth_state');
         secureRemove('oauth_nonce');
+        secureRemove('pkce_verifier');
 
         try {
             const response = await apiPost<AuthResponse>(API_ENDPOINTS.AUTH_CALLBACK, {
                 code,
                 provider: 'google',
                 redirectUri: `${window.location.origin}/auth/callback`,
+                codeVerifier: codeVerifier || undefined,
             }, {
                 headers: getSecurityHeaders(),
             });

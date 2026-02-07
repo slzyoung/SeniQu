@@ -6,7 +6,6 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-    Menu,
     Search,
     Bell,
     Settings,
@@ -14,8 +13,10 @@ import {
     Sun,
     Moon,
     ChevronDown,
-    LogIn
+    LogIn,
+    ChevronRight
 } from 'lucide-react';
+
 import { useUIStore } from '../../stores/useUIStore';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useTheme } from '../../hooks/useTheme';
@@ -31,7 +32,7 @@ interface HeaderProps {
 export function Header({ title, subtitle, actions, className = '' }: HeaderProps) {
     const navigate = useNavigate();
     const location = useLocation();
-    const { setSearchOpen } = useUIStore();
+    const { setSearchOpen, toggleMobileMenu } = useUIStore();
     const { user, isAuthenticated, logout } = useAuthStore();
     const { toggleTheme, isDark } = useTheme();
     const [showUserMenu, setShowUserMenu] = React.useState(false);
@@ -64,10 +65,12 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
             <div className="flex items-center gap-4 flex-1 min-w-0">
                 {/* Mobile Menu Toggle */}
                 <button
-                    onClick={useUIStore.getState().toggleMobileMenu}
-                    className="md:hidden p-2 text-theme-muted hover:text-theme-text transition-colors"
+                    onClick={toggleMobileMenu}
+                    className="md:hidden p-2 -ml-2 rounded-full bg-theme-elevated text-theme-muted hover:text-theme-text transition-colors touch-manipulation"
+                    aria-label="Open sidebar"
+                    type="button"
                 >
-                    <Menu className="w-5 h-5" />
+                    <ChevronRight className="w-5 h-5" />
                 </button>
 
 
@@ -239,7 +242,7 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
                     </div>
                 )}
             </div>
-        </header>
+        </header >
     );
 }
 

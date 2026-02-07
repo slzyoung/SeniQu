@@ -357,7 +357,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               required
-              className={`w-full pl-11 pr-4 py-3 bg-theme-elevated/50 border ${errors.email ? 'border-red-500' : 'border-theme-border'
+              className={`w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.email ? 'border-red-500' : 'border-theme-border'
                 } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
             />
           </div>
@@ -377,7 +377,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
-              className={`w-full pl-11 pr-12 py-3 bg-theme-elevated/50 border ${errors.password ? 'border-red-500' : 'border-theme-border'
+              className={`w-full pl-11 pr-12 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.password ? 'border-red-500' : 'border-theme-border'
                 } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
             />
             <button
@@ -464,7 +464,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="Your name"
-            className={`w-full px-4 py-3 bg-theme-elevated/50 border ${errors.displayName ? 'border-red-500' : 'border-theme-border'
+            className={`w-full px-4 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.displayName ? 'border-red-500' : 'border-theme-border'
               } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
           />
           {errors.displayName && (
@@ -483,7 +483,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               required
-              className={`w-full pl-11 pr-4 py-3 bg-theme-elevated/50 border ${errors.email ? 'border-red-500' : 'border-theme-border'
+              className={`w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.email ? 'border-red-500' : 'border-theme-border'
                 } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
             />
           </div>
@@ -503,7 +503,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
-              className={`w-full pl-11 pr-12 py-3 bg-theme-elevated/50 border ${errors.password ? 'border-red-500' : 'border-theme-border'
+              className={`w-full pl-11 pr-12 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.password ? 'border-red-500' : 'border-theme-border'
                 } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
             />
             <button

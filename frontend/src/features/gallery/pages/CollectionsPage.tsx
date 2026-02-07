@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Filter, Loader2, ArrowDown } from 'lucide-react';
-import { Navbar } from '../../../components/Navbar';
-import { Footer } from '../../../components/Footer';
+import { PageContainer } from '../../../components/common/DashboardLayout';
 import { CollectionCard, CollectionData } from '../../../components/CollectionCard';
 import { useArtworks } from '../../../hooks/useArtworks';
 import { useScrollAnimation } from '../../../hooks/useScrollAnimation';
@@ -84,109 +83,103 @@ export default function CollectionsPage() {
     const hasMore = artworksData?.meta ? page < artworksData.meta.totalPages : false;
 
     return (
-        <div className="min-h-screen bg-theme-bg text-theme-text font-sans transition-colors duration-300 pb-20 md:pb-0">
-            <Navbar />
-
-            <main className="pt-24 pb-16 px-4 md:px-6 max-w-7xl mx-auto">
-                {/* Header */}
-                <div
-                    ref={ref}
-                    className={`text-center mb-10 transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
-                >
-                    <div className="flex items-center justify-center gap-2 mb-3">
-                        <div className="h-[1px] w-8 bg-gold/50" />
-                        <span className="text-gold text-xs uppercase tracking-[0.2em] font-medium">
-                            Discover
-                        </span>
-                        <div className="h-[1px] w-8 bg-gold/50" />
-                    </div>
-                    <h1 className="text-3xl md:text-5xl font-serif font-bold mb-4">
-                        Curated <span className="text-gold italic">Collections</span>
-                    </h1>
-                    <p className="text-theme-muted max-w-xl mx-auto flex items-center justify-center gap-2">
-                        <Filter className="w-4 h-4" />
-                        Explore verified masterpieces from the archipelago
-                    </p>
+        <PageContainer className="max-w-7xl mx-auto">
+            {/* Header */}
+            <div
+                ref={ref}
+                className={`text-center mb-10 transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
+            >
+                <div className="flex items-center justify-center gap-2 mb-3">
+                    <div className="h-[1px] w-8 bg-gold/50" />
+                    <span className="text-gold text-xs uppercase tracking-[0.2em] font-medium">
+                        Discover
+                    </span>
+                    <div className="h-[1px] w-8 bg-gold/50" />
                 </div>
+                <h1 className="text-3xl md:text-5xl font-serif font-bold mb-4">
+                    Curated <span className="text-gold italic">Collections</span>
+                </h1>
+                <p className="text-theme-muted max-w-xl mx-auto flex items-center justify-center gap-2">
+                    <Filter className="w-4 h-4" />
+                    Explore verified masterpieces from the archipelago
+                </p>
+            </div>
 
-                {/* Category Tabs */}
-                <div className="sticky top-20 z-30 bg-theme-bg/80 backdrop-blur-md py-4 -mx-4 px-4 md:mx-0 md:px-0 mb-8 border-b border-theme-border/50">
-                    <div className="flex overflow-x-auto hide-scrollbar gap-2 md:justify-center">
-                        {CATEGORIES.map((cat) => (
-                            <button
-                                key={cat}
-                                onClick={() => setActiveCategory(cat)}
-                                className={`relative px-4 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${activeCategory === cat
-                                    ? 'text-charcoal'
-                                    : 'text-theme-muted hover:text-theme-text bg-theme-surface/50'
-                                    }`}
-                            >
-                                {activeCategory === cat && (
-                                    <motion.div
-                                        layoutId="activeCollectionCat"
-                                        className="absolute inset-0 bg-gold rounded-full -z-10 shadow-lg shadow-gold/20"
-                                        transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-                                    />
-                                )}
-                                {cat}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Artworks Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <AnimatePresence mode="popLayout">
-                        {accumulatedArtworks.map((collection) => (
-                            <CollectionCard
-                                key={collection.id}
-                                data={collection}
-                                isFavorite={favorites.includes(collection.id)}
-                                onToggleFavorite={toggleFavorite}
-                            />
-                        ))}
-                    </AnimatePresence>
-                </div>
-
-                {/* Load More Trigger */}
-                <div className="mt-12 text-center">
-                    {isLoading && page === 1 ? (
-                        <div className="flex flex-col items-center gap-2">
-                            <Loader2 className="w-8 h-8 text-gold animate-spin" />
-                            <span className="text-theme-muted text-sm">Loading collections...</span>
-                        </div>
-                    ) : hasMore ? (
+            {/* Category Tabs */}
+            <div className="sticky top-20 z-30 bg-theme-bg/80 backdrop-blur-md py-4 -mx-4 px-4 md:mx-0 md:px-0 mb-8 border-b border-theme-border/50">
+                <div className="flex overflow-x-auto hide-scrollbar gap-2 md:justify-center">
+                    {CATEGORIES.map((cat) => (
                         <button
-                            onClick={handleLoadMore}
-                            disabled={isFetching}
-                            className="group relative inline-flex items-center gap-2 px-8 py-3 rounded-full border border-gold/30 hover:border-gold bg-transparent text-theme-text hover:text-gold transition-all disabled:opacity-50"
+                            key={cat}
+                            onClick={() => setActiveCategory(cat)}
+                            className={`relative px-4 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${activeCategory === cat
+                                ? 'text-charcoal'
+                                : 'text-theme-muted hover:text-theme-text bg-theme-surface/50'
+                                }`}
                         >
-                            {isFetching ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                                <>
-                                    <span>Load More</span>
-                                    <ArrowDown className="w-4 h-4 group-hover:translate-y-1 transition-transform" />
-                                </>
+                            {activeCategory === cat && (
+                                <motion.div
+                                    layoutId="activeCollectionCat"
+                                    className="absolute inset-0 bg-gold rounded-full -z-10 shadow-lg shadow-gold/20"
+                                    transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+                                />
                             )}
+                            {cat}
                         </button>
-                    ) : accumulatedArtworks.length > 0 ? (
-                        <span className="text-theme-muted text-sm italic">You've reached the end of the collection.</span>
-                    ) : (
-                        <div className="py-20 text-center">
-                            <p className="text-theme-muted text-lg">No collections found.</p>
-                            <button
-                                onClick={() => setActiveCategory('All')}
-                                className="mt-4 text-gold hover:underline"
-                            >
-                                Clear Filters
-                            </button>
-                        </div>
-                    )}
+                    ))}
                 </div>
-            </main>
+            </div>
 
-            <Footer />
-        </div>
+            {/* Artworks Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <AnimatePresence mode="popLayout">
+                    {accumulatedArtworks.map((collection) => (
+                        <CollectionCard
+                            key={collection.id}
+                            data={collection}
+                            isFavorite={favorites.includes(collection.id)}
+                            onToggleFavorite={toggleFavorite}
+                        />
+                    ))}
+                </AnimatePresence>
+            </div>
+
+            {/* Load More Trigger */}
+            <div className="mt-12 text-center">
+                {isLoading && page === 1 ? (
+                    <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="w-8 h-8 text-gold animate-spin" />
+                        <span className="text-theme-muted text-sm">Loading collections...</span>
+                    </div>
+                ) : hasMore ? (
+                    <button
+                        onClick={handleLoadMore}
+                        disabled={isFetching}
+                        className="group relative inline-flex items-center gap-2 px-8 py-3 rounded-full border border-gold/30 hover:border-gold bg-transparent text-theme-text hover:text-gold transition-all disabled:opacity-50"
+                    >
+                        {isFetching ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <>
+                                <span>Load More</span>
+                                <ArrowDown className="w-4 h-4 group-hover:translate-y-1 transition-transform" />
+                            </>
+                        )}
+                    </button>
+                ) : accumulatedArtworks.length > 0 ? (
+                    <span className="text-theme-muted text-sm italic">You've reached the end of the collection.</span>
+                ) : (
+                    <div className="py-20 text-center">
+                        <p className="text-theme-muted text-lg">No collections found.</p>
+                        <button
+                            onClick={() => setActiveCategory('All')}
+                            className="mt-4 text-gold hover:underline"
+                        >
+                            Clear Filters
+                        </button>
+                    </div>
+                )}
+            </div>
+        </PageContainer>
     );
 }

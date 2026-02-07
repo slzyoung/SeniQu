@@ -66,16 +66,15 @@ export function DashboardLayout({
                             animate={{ x: 0 }}
                             exit={{ x: '-100%' }}
                             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                            className="fixed inset-y-0 left-0 z-50 w-72 bg-theme-surface shadow-2xl md:hidden"
+                            className="fixed inset-y-0 left-0 z-50 w-[88px] bg-theme-surface shadow-2xl md:hidden border-r border-theme-border flex flex-col items-center"
                         >
                             <Sidebar
                                 sections={sections}
                                 footer={footer}
                                 variant="mobile"
                                 onClose={() => setMobileMenuOpen(false)}
+                                className="w-full"
                             />
-
-
                         </motion.div>
                     </>
                 )}

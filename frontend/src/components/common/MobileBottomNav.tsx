@@ -23,7 +23,6 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useAuthModalStore } from '../../stores/useAuthModalStore';
-import { getDashboardRoute } from '../../lib/utils';
 import { ROUTES } from '../../lib/constants';
 
 interface NavItem {
@@ -42,8 +41,8 @@ const guestNavItems: NavItem[] = [
 
 const userNavItems: NavItem[] = [
     { path: ROUTES.USER_DASHBOARD, icon: Home, label: 'Home' },
-    { path: ROUTES.GALLERY, icon: Search, label: 'Explore' },
-    { path: ROUTES.USER_BOOKMARKS, icon: Bookmark, label: 'Saved' },
+    { path: ROUTES.USER_GALLERY, icon: Search, label: 'Explore' },
+    { path: ROUTES.USER_BOOKMARKS, icon: Bookmark, label: 'Bookmarks' },
     { path: ROUTES.USER_PROFILE, icon: User, label: 'Profile' },
 ];
 
@@ -94,8 +93,6 @@ export function MobileBottomNav() {
     const handleNavClick = (item: NavItem) => {
         if (item.requiresAuth && !isAuthenticated) {
             openAuthModal();
-        } else if (item.label === 'Profile' && isAuthenticated && user) {
-            navigate(getDashboardRoute(user.role));
         } else {
             navigate(item.path);
         }

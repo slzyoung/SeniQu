@@ -85,12 +85,13 @@ const AdminProfile = lazy(() => import('../features/admin/pages/AdminProfile'));
 const UserLayout = lazy(() => import('../features/user/UserLayout'));
 const ArtistLayout = lazy(() => import('../features/artist/ArtistLayout'));
 const AdminLayout = lazy(() => import('../features/admin/AdminLayout'));
-const GalleryLayout = lazy(() => import('../features/gallery/GalleryLayout'));
+
 
 // Auth callback (still needed for OAuth)
 const AuthCallback = lazy(() => import('../features/auth/pages/AuthCallback'));
 
 import { GlobalLayout } from '../components/common/GlobalLayout';
+import { PublicLayout } from '../components/common/PublicLayout';
 
 const router = createBrowserRouter(
     createRoutesFromElements(
@@ -104,26 +105,27 @@ const router = createBrowserRouter(
             <Route path={ROUTES.REGISTER} element={<LandingPage openAuthModal />} />
             <Route path={ROUTES.CALLBACK} element={<AuthCallback />} />
 
-            {/* Public Gallery Routes */}
-            <Route element={<GalleryLayout />}>
+            {/* Public Layout Routes - Marketplace, Community, AI, Gallery */}
+            <Route element={<PublicLayout />}>
+                {/* Marketplace Routes */}
+                <Route path={ROUTES.MARKETPLACE} element={<Marketplace />} />
+                <Route path={ROUTES.MARKETPLACE_NFT} element={<NFTDetail />} />
+
+                {/* Community Routes */}
+                <Route path={ROUTES.COMMUNITY} element={<CommunityForum />} />
+                <Route path={ROUTES.COMMUNITY_THREAD} element={<ThreadView />} />
+
+                {/* AI Routes */}
+                <Route path={ROUTES.AI_GENRE} element={<GenreIdentifier />} />
+                <Route path={ROUTES.AI_CURATION} element={<AICuration />} />
+
+                {/* Gallery Routes */}
                 <Route path={ROUTES.GALLERY} element={<PublicGallery />} />
                 <Route path='/collections' element={<CollectionsPage />} />
                 <Route path={ROUTES.GALLERY_MUSEUM} element={<MuseumDetail />} />
                 <Route path={ROUTES.GALLERY_ARTWORK} element={<ArtworkView />} />
                 <Route path={ROUTES.NEARBY} element={<NearbyMuseums />} />
             </Route>
-
-            {/* Marketplace Routes - Public */}
-            <Route path={ROUTES.MARKETPLACE} element={<Marketplace />} />
-            <Route path={ROUTES.MARKETPLACE_NFT} element={<NFTDetail />} />
-
-            {/* Community Routes - Public */}
-            <Route path={ROUTES.COMMUNITY} element={<CommunityForum />} />
-            <Route path={ROUTES.COMMUNITY_THREAD} element={<ThreadView />} />
-
-            {/* AI Routes - Public */}
-            <Route path={ROUTES.AI_GENRE} element={<GenreIdentifier />} />
-            <Route path={ROUTES.AI_CURATION} element={<AICuration />} />
 
             {/* User/Collector Dashboard Routes */}
             <Route element={

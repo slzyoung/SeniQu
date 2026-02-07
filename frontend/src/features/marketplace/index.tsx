@@ -6,8 +6,6 @@
 import { useState } from 'react';
 import { PageContainer } from '../../components/common/DashboardLayout';
 import { Card, Button, Badge } from '../../components/ui';
-import { Navbar } from '../../components/Navbar';
-import { Footer } from '../../components/Footer';
 import {
     ShoppingBag,
     Search,
@@ -102,110 +100,105 @@ export function Marketplace() {
     );
 
     return (
-        <div className="min-h-screen bg-theme-bg">
-            <Navbar />
-            <main className="pt-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto py-8">
-                <PageContainer
-                    title="NFT Marketplace"
-                    subtitle="Discover and collect rare digital art"
-                    actions={
-                        <Button variant="gold" leftIcon={<ShoppingBag className="w-4 h-4" />}>
-                            My Collection
-                        </Button>
-                    }
-                >
-                    {/* Search & Filters */}
-                    <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                        <div className="flex-1 relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-muted" />
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search NFTs..."
-                                className="w-full pl-10 pr-4 py-3 bg-theme-surface border border-theme-border rounded-xl text-theme-text placeholder:text-theme-muted focus:outline-none focus:border-gold"
-                            />
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <select
-                                value={category}
-                                onChange={(e) => { setCategory(e.target.value); setPage(1); }}
-                                className="px-4 py-3 bg-theme-surface border border-theme-border rounded-xl text-theme-text"
-                            >
-                                <option value="">All Categories</option>
-                                <option value="digital">Digital Art</option>
-                                <option value="traditional">Traditional</option>
-                                <option value="photography">Photography</option>
-                                <option value="abstract">Abstract</option>
-                            </select>
-                            <div className="flex items-center border border-theme-border rounded-lg overflow-hidden">
-                                <button
-                                    onClick={() => setViewMode('grid')}
-                                    className={`p-2.5 ${viewMode === 'grid' ? 'bg-gold/10 text-gold' : 'text-theme-muted hover:text-theme-text'}`}
-                                >
-                                    <Grid className="w-5 h-5" />
-                                </button>
-                                <button
-                                    onClick={() => setViewMode('list')}
-                                    className={`p-2.5 ${viewMode === 'list' ? 'bg-gold/10 text-gold' : 'text-theme-muted hover:text-theme-text'}`}
-                                >
-                                    <List className="w-5 h-5" />
-                                </button>
-                            </div>
-                        </div>
+        <PageContainer
+            className="max-w-7xl mx-auto"
+            title="NFT Marketplace"
+            subtitle="Discover and collect rare digital art"
+            actions={
+                <Button variant="gold" leftIcon={<ShoppingBag className="w-4 h-4" />}>
+                    My Collection
+                </Button>
+            }
+        >
+            {/* Search & Filters */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-muted" />
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search NFTs..."
+                        className="w-full pl-10 pr-4 py-3 bg-theme-surface border border-theme-border rounded-xl text-theme-text placeholder:text-theme-muted focus:outline-none focus:border-gold"
+                    />
+                </div>
+                <div className="flex items-center gap-2">
+                    <select
+                        value={category}
+                        onChange={(e) => { setCategory(e.target.value); setPage(1); }}
+                        className="px-4 py-3 bg-theme-surface border border-theme-border rounded-xl text-theme-text"
+                    >
+                        <option value="">All Categories</option>
+                        <option value="digital">Digital Art</option>
+                        <option value="traditional">Traditional</option>
+                        <option value="photography">Photography</option>
+                        <option value="abstract">Abstract</option>
+                    </select>
+                    <div className="flex items-center border border-theme-border rounded-lg overflow-hidden">
+                        <button
+                            onClick={() => setViewMode('grid')}
+                            className={`p-2.5 ${viewMode === 'grid' ? 'bg-gold/10 text-gold' : 'text-theme-muted hover:text-theme-text'}`}
+                        >
+                            <Grid className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={() => setViewMode('list')}
+                            className={`p-2.5 ${viewMode === 'list' ? 'bg-gold/10 text-gold' : 'text-theme-muted hover:text-theme-text'}`}
+                        >
+                            <List className="w-5 h-5" />
+                        </button>
                     </div>
+                </div>
+            </div>
 
-                    {/* Content */}
-                    {isLoading ? (
-                        <div className="py-20 flex justify-center">
-                            <Loader2 className="w-8 h-8 text-gold animate-spin" />
-                        </div>
-                    ) : isError ? (
-                        <Card variant="elevated" className="text-center py-16">
-                            <p className="text-red-400">Failed to load NFTs. Please try again.</p>
-                        </Card>
-                    ) : filteredArtworks.length === 0 ? (
-                        <Card variant="elevated" className="text-center py-16">
-                            <ShoppingBag className="w-16 h-16 text-theme-muted mx-auto mb-4" />
-                            <h3 className="text-xl font-semibold text-theme-text mb-2">No NFTs Found</h3>
-                            <p className="text-theme-muted max-w-sm mx-auto">
-                                {searchQuery ? 'Try adjusting your search' : 'No NFTs are currently listed for sale'}
-                            </p>
-                        </Card>
-                    ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                            {filteredArtworks.map((artwork: NFTItem) => (
-                                <NFTCard key={artwork.id} item={artwork} />
-                            ))}
-                        </div>
-                    )}
+            {/* Content */}
+            {isLoading ? (
+                <div className="py-20 flex justify-center">
+                    <Loader2 className="w-8 h-8 text-gold animate-spin" />
+                </div>
+            ) : isError ? (
+                <Card variant="elevated" className="text-center py-16">
+                    <p className="text-red-400">Failed to load NFTs. Please try again.</p>
+                </Card>
+            ) : filteredArtworks.length === 0 ? (
+                <Card variant="elevated" className="text-center py-16">
+                    <ShoppingBag className="w-16 h-16 text-theme-muted mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-theme-text mb-2">No NFTs Found</h3>
+                    <p className="text-theme-muted max-w-sm mx-auto">
+                        {searchQuery ? 'Try adjusting your search' : 'No NFTs are currently listed for sale'}
+                    </p>
+                </Card>
+            ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {filteredArtworks.map((artwork: NFTItem) => (
+                        <NFTCard key={artwork.id} item={artwork} />
+                    ))}
+                </div>
+            )}
 
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                        <div className="mt-8 flex justify-center gap-2">
-                            <Button
-                                variant="ghost"
-                                disabled={page === 1}
-                                onClick={() => setPage(p => p - 1)}
-                            >
-                                Previous
-                            </Button>
-                            <span className="flex items-center px-4 text-theme-muted">
-                                Page {page} of {totalPages}
-                            </span>
-                            <Button
-                                variant="ghost"
-                                disabled={page >= totalPages}
-                                onClick={() => setPage(p => p + 1)}
-                            >
-                                Next
-                            </Button>
-                        </div>
-                    )}
-                </PageContainer>
-            </main>
-            <Footer />
-        </div>
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="mt-8 flex justify-center gap-2">
+                    <Button
+                        variant="ghost"
+                        disabled={page === 1}
+                        onClick={() => setPage(p => p - 1)}
+                    >
+                        Previous
+                    </Button>
+                    <span className="flex items-center px-4 text-theme-muted">
+                        Page {page} of {totalPages}
+                    </span>
+                    <Button
+                        variant="ghost"
+                        disabled={page >= totalPages}
+                        onClick={() => setPage(p => p + 1)}
+                    >
+                        Next
+                    </Button>
+                </div>
+            )}
+        </PageContainer>
     );
 }
 
@@ -215,35 +208,29 @@ export function NFTDetail() {
     // Use useArtwork hook to fetch single NFT
     // For now, show a detailed view placeholder
     return (
-        <div className="min-h-screen bg-theme-bg">
-            <Navbar />
-            <main className="pt-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto py-8">
-                <PageContainer title="NFT Details" subtitle="View artwork details and purchase options">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        <Card variant="elevated" className="aspect-square bg-theme-elevated flex items-center justify-center">
-                            <ImageIcon className="w-16 h-16 text-theme-muted/40" />
-                        </Card>
-                        <div className="space-y-6">
-                            <div>
-                                <Badge variant="gold" className="mb-2">NFT</Badge>
-                                <h1 className="text-3xl font-bold text-theme-text">Loading...</h1>
-                                <p className="text-theme-muted mt-2">NFT ID: {id}</p>
-                            </div>
-                            <Card variant="default" className="p-6">
-                                <div className="flex items-center justify-between mb-4">
-                                    <span className="text-theme-muted">Current Price</span>
-                                    <span className="text-2xl font-bold text-gold">-- ETH</span>
-                                </div>
-                                <Button variant="gold" className="w-full">
-                                    Buy Now
-                                </Button>
-                            </Card>
-                        </div>
+        <PageContainer title="NFT Details" subtitle="View artwork details and purchase options">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <Card variant="elevated" className="aspect-square bg-theme-elevated flex items-center justify-center">
+                    <ImageIcon className="w-16 h-16 text-theme-muted/40" />
+                </Card>
+                <div className="space-y-6">
+                    <div>
+                        <Badge variant="gold" className="mb-2">NFT</Badge>
+                        <h1 className="text-3xl font-bold text-theme-text">Loading...</h1>
+                        <p className="text-theme-muted mt-2">NFT ID: {id}</p>
                     </div>
-                </PageContainer>
-            </main>
-            <Footer />
-        </div>
+                    <Card variant="default" className="p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <span className="text-theme-muted">Current Price</span>
+                            <span className="text-2xl font-bold text-gold">-- ETH</span>
+                        </div>
+                        <Button variant="gold" className="w-full">
+                            Buy Now
+                        </Button>
+                    </Card>
+                </div>
+            </div>
+        </PageContainer>
     );
 }
 

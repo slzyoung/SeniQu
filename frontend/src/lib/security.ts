@@ -50,6 +50,9 @@ const CSRF_TOKEN_KEY = 'seniqu_csrf_token';
 /**
  * Generate a CSRF token
  */
+/**
+ * Generate a CSRF token
+ */
 export function generateCSRFToken(): string {
     const array = new Uint8Array(32);
     crypto.getRandomValues(array);
@@ -57,6 +60,36 @@ export function generateCSRFToken(): string {
     sessionStorage.setItem(CSRF_TOKEN_KEY, token);
     return token;
 }
+
+/**
+ * Generate a PKCE Code Verifier
+ * High-entropy random string (43-128 chars)
+ */
+export function generateCodeVerifier(): string {
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    // Base64URL encode without padding
+    return btoa(String.fromCharCode(...array))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+}
+
+/**
+ * Generate a PKCE Code Challenge from Verifier
+ * SHA-256 hash, Base64URL encoded
+ */
+export async function generateCodeChallenge(verifier: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(verifier);
+    const hash = await crypto.subtle.digest('SHA-256', data);
+
+    return btoa(String.fromCharCode(...new Uint8Array(hash)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+}
+
 
 /**
  * Get the current CSRF token
@@ -117,7 +150,6 @@ export const bioSchema = z
 // ============================================
 
 const STORAGE_PREFIX = 'seniqu_';
-const ENCRYPTION_KEY = 'seniqu_storage_key'; // In production, use env variable
 
 /**
  * Simple obfuscation for localStorage (not true encryption)

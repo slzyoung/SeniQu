@@ -5,7 +5,7 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useUIStore } from '../../stores/useUIStore';
 
 export interface SidebarItem {
@@ -56,29 +56,43 @@ export function Sidebar({
     const isParentActive = (item: SidebarItem) =>
         item.children?.some((child) => location.pathname === child.path);
 
-    const handleItemClick = () => {
-        if (variant === 'mobile' && onClose) {
+    const handleClose = async () => {
+        if (onClose) {
+            // Add small delay for mobile interactions/animations
+            await new Promise(resolve => setTimeout(resolve, 100));
             onClose();
         }
     };
+
+    const handleItemClick = async () => {
+        if (variant === 'mobile' && onClose) {
+            await handleClose();
+        }
+    };
+
+    const isMobile = variant === 'mobile';
 
     return (
         <motion.aside
             initial={false}
             animate={{
-                width: variant === 'mobile' ? '100%' : (sidebarCollapsed ? 80 : 280)
+                width: isMobile ? '100%' : (sidebarCollapsed ? 80 : 280)
             }}
             transition={{ type: 'spring', bounce: 0.1, duration: 0.4 }}
             className={`
         ${variant === 'desktop' ? 'fixed left-0 top-0 h-screen z-40 border-r border-theme-border' : 'h-full w-full'}
         bg-theme-surface
         flex flex-col
+        ${isMobile ? 'items-center bg-[#FBF9F5]' : ''}
         ${className}
       `}
         >
             {/* Logo / Header */}
-            <div className={`p-4 border-b border-theme-border flex items-center ${variant === 'mobile' ? 'justify-between' : 'justify-between'} h-16`}>
-                {!sidebarCollapsed && (
+            <div className={`
+                flex items-center 
+                ${isMobile ? 'justify-center py-6 h-auto min-h-[64px]' : 'justify-between p-4 h-16 border-b border-theme-border'}
+            `}>
+                {!sidebarCollapsed && !isMobile && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -88,6 +102,16 @@ export function Sidebar({
                             <span className="text-xl font-serif font-bold text-gold">Seniqu</span>
                         )}
                     </motion.div>
+                )}
+
+                {isMobile && (
+                    <button
+                        onClick={handleClose}
+                        type="button"
+                        className="p-2 rounded-full bg-theme-elevated text-theme-muted hover:text-theme-text transition-colors"
+                    >
+                        <ChevronLeft className="w-5 h-5" />
+                    </button>
                 )}
 
                 {variant === 'desktop' && (
@@ -102,32 +126,23 @@ export function Sidebar({
                         )}
                     </button>
                 )}
-
-                {variant === 'mobile' && onClose && (
-                    <button
-                        onClick={onClose}
-                        className="p-2 rounded-lg text-theme-muted hover:text-theme-text hover:bg-theme-elevated transition-colors"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-                )}
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
+            <nav className={`flex-1 overflow-y-auto ${isMobile ? 'px-2 py-4 w-full flex flex-col items-center gap-6' : 'py-4 px-3 space-y-6'}`}>
                 {sections.map((section, sectionIndex) => (
-                    <div key={sectionIndex}>
-                        {section.title && !sidebarCollapsed && (
+                    <div key={sectionIndex} className={isMobile ? 'w-full flex flex-col items-center' : ''}>
+                        {section.title && !sidebarCollapsed && !isMobile && (
                             <h3 className="px-3 mb-2 text-xs font-semibold text-theme-muted uppercase tracking-wider">
                                 {section.title}
                             </h3>
                         )}
 
-                        <ul className="space-y-1">
+                        <ul className={`space-y-1 ${isMobile ? 'w-full flex flex-col items-center gap-2' : ''}`}>
                             {section.items.map((item) => (
-                                <li key={item.id}>
-                                    {item.children ? (
-                                        // Parent item with children
+                                <li key={item.id} className={isMobile ? 'w-full flex justify-center' : ''}>
+                                    {item.children && !isMobile ? (
+                                        // Parent item with children (Desktop only logic for now, simplify for mobile if needed)
                                         <>
                                             <button
                                                 onClick={() => toggleExpand(item.id)}
@@ -185,21 +200,24 @@ export function Sidebar({
                                             </AnimatePresence>
                                         </>
                                     ) : (
-                                        // Regular item
+                                        // Regular item (and mobile items treated as flat list for now or simplified)
                                         <NavLink
                                             to={item.path}
                                             onClick={handleItemClick}
-                                            className={`
-                        flex items-center gap-3 px-3 py-2.5 rounded-xl
-                        transition-all duration-200
-                        ${isActive(item.path)
-                                                    ? 'bg-gold/10 text-gold shadow-lg shadow-gold/5'
-                                                    : 'text-theme-muted hover:text-theme-text hover:bg-theme-elevated'
+                                            className={({ isActive }) => `
+                                                flex items-center 
+                                                transition-all duration-200 group relative
+                                                ${isMobile
+                                                    ? `justify-center w-12 h-12 rounded-2xl ${isActive ? 'bg-[#EAE0D5] text-gold' : 'text-theme-muted hover:bg-theme-elevated hover:text-theme-text'}`
+                                                    : `gap-3 px-3 py-2.5 rounded-xl ${isActive ? 'bg-gold/10 text-gold shadow-lg shadow-gold/5' : 'text-theme-muted hover:text-theme-text hover:bg-theme-elevated'}`
                                                 }
-                      `}
+                                            `}
                                         >
-                                            {item.icon}
-                                            {!sidebarCollapsed && (
+                                            <span className={isMobile ? 'w-6 h-6' : ''}>
+                                                {item.icon}
+                                            </span>
+
+                                            {!sidebarCollapsed && !isMobile && (
                                                 <>
                                                     <span className="flex-1 text-sm font-medium">
                                                         {item.label}
@@ -211,6 +229,8 @@ export function Sidebar({
                                                     )}
                                                 </>
                                             )}
+
+                                            {/* Mobile Tooltip/Label fallback could go here if needed, but per request implies just icons */}
                                         </NavLink>
                                     )}
                                 </li>
@@ -222,7 +242,10 @@ export function Sidebar({
 
             {/* Footer */}
             {footer && (
-                <div className="p-3 border-t border-theme-border">
+                <div className={`
+                    border-t border-theme-border
+                    ${isMobile ? 'p-4 w-full flex justify-center' : 'p-3'}
+                `}>
                     {footer}
                 </div>
             )}
