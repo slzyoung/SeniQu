@@ -6,6 +6,7 @@ import { PassportModule } from "@nestjs/passport"
 // Services
 import { AuthService } from "./auth.service"
 import { PrivyService } from "./privy.service"
+import { GoogleService } from "./google.service"
 
 // Controllers
 import { AuthController } from "./auth.controller"
@@ -47,6 +48,7 @@ import { UsersModule } from "../users/users.module"
     ],
     providers: [
         AuthService,
+        GoogleService,
         PrivyService,
         JwtStrategy,
         JwtAuthGuard,
@@ -55,6 +57,6 @@ import { UsersModule } from "../users/users.module"
         PrivyGuard,
     ],
     controllers: [AuthController],
-    exports: [AuthService, JwtModule, PrivyService],
+    exports: [AuthService, JwtModule, PrivyService, GoogleService],
 })
 export class AuthModule { }

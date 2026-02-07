@@ -30,6 +30,12 @@ export const configuration = () => ({
         verificationKey: process.env.PRIVY_VERIFICATION_KEY,
     },
 
+    // Google OAuth
+    google: {
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    },
+
     // Solana
     solana: {
         rpcUrl: process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com",
@@ -66,6 +72,10 @@ export const validationSchema = Joi.object({
     // Privy
     PRIVY_APP_ID: Joi.string().required(),
     PRIVY_APP_SECRET: Joi.string().required(),
+
+    // Google
+    GOOGLE_CLIENT_ID: Joi.string().required(),
+    GOOGLE_CLIENT_SECRET: Joi.string().required(),
 
     // Solana
     SOLANA_RPC_URL: Joi.string().default("https://api.devnet.solana.com"),

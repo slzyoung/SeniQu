@@ -12,6 +12,7 @@ export interface User {
     adminRole?: string
     adminLevel?: number
     privyId?: string
+    googleId?: string
     walletAddress?: string
     createdAt: Date
     updatedAt: Date
@@ -34,6 +35,7 @@ export class UsersService {
                 display_name: dto.displayName,
                 role: this.mapUserTypeToRole(dto.userType || "ART_LOVER"),
                 privy_id: dto.privyId,
+                google_id: dto.googleId,
                 wallet_address: dto.walletAddress,
             })
             .select()
@@ -132,6 +134,23 @@ export class UsersService {
         return this.mapToUser(data)
     }
 
+    async updateGoogleId(userId: string, googleId: string): Promise<void> {
+        const client = this.db.getAdminClient()
+
+        const { error } = await client
+            .from("users")
+            .update({
+                google_id: googleId,
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", userId)
+
+        if (error) {
+            this.logger.error(`Failed to update Google ID: ${error.message}`)
+            // Don't throw error here to allow login to proceed even if linking fails
+        }
+    }
+
     async updateWallet(userId: string, walletAddress: string): Promise<void> {
         const client = this.db.getAdminClient()
 
@@ -178,6 +197,7 @@ export class UsersService {
             adminRole: data.admin_role,
             adminLevel: data.admin_level,
             privyId: data.privy_id,
+            googleId: data.google_id,
             walletAddress: data.wallet_address,
             createdAt: new Date(data.created_at),
             updatedAt: new Date(data.updated_at),

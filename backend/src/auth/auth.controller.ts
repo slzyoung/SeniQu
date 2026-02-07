@@ -39,6 +39,22 @@ export class AuthController {
     }
 
     /**
+     * Handle Google OAuth Callback
+     */
+    @Post("callback")
+    @Public()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: "Handle Google OAuth Callback" })
+    @ApiResponse({ status: 200, type: AuthResponseDto })
+    async handleGoogleCallback(
+        @Body("code") code: string,
+        @Body("redirectUri") redirectUri: string,
+        @Body("codeVerifier") codeVerifier?: string,
+    ): Promise<AuthResponseDto> {
+        return this.authService.handleGoogleCallback(code, redirectUri, codeVerifier)
+    }
+
+    /**
      * Register new user
      */
     @Post("register")
