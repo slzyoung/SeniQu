@@ -26,7 +26,7 @@ export class GoogleService {
             const { tokens } = await this.oauthClient.getToken({
                 code,
                 redirect_uri: redirectUri,
-                code_verifier: codeVerifier,
+                codeVerifier,
             })
 
             if (!tokens.id_token) {
