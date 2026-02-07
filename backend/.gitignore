@@ -35,6 +35,7 @@ coverage
 # Environment
 .env
 .env.test
+.env.example
 .env.development
 .env.production
 *.env
