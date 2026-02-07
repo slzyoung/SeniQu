@@ -18,16 +18,27 @@ import {
     Users,
     Building2,
     Bell,
+    Grid,
     type LucideIcon,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { useAuthModalStore } from '../../stores/useAuthModalStore';
+import { getDashboardRoute } from '../../lib/utils';
 import { ROUTES } from '../../lib/constants';
 
 interface NavItem {
     path: string;
     icon: LucideIcon;
     label: string;
+    requiresAuth?: boolean;
 }
+
+const guestNavItems: NavItem[] = [
+    { path: ROUTES.HOME, icon: Home, label: 'Home' },
+    { path: '/collections', icon: Grid, label: 'Collections' },
+    { path: ROUTES.ARTIST_UPLOAD, icon: Upload, label: 'Upload', requiresAuth: true },
+    { path: ROUTES.USER_PROFILE, icon: User, label: 'Profile', requiresAuth: true },
+];
 
 const userNavItems: NavItem[] = [
     { path: ROUTES.USER_DASHBOARD, icon: Home, label: 'Home' },
@@ -59,23 +70,36 @@ function getNavItems(role: string): NavItem[] {
         case 'artist':
         case 'institution':
             return artistNavItems;
-        default:
+        case 'user':
             return userNavItems;
+        default:
+            return guestNavItems;
     }
 }
 
 export function MobileBottomNav() {
     const location = useLocation();
     const navigate = useNavigate();
-    const { user } = useAuthStore();
+    const { user, isAuthenticated } = useAuthStore();
+    const { openAuthModal } = useAuthModalStore();
 
-    const navItems = getNavItems(user?.role || 'user');
+    const navItems = getNavItems(isAuthenticated ? (user?.role || 'user') : 'guest');
     const currentPath = location.pathname;
 
-    // Don't show on auth pages or landing page
-    if (currentPath === '/' || currentPath.startsWith('/auth')) {
+    // Don't show on auth pages
+    if (currentPath.startsWith('/auth')) {
         return null;
     }
+
+    const handleNavClick = (item: NavItem) => {
+        if (item.requiresAuth && !isAuthenticated) {
+            openAuthModal();
+        } else if (item.label === 'Profile' && isAuthenticated && user) {
+            navigate(getDashboardRoute(user.role));
+        } else {
+            navigate(item.path);
+        }
+    };
 
     return (
         <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-theme-surface/80 backdrop-blur-xl border-t border-theme-border/50 pb-[env(safe-area-inset-bottom)] shadow-lg shadow-theme-bg/20">
@@ -91,8 +115,8 @@ export function MobileBottomNav() {
 
                     return (
                         <button
-                            key={item.path}
-                            onClick={() => navigate(item.path)}
+                            key={item.label}
+                            onClick={() => handleNavClick(item)}
                             className="relative flex flex-col items-center justify-center gap-1 h-full w-full touch-manipulation active:scale-95 transition-transform duration-200"
                         >
                             <div className="relative p-1.5 rounded-xl transition-colors duration-300">

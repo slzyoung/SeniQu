@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Filter, Loader2, ArrowDown } from 'lucide-react';
 import { Navbar } from '../../../components/Navbar';
-import { MobileNav } from '../../../components/MobileNav';
 import { Footer } from '../../../components/Footer';
 import { CollectionCard, CollectionData } from '../../../components/CollectionCard';
 import { useArtworks } from '../../../hooks/useArtworks';
@@ -188,7 +187,6 @@ export default function CollectionsPage() {
             </main>
 
             <Footer />
-            <MobileNav />
         </div>
     );
 }

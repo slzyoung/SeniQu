@@ -2,7 +2,7 @@ services:
   - type: web
     name: seniqu-backend
     env: node
-    rootDir: .
+    rootDir: backend
     buildCommand: npm install && npm run build
     startCommand: npm run start:prod
     envVars:
@@ -10,6 +10,4 @@ services:
         value: production
       - key: PORT
         value: 10000
-      - key: NODE_OPTIONS
-        value: --max-old-space-size=460
-    plan: free
+    plan: free # or starter, standard, etc.
