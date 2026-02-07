@@ -47,7 +47,7 @@ export function Navbar() {
       <nav
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${isScrolled ? 'bg-theme-glass backdrop-blur-xl border-b border-theme-glass-border py-4 shadow-sm' : 'bg-transparent py-6'}`}>
 
-        <div className="max-w-7xl mx-auto px-4 md:px-6 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 md:px-8 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center relative group cursor-pointer" onClick={() => navigate(ROUTES.HOME)}>
             <span className="font-serif text-2xl md:text-3xl font-bold text-gold italic tracking-wide relative z-10">

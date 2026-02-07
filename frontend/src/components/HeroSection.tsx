@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { ArrowRight, Play } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { ParticleField } from './ParticleField';
 
 const artworks = [
@@ -116,10 +117,10 @@ export function HeroSection() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 sm:gap-6">
-            <button className="w-full sm:w-auto px-8 py-4 bg-gold text-charcoal font-bold rounded-sm hover:bg-gold-light transition-all duration-300 transform hover:scale-105 shadow-[0_0_20px_rgba(201,168,76,0.2)] dark:shadow-[0_0_20px_rgba(201,168,76,0.3)] flex items-center justify-center gap-2 group">
+            <Link to="/collections" className="w-full sm:w-auto px-8 py-4 bg-gold text-charcoal font-bold rounded-sm hover:bg-gold-light transition-all duration-300 transform hover:scale-105 shadow-[0_0_20px_rgba(201,168,76,0.2)] dark:shadow-[0_0_20px_rgba(201,168,76,0.3)] flex items-center justify-center gap-2 group">
               Explore Collections
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </button>
+            </Link>
 
             <button className="w-full sm:w-auto px-8 py-4 bg-transparent border border-charcoal/20 dark:border-cream-muted text-charcoal/70 dark:text-cream-muted font-medium rounded-sm hover:bg-charcoal/5 dark:hover:bg-cream-muted/10 transition-all duration-300 flex items-center justify-center gap-2">
               <Play className="w-4 h-4 fill-current" />

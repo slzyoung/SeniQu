@@ -83,7 +83,7 @@ export default function CollectionsPage() {
     const hasMore = artworksData?.meta ? page < artworksData.meta.totalPages : false;
 
     return (
-        <PageContainer className="max-w-7xl mx-auto">
+        <PageContainer className="max-w-7xl mx-auto pt-20 px-4 sm:px-6">
             {/* Header */}
             <div
                 ref={ref}

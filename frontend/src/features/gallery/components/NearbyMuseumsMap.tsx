@@ -7,7 +7,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { GoogleMap, useLoadScript, Marker } from '@react-google-maps/api';
 import { useQuery } from '@tanstack/react-query';
 import { museumService } from '../../../services/museumService';
-import { PageContainer } from '../../../components/common/DashboardLayout';
 import { Card, CardContent } from '../../../components/ui';
 import { MapPin, Navigation, ExternalLink, AlertTriangle } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
@@ -152,68 +151,63 @@ export function NearbyMuseumsMap() {
     };
 
     return (
-        <PageContainer
-            title="Nearby Museums & Galleries"
-            description="Discover art destinations near you"
-        >
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Map Section */}
-                <div className="lg:col-span-2">
-                    {locationError && (
-                        <div className="mb-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl flex items-center gap-3 text-yellow-500">
-                            <Navigation className="w-5 h-5" />
-                            <p className="text-sm">{locationError}</p>
-                        </div>
-                    )}
-                    {renderMap()}
-                </div>
-
-                {/* List Section */}
-                <div className="space-y-4 h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                    <h3 className="font-serif text-xl font-bold text-gold sticky top-0 bg-theme-bg py-2 z-10">
-                        Nearest Locations
-                    </h3>
-
-                    {isLoading ? (
-                        <div className="py-8 text-center">
-                            <Loader2 className="w-8 h-8 text-gold animate-spin mx-auto" />
-                            <p className="text-sm text-theme-muted mt-2">Finding nearby gems...</p>
-                        </div>
-                    ) : museums && museums.length > 0 ? (
-                        museums.map((museum) => (
-                            <Card key={museum.id} variant="elevated" className="hover:border-gold transition-colors group">
-                                <CardContent className="p-4">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <h4 className="font-medium text-theme-text group-hover:text-gold transition-colors">
-                                            {museum.name}
-                                        </h4>
-                                        <span className="text-xs px-2 py-1 bg-theme-surface rounded-full text-theme-muted border border-theme-border">
-                                            {0.0} km
-                                        </span>
-                                    </div>
-                                    <p className="text-sm text-theme-muted line-clamp-2 mb-3">
-                                        {museum.address.street}, {museum.address.city}
-                                    </p>
-                                    <div className="flex items-center gap-2">
-                                        <Link
-                                            to={ROUTES.GALLERY_MUSEUM.replace(':id', museum.id)}
-                                            className="text-xs font-medium text-gold hover:underline flex items-center gap-1"
-                                        >
-                                            View Details <ExternalLink className="w-3 h-3" />
-                                        </Link>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))
-                    ) : (
-                        <div className="py-8 text-center bg-theme-surface rounded-xl border border-theme-border">
-                            <MapPin className="w-8 h-8 text-theme-muted mx-auto mb-2" />
-                            <p className="text-theme-muted">No museums found in this area.</p>
-                        </div>
-                    )}
-                </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Map Section */}
+            <div className="lg:col-span-2">
+                {locationError && (
+                    <div className="mb-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl flex items-center gap-3 text-yellow-500">
+                        <Navigation className="w-5 h-5" />
+                        <p className="text-sm">{locationError}</p>
+                    </div>
+                )}
+                {renderMap()}
             </div>
-        </PageContainer>
+
+            {/* List Section */}
+            <div className="space-y-4 h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                <h3 className="font-serif text-xl font-bold text-gold sticky top-0 bg-theme-bg py-2 z-10">
+                    Nearest Locations
+                </h3>
+
+                {isLoading ? (
+                    <div className="py-8 text-center">
+                        <Loader2 className="w-8 h-8 text-gold animate-spin mx-auto" />
+                        <p className="text-sm text-theme-muted mt-2">Finding nearby gems...</p>
+                    </div>
+                ) : museums && museums.length > 0 ? (
+                    museums.map((museum) => (
+                        <Card key={museum.id} variant="elevated" className="hover:border-gold transition-colors group">
+                            <CardContent className="p-4">
+                                <div className="flex justify-between items-start mb-2">
+                                    <h4 className="font-medium text-theme-text group-hover:text-gold transition-colors">
+                                        {museum.name}
+                                    </h4>
+                                    <span className="text-xs px-2 py-1 bg-theme-surface rounded-full text-theme-muted border border-theme-border">
+                                        {0.0} km
+                                    </span>
+                                </div>
+                                <p className="text-sm text-theme-muted line-clamp-2 mb-3">
+                                    {museum.address.street}, {museum.address.city}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    <Link
+                                        to={ROUTES.GALLERY_MUSEUM.replace(':id', museum.id)}
+                                        className="text-xs font-medium text-gold hover:underline flex items-center gap-1"
+                                    >
+                                        View Details <ExternalLink className="w-3 h-3" />
+                                    </Link>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ))
+                ) : (
+                    <div className="py-8 text-center bg-theme-surface rounded-xl border border-theme-border">
+                        <MapPin className="w-8 h-8 text-theme-muted mx-auto mb-2" />
+                        <p className="text-theme-muted">No museums found in this area.</p>
+                    </div>
+                )}
+            </div>
+        </div>
     );
 }
 

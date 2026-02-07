@@ -466,7 +466,7 @@ class AuthService {
         try {
             const response = await apiPost<AuthResponse>(API_ENDPOINTS.AUTH_CALLBACK, {
                 code,
-                provider: 'google',
+                // provider: 'google', // Removed: Not expected by backend
                 redirectUri: `${window.location.origin}/auth/callback`,
                 codeVerifier: codeVerifier || undefined,
             }, {

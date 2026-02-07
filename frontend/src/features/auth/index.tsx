@@ -3,7 +3,7 @@
  * OWASP-compliant with proper security measures
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
@@ -217,6 +217,8 @@ export function AuthCallback() {
     const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
     const [errorMessage, setErrorMessage] = useState('');
 
+    const processedCode = useRef<string | null>(null);
+
     useEffect(() => {
         const handleCallback = async () => {
             const code = searchParams.get('code');
@@ -240,6 +242,10 @@ export function AuthCallback() {
                 setTimeout(() => navigate(ROUTES.LOGIN), 3000);
                 return;
             }
+
+            // Prevent double execution (React Strict Mode)
+            if (processedCode.current === code) return;
+            processedCode.current = code;
 
             try {
                 // Exchange code for tokens

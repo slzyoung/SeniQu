@@ -1,40 +1,37 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Home, Grid, Upload, User } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Home, Grid, MapPin, Compass } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useAuthStore } from '../stores/useAuthStore';
 import { useAuthModalStore } from '../stores/useAuthModalStore';
-import { getDashboardRoute } from '../lib/utils';
+import { ROUTES } from '../lib/constants';
 
 export function MobileNav() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('Home');
-  const { isAuthenticated, user } = useAuthStore();
+  const location = useLocation();
   const { openAuthModal } = useAuthModalStore();
 
-  const handleNavClick = (label: string) => {
-    setActiveTab(label);
+  const getActiveTab = (pathname: string) => {
+    if (pathname === '/') return 'Home';
+    if (pathname.startsWith('/collections')) return 'Collections';
+    if (pathname.startsWith('/gallery/nearby')) return 'Nearby';
+    if (pathname === '/gallery') return 'Explore';
+    return 'Home'; // Default or handle other cases
+  };
 
+  const activeTab = getActiveTab(location.pathname);
+
+  const handleNavClick = (label: string) => {
     switch (label) {
       case 'Home':
-        navigate('/');
+        navigate(ROUTES.HOME);
         break;
       case 'Collections':
         navigate('/collections');
         break;
-      case 'Upload':
-        if (isAuthenticated) {
-          navigate('/upload');
-        } else {
-          openAuthModal();
-        }
+      case 'Nearby':
+        navigate(ROUTES.NEARBY);
         break;
-      case 'Profile':
-        if (isAuthenticated && user) {
-          navigate(getDashboardRoute(user.role));
-        } else {
-          openAuthModal();
-        }
+      case 'Explore':
+        openAuthModal();
         break;
     }
   };
@@ -42,8 +39,8 @@ export function MobileNav() {
   const navItems = [
     { icon: Home, label: 'Home' },
     { icon: Grid, label: 'Collections' },
-    { icon: Upload, label: 'Upload' },
-    { icon: User, label: 'Profile' }
+    { icon: MapPin, label: 'Nearby' },
+    { icon: Compass, label: 'Explore' }
   ];
 
   return (

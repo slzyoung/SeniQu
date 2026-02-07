@@ -19,10 +19,13 @@ import { SidebarSection } from '../ui/Sidebar';
 import { ROUTES } from '../../lib/constants';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { Avatar } from '../ui';
-import { Link } from 'react-router-dom';
+import { Link, Outlet } from 'react-router-dom';
 import { adminSidebarSections } from '../../features/admin/AdminLayout';
 import { getArtistSidebarSections } from '../../features/artist/ArtistLayout';
 import { userSidebarSections } from '../../features/user/UserLayout';
+import { Navbar } from '../Navbar';
+import { Footer } from '../Footer';
+import { MobileNav } from '../MobileNav';
 
 const publicSidebarSections: SidebarSection[] = [
     {
@@ -136,6 +139,20 @@ export function PublicLayout() {
         } else {
             sections = userSidebarSections;
         }
+    }
+
+    // Use Landing Page style layout for guests
+    if (!isAuthenticated) {
+        return (
+            <div className="min-h-screen bg-theme-bg flex flex-col">
+                <Navbar />
+                <main className="flex-1">
+                    <Outlet />
+                </main>
+                <Footer />
+                <MobileNav />
+            </div>
+        );
     }
 
     return (

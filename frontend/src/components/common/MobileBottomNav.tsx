@@ -19,6 +19,8 @@ import {
     Building2,
     Bell,
     Grid,
+    MapPin,
+    Compass,
     type LucideIcon,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -35,8 +37,8 @@ interface NavItem {
 const guestNavItems: NavItem[] = [
     { path: ROUTES.HOME, icon: Home, label: 'Home' },
     { path: '/collections', icon: Grid, label: 'Collections' },
-    { path: ROUTES.ARTIST_UPLOAD, icon: Upload, label: 'Upload', requiresAuth: true },
-    { path: ROUTES.USER_PROFILE, icon: User, label: 'Profile', requiresAuth: true },
+    { path: ROUTES.NEARBY, icon: MapPin, label: 'Nearby' },
+    { path: ROUTES.GALLERY, icon: Compass, label: 'Explore', requiresAuth: true },
 ];
 
 const userNavItems: NavItem[] = [

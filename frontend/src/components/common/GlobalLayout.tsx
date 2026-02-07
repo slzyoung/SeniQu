@@ -8,6 +8,8 @@ import { useAuthModalStore } from '../../stores/useAuthModalStore';
 
 import { LoadingFallback } from './LoadingFallback';
 
+import { ScrollToTop } from './ScrollToTop';
+
 /**
  * GlobalLayout Component
  * Wraps the entire application to provide global UI elements
@@ -18,6 +20,7 @@ export const GlobalLayout: React.FC = () => {
 
     return (
         <>
+            <ScrollToTop />
             {/* Main Content */}
             <Suspense fallback={<LoadingFallback />}>
                 <Outlet />

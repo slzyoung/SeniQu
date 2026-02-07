@@ -14,7 +14,7 @@ import {
     Moon,
     ChevronDown,
     LogIn,
-    ChevronRight
+    Menu
 } from 'lucide-react';
 
 import { useUIStore } from '../../stores/useUIStore';
@@ -70,7 +70,7 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
                     aria-label="Open sidebar"
                     type="button"
                 >
-                    <ChevronRight className="w-5 h-5" />
+                    <Menu className="w-5 h-5" />
                 </button>
 
 
@@ -225,7 +225,7 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
                         </div>
                     </>
                 ) : (
-                    <div className="flex items-center gap-2">
+                    <div className="hidden md:flex items-center gap-2">
                         <button
                             onClick={() => navigate('/login')}
                             className="hidden sm:flex items-center px-4 py-2 text-sm font-medium text-theme-text hover:text-gold transition-colors"
