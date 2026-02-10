@@ -173,6 +173,9 @@ GOOGLE_CALLBACK_URL=https://seniquwebapp.onrender.com/api/v1/auth/google/callbac
 # Frontend URL (for OAuth redirects back to frontend)
 FRONTEND_URL=https://seniquapp.netlify.app
 
+# OAuth Cookie Secret (HMAC signing for signed httpOnly OAuth cookie)
+OAUTH_COOKIE_SECRET=your-oauth-cookie-secret-min-32-chars
+
 # CORS
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 ```

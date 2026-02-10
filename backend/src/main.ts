@@ -35,8 +35,9 @@ async function bootstrap() {
         crossOriginEmbedderPolicy: false,
     }))
 
-    // Cookie parser
-    app.use(cookieParser())
+    // Cookie parser (with secret for signed cookies — used by OAuth flow)
+    const cookieSecret = configService.get<string>("google.oauthCookieSecret") || "seniqu-dev-oauth-cookie-secret"
+    app.use(cookieParser(cookieSecret))
 
     // CORS configuration
     const rawAllowedOrigins = configService.get<string>("CORS_ORIGINS")?.split(",") || []

@@ -105,20 +105,51 @@ export class AuthService {
     }
 
     /**
-     * Handle Google OAuth Callback (legacy - frontend POST)
+     * Generate OAuth security parameters (PKCE, state, nonce)
      */
-    async handleGoogleCallback(code: string, redirectUri: string, codeVerifier?: string): Promise<AuthResponseDto> {
-        const googleProfile = await this.googleService.verifyGoogleUser(code, redirectUri, codeVerifier)
-        return this.findOrCreateGoogleUser(googleProfile)
+    generateOAuthParams() {
+        return {
+            pkce: this.googleService.generatePKCE(),
+            state: (secret: string) => this.googleService.generateSignedState(secret),
+            nonce: () => this.googleService.generateNonce(),
+        }
+    }
+
+    /**
+     * Verify HMAC-signed state parameter
+     */
+    verifyOAuthState(state: string, secret: string): boolean {
+        return this.googleService.verifySignedState(state, secret)
+    }
+
+    /**
+     * Build Google authorization URL
+     */
+    buildGoogleAuthUrl(params: {
+        redirectUri: string
+        state: string
+        nonce: string
+        codeChallenge: string
+    }): string {
+        return this.googleService.buildAuthUrl(params)
     }
 
     /**
      * Handle Google OAuth Callback via backend redirect
-     * Google redirects directly to this backend endpoint
+     * Fully validated: PKCE + nonce
      */
-    async handleGoogleCallbackRedirect(code: string): Promise<AuthResponseDto> {
+    async handleGoogleCallbackRedirect(
+        code: string,
+        codeVerifier: string,
+        nonce: string,
+    ): Promise<AuthResponseDto> {
         const callbackUrl = this.configService.get<string>("google.callbackUrl") || ""
-        const googleProfile = await this.googleService.verifyGoogleUser(code, callbackUrl)
+        const googleProfile = await this.googleService.verifyGoogleUser(
+            code,
+            callbackUrl,
+            codeVerifier,
+            nonce,
+        )
         return this.findOrCreateGoogleUser(googleProfile)
     }
 

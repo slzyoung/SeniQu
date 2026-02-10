@@ -49,67 +49,145 @@ export class AuthController {
     }
 
     /**
-     * Handle Google OAuth Callback (legacy POST - from frontend)
+     * Initiate Google OAuth flow (server-side)
+     * Generates PKCE, state, nonce — stores them in a signed httpOnly cookie.
+     * Returns the Google authorization URL.
      */
-    @Post("callback")
+    @Get("google/initiate")
     @Public()
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: "Handle Google OAuth Callback (legacy POST)" })
-    @ApiResponse({ status: 200, type: AuthResponseDto })
-    async handleGoogleCallback(
-        @Body("code") code: string,
-        @Body("redirectUri") redirectUri: string,
-        @Body("codeVerifier") codeVerifier?: string,
-    ): Promise<AuthResponseDto> {
-        return this.authService.handleGoogleCallback(code, redirectUri, codeVerifier)
+    @ApiOperation({ summary: "Initiate Google OAuth (server-side security params)" })
+    async initiateGoogleOAuth(
+        @Res() res: Response,
+    ) {
+        const cookieSecret = this.configService.get<string>("google.oauthCookieSecret") || "fallback-secret"
+        const callbackUrl = this.configService.get<string>("google.callbackUrl") || ""
+
+        // Generate security parameters
+        const { codeVerifier, codeChallenge } = this.authService.generateOAuthParams().pkce
+        const state = this.authService.generateOAuthParams().state(cookieSecret)
+        const nonce = this.authService.generateOAuthParams().nonce()
+
+        // Build the Google auth URL
+        const authUrl = this.authService.buildGoogleAuthUrl({
+            redirectUri: callbackUrl,
+            state,
+            nonce,
+            codeChallenge,
+        })
+
+        // Store in signed httpOnly cookie (client JS cannot access)
+        const cookiePayload = JSON.stringify({ codeVerifier, state, nonce })
+        res.cookie("__oauth_params", cookiePayload, {
+            httpOnly: true,
+            secure: true,
+            sameSite: "lax",
+            maxAge: 10 * 60 * 1000, // 10 minutes
+            path: "/",
+            signed: true,
+        })
+
+        this.logger.log("Google OAuth initiated — PKCE + signed state + nonce")
+        return res.json({ authUrl })
     }
 
     /**
      * Handle Google OAuth Callback (server-side redirect)
-     * Google redirects directly to this endpoint with ?code=xxx&state=yyy
-     * We exchange the code, generate JWT tokens, and redirect to the frontend.
+     * Google redirects here with ?code=xxx&state=yyy
+     * Validates cookie, state signature, exchanges code with PKCE, verifies nonce.
      */
     @Get("google/callback")
     @Public()
-    @ApiOperation({ summary: "Handle Google OAuth server-side callback" })
+    @ApiOperation({ summary: "Handle Google OAuth callback (hardened)" })
     async handleGoogleOAuthCallback(
         @Query("code") code: string,
         @Query("state") state: string,
         @Query("error") error: string,
+        @Req() req: any,
         @Res() res: Response,
     ) {
         const frontendUrl = this.configService.get<string>("frontendUrl") || "https://seniquapp.netlify.app"
+        const cookieSecret = this.configService.get<string>("google.oauthCookieSecret") || "fallback-secret"
+
+        // Always clear the OAuth cookie after use
+        const clearCookie = () => {
+            res.clearCookie("__oauth_params", { path: "/" })
+        }
 
         // Handle OAuth error from Google
         if (error) {
             this.logger.warn(`Google OAuth error: ${error}`)
+            clearCookie()
             return res.redirect(
                 `${frontendUrl}/auth/callback#error=${encodeURIComponent(error)}`
             )
         }
 
-        if (!code) {
-            this.logger.warn("Google OAuth callback missing code parameter")
+        if (!code || !state) {
+            this.logger.warn("Google OAuth callback missing code or state")
+            clearCookie()
             return res.redirect(
-                `${frontendUrl}/auth/callback#error=${encodeURIComponent("missing_code")}`
+                `${frontendUrl}/auth/callback#error=${encodeURIComponent("missing_params")}`
+            )
+        }
+
+        // Read the signed cookie
+        const cookieRaw = req.signedCookies?.__oauth_params
+        if (!cookieRaw) {
+            this.logger.warn("Missing __oauth_params cookie (expired or tampered)")
+            clearCookie()
+            return res.redirect(
+                `${frontendUrl}/auth/callback#error=${encodeURIComponent("session_expired")}`
+            )
+        }
+
+        let oauthParams: { codeVerifier: string; state: string; nonce: string }
+        try {
+            oauthParams = JSON.parse(cookieRaw)
+        } catch {
+            this.logger.warn("Corrupted __oauth_params cookie")
+            clearCookie()
+            return res.redirect(
+                `${frontendUrl}/auth/callback#error=${encodeURIComponent("invalid_session")}`
+            )
+        }
+
+        // Validate state matches what we stored
+        if (state !== oauthParams.state) {
+            this.logger.warn("OAuth state mismatch")
+            clearCookie()
+            return res.redirect(
+                `${frontendUrl}/auth/callback#error=${encodeURIComponent("state_mismatch")}`
+            )
+        }
+
+        // Verify HMAC signature + timestamp freshness
+        if (!this.authService.verifyOAuthState(state, cookieSecret)) {
+            this.logger.warn("OAuth state signature invalid or expired")
+            clearCookie()
+            return res.redirect(
+                `${frontendUrl}/auth/callback#error=${encodeURIComponent("state_invalid")}`
             )
         }
 
         try {
-            const result = await this.authService.handleGoogleCallbackRedirect(code)
+            const result = await this.authService.handleGoogleCallbackRedirect(
+                code,
+                oauthParams.codeVerifier,
+                oauthParams.nonce,
+            )
 
-            // Build redirect URL with tokens in hash fragment (never sent to server)
+            // Build redirect URL with tokens in hash fragment
             const params = new URLSearchParams()
             params.set("access_token", result.accessToken)
             params.set("refresh_token", result.refreshToken)
             params.set("user", JSON.stringify(result.user))
 
-            const redirectUrl = `${frontendUrl}/auth/callback#${params.toString()}`
-
-            this.logger.log(`Google OAuth success, redirecting to frontend`)
-            return res.redirect(redirectUrl)
+            clearCookie()
+            this.logger.log("Google OAuth success — PKCE + state + nonce verified")
+            return res.redirect(`${frontendUrl}/auth/callback#${params.toString()}`)
         } catch (err) {
             this.logger.error(`Google OAuth callback error: ${err.message}`, err.stack)
+            clearCookie()
             return res.redirect(
                 `${frontendUrl}/auth/callback#error=${encodeURIComponent(err.message || "auth_failed")}`
             )

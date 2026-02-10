@@ -39,35 +39,44 @@ sequenceDiagram
     API-->>Client: { accessToken }
 ```
 
-### 1.3 Google OAuth Server-Side Callback Flow
+### 1.3 Google OAuth Server-Side Callback Flow (Hardened)
 
-Google OAuth uses a **server-side callback** pattern. The backend handles the code exchange directly, keeping the client secret secure.
+Google OAuth uses a fully hardened **server-side** pattern with PKCE, HMAC-signed state, and nonce verification.
 
 ```mermaid
 sequenceDiagram
     participant User
     participant Frontend
-    participant Google
     participant Backend
+    participant Google
 
     User->>Frontend: Click "Sign in with Google"
-    Frontend->>Google: Redirect to Google Auth URL
-    Note right of Frontend: redirect_uri = /api/v1/auth/google/callback
-    Google->>User: Show consent screen
+    Frontend->>Backend: GET /api/v1/auth/google/initiate
+    Backend->>Backend: Generate PKCE (code_verifier + code_challenge)
+    Backend->>Backend: Generate HMAC-signed state (with timestamp)
+    Backend->>Backend: Generate nonce
+    Backend->>Frontend: Set signed httpOnly cookie (__oauth_params) + return authUrl
+    Frontend->>Google: Redirect to Google auth URL
+    Google->>User: Consent screen
     User->>Google: Approve
     Google->>Backend: GET /api/v1/auth/google/callback?code=xxx&state=yyy
-    Backend->>Google: Exchange code for tokens (server-side)
-    Google-->>Backend: ID token + user info
+    Backend->>Backend: Read signed cookie → validate state HMAC + expiry
+    Backend->>Google: Exchange code + code_verifier (PKCE) for tokens
+    Backend->>Backend: Verify nonce in ID token payload
     Backend->>Backend: Find/create user, generate JWT
     Backend->>Frontend: 302 Redirect to /auth/callback#access_token=...&refresh_token=...
     Frontend->>Frontend: Parse hash fragment, store tokens, redirect to dashboard
 ```
 
-**Key details:**
-- `redirect_uri` points to the **backend** (`/api/v1/auth/google/callback`), not the frontend
-- Tokens are passed to the frontend via **URL hash fragments** (never sent to server in subsequent requests)
-- The frontend parses the hash, stores tokens, and cleans the URL
-- `GOOGLE_CALLBACK_URL` and `FRONTEND_URL` must be set in backend `.env`
+**Security features:**
+
+| Feature | Implementation |
+|---------|----------------|
+| **PKCE** | `code_verifier` + `code_challenge` (SHA-256, RFC 7636) generated server-side |
+| **State** | HMAC-SHA256 signed with embedded timestamp, 10-minute expiry, timing-safe comparison |
+| **Nonce** | Random UUID verified against Google ID token `nonce` claim to prevent replay attacks |
+| **Cookie** | Signed httpOnly, Secure, SameSite=Lax — client JS cannot read or tamper |
+| **Cleanup** | Cookie cleared after every callback, regardless of success or failure |
 
 ### 1.3 Token Configuration
 

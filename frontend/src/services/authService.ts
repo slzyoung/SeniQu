@@ -391,7 +391,8 @@ class AuthService {
 
     /**
      * Initiate Google OAuth flow
-     * Redirects user to Google, which then redirects to the BACKEND callback URL
+     * Calls the backend to generate PKCE, state, nonce (server-side security).
+     * Backend returns the Google auth URL.
      */
     async initiateGoogleAuth(): Promise<string> {
         // Rate limit check
@@ -403,39 +404,23 @@ class AuthService {
             } as AuthError;
         }
 
-        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-        if (!clientId) {
-            throw {
-                message: 'Google OAuth is not configured',
-                code: 'OAUTH_NOT_CONFIGURED',
-            } as AuthError;
+        try {
+            // Call backend to generate auth URL with PKCE + signed state + nonce
+            const response = await apiGet<{ authUrl: string }>(
+                `${API_ENDPOINTS.AUTH_CALLBACK.replace('/callback', '/google/initiate')}`,
+                { headers: getSecurityHeaders() },
+            );
+
+            // Backend wraps in {success, data} envelope
+            const data = (response as any)?.data || response;
+            if (!data?.authUrl) {
+                throw { message: 'Failed to initiate Google OAuth', code: 'INITIATE_FAILED' };
+            }
+
+            return data.authUrl;
+        } catch (error) {
+            throw sanitizeError(error);
         }
-
-        // Generate secure state parameter to prevent CSRF
-        const state = generateCSRFToken();
-        secureStore('oauth_state', state);
-
-        // Generate nonce for additional security
-        const nonce = crypto.randomUUID();
-        secureStore('oauth_nonce', nonce);
-
-        // Backend callback URL — Google redirects here, not to the frontend
-        const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
-        const redirectUri = `${apiBaseUrl}/auth/google/callback`;
-
-        const scope = 'openid email profile';
-
-        const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-        authUrl.searchParams.set('client_id', clientId);
-        authUrl.searchParams.set('redirect_uri', redirectUri);
-        authUrl.searchParams.set('response_type', 'code');
-        authUrl.searchParams.set('scope', scope);
-        authUrl.searchParams.set('state', state);
-        authUrl.searchParams.set('nonce', nonce);
-        authUrl.searchParams.set('access_type', 'offline');
-        authUrl.searchParams.set('prompt', 'consent');
-
-        return authUrl.toString();
     }
 
     /**

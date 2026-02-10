@@ -23,8 +23,8 @@ Content-Type: application/json
 |--------|----------|-------------|------|
 | POST | `/auth/register` | Register new user | No |
 | POST | `/auth/login` | Login with email/password | No |
-| GET | `/auth/google/callback` | Google OAuth server-side callback (redirect) | No |
-| POST | `/auth/callback` | Google OAuth callback (legacy POST) | No |
+| GET | `/auth/google/initiate` | Initiate Google OAuth (returns auth URL, sets cookie) | No |
+| GET | `/auth/google/callback` | Google OAuth callback (PKCE + state + nonce verified) | No |
 | POST | `/auth/privy` | Login with Privy wallet | No |
 | POST | `/auth/refresh` | Refresh access token | Refresh Token |
 | GET | `/auth/me` | Get current user profile | Yes |
@@ -44,21 +44,23 @@ curl -X POST http://localhost:3001/api/v1/auth/login \
   -d '{"email": "user@example.com", "password": "Password1!"}'
 ```
 
-### Google OAuth (Server-Side Callback)
+### Google OAuth (Hardened Server-Side Flow)
 
-The Google OAuth flow uses a **backend callback** pattern:
+The Google OAuth flow uses PKCE, HMAC-signed state, and nonce verification:
 
-1. Frontend redirects user to Google's auth URL with:
-   - `redirect_uri = https://seniquwebapp.onrender.com/api/v1/auth/google/callback`
-2. Google redirects to `GET /api/v1/auth/google/callback?code=xxx&state=yyy`
-3. Backend exchanges the code for user info, generates JWT tokens
-4. Backend issues a **302 redirect** to the frontend with tokens in the URL hash fragment:
+1. Frontend calls `GET /api/v1/auth/google/initiate`
+   - Backend generates PKCE pair, signed state, nonce
+   - Stores them in a signed httpOnly cookie `__oauth_params`
+   - Returns `{ authUrl: "https://accounts.google.com/o/oauth2/v2/auth?..." }`
+2. Frontend redirects user to `authUrl`
+3. Google redirects to `GET /api/v1/auth/google/callback?code=xxx&state=yyy`
+4. Backend validates state (HMAC signature + 10-min expiry), exchanges code with `code_verifier` (PKCE), verifies `nonce` in ID token
+5. Backend redirects to frontend with JWT in hash fragment:
    ```
    https://seniquapp.netlify.app/auth/callback#access_token=...&refresh_token=...&user=...
    ```
-5. Frontend parses the hash, stores tokens, and redirects to dashboard
 
-> **Note:** This endpoint returns a redirect, not a JSON response.
+> **Security:** PKCE (RFC 7636), HMAC-SHA256 signed state, nonce replay protection, signed httpOnly cookies.
 
 ---
 
