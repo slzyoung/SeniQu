@@ -12,8 +12,6 @@ import {
     resetRateLimit,
     generateCSRFToken,
     generateFingerprint,
-    generateCodeVerifier,
-    generateCodeChallenge,
     secureStore,
     secureRetrieve,
     secureRemove,
@@ -393,6 +391,7 @@ class AuthService {
 
     /**
      * Initiate Google OAuth flow
+     * Redirects user to Google, which then redirects to the BACKEND callback URL
      */
     async initiateGoogleAuth(): Promise<string> {
         // Rate limit check
@@ -420,14 +419,9 @@ class AuthService {
         const nonce = crypto.randomUUID();
         secureStore('oauth_nonce', nonce);
 
-        // Generate PKCE Verifier and Challenge
-        const codeVerifier = generateCodeVerifier();
-        const codeChallenge = await generateCodeChallenge(codeVerifier);
-        secureStore('pkce_verifier', codeVerifier);
-
-        const redirectUri = import.meta.env.PROD
-            ? 'https://seniquapp.netlify.app/auth/callback'
-            : `${window.location.origin}/auth/callback`;
+        // Backend callback URL — Google redirects here, not to the frontend
+        const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+        const redirectUri = `${apiBaseUrl}/auth/google/callback`;
 
         const scope = 'openid email profile';
 
@@ -438,8 +432,6 @@ class AuthService {
         authUrl.searchParams.set('scope', scope);
         authUrl.searchParams.set('state', state);
         authUrl.searchParams.set('nonce', nonce);
-        authUrl.searchParams.set('code_challenge', codeChallenge);
-        authUrl.searchParams.set('code_challenge_method', 'S256');
         authUrl.searchParams.set('access_type', 'offline');
         authUrl.searchParams.set('prompt', 'consent');
 
@@ -447,60 +439,52 @@ class AuthService {
     }
 
     /**
-     * Handle Google OAuth callback
+     * Handle Google OAuth callback — parse tokens from URL hash fragment
+     * The backend redirects to the frontend with tokens in the hash.
      */
-    async handleGoogleCallback(code: string, state: string): Promise<AuthResponse> {
-        // Verify state to prevent CSRF
-        const storedState = secureRetrieve('oauth_state');
-        const codeVerifier = secureRetrieve('pkce_verifier');
+    handleGoogleCallbackFromHash(hash: string): AuthResponse {
+        // Parse hash fragment (remove leading #)
+        const params = new URLSearchParams(hash.replace(/^#/, ''));
 
-        if (!storedState || storedState !== state) {
+        const error = params.get('error');
+        if (error) {
             throw {
-                message: 'Invalid OAuth state',
-                code: 'OAUTH_STATE_MISMATCH',
+                message: decodeURIComponent(error),
+                code: 'OAUTH_ERROR',
             } as AuthError;
         }
 
-        // Clean up stored state
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        const userJson = params.get('user');
+
+        if (!accessToken || !refreshToken || !userJson) {
+            throw {
+                message: 'Invalid authentication response from server',
+                code: 'INVALID_CALLBACK',
+            } as AuthError;
+        }
+
+        // Clean up stored OAuth state
         secureRemove('oauth_state');
         secureRemove('oauth_nonce');
-        secureRemove('pkce_verifier');
 
+        let backendUser: any;
         try {
-            const rawResponse = await apiPost<any>(API_ENDPOINTS.AUTH_CALLBACK, {
-                code,
-                // provider: 'google', // Removed: Not expected by backend
-                redirectUri: import.meta.env.PROD
-                    ? 'https://seniquapp.netlify.app/auth/callback'
-                    : `${window.location.origin}/auth/callback`,
-                codeVerifier: codeVerifier || undefined,
-            }, {
-                headers: getSecurityHeaders(),
-            });
-
-            // Backend wraps responses in {success, data, meta} envelope
-            // Extract the actual data from the envelope
-            const response = rawResponse?.data || rawResponse;
-
-            // Validate response integrity
-            if (!validateResponseIntegrity(response)) {
-                throw { message: 'Invalid server response', code: 'RESPONSE_INTEGRITY_ERROR' };
-            }
-
-            // Map user
-            const authResponse: AuthResponse = {
-                user: this.mapBackendUserToFrontend(response.user),
-                accessToken: response.accessToken,
-                refreshToken: response.refreshToken
-            };
-
-            // Store tokens securely
-            this.storeAuthTokens(authResponse.accessToken, authResponse.refreshToken);
-
-            return authResponse;
-        } catch (error) {
-            throw sanitizeError(error);
+            backendUser = JSON.parse(userJson);
+        } catch {
+            throw {
+                message: 'Invalid user data in auth response',
+                code: 'INVALID_USER_DATA',
+            } as AuthError;
         }
+
+        const user = this.mapBackendUserToFrontend(backendUser);
+
+        // Store tokens securely
+        this.storeAuthTokens(accessToken, refreshToken);
+
+        return { user, accessToken, refreshToken };
     }
 
     /**

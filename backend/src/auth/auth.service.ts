@@ -102,31 +102,37 @@ export class AuthService {
             user,
             ...tokens,
         }
-        return {
-            user,
-            ...tokens,
-        }
     }
 
     /**
-     * Handle Google OAuth Callback
+     * Handle Google OAuth Callback (legacy - frontend POST)
      */
     async handleGoogleCallback(code: string, redirectUri: string, codeVerifier?: string): Promise<AuthResponseDto> {
-        // Exchange code for Google profile
-        // Note: google-auth-library handles the code verifier internally if passed, 
-        // but for now we just need the code and redirectUri to match what the frontend sent.
         const googleProfile = await this.googleService.verifyGoogleUser(code, redirectUri, codeVerifier)
+        return this.findOrCreateGoogleUser(googleProfile)
+    }
 
+    /**
+     * Handle Google OAuth Callback via backend redirect
+     * Google redirects directly to this backend endpoint
+     */
+    async handleGoogleCallbackRedirect(code: string): Promise<AuthResponseDto> {
+        const callbackUrl = this.configService.get<string>("google.callbackUrl") || ""
+        const googleProfile = await this.googleService.verifyGoogleUser(code, callbackUrl)
+        return this.findOrCreateGoogleUser(googleProfile)
+    }
+
+    /**
+     * Find or create a user from a Google profile
+     */
+    private async findOrCreateGoogleUser(googleProfile: { email?: string; name?: string; picture?: string; googleId: string }): Promise<AuthResponseDto> {
         if (!googleProfile.email) {
             throw new UnauthorizedException("Google account must have an email address")
         }
 
-        // Find or create user
         let user = await this.usersService.findByEmail(googleProfile.email)
 
         if (!user) {
-            // Create new user
-            // We'll generate a random password since they use Google
             const randomPassword = Math.random().toString(36).slice(-8)
             const hashedPassword = await bcrypt.hash(randomPassword, 12)
 
@@ -134,20 +140,15 @@ export class AuthService {
                 email: googleProfile.email,
                 password: hashedPassword,
                 displayName: googleProfile.name,
-                userType: "ART_LOVER", // Default role
-                isVerified: true, // Google emails are verified
+                userType: "ART_LOVER",
+                isVerified: true,
                 googleId: googleProfile.googleId,
             })
         } else if (!user.googleId) {
-            // Link Google account to existing user if not already linked
-            // We need to add a method to UsersService for this, or just use update if we add googleId to UpdateUserDto
-            // For now, let's just log it or leave it, but ideally we should update the user.
-            // Let's add an update method for googleId in UsersService first.
             await this.usersService.updateGoogleId(user.id, googleProfile.googleId)
             user.googleId = googleProfile.googleId
         }
 
-        // Generate tokens
         const tokens = await this.generateTokens(user)
 
         return {

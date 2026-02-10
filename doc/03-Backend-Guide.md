@@ -162,13 +162,16 @@ SUPABASE_SERVICE_KEY=your-service-key
 
 # JWT
 JWT_SECRET=your-super-secret-jwt-key-min-32-chars
-JWT_EXPIRES_IN=15m
-JWT_REFRESH_SECRET=your-refresh-secret-key
-JWT_REFRESH_EXPIRES_IN=7d
+JWT_EXPIRES_IN=7d
+JWT_REFRESH_EXPIRES_IN=30d
 
 # OAuth
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_CALLBACK_URL=https://seniquwebapp.onrender.com/api/v1/auth/google/callback
+
+# Frontend URL (for OAuth redirects back to frontend)
+FRONTEND_URL=https://seniquapp.netlify.app
 
 # CORS
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173

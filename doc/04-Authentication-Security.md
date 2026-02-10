@@ -39,6 +39,36 @@ sequenceDiagram
     API-->>Client: { accessToken }
 ```
 
+### 1.3 Google OAuth Server-Side Callback Flow
+
+Google OAuth uses a **server-side callback** pattern. The backend handles the code exchange directly, keeping the client secret secure.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Google
+    participant Backend
+
+    User->>Frontend: Click "Sign in with Google"
+    Frontend->>Google: Redirect to Google Auth URL
+    Note right of Frontend: redirect_uri = /api/v1/auth/google/callback
+    Google->>User: Show consent screen
+    User->>Google: Approve
+    Google->>Backend: GET /api/v1/auth/google/callback?code=xxx&state=yyy
+    Backend->>Google: Exchange code for tokens (server-side)
+    Google-->>Backend: ID token + user info
+    Backend->>Backend: Find/create user, generate JWT
+    Backend->>Frontend: 302 Redirect to /auth/callback#access_token=...&refresh_token=...
+    Frontend->>Frontend: Parse hash fragment, store tokens, redirect to dashboard
+```
+
+**Key details:**
+- `redirect_uri` points to the **backend** (`/api/v1/auth/google/callback`), not the frontend
+- Tokens are passed to the frontend via **URL hash fragments** (never sent to server in subsequent requests)
+- The frontend parses the hash, stores tokens, and cleans the URL
+- `GOOGLE_CALLBACK_URL` and `FRONTEND_URL` must be set in backend `.env`
+
 ### 1.3 Token Configuration
 
 ```typescript
@@ -335,5 +365,6 @@ export const ProtectedRoute: FC<Props> = ({ children, roles }) => {
 - [x] Account lockout
 - [x] Row Level Security
 - [x] Role-based access control
+- [x] OAuth server-side callback (Google)
+- [x] OAuth state parameter (CSRF protection)
 - [ ] Two-factor authentication (planned)
-- [ ] OAuth state/PKCE (enhancement)

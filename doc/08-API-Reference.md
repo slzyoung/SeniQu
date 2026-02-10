@@ -23,10 +23,12 @@ Content-Type: application/json
 |--------|----------|-------------|------|
 | POST | `/auth/register` | Register new user | No |
 | POST | `/auth/login` | Login with email/password | No |
-| POST | `/auth/google` | Login with Google OAuth | No |
+| GET | `/auth/google/callback` | Google OAuth server-side callback (redirect) | No |
+| POST | `/auth/callback` | Google OAuth callback (legacy POST) | No |
 | POST | `/auth/privy` | Login with Privy wallet | No |
 | POST | `/auth/refresh` | Refresh access token | Refresh Token |
-| POST | `/auth/logout` | Logout user | Yes |
+| GET | `/auth/me` | Get current user profile | Yes |
+| POST | `/auth/link-wallet` | Link Solana wallet to account | Yes |
 
 ### Request Examples
 
@@ -34,13 +36,29 @@ Content-Type: application/json
 # Register
 curl -X POST http://localhost:3001/api/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "password": "password123", "displayName": "John"}'
+  -d '{"email": "user@example.com", "password": "Password1!", "displayName": "John"}'
 
 # Login
 curl -X POST http://localhost:3001/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "password": "password123"}'
+  -d '{"email": "user@example.com", "password": "Password1!"}'
 ```
+
+### Google OAuth (Server-Side Callback)
+
+The Google OAuth flow uses a **backend callback** pattern:
+
+1. Frontend redirects user to Google's auth URL with:
+   - `redirect_uri = https://seniquwebapp.onrender.com/api/v1/auth/google/callback`
+2. Google redirects to `GET /api/v1/auth/google/callback?code=xxx&state=yyy`
+3. Backend exchanges the code for user info, generates JWT tokens
+4. Backend issues a **302 redirect** to the frontend with tokens in the URL hash fragment:
+   ```
+   https://seniquapp.netlify.app/auth/callback#access_token=...&refresh_token=...&user=...
+   ```
+5. Frontend parses the hash, stores tokens, and redirects to dashboard
+
+> **Note:** This endpoint returns a redirect, not a JSON response.
 
 ---
 

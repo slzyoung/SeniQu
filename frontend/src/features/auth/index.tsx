@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { Card, Button, Input } from '../../components/ui';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -211,65 +211,49 @@ export function Login() {
 
 export function AuthCallback() {
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
     const { login: storeLogin } = useAuthStore();
     const toast = useToast();
     const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
     const [errorMessage, setErrorMessage] = useState('');
 
-    const processedCode = useRef<string | null>(null);
+    const processed = useRef(false);
 
     useEffect(() => {
-        const handleCallback = async () => {
-            const code = searchParams.get('code');
-            const state = searchParams.get('state');
-            const error = searchParams.get('error');
+        if (processed.current) return;
+        processed.current = true;
 
-            // Handle OAuth error
-            if (error) {
-                setStatus('error');
-                setErrorMessage(error === 'access_denied'
-                    ? 'Authentication was cancelled.'
-                    : 'Authentication failed. Please try again.');
-                setTimeout(() => navigate(ROUTES.LOGIN), 3000);
-                return;
-            }
+        const hash = window.location.hash;
 
-            // Validate code and state
-            if (!code || !state) {
-                setStatus('error');
-                setErrorMessage('Invalid authentication response.');
-                setTimeout(() => navigate(ROUTES.LOGIN), 3000);
-                return;
-            }
+        if (!hash) {
+            setStatus('error');
+            setErrorMessage('No authentication data received.');
+            setTimeout(() => navigate(ROUTES.LOGIN), 3000);
+            return;
+        }
 
-            // Prevent double execution (React Strict Mode)
-            if (processedCode.current === code) return;
-            processedCode.current = code;
+        try {
+            // Parse tokens from hash fragment (set by backend redirect)
+            const response = authService.handleGoogleCallbackFromHash(hash);
 
-            try {
-                // Exchange code for tokens
-                const response = await authService.handleGoogleCallback(code, state);
+            // Update store
+            storeLogin(response.user, response.accessToken, response.refreshToken);
 
-                // Update store
-                storeLogin(response.user, response.accessToken, response.refreshToken);
+            setStatus('success');
+            toast.success('Welcome!', 'You have successfully signed in.');
 
-                setStatus('success');
-                toast.success('Welcome!', 'You have successfully signed in.');
+            // Clear hash from URL
+            window.history.replaceState(null, '', window.location.pathname);
 
-                const redirectPath = getDashboardRoute(response.user.role);
-                setTimeout(() => navigate(redirectPath), 1500);
-            } catch (error) {
-                const authError = error as AuthError;
-                setStatus('error');
-                setErrorMessage(authError.message || 'Authentication failed.');
-                toast.error('Authentication Failed', authError.message);
-                setTimeout(() => navigate(ROUTES.LOGIN), 3000);
-            }
-        };
-
-        handleCallback();
-    }, [searchParams, storeLogin, navigate, toast]);
+            const redirectPath = getDashboardRoute(response.user.role);
+            setTimeout(() => navigate(redirectPath), 1500);
+        } catch (error) {
+            const authError = error as AuthError;
+            setStatus('error');
+            setErrorMessage(authError.message || 'Authentication failed.');
+            toast.error('Authentication Failed', authError.message);
+            setTimeout(() => navigate(ROUTES.LOGIN), 3000);
+        }
+    }, [storeLogin, navigate, toast]);
 
     return (
         <div className="min-h-screen bg-theme-bg flex items-center justify-center">
