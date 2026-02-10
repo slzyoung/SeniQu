@@ -4,8 +4,13 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  base: '/', // Ensure absolute paths
+  define: {
+    'global': 'globalThis', // Polyfill for some Web3/older libs
+    'process.env': {}, // Polyfill for libs accessing process.env
+  },
   build: {
-    chunkSizeWarningLimit: 1600,
+    chunkSizeWarningLimit: 4000, // Increased to accommodate combined Web3 chunk
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -31,12 +36,10 @@ export default defineConfig({
             return 'vendor-utils';
           }
 
-          // Auth & Web3
-          if (id.includes('node_modules/@privy-io')) {
-            return 'vendor-auth-privy';
-          }
-          // Group all other Web3 deps to avoid circular dependencies
-          if (id.includes('node_modules/@solana') ||
+          // Combined Web3 & Auth Chunk
+          // Merging these is CRITICAL to avoid circular dependency crashes (ReferenceError)
+          if (id.includes('node_modules/@privy-io') ||
+            id.includes('node_modules/@solana') ||
             id.includes('node_modules/bs58') ||
             id.includes('node_modules/buffer-layout') ||
             id.includes('node_modules/viem') ||
@@ -47,7 +50,7 @@ export default defineConfig({
             id.includes('node_modules/@web3modal') ||
             id.includes('node_modules/@base-org') ||
             id.includes('node_modules/ox')) {
-            return 'vendor-web3';
+            return 'vendor-web3-all';
           }
         },
       },
