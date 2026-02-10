@@ -39,6 +39,10 @@ async function bootstrap() {
     const cookieSecret = configService.get<string>("google.oauthCookieSecret") || "seniqu-dev-oauth-cookie-secret"
     app.use(cookieParser(cookieSecret))
 
+    // Trust proxy (required for secure cookies behind reverse proxies like Heroku/Railway/Render)
+    const expressApp = app.getHttpAdapter().getInstance();
+    expressApp.set('trust proxy', 1);
+
     // CORS configuration
     const rawAllowedOrigins = configService.get<string>("CORS_ORIGINS")?.split(",") || []
     const cleanOrigins = rawAllowedOrigins.map(origin => origin.trim()).filter(Boolean)

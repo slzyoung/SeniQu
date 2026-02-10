@@ -82,7 +82,7 @@ export class AuthController {
         res.cookie("__oauth_params", cookiePayload, {
             httpOnly: true,
             secure: isProduction, // Secure only in production (HTTPS)
-            sameSite: isProduction ? "lax" : "lax", // 'lax' is usually fine for localhost too, but 'none' requires secure
+            sameSite: isProduction ? "none" : "lax", // 'none' + secure allows cross-site cookie usage in all contexts (e.g. iframes or strict redirect flows)
             maxAge: 10 * 60 * 1000, // 10 minutes
             path: "/",
             signed: true,
@@ -112,7 +112,13 @@ export class AuthController {
 
         // Always clear the OAuth cookie after use
         const clearCookie = () => {
-            res.clearCookie("__oauth_params", { path: "/" })
+            const isProduction = this.configService.get("NODE_ENV") === "production"
+            res.clearCookie("__oauth_params", {
+                path: "/",
+                httpOnly: true,
+                secure: isProduction,
+                sameSite: isProduction ? "none" : "lax"
+            })
         }
 
         // Handle OAuth error from Google

@@ -5,97 +5,22 @@
  */
 
 import {
-    Home,
-    Image,
-    MapPin,
-    Sparkles,
-    Brain,
-    ShoppingCart,
-    MessageSquare,
     LogIn
 } from 'lucide-react';
 import { DashboardLayout } from './DashboardLayout';
-import { SidebarSection } from '../ui/Sidebar';
 import { ROUTES } from '../../lib/constants';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { Avatar } from '../ui';
-import { Link, Outlet } from 'react-router-dom';
-import { adminSidebarSections } from '../../features/admin/AdminLayout';
-import { getArtistSidebarSections } from '../../features/artist/ArtistLayout';
-import { userSidebarSections } from '../../features/user/UserLayout';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Navbar } from '../Navbar';
 import { Footer } from '../Footer';
 import { MobileNav } from '../MobileNav';
-
-const publicSidebarSections: SidebarSection[] = [
-    {
-        title: 'Overview',
-        items: [
-            {
-                id: 'home',
-                label: 'Home',
-                icon: <Home className="w-5 h-5" />,
-                path: ROUTES.HOME,
-            },
-        ],
-    },
-    {
-        title: 'Explore',
-        items: [
-            {
-                id: 'gallery',
-                label: 'Art Gallery',
-                icon: <Image className="w-5 h-5" />,
-                path: ROUTES.GALLERY,
-            },
-            {
-                id: 'nearby',
-                label: 'Nearby Museums',
-                icon: <MapPin className="w-5 h-5" />,
-                path: ROUTES.NEARBY,
-            },
-        ],
-    },
-    {
-        title: 'AI Tools',
-        items: [
-            {
-                id: 'genre-identifier',
-                label: 'Genre Identifier',
-                icon: <Sparkles className="w-5 h-5" />,
-                path: ROUTES.AI_GENRE,
-            },
-            {
-                id: 'ai-curation',
-                label: 'AI Curation',
-                icon: <Brain className="w-5 h-5" />,
-                path: ROUTES.AI_CURATION,
-            },
-        ],
-    },
-    {
-        title: 'Marketplace',
-        items: [
-            {
-                id: 'marketplace',
-                label: 'NFT Marketplace',
-                icon: <ShoppingCart className="w-5 h-5" />,
-                path: ROUTES.MARKETPLACE,
-            },
-        ],
-    },
-    {
-        title: 'Community',
-        items: [
-            {
-                id: 'community',
-                label: 'Forum',
-                icon: <MessageSquare className="w-5 h-5" />,
-                path: ROUTES.COMMUNITY,
-            },
-        ],
-    },
-];
+import {
+    publicSidebarSections,
+    adminSidebarSections,
+    getArtistSidebarSections,
+    userSidebarSections
+} from '../../config/sidebar';
 
 function PublicSidebarFooter() {
     const { user, isAuthenticated } = useAuthStore();
@@ -141,6 +66,10 @@ export function PublicLayout() {
         }
     }
 
+    const location = useLocation();
+    // Hide footer on mobile for Collections and Nearby pages
+    const isMobileFooterHidden = location.pathname === '/collections' || location.pathname === ROUTES.NEARBY;
+
     // Use Landing Page style layout for guests
     if (!isAuthenticated) {
         return (
@@ -149,7 +78,9 @@ export function PublicLayout() {
                 <main className="flex-1">
                     <Outlet />
                 </main>
-                <Footer />
+                <div className={isMobileFooterHidden ? 'hidden md:block' : ''}>
+                    <Footer />
+                </div>
                 <MobileNav />
             </div>
         );
