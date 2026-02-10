@@ -15,7 +15,8 @@ import {
     Brain,
     ShoppingCart,
     Wallet,
-    MessageSquare
+    MessageSquare,
+    CreditCard
 } from 'lucide-react';
 import { DashboardLayout } from '../../components/common/DashboardLayout';
 import { SidebarSection } from '../../components/ui/Sidebar';
@@ -75,13 +76,13 @@ export const userSidebarSections: SidebarSection[] = [
         items: [
             {
                 id: 'marketplace',
-                label: 'NFT Marketplace',
+                label: 'Arts Marketplace',
                 icon: <ShoppingCart className="w-5 h-5" />,
                 path: ROUTES.USER_MARKETPLACE,
             },
             {
                 id: 'my-nfts',
-                label: 'My NFTs',
+                label: 'My Arts',
                 icon: <Wallet className="w-5 h-5" />,
                 path: ROUTES.USER_MY_NFTS,
             },
@@ -118,6 +119,12 @@ export const userSidebarSections: SidebarSection[] = [
     {
         title: 'Account',
         items: [
+            {
+                id: 'wallet',
+                label: 'Wallet',
+                icon: <CreditCard className="w-5 h-5" />,
+                path: ROUTES.USER_WALLET,
+            },
             {
                 id: 'profile',
                 label: 'Profile',

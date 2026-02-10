@@ -126,12 +126,12 @@ export function Navbar() {
                 </button>
 
                 <button
-                  onClick={() => openAuthModal()}
+                  onClick={() => openAuthModal('wallet-select')}
                   className="group flex items-center gap-2 px-5 py-2.5 border border-gold/50 rounded-full text-gold hover:bg-gold hover:text-charcoal hover:shadow-lg hover:shadow-gold/20 transition-all duration-300 relative overflow-hidden">
 
                   <div className="absolute inset-0 bg-gold/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
                   <span className="text-sm font-medium tracking-wide relative z-10">
-                    Connect & Collect
+                    Connect
                   </span>
                   <Wallet className="w-4 h-4 transition-transform group-hover:scale-110 relative z-10" />
                 </button>
@@ -275,11 +275,11 @@ export function Navbar() {
                     <button
                       onClick={() => {
                         setMobileMenuOpen(false);
-                        openAuthModal();
+                        openAuthModal('wallet-select');
                       }}
                       className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gold text-charcoal rounded-full font-medium shadow-lg shadow-gold/20">
 
-                      <span>Connect Wallet</span>
+                      <span>Connect</span>
                       <Wallet className="w-5 h-5" />
                     </button>
                   </>

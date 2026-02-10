@@ -17,9 +17,19 @@ import { getDashboardRoute } from '../lib/utils';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialView?: AuthView;
 }
 
-type AuthView = 'main' | 'email-login' | 'email-register';
+type AuthView = 'main' | 'email-login' | 'email-register' | 'wallet-select';
+
+type WalletType = 'metamask' | 'phantom' | 'solflare' | 'walletconnect';
+
+const WALLET_OPTIONS: { id: WalletType; name: string; logo: string; description: string }[] = [
+  { id: 'phantom', name: 'Phantom', logo: '/images/wallets/phantom.svg', description: 'Solana\'s most popular wallet' },
+  { id: 'solflare', name: 'Solflare', logo: '/images/wallets/solflare.svg', description: 'Advanced Solana wallet' },
+  { id: 'metamask', name: 'MetaMask', logo: '/images/wallets/metamask.svg', description: 'Multi-chain browser wallet' },
+  { id: 'walletconnect', name: 'WalletConnect', logo: '/images/wallets/walletconnect.svg', description: 'Connect any mobile wallet' },
+];
 
 // Password strength indicator
 function PasswordStrength({ password }: { password: string }) {
@@ -59,13 +69,13 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
-export function AuthModal({ isOpen, onClose }: AuthModalProps) {
+export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalProps) {
   const navigate = useNavigate();
   const toast = useToast();
   const { login: storeLogin } = useAuthStore();
 
   // View state
-  const [view, setView] = useState<AuthView>('main');
+  const [view, setView] = useState<AuthView>(initialView);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -75,14 +85,24 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [displayName, setDisplayName] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Reset view when modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setView(initialView);
+    }
+  }, [isOpen, initialView]);
+
   // Reset form on close
   const handleClose = useCallback(() => {
-    setView('main');
-    setEmail('');
-    setPassword('');
-    setDisplayName('');
-    setErrors({});
-    setShowPassword(false);
+    // Delay reset slightly to allow close animation to finish
+    setTimeout(() => {
+      setView('main'); // Reset to main for next time by default
+      setEmail('');
+      setPassword('');
+      setDisplayName('');
+      setErrors({});
+      setShowPassword(false);
+    }, 300);
     onClose();
   }, [onClose]);
 
@@ -110,16 +130,15 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   }, [toast]);
 
   // Handle wallet connect (Privy)
-  const handleWalletConnect = useCallback(async () => {
+  const handleWalletConnect = useCallback(async (walletType?: WalletType) => {
     setIsLoading(true);
     setErrors({});
 
     try {
-      // For now, show a message that Privy integration is pending
-      toast.info('Wallet Connect', 'Connecting to wallet provider...');
+      toast.info('Wallet Connect', `Connecting to ${walletType ? WALLET_OPTIONS.find(w => w.id === walletType)?.name : 'wallet'}...`);
 
-      // In production, this would integrate with Privy SDK
-      // const privyToken = await privy.login();
+      // In production, this integrates with Privy SDK
+      // const privyToken = await privy.connectWallet({ walletType });
       // const response = await authService.authenticateWithPrivy(privyToken);
       // storeLogin(response.user, response.accessToken, response.refreshToken);
 
@@ -303,9 +322,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           <span>Sign in with Email</span>
         </button>
 
-        {/* Wallet Connect */}
+        {/* Connect Wallet */}
         <button
-          onClick={handleWalletConnect}
+          onClick={() => switchView('wallet-select')}
           disabled={isLoading}
           className="w-full flex items-center justify-center gap-3 bg-transparent border border-gold/40 text-gold py-3 rounded-xl font-medium hover:bg-gold/5 transition-colors disabled:opacity-50"
         >
@@ -563,6 +582,79 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     </>
   );
 
+  // Render wallet selection view
+  const renderWalletSelectView = () => (
+    <>
+      {/* Header */}
+      <div className="px-8 pt-10 pb-4">
+        <button
+          onClick={() => initialView === 'wallet-select' ? handleClose() : switchView('main')}
+          className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-4"
+        >
+          {initialView === 'wallet-select' ? <X className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
+          <span className="text-sm">{initialView === 'wallet-select' ? 'Close' : 'Back'}</span>
+        </button>
+        <h2 className="text-2xl font-serif font-bold text-theme-text mb-2">
+          Connect <span className="text-gold italic">Wallet</span>
+        </h2>
+        <p className="text-theme-muted text-sm">
+          Choose your preferred wallet to connect.
+        </p>
+        <div className="mt-3 flex items-center gap-2">
+          <span className="text-xs px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-400 font-medium border border-purple-500/20">
+            Solana
+          </span>
+          <span className="text-xs text-theme-muted">Powered by Privy</span>
+        </div>
+      </div>
+
+      {/* Wallet Options */}
+      <div className="px-8 pb-8 space-y-3">
+        {/* Error Message */}
+        {errors.general && (
+          <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{errors.general}</span>
+          </div>
+        )}
+
+        {WALLET_OPTIONS.map((wallet) => (
+          <button
+            key={wallet.id}
+            onClick={() => handleWalletConnect(wallet.id)}
+            disabled={isLoading}
+            className="w-full flex items-center gap-4 p-4 bg-theme-elevated/50 border border-theme-border hover:border-gold/40 hover:bg-gold/5 rounded-xl transition-all duration-200 disabled:opacity-50 group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-theme-surface flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+              <img
+                src={wallet.logo}
+                alt={wallet.name}
+                className="w-7 h-7"
+              />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="font-medium text-theme-text group-hover:text-gold transition-colors">
+                {wallet.name}
+              </p>
+              <p className="text-xs text-theme-muted">
+                {wallet.description}
+              </p>
+            </div>
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 text-theme-muted animate-spin flex-shrink-0" />
+            ) : (
+              <div className="w-2 h-2 rounded-full bg-green-500/50 group-hover:bg-green-500 transition-colors flex-shrink-0" />
+            )}
+          </button>
+        ))}
+
+        <p className="text-xs text-center text-theme-muted pt-2">
+          Your wallet will be securely connected via encrypted channels.
+        </p>
+      </div>
+    </>
+  );
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -608,6 +700,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   {view === 'main' && renderMainView()}
                   {view === 'email-login' && renderEmailLoginView()}
                   {view === 'email-register' && renderEmailRegisterView()}
+                  {view === 'wallet-select' && renderWalletSelectView()}
                 </motion.div>
               </AnimatePresence>
 

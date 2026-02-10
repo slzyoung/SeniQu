@@ -1,6 +1,6 @@
 /**
- * NFT Marketplace Page for User Dashboard
- * Browse and purchase NFTs
+ * Arts Marketplace Page for User Dashboard
+ * Browse and collect verified artworks — Proof of Art (PoA)
  */
 
 import { useState } from 'react';
@@ -84,7 +84,7 @@ function NFTCard({
                     <div className="w-full xs:w-20 xs:h-20 sm:w-28 sm:h-28 aspect-square rounded-xl overflow-hidden flex-shrink-0 bg-theme-elevated">
                         <img
                             src={nft.artwork?.primaryImageUrl || '/placeholder-nft.jpg'}
-                            alt={nft.artwork?.title || 'NFT'}
+                            alt={nft.artwork?.title || 'Artwork'}
                             className="w-full h-full object-cover"
                             loading="lazy"
                         />
@@ -98,7 +98,7 @@ function NFTCard({
                                 </div>
                                 <Badge variant="gold" className="flex-shrink-0 flex items-center gap-1 scale-90 sm:scale-100 origin-right">
                                     <Sparkles className="w-3 h-3" />
-                                    NFT
+                                    PoA
                                 </Badge>
                             </div>
                             <div className="flex items-center gap-3 sm:gap-4 mt-2 text-xs text-theme-muted">
@@ -108,14 +108,14 @@ function NFTCard({
                                 <span className="flex items-center gap-1">
                                     <Heart className="w-3 h-3" /> {nft.artwork?.likes || 0}
                                 </span>
-                                <Badge variant="default" className="scale-90 origin-left">{nft.blockchain || 'Ethereum'}</Badge>
+                                <Badge variant="default" className="scale-90 origin-left">{nft.blockchain || 'Solana'}</Badge>
                             </div>
                         </div>
                         <div className="flex items-center justify-between mt-3 gap-2">
                             <div className="min-w-0">
                                 <p className="text-[10px] sm:text-xs text-theme-muted truncate">Current Price</p>
                                 <p className="font-mono text-sm sm:text-lg font-bold text-gold truncate">
-                                    {nft.listingPrice || nft.price} {nft.currency || 'ETH'}
+                                    {nft.listingPrice || nft.price} {nft.currency || 'SOL'}
                                 </p>
                             </div>
                             <Button
@@ -142,13 +142,13 @@ function NFTCard({
             <div className="relative aspect-square overflow-hidden bg-theme-elevated">
                 <img
                     src={nft.artwork?.primaryImageUrl || '/placeholder-nft.jpg'}
-                    alt={nft.artwork?.title || 'NFT'}
+                    alt={nft.artwork?.title || 'Artwork'}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                     loading="lazy"
                 />
                 <Badge variant="gold" className="absolute top-3 left-3 flex items-center gap-1 shadow-md">
                     <Sparkles className="w-3 h-3" />
-                    NFT
+                    PoA
                 </Badge>
                 {/* Mobile Buy Button (Visible always on small screens, or adjust as needed. Here keeping hover behavior but adding mobile support if needed) */}
                 {/* For mobile, hover doesn't exist, so we rely on clicking card to go to detail, where they can buy. */}
@@ -163,7 +163,7 @@ function NFTCard({
                                 onBuy?.(nft.id);
                             }}
                         >
-                            Buy Now
+                            Collect Now
                         </Button>
                     </div>
                 </div>
@@ -177,10 +177,10 @@ function NFTCard({
                     <div className="min-w-0">
                         <p className="text-[10px] sm:text-xs text-theme-muted truncate">Price</p>
                         <p className="font-mono font-bold text-gold text-sm sm:text-base truncate">
-                            {nft.listingPrice || nft.price} {nft.currency || 'ETH'}
+                            {nft.listingPrice || nft.price} {nft.currency || 'SOL'}
                         </p>
                     </div>
-                    <Badge variant="default" className="text-[10px] sm:text-xs scale-90 sm:scale-100 origin-right">{nft.blockchain || 'ETH'}</Badge>
+                    <Badge variant="default" className="text-[10px] sm:text-xs scale-90 sm:scale-100 origin-right">{nft.blockchain || 'SOL'}</Badge>
                 </div>
             </div>
         </Card>
@@ -235,23 +235,23 @@ export function NFTMarketplacePage() {
 
     return (
         <PageContainer
-            title="NFT Marketplace"
-            description="Discover and collect unique digital artworks"
+            title="Arts Marketplace"
+            subtitle="Discover and collect verified heritage artworks"
             actions={
                 <Button
                     variant="gold"
                     leftIcon={<Wallet className="w-4 h-4" />}
                     onClick={() => navigate('/dashboard/my-nfts')}
                 >
-                    <span className="hidden sm:inline">My NFTs</span>
-                    <span className="sm:hidden">My NFTs</span>
+                    <span className="hidden sm:inline">My Arts</span>
+                    <span className="sm:hidden">My Arts</span>
                 </Button>
             }
         >
             {/* Stats */}
             <StatsGrid>
                 <StatCard
-                    title="Total NFTs"
+                    title="Total Artworks"
                     value={stats?.totalNFTs?.toLocaleString() || '0'}
                     icon={Sparkles}
                     color="bg-purple-500/10 text-purple-500"
@@ -266,13 +266,13 @@ export function NFTMarketplacePage() {
                 />
                 <StatCard
                     title="Total Volume"
-                    value={`${stats?.totalVolume?.toFixed(2) || '0'} ETH`}
+                    value={`${stats?.totalVolume?.toFixed(2) || '0'} SOL`}
                     icon={TrendingUp}
                     color="bg-green-500/10 text-green-500"
                     isLoading={statsLoading}
                 />
                 <StatCard
-                    title="Your NFTs"
+                    title="Your Arts"
                     value={ownedNFTs.length.toString()}
                     icon={Wallet}
                     color="bg-gold/10 text-gold"
@@ -286,7 +286,7 @@ export function NFTMarketplacePage() {
                         <div className="relative flex-1">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-muted" />
                             <Input
-                                placeholder="Search NFTs by name, artist, or collection..."
+                                placeholder="Search artworks by name, artist, or collection..."
                                 className="pl-10"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -335,10 +335,10 @@ export function NFTMarketplacePage() {
             ) : nfts.length === 0 ? (
                 <Card variant="elevated" className="text-center py-16">
                     <Sparkles className="w-16 h-16 text-theme-muted mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-theme-text mb-2">No NFTs Listed</h3>
+                    <h3 className="text-lg font-medium text-theme-text mb-2">No Artworks Listed</h3>
                     <p className="text-theme-muted mb-4">The marketplace is awaiting its first listings</p>
                     <Button variant="gold" onClick={() => navigate('/artist/nft')}>
-                        Create Your First NFT
+                        Create Your First Artwork
                     </Button>
                 </Card>
             ) : (

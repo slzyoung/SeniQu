@@ -1,6 +1,7 @@
 /**
- * Marketplace Feature - NFT Marketplace and Details
- * Uses real API data with useArtworks hook for NFT listings
+ * Marketplace Feature - Arts Marketplace and Details
+ * Uses real API data with useArtworks hook for artwork listings
+ * Proof of Art (PoA) concept — digitally verified heritage artworks
  */
 
 import { useState } from 'react';
@@ -49,7 +50,7 @@ function NFTCard({ item }: { item: NFTItem }) {
                     </div>
                 )}
                 {item.isNFT && (
-                    <Badge variant="gold" className="absolute top-3 right-3">NFT</Badge>
+                    <Badge variant="gold" className="absolute top-3 right-3">PoA</Badge>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
@@ -58,7 +59,7 @@ function NFTCard({ item }: { item: NFTItem }) {
                 <p className="text-sm text-theme-muted">{item.artist?.displayName || 'Unknown Artist'}</p>
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-theme-border">
                     <span className="font-semibold text-gold">
-                        {item.price ? `${item.price} ETH` : 'Not for sale'}
+                        {item.price ? `${item.price} SOL` : 'Not listed'}
                     </span>
                     <div className="flex items-center gap-3 text-xs text-theme-muted">
                         <span className="flex items-center gap-1">
@@ -102,8 +103,8 @@ export function Marketplace() {
     return (
         <PageContainer
             className="max-w-7xl mx-auto"
-            title="NFT Marketplace"
-            subtitle="Discover and collect rare digital art"
+            title="Arts Marketplace"
+            subtitle="Discover and collect verified heritage artworks — Proof of Art"
             actions={
                 <Button variant="gold" leftIcon={<ShoppingBag className="w-4 h-4" />}>
                     My Collection
@@ -118,7 +119,7 @@ export function Marketplace() {
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search NFTs..."
+                        placeholder="Search artworks by name, artist, or collection..."
                         className="w-full pl-10 pr-4 py-3 bg-theme-surface border border-theme-border rounded-xl text-theme-text placeholder:text-theme-muted focus:outline-none focus:border-gold"
                     />
                 </div>
@@ -158,14 +159,14 @@ export function Marketplace() {
                 </div>
             ) : isError ? (
                 <Card variant="elevated" className="text-center py-16">
-                    <p className="text-red-400">Failed to load NFTs. Please try again.</p>
+                    <p className="text-red-400">Failed to load artworks. Please try again.</p>
                 </Card>
             ) : filteredArtworks.length === 0 ? (
                 <Card variant="elevated" className="text-center py-16">
                     <ShoppingBag className="w-16 h-16 text-theme-muted mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-theme-text mb-2">No NFTs Found</h3>
+                    <h3 className="text-xl font-semibold text-theme-text mb-2">No Artworks Found</h3>
                     <p className="text-theme-muted max-w-sm mx-auto">
-                        {searchQuery ? 'Try adjusting your search' : 'No NFTs are currently listed for sale'}
+                        {searchQuery ? 'Try adjusting your search' : 'No artworks are currently listed'}
                     </p>
                 </Card>
             ) : (
@@ -208,24 +209,24 @@ export function NFTDetail() {
     // Use useArtwork hook to fetch single NFT
     // For now, show a detailed view placeholder
     return (
-        <PageContainer title="NFT Details" subtitle="View artwork details and purchase options">
+        <PageContainer title="Artwork Details" subtitle="View artwork details and collect">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <Card variant="elevated" className="aspect-square bg-theme-elevated flex items-center justify-center">
                     <ImageIcon className="w-16 h-16 text-theme-muted/40" />
                 </Card>
                 <div className="space-y-6">
                     <div>
-                        <Badge variant="gold" className="mb-2">NFT</Badge>
+                        <Badge variant="gold" className="mb-2">PoA</Badge>
                         <h1 className="text-3xl font-bold text-theme-text">Loading...</h1>
-                        <p className="text-theme-muted mt-2">NFT ID: {id}</p>
+                        <p className="text-theme-muted mt-2">Artwork ID: {id}</p>
                     </div>
                     <Card variant="default" className="p-6">
                         <div className="flex items-center justify-between mb-4">
                             <span className="text-theme-muted">Current Price</span>
-                            <span className="text-2xl font-bold text-gold">-- ETH</span>
+                            <span className="text-2xl font-bold text-gold">-- SOL</span>
                         </div>
                         <Button variant="gold" className="w-full">
-                            Buy Now
+                            Collect Now
                         </Button>
                     </Card>
                 </div>

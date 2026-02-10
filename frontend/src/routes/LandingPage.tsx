@@ -14,6 +14,9 @@ import { Footer } from '../components/Footer';
 import { MobileNav } from '../components/MobileNav';
 import { useAuthModalStore } from '../stores/useAuthModalStore';
 
+import { AboutSection } from '../components/AboutSection';
+import { ArtistsSection } from '../components/ArtistsSection';
+
 interface LandingPageProps {
     openAuthModal?: boolean;
 }
@@ -35,11 +38,15 @@ export function LandingPage({ openAuthModal: shouldOpenModal }: LandingPageProps
                 <HeroSection />
                 <StatsBar />
                 <TrustedBy />
+                <AboutSection />
                 <FeaturedCollections />
+                <ArtistsSection />
                 <HowItWorks />
                 <CTASection />
             </main>
-            <Footer />
+            <div className="hidden md:block">
+                <Footer />
+            </div>
             <MobileNav />
         </div>
     );

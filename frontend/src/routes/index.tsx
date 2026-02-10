@@ -27,8 +27,9 @@ const UserGallery = lazy(() => import('../features/user/pages/GalleryPage'));
 const UserNearby = lazy(() => import('../features/user/pages/NearbyMuseumsPage'));
 const UserGenreIdentifier = lazy(() => import('../features/user/pages/GenreIdentifierPage'));
 const UserAICuration = lazy(() => import('../features/user/pages/AICurationPage'));
-const UserMarketplace = lazy(() => import('../features/user/pages/NFTMarketplacePage'));
-const UserMyNFTs = lazy(() => import('../features/user/pages/MyNFTsPage'));
+const UserMarketplace = lazy(() => import('../features/user/pages/ArtsMarketplacePage'));
+const UserMyNFTs = lazy(() => import('../features/user/pages/MyArtsPage'));
+const UserWallet = lazy(() => import('../features/user/pages/WalletPage'));
 const UserCommunity = lazy(() => import('../features/user/pages/CommunityPage'));
 
 // Lazy load gallery pages
@@ -149,6 +150,7 @@ const router = createBrowserRouter(
                 <Route path={ROUTES.USER_AI_CURATION} element={<UserAICuration />} />
                 <Route path={ROUTES.USER_MARKETPLACE} element={<UserMarketplace />} />
                 <Route path={ROUTES.USER_MY_NFTS} element={<UserMyNFTs />} />
+                <Route path={ROUTES.USER_WALLET} element={<UserWallet />} />
                 <Route path={ROUTES.USER_COMMUNITY} element={<UserCommunity />} />
             </Route>
 

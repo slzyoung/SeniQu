@@ -132,7 +132,7 @@ function ArtworkCard({
                     </div>
                 )}
                 {isNFT && (
-                    <Badge variant="gold" className="absolute top-3 right-3 shadow-lg">NFT</Badge>
+                    <Badge variant="gold" className="absolute top-3 right-3 shadow-lg">PoA</Badge>
                 )}
             </div>
             <div className="p-3 sm:p-4">
@@ -210,7 +210,7 @@ export function UserDashboard() {
                         isLoading={statsLoading}
                     />
                     <StatCard
-                        title="NFTs Owned"
+                        title="Arts Owned"
                         value={stats?.nftCount?.toLocaleString() || '0'}
                         icon={ImageIcon}
                         color="bg-gold/10 text-gold"

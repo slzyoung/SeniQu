@@ -77,10 +77,12 @@ export class AuthController {
 
         // Store in signed httpOnly cookie (client JS cannot access)
         const cookiePayload = JSON.stringify({ codeVerifier, state, nonce })
+        const isProduction = this.configService.get("NODE_ENV") === "production"
+
         res.cookie("__oauth_params", cookiePayload, {
             httpOnly: true,
-            secure: true,
-            sameSite: "lax",
+            secure: isProduction, // Secure only in production (HTTPS)
+            sameSite: isProduction ? "lax" : "lax", // 'lax' is usually fine for localhost too, but 'none' requires secure
             maxAge: 10 * 60 * 1000, // 10 minutes
             path: "/",
             signed: true,

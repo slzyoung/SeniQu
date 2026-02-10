@@ -1,6 +1,6 @@
 /**
- * My NFTs Page for User Dashboard
- * View and manage owned NFTs
+ * My Arts Page for User Dashboard
+ * View and manage owned artworks — Proof of Art (PoA)
  */
 
 import { useState } from 'react';
@@ -56,7 +56,7 @@ function NFTCard({
                     <div className="w-full xs:w-20 xs:h-20 sm:w-28 sm:h-28 aspect-square rounded-xl overflow-hidden flex-shrink-0 bg-theme-elevated">
                         <img
                             src={nft.artwork?.primaryImageUrl || '/placeholder-nft.jpg'}
-                            alt={nft.artwork?.title || 'NFT'}
+                            alt={nft.artwork?.title || 'Artwork'}
                             className="w-full h-full object-cover"
                             loading="lazy"
                         />
@@ -77,12 +77,12 @@ function NFTCard({
                                 </div>
                             </div>
                             <div className="flex items-center gap-3 sm:gap-4 mt-2 text-xs text-theme-muted">
-                                <Badge variant="default" className="scale-90 origin-left">{nft.blockchain || 'Ethereum'}</Badge>
+                                <Badge variant="default" className="scale-90 origin-left">{nft.blockchain || 'Solana'}</Badge>
                                 <span>Token #{nft.tokenId?.slice(-6) || '???'}</span>
                             </div>
                             {nft.isListed && (
                                 <p className="font-mono text-sm sm:text-lg font-bold text-gold mt-2">
-                                    {nft.listingPrice} {nft.currency || 'ETH'}
+                                    {nft.listingPrice} {nft.currency || 'SOL'}
                                 </p>
                             )}
                         </div>
@@ -142,7 +142,7 @@ function NFTCard({
             <div className="relative aspect-square overflow-hidden bg-theme-elevated">
                 <img
                     src={nft.artwork?.primaryImageUrl || '/placeholder-nft.jpg'}
-                    alt={nft.artwork?.title || 'NFT'}
+                    alt={nft.artwork?.title || 'Artwork'}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                     loading="lazy"
                 />
@@ -154,7 +154,7 @@ function NFTCard({
                 </Badge>
                 <Badge variant="gold" className="absolute top-3 right-3 flex items-center gap-1 shadow-md">
                     <Sparkles className="w-3 h-3" />
-                    NFT
+                    PoA
                 </Badge>
                 {/* Desktop Overlay Actions */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block">
@@ -208,10 +208,10 @@ function NFTCard({
                     {nft.artwork?.title || 'Untitled'}
                 </h3>
                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-theme-border">
-                    <Badge variant="default" className="text-[10px] sm:text-xs scale-90 sm:scale-100 origin-left">{nft.blockchain || 'ETH'}</Badge>
+                    <Badge variant="default" className="text-[10px] sm:text-xs scale-90 sm:scale-100 origin-left">{nft.blockchain || 'SOL'}</Badge>
                     {nft.isListed && (
                         <p className="font-mono font-bold text-gold text-sm sm:text-base">
-                            {nft.listingPrice} {nft.currency || 'ETH'}
+                            {nft.listingPrice} {nft.currency || 'SOL'}
                         </p>
                     )}
                 </div>
@@ -272,8 +272,8 @@ export function MyNFTsPage() {
 
     return (
         <PageContainer
-            title="My NFTs"
-            description="Manage your digital art collection"
+            title="My Arts"
+            subtitle="Manage your digital art collection"
             actions={
                 <Button
                     variant="gold"
@@ -327,7 +327,7 @@ export function MyNFTsPage() {
                         </div>
                         <div>
                             <p className="text-sm text-theme-muted">Total Value</p>
-                            <p className="text-2xl font-bold text-gold">{totalValue.toFixed(2)} ETH</p>
+                            <p className="text-2xl font-bold text-gold">{totalValue.toFixed(2)} SOL</p>
                         </div>
                     </div>
                 </Card>
@@ -368,18 +368,18 @@ export function MyNFTsPage() {
                 <Card variant="elevated" className="text-center py-16">
                     <Sparkles className="w-16 h-16 text-theme-muted mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-theme-text mb-2">
-                        {activeTab === 'owned' ? 'No NFTs Owned Yet' : 'No NFTs Created Yet'}
+                        {activeTab === 'owned' ? 'No Arts Owned Yet' : 'No Arts Created Yet'}
                     </h3>
                     <p className="text-theme-muted mb-4 max-w-md mx-auto">
                         {activeTab === 'owned'
-                            ? 'Start your collection by purchasing NFTs from the marketplace.'
-                            : 'Mint your first NFT from an artwork you\'ve uploaded.'}
+                            ? 'Start your collection by collecting artworks from the marketplace.'
+                            : 'Create your first artwork from an uploaded piece.'}
                     </p>
                     <Button
                         variant="gold"
                         onClick={() => navigate(activeTab === 'owned' ? '/dashboard/marketplace' : '/artist/nft')}
                     >
-                        {activeTab === 'owned' ? 'Browse Marketplace' : 'Create NFT'}
+                        {activeTab === 'owned' ? 'Browse Marketplace' : 'Create Artwork'}
                     </Button>
                 </Card>
             ) : (
@@ -409,7 +409,7 @@ export function MyNFTsPage() {
                         <div>
                             <h4 className="font-medium text-theme-text">Blockchain Explorer</h4>
                             <p className="text-sm text-theme-muted mt-1">
-                                View your NFT transactions and ownership history on the blockchain explorer.
+                                View your artwork transactions and ownership history on the blockchain explorer.
                             </p>
                         </div>
                     </div>

@@ -21,12 +21,14 @@ import {
     Grid,
     MapPin,
     Compass,
+    Wallet,
     type LucideIcon,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useAuthModalStore } from '../../stores/useAuthModalStore';
 import { useUIStore } from '../../stores/useUIStore';
 import { ROUTES } from '../../lib/constants';
+import { Avatar } from '../ui/Avatar';
 
 interface NavItem {
     path: string;
@@ -46,6 +48,7 @@ const userNavItems: NavItem[] = [
     { path: ROUTES.USER_DASHBOARD, icon: Home, label: 'Home' },
     { path: ROUTES.USER_GALLERY, icon: Search, label: 'Explore' },
     { path: ROUTES.USER_BOOKMARKS, icon: Bookmark, label: 'Bookmarks' },
+    { path: ROUTES.USER_WALLET, icon: Wallet, label: 'Wallet' },
     { path: ROUTES.USER_PROFILE, icon: User, label: 'Profile' },
 ];
 
@@ -106,7 +109,10 @@ export function MobileBottomNav() {
 
     return (
         <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-theme-surface/80 backdrop-blur-xl border-t border-theme-border/50 pb-[env(safe-area-inset-bottom)] shadow-lg shadow-theme-bg/20">
-            <div className="grid grid-cols-4 sm:grid-cols-5 h-16 items-center px-2">
+            <div
+                className="grid h-16 items-center px-2"
+                style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}
+            >
                 {navItems.map((item) => {
                     // Active check logic: Exact match or starts with path (except for root dashboard paths to avoid false positives)
                     const isRoot = item.path === ROUTES.USER_DASHBOARD || item.path === ROUTES.ARTIST_DASHBOARD || item.path === ROUTES.ADMIN_DASHBOARD;
@@ -115,6 +121,7 @@ export function MobileBottomNav() {
                         : currentPath.startsWith(item.path);
 
                     const Icon = item.icon;
+                    const isProfile = item.label === 'Profile' && isAuthenticated;
 
                     return (
                         <button
@@ -130,12 +137,24 @@ export function MobileBottomNav() {
                                         transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                                     />
                                 )}
-                                <Icon
-                                    className={`w-5 h-5 transition-all duration-300 ${isActive
-                                        ? 'text-seniqu-gold stroke-[2.5px]'
-                                        : 'text-theme-muted stroke-[2px] opacity-70'
-                                        }`}
-                                />
+
+                                {isProfile ? (
+                                    <div className={`relative transition-all duration-300 ${isActive ? 'ring-2 ring-seniqu-gold rounded-full p-0.5' : ''}`}>
+                                        <Avatar
+                                            src={user?.avatar}
+                                            name={user?.displayName || 'User'}
+                                            size="xs"
+                                            className={isActive ? 'opacity-100' : 'opacity-70'}
+                                        />
+                                    </div>
+                                ) : (
+                                    <Icon
+                                        className={`w-5 h-5 transition-all duration-300 ${isActive
+                                            ? 'text-seniqu-gold stroke-[2.5px]'
+                                            : 'text-theme-muted stroke-[2px] opacity-70'
+                                            }`}
+                                    />
+                                )}
                             </div>
                             <span
                                 className={`text-[10px] font-medium transition-all duration-300 ${isActive

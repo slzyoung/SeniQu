@@ -16,7 +16,7 @@ import { ScrollToTop } from './ScrollToTop';
  * that need access to the Router context (like GlobalSearchModal)
  */
 export const GlobalLayout: React.FC = () => {
-    const { isOpen, closeAuthModal } = useAuthModalStore();
+    const { isOpen, closeAuthModal, initialView } = useAuthModalStore();
 
     return (
         <>
@@ -31,7 +31,7 @@ export const GlobalLayout: React.FC = () => {
             <ToastContainer />
 
             {/* Global Auth Modal - Available on all pages */}
-            <AuthModal isOpen={isOpen} onClose={closeAuthModal} />
+            <AuthModal isOpen={isOpen} onClose={closeAuthModal} initialView={initialView} />
         </>
     );
 };

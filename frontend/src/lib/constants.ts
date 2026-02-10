@@ -52,6 +52,7 @@ export const ROUTES = {
     USER_AI_CURATION: '/dashboard/ai-curation',
     USER_MARKETPLACE: '/dashboard/marketplace',
     USER_MY_NFTS: '/dashboard/my-nfts',
+    USER_WALLET: '/dashboard/wallet',
     USER_COMMUNITY: '/dashboard/community',
 
     // Artist/Institution Routes
