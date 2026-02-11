@@ -386,7 +386,14 @@ export function WalletPage() {
                         <div className="relative overflow-hidden rounded-xl bg-black aspect-square">
                             <QrReader
                                 constraints={{ facingMode: 'environment' }}
-                                onResult={handleScan}
+                                onResult={(result, error) => {
+                                    if (!!result) {
+                                        handleScan(result);
+                                    }
+                                    if (!!error) {
+                                        console.info(error);
+                                    }
+                                }}
                                 className="w-full h-full object-cover"
                             />
                             <Button
