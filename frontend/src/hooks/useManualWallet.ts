@@ -236,8 +236,14 @@ function getWalletInstallUrl(walletType: ManualWalletType): string {
 // ============================================================
 
 const WALLET_RATE_LIMITS = {
-    connect: { key: 'wallet_manual_connect', max: 5, window: 60000 },
-    sign: { key: 'wallet_manual_sign', max: 3, window: 60000 },
+    connect: { key: 'wallet_manual_connect', max: 10, window: 60000 },
+    sign: { key: 'wallet_manual_sign', max: 5, window: 60000 },
+};
+
+// Storage Keys
+const STORAGE_KEYS = {
+    CONNECTING_WALLET: 'seniqu_connecting_wallet',
+    CONNECTING_TIME: 'seniqu_connecting_time',
 };
 
 // ============================================================
@@ -259,6 +265,23 @@ export function useManualWallet() {
     const isProcessingRef = useRef(false);
     const abortControllerRef = useRef<AbortController | null>(null);
 
+    // Auto-Resume Connection on Mount (Mobile Redirect Handling)
+    useState(() => {
+        const storedWallet = sessionStorage.getItem(STORAGE_KEYS.CONNECTING_WALLET) as ManualWalletType | null;
+        const storedTime = sessionStorage.getItem(STORAGE_KEYS.CONNECTING_TIME);
+
+        if (storedWallet && storedTime) {
+            const timeDiff = Date.now() - parseInt(storedTime, 10);
+            // Resume if within 5 minutes
+            if (timeDiff < 5 * 60 * 1000) {
+                console.log(`[ManualWallet] Resuming connection to ${storedWallet}`);
+            }
+            // Always clear on init to prevent stuck loops
+            sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_WALLET);
+            sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_TIME);
+        }
+    });
+
     /**
      * Reset to idle state
      */
@@ -268,6 +291,11 @@ export function useManualWallet() {
         setActiveWalletType(null);
         setError(null);
         isProcessingRef.current = false;
+
+        // Clear session storage
+        sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_WALLET);
+        sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_TIME);
+
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
             abortControllerRef.current = null;
@@ -441,6 +469,10 @@ export function useManualWallet() {
         setError(null);
         setActiveWalletType(walletType);
 
+        // Persist attempt for mobile redirect fallback
+        sessionStorage.setItem(STORAGE_KEYS.CONNECTING_WALLET, walletType);
+        sessionStorage.setItem(STORAGE_KEYS.CONNECTING_TIME, Date.now().toString());
+
         const isMobileDevice = isMobile();
         const inAppBrowser = isWalletInAppBrowser();
 
@@ -565,6 +597,10 @@ export function useManualWallet() {
             // === STEP 5: Handle Authentication ===
             setState('authenticated');
 
+            // Clear session storage on success
+            sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_WALLET);
+            sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_TIME);
+
             // If new user, return without storing login state (must complete profile first)
             if (authResponse.isNewUser) {
                 return authResponse;
@@ -632,14 +668,67 @@ export function useManualWallet() {
             // === STEP 2: Sign Message ===
             setState('awaiting-signature');
 
+            // Helpful toast specifically for mobile users who might need to check app
+            if (isMobile()) {
+                toast.info('Check Wallet', 'Please switch to your wallet app to sign.');
+            }
+
             const messageBytes = new TextEncoder().encode(nonceResponse.message);
             let signatureBytes: Uint8Array;
 
             // Handle Reown Provider / Standard Provider
             if (provider.signMessage) {
+                console.log('[ManualWallet] Helper: Calling provider.signMessage...');
                 const result = await provider.signMessage(messageBytes);
-                // Some providers return object { signature: ... }, others return signature directly
-                signatureBytes = result.signature || result;
+                console.log('[ManualWallet] Helper: Sign Message Result:', result); // DEBUG
+
+                // Robust handling of different signature return formats
+                if (result instanceof Uint8Array) {
+                    signatureBytes = result;
+                } else if (typeof result === 'object' && result.signature) {
+                    // Some adapters return { signature: Uint8Array }
+                    signatureBytes = result.signature;
+                } else if (typeof result === 'string') {
+                    // Reown sometimes returns hex string "0x..." or base58?
+                    if (result.startsWith('0x')) {
+                        // Hex string
+                        const sig = result.slice(2);
+                        const match = sig.match(/.{1,2}/g);
+                        if (match) {
+                            signatureBytes = new Uint8Array(match.map((byte: string) => parseInt(byte, 16)));
+                        } else {
+                            throw new Error('Invalid hex signature');
+                        }
+                    } else {
+                        // If it is a base58 string, we need bs58 decode, but we don't have it here.
+                        // For now, fail if we can't parse it as hex to avoid "string not assignable to number" errors.
+                        throw new Error('Unknown string signature format (not hex)');
+                    }
+                } else {
+                    // Last ditch: try strict cast if it looks like an array
+                    if (Array.isArray(result) || ArrayBuffer.isView(result)) {
+                        signatureBytes = new Uint8Array(result as any);
+                    } else {
+                        // Try to cast from object values ONLY if it's an object (and not null/string/etc)
+                        if (typeof result === 'object' && result !== null) {
+                            // potential {0: 12, 1: 34 ...}
+                            const values = Object.values(result);
+                            // Ensure all values are numbers
+                            if (values.every((v: any) => typeof v === 'number')) {
+                                signatureBytes = new Uint8Array(values as number[]);
+                            } else {
+                                throw new Error('Unknown signature object format: values are not all numbers');
+                            }
+                        } else {
+                            throw new Error('Unknown signature format returned by provider');
+                        }
+                    }
+                }
+
+                if (!signatureBytes || signatureBytes.length === 0) {
+                    throw new Error('Empty signature returned');
+                }
+
             } else {
                 throw new Error('Provider does not support signMessage');
             }

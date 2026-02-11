@@ -4,7 +4,7 @@
 Seniqu uses a **Hybrid Wallet Strategy** combining:
 1.  **Embedded Wallets (Privy)**: Auto-generated for all users (email/social logins) for a seamless Web3 experience.
 2.  **External Wallets (Manual)**: Direct connections for crypto-native users (MetaMask, Phantom).
-3.  **Mobile Wallets (Reown)**: WalletConnect integration for mobile users.
+3.  **Mobile Wallets (Reown)**: WalletConnect integration for mobile users with deep linking support.
 
 ---
 
@@ -70,6 +70,19 @@ We use **Reown AppKit** (formerly WalletConnect Web3Modal) for mobile support.
 - **Project ID**: Configured in `.env` (`VITE_WALLETCONNECT_PROJECT_ID`).
 - **Flow**: Opens native mobile apps via deep links.
 
+#### Mobile Optimization & Session Persistence
+Mobile wallets often require switching apps, which can cause the browser (and the app state) to reload. To handle this:
+1.  **Session Persistence**: The `useManualWallet` hook persists the "connecting" state in `sessionStorage` before the deep link redirect.
+2.  **Auto-Resume**: Upon reloading, the hook checks `sessionStorage` and automatically resumes the connection process if a pending attempt is found (valid for 5 minutes).
+3.  **Relaxed Rate Limits**: Rate limits for mobile are higher (10 requests/min) to account for retries and app swithcing delays.
+
+### 3.3 Signature Handling
+The system supports multiple signature formats to ensure compatibility across all providers (Reown, Phantom, MetaMask):
+-   **Uint8Array**: Standard Solana signature format.
+-   **Hex String**: Standard Ethereum (0x...) or some WalletConnect responses.
+-   **Object**: Some providers return `{ signature: ... }` objects.
+The `useManualWallet` hook includes robust logic to parse and normalize these into a consistent format for backend verification.
+
 ---
 
 ## 4. Backend Wallet Service
@@ -101,3 +114,10 @@ We use **Reown AppKit** (formerly WalletConnect Web3Modal) for mobile support.
 ### "Profile Redirect Loop"
 **Cause**: `user` object in state missing `username` or `displayName`.
 **Fix**: Ensure `needsProfileCompletion(user)` returns false before redirecting to dashboard.
+
+### "Sign In Failed" on Mobile
+**Cause**: App switching caused state loss or signature format mismatch.
+**Fix**:
+1.  Ensure `VITE_WALLETCONNECT_PROJECT_ID` is set.
+2.  The `useManualWallet` hook now handles session persistence to recover state after app switches.
+3.  Signature parsing logic in `loginWithProvider` handles various return formats from Reown.

@@ -56,7 +56,7 @@ Seniqu employs a **Hybrid Wallet Strategy** to optimize user experience across d
         *   **Multi-Chain**: Supports both Solana and EVM (Ethereum) wallets via `EthersAdapter`.
     *   **Reason**: Best-in-class mobile experience for deep linking to wallet apps.
 
-### 1.4 Manual Wallet Authentication Flow (Desktop)
+### 1.4 Manual Wallet Authentication Flow (Desktop & Mobile)
 
 Direct wallet-to-backend authentication bypasses third-party SDKs for wallet login. The flow uses cryptographic signature verification and single-use nonces.
 
@@ -68,8 +68,9 @@ sequenceDiagram
     participant Backend
     participant Supabase
 
-    User->>Frontend: Click wallet button (e.g., Phantom)
-    Frontend->>WalletExt: Connect to extension
+    User->>Frontend: Click wallet button
+    Frontend->>Frontend: Check Session Storage (Auto-Resume)
+    Frontend->>WalletExt: Connect to extension / App Switch
     WalletExt-->>Frontend: Public address
 
     Frontend->>Backend: POST /wallet/nonce { walletAddress, chain }
@@ -78,7 +79,7 @@ sequenceDiagram
 
     Frontend->>WalletExt: Sign message (nonce)
     User->>WalletExt: Approve signature
-    WalletExt-->>Frontend: Signature bytes
+    WalletExt-->>Frontend: Signature bytes (Hex/Uint8Array)
 
     Frontend->>Backend: POST /auth/wallet { walletAddress, signature, nonce, chain }
     Backend->>Supabase: Validate nonce (single-use, not expired)
@@ -90,6 +91,10 @@ sequenceDiagram
 
     Frontend->>Frontend: Store tokens, Check Profile Completion
 ```
+
+**Mobile Enhancements:**
+-   **Session Persistence**: The frontend persists the connection state in `sessionStorage` to handle app switching (deep linking).
+-   **Auto-Resume**: On return to the app, the connection flow automatically resumes if a pending attempt is detected.
 
 ### 1.5 Mandatory Profile Completion
 
@@ -408,5 +413,5 @@ device_fingerprint VARCHAR(128)
 - [x] Manual wallet signature verification
 - [x] Single-use nonce anti-replay protection
 - [x] Device fingerprinting for wallet sessions
-- [x] Wallet connection rate limiting
+- [x] Wallet connection rate limiting (with mobile persistence)
 - [ ] Two-factor authentication (planned)
