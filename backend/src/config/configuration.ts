@@ -48,6 +48,12 @@ export const configuration = () => ({
         programId: process.env.SENIQU_PROGRAM_ID,
     },
 
+    // WalletConnect / Reown
+    walletConnect: {
+        projectId: process.env.WALLETCONNECT_PROJECT_ID,
+        secretKey: process.env.WALLETCONNECT_SECRET_KEY,
+    },
+
     // Security
     security: {
         corsOrigins: process.env.CORS_ORIGINS?.split(",") || ["http://localhost:3000"],
@@ -85,6 +91,10 @@ export const validationSchema = Joi.object({
     // Solana
     SOLANA_RPC_URL: Joi.string().default("https://api.devnet.solana.com"),
     SOLANA_NETWORK: Joi.string().valid("devnet", "mainnet-beta").default("devnet"),
+
+    // WalletConnect / Reown
+    WALLETCONNECT_PROJECT_ID: Joi.string().optional(),
+    WALLETCONNECT_SECRET_KEY: Joi.string().optional(),
 })
 
 export type AppConfiguration = ReturnType<typeof configuration>

@@ -1,8 +1,8 @@
-import { ApiProperty } from "@nestjs/swagger"
+import { ApiProperty, ApiResponseProperty } from "@nestjs/swagger"
 
 export interface JwtPayload {
     sub: string
-    email: string
+    email?: string | null
     userType: string
     adminRole?: string
 }
@@ -11,8 +11,8 @@ export class UserResponseDto {
     @ApiProperty()
     id: string
 
-    @ApiProperty()
-    email: string
+    @ApiProperty({ required: false })
+    email?: string | null
 
     @ApiProperty()
     displayName?: string
@@ -39,4 +39,7 @@ export class AuthResponseDto {
 
     @ApiProperty()
     refreshToken: string
+
+    @ApiResponseProperty()
+    isNewUser?: boolean
 }

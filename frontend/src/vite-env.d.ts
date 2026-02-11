@@ -8,6 +8,10 @@ interface ImportMetaEnv {
     readonly VITE_GOOGLE_CLIENT_ID: string;
     readonly VITE_PRIVY_APP_ID: string;
 
+    // WalletConnect / Reown
+    readonly VITE_WALLETCONNECT_PROJECT_ID: string;
+    readonly VITE_APP_URL: string;
+
     // Rate Limiting
     readonly VITE_RATE_LIMIT_MAX_REQUESTS: string;
     readonly VITE_RATE_LIMIT_WINDOW_MS: string;

@@ -66,6 +66,7 @@ export interface AuthResponse {
     user: User;
     accessToken: string;
     refreshToken: string;
+    isNewUser?: boolean;
 }
 
 export interface LoginCredentials {
@@ -523,6 +524,70 @@ class AuthService {
 
             // Store tokens securely
             this.storeAuthTokens(authResponse.accessToken, authResponse.refreshToken);
+
+            return authResponse;
+        } catch (error) {
+            throw sanitizeError(error);
+        }
+    }
+
+    /**
+     * Authenticate with manual wallet signature (no Privy)
+     * Sends walletAddress + signature + nonce to POST /auth/wallet
+     */
+    async authenticateWithWallet(
+        walletAddress: string,
+        signature: string,
+        nonce: string,
+        chain: string = 'solana',
+    ): Promise<AuthResponse> {
+        // Rate limit check
+        const rateLimit = checkAuthRateLimit('oauth', walletAddress);
+        if (!rateLimit.allowed) {
+            throw {
+                message: 'Too many login attempts. Please try again later.',
+                code: 'RATE_LIMIT_EXCEEDED',
+            } as AuthError;
+        }
+
+        // Basic validation
+        if (!walletAddress || !signature || !nonce) {
+            throw {
+                message: 'Missing required wallet authentication data',
+                code: 'INVALID_INPUT',
+            } as AuthError;
+        }
+
+        try {
+            const rawResponse = await apiPost<any>(
+                API_ENDPOINTS.AUTH_WALLET,
+                { walletAddress, signature, nonce, chain },
+                { headers: getSecurityHeaders() },
+            );
+
+            // Extract from envelope
+            const response = rawResponse?.data || rawResponse;
+
+            // Validate
+            if (!validateResponseIntegrity(response)) {
+                throw { message: 'Invalid server response', code: 'RESPONSE_INTEGRITY_ERROR' };
+            }
+
+            if (!response.user || !response.accessToken || !response.refreshToken) {
+                throw { message: 'Server response missing required data', code: 'INVALID_RESPONSE' };
+            }
+
+            const authResponse: AuthResponse = {
+                user: this.mapBackendUserToFrontend(response.user),
+                accessToken: response.accessToken,
+                refreshToken: response.refreshToken,
+            };
+
+            // Store tokens securely
+            this.storeAuthTokens(authResponse.accessToken, authResponse.refreshToken);
+
+            // Reset rate limit on success
+            resetRateLimit(`auth:oauth:${walletAddress}`);
 
             return authResponse;
         } catch (error) {

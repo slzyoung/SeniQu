@@ -35,6 +35,7 @@ export interface RecentActivity {
 // ============================================
 
 export const updateProfileSchema = z.object({
+    username: z.string().min(3).max(20).regex(/^[a-z0-9_]+$/).optional(),
     displayName: z.string().min(2).max(50).optional().transform(val => val ? sanitizeInput(val) : val),
     bio: z.string().max(500).optional().transform(val => val ? sanitizeInput(val) : val),
     avatarUrl: z.string().url().optional().or(z.literal('')),

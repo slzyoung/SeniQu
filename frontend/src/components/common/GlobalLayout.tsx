@@ -5,6 +5,7 @@ import { GlobalSearchModal } from './GlobalSearchModal';
 import { ToastContainer } from '../ui/Toast';
 import { AuthModal } from '../AuthModal';
 import { useAuthModalStore } from '../../stores/useAuthModalStore';
+import { PrivyAuthBridge } from '../providers/PrivyAuthBridge';
 
 import { LoadingFallback } from './LoadingFallback';
 
@@ -20,18 +21,21 @@ export const GlobalLayout: React.FC = () => {
 
     return (
         <>
-            <ScrollToTop />
-            {/* Main Content */}
-            <Suspense fallback={<LoadingFallback />}>
-                <Outlet />
-            </Suspense>
+            {/* Privy → Backend JWT bridge (invisible UI component) */}
+            <PrivyAuthBridge>
+                <ScrollToTop />
+                {/* Main Content */}
+                <Suspense fallback={<LoadingFallback />}>
+                    <Outlet />
+                </Suspense>
 
-            {/* Global UI Components that require Router Context */}
-            <GlobalSearchModal />
-            <ToastContainer />
+                {/* Global UI Components that require Router Context */}
+                <GlobalSearchModal />
+                <ToastContainer />
 
-            {/* Global Auth Modal - Available on all pages */}
-            <AuthModal isOpen={isOpen} onClose={closeAuthModal} initialView={initialView} />
+                {/* Global Auth Modal - Available on all pages */}
+                <AuthModal isOpen={isOpen} onClose={closeAuthModal} initialView={initialView} />
+            </PrivyAuthBridge>
         </>
     );
 };

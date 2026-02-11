@@ -87,6 +87,10 @@ const UserLayout = lazy(() => import('../features/user/UserLayout'));
 const ArtistLayout = lazy(() => import('../features/artist/ArtistLayout'));
 const AdminLayout = lazy(() => import('../features/admin/AdminLayout'));
 
+// Legal Pages
+const TermsOfService = lazy(() => import('../components/common/Legal').then(module => ({ default: module.TermsOfService })));
+const PrivacyPolicy = lazy(() => import('../components/common/Legal').then(module => ({ default: module.PrivacyPolicy })));
+
 
 // Auth callback (still needed for OAuth)
 const AuthCallback = lazy(() => import('../features/auth/pages/AuthCallback'));
@@ -130,6 +134,10 @@ const router = createBrowserRouter(
                 <Route path={ROUTES.GALLERY_MUSEUM} element={<MuseumDetail />} />
                 <Route path={ROUTES.GALLERY_ARTWORK} element={<ArtworkView />} />
                 <Route path={ROUTES.NEARBY} element={<NearbyMuseums />} />
+
+                {/* Legal Routes */}
+                <Route path="/terms" element={<TermsOfService />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
             </Route>
 
             {/* User/Collector Dashboard Routes */}

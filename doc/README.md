@@ -90,6 +90,9 @@ cd backend && npm run start:dev
 |---------|-------------|
 | **Virtual Museums** | Immersive digital galleries for institutions |
 | **NFT Marketplace** | Secure minting and trading of digital art |
+| **Manual Wallet Auth** | Direct login via Phantom, Solflare, MetaMask signature |
+| **Privy Embedded Wallet** | Auto-created non-custodial wallet for all users |
+| **Deposit & Withdraw** | Transfer tokens to/from embedded wallet |
 | **Geolocation Search** | Find nearby museums and galleries |
 | **Community Forum** | Discussions for art enthusiasts |
 | **AI Art Analysis** | Genre detection and curation tools |
@@ -102,8 +105,9 @@ cd backend && npm run start:dev
 
 | Module | Description |
 |--------|-------------|
-| `auth` | Authentication (JWT, OAuth, Privy) |
+| `auth` | Authentication (JWT, OAuth, Privy, Wallet Signature) |
 | `users` | User profiles and settings |
+| `wallet` | Wallet connections, balances, transactions, deposit/withdraw |
 | `artworks` | Artwork CRUD and management |
 | `nfts` | NFT minting and marketplace |
 | `museums` | Museums/galleries with geolocation |
@@ -121,14 +125,18 @@ cd backend && npm run start:dev
 ## 🔒 Security Features
 
 - ✅ JWT with refresh tokens
-- ✅ OAuth 2.0 (Google, GitHub)
-- ✅ Privy Web3 wallet auth
+- ✅ OAuth 2.0 (Google)
+- ✅ Manual wallet signature verification (Phantom, Solflare, MetaMask)
+- ✅ WalletConnect / Reown mobile wallet connection
+- ✅ Privy non-custodial embedded wallets
 - ✅ Role-based access control (RBAC)
 - ✅ Row Level Security (RLS)
-- ✅ Rate limiting (3-tier)
+- ✅ Rate limiting (3-tier + wallet-specific)
 - ✅ XSS sanitization
 - ✅ SQL injection prevention
 - ✅ Security headers (Helmet)
+- ✅ Single-use nonce anti-replay protection
+- ✅ Device fingerprinting for wallet sessions
 - ✅ Comprehensive audit logging
 
 ---
@@ -137,10 +145,20 @@ cd backend && npm run start:dev
 
 Run SQL migrations in Supabase SQL Editor:
 
-1. `001_initial_schema.sql` - Tables and types
-2. `002_functions.sql` - PostgreSQL functions
-3. `003_security_policies.sql` - RLS policies
-4. `004_indexes.sql` - Performance indexes
+1. `001_initial_schema.sql` — Core tables and types
+2. `002_functions.sql` — PostgreSQL functions
+3. `003_security_policies.sql` — RLS policies
+4. `004_indexes.sql` — Performance indexes
+5. `005_fix_user_schema.sql` — User schema fixes
+6. `006_seed_users.sql` — Seed data
+7. `007_dashboard_enhancements.sql` — Dashboard enhancements
+8. `008_add_category_and_missing_columns.sql` — Category support
+9. `009_add_google_id.sql` — Google OAuth ID
+10. `010_wallet_infrastructure.sql` — Wallet connections, nonces, sessions
+11. `011_security_hardening.sql` — Security hardening
+12. `012_fix_remaining_security.sql` — Security fixes
+13. `013_secure_spatial_ref_sys.sql` — PostGIS security
+14. `014_wallet_transactions.sql` — Transactions, balances, embedded wallet
 
 ---
 

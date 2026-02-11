@@ -2,16 +2,17 @@
 
 ## 1. Authentication System
 
-Seniqu implements a robust multi-strategy authentication system with enterprise-grade security measures.
+Seniqu implements a robust multi-strategy authentication system with enterprise-grade security measures, supporting both traditional and Web3 wallet-based authentication.
 
 ### 1.1 Supported Authentication Methods
 
 | Method | Status | Description |
 |--------|--------|-------------|
 | **Email/Password** | ✅ Active | Traditional login with bcrypt hashing |
-| **Google OAuth 2.0** | ✅ Active | Social login via Google |
-| **GitHub OAuth 2.0** | ✅ Active | Developer-friendly OAuth |
-| **Privy Web3** | ✅ Active | Wallet-based authentication |
+| **Google OAuth 2.0** | ✅ Active | Social login via Google (PKCE + HMAC state) |
+| **Manual Wallet** | ✅ Active | Direct wallet signature (Phantom, Solflare, MetaMask) |
+| **WalletConnect / Reown** | ✅ Active | Mobile QR-based wallet connection |
+| **Privy Embedded Wallet** | ✅ Active | Auto-created non-custodial wallets for all users |
 
 ### 1.2 JWT Token Flow
 
@@ -39,7 +40,52 @@ sequenceDiagram
     API-->>Client: { accessToken }
 ```
 
-### 1.3 Google OAuth Server-Side Callback Flow (Hardened)
+### 1.3 Manual Wallet Authentication Flow
+
+Direct wallet-to-backend authentication bypasses third-party SDKs for wallet login. The flow uses cryptographic signature verification and single-use nonces.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant WalletExt as Wallet Extension
+    participant Backend
+    participant Supabase
+
+    User->>Frontend: Click wallet button (e.g., Phantom)
+    Frontend->>WalletExt: Connect to extension
+    WalletExt-->>Frontend: Public address
+
+    Frontend->>Backend: POST /wallet/nonce { walletAddress, chain }
+    Backend->>Supabase: Store nonce (wallet_nonces table)
+    Backend-->>Frontend: { nonce, message }
+
+    Frontend->>WalletExt: Sign message (nonce)
+    User->>WalletExt: Approve signature
+    WalletExt-->>Frontend: Signature bytes
+
+    Frontend->>Backend: POST /auth/wallet { walletAddress, signature, nonce, chain }
+    Backend->>Supabase: Validate nonce (single-use, not expired)
+    Backend->>Backend: Verify signature against public key
+    Backend->>Supabase: Find or create user by wallet address
+    Backend->>Supabase: Auto-link wallet (wallet_connections table)
+    Backend->>Backend: Generate JWT tokens
+    Backend-->>Frontend: { user, accessToken, refreshToken }
+
+    Frontend->>Frontend: Store tokens, redirect to dashboard
+```
+
+**Security features:**
+
+| Feature | Implementation |
+|---------|----------------|
+| **Single-use nonces** | Nonce marked `is_used = TRUE` after verification, expires in 5 min |
+| **Signature verification** | Ed25519 (Solana) or EIP-191 (Ethereum) signature checked server-side |
+| **Rate limiting** | 5 connect + 3 sign attempts per minute (client), server throttle on `/auth/wallet` |
+| **Anti-replay** | Nonce cannot be reused; `wallet_nonces` table enforces uniqueness |
+| **Sanitized errors** | Internal errors never leak stack traces; user rejections detected separately |
+
+### 1.4 Google OAuth Server-Side Callback Flow (Hardened)
 
 Google OAuth uses a fully hardened **server-side** pattern with PKCE, HMAC-signed state, and nonce verification.
 
@@ -78,7 +124,29 @@ sequenceDiagram
 | **Cookie** | Signed httpOnly, Secure, SameSite=Lax — client JS cannot read or tamper |
 | **Cleanup** | Cookie cleared after every callback, regardless of success or failure |
 
-### 1.3 Token Configuration
+### 1.5 Privy Embedded Wallet
+
+After any successful authentication (email, Google, or manual wallet), Privy automatically creates a **non-custodial embedded Solana wallet** for the user if one doesn't exist.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Privy
+    participant Backend
+
+    User->>Frontend: Successfully authenticated
+    Frontend->>Privy: Create embedded wallet (if not exists)
+    Privy-->>Frontend: Embedded wallet address
+    Frontend->>Backend: POST /auth/link-wallet { walletAddress, isEmbedded: true }
+    Backend->>Backend: Store in users.embedded_wallet_address
+    Backend-->>Frontend: Success
+```
+
+> [!IMPORTANT]
+> The embedded wallet is non-custodial — only the user controls the private key via Privy's MPC infrastructure. Seniqu never has access to the private key.
+
+### 1.6 Token Configuration
 
 ```typescript
 JWT_SECRET=your-super-secret-jwt-key-min-32-chars
@@ -93,24 +161,14 @@ JWT_REFRESH_EXPIRES_IN=7d             // Refresh token: 7 days
 
 | Role | Capabilities |
 |------|--------------|
-| `art_lover` | Browse gallery, view artworks, basic access |
+| `user` | Browse gallery, view artworks, basic access |
 | `collector` | Buy art, create collections, manage bookmarks |
 | `artist` | Upload artwork, view analytics, manage profile |
 | `institution` | Manage museum/gallery, curate exhibitions |
 | `admin` | Content moderation, user management, approvals |
 | `super_admin` | Full system access, security center, system logs |
 
-### 2.2 Admin Roles (Granular)
-
-| Admin Role | Permissions |
-|------------|-------------|
-| `content_moderator` | Review & approve artworks |
-| `user_manager` | Manage user accounts |
-| `system_admin` | Server configuration |
-| `security_admin` | Security logs, threat response |
-| `super_admin` | All permissions |
-
-### 2.3 Frontend Implementation
+### 2.2 Frontend Implementation
 
 ```tsx
 // Protected route with role check
@@ -122,7 +180,7 @@ JWT_REFRESH_EXPIRES_IN=7d             // Refresh token: 7 days
 {user.role === 'artist' && <ArtistTools />}
 ```
 
-### 2.4 Backend Implementation
+### 2.3 Backend Implementation
 
 ```typescript
 // Controller protection
@@ -145,16 +203,23 @@ getProfile(@GetUser() user: User) {
 All inputs are validated using class-validator DTOs:
 
 ```typescript
-export class CreateMuseumDto {
+export class WalletLoginDto {
     @IsString()
-    @MinLength(3)
-    @MaxLength(200)
-    @Matches(/^[a-zA-Z0-9\s\-,.'&()]+$/)  // Safe characters only
-    name: string;
+    @IsNotEmpty()
+    walletAddress: string;
 
-    @IsEmail()
-    @Transform(({ value }) => value.toLowerCase().trim())
-    email: string;
+    @IsString()
+    @IsNotEmpty()
+    signature: string;
+
+    @IsString()
+    @IsNotEmpty()
+    nonce: string;
+
+    @IsOptional()
+    @IsString()
+    @IsIn(['solana', 'ethereum'])
+    chain?: string = 'solana';
 }
 ```
 
@@ -178,7 +243,7 @@ private sanitizeString(str: string): string {
 // SqlInjectionGuard detects injection patterns
 const sqlPatterns = [
     /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION)\b.*\b(FROM|INTO|TABLE)\b)/i,
-    /(--|\#|\/\*|\*\/)/,
+    /(--|#|\/\*|\*\/)/,
     /(\b(OR|AND)\b\s*\d+\s*=\s*\d+)/i,
     /(;\s*(DROP|DELETE|UPDATE|INSERT))/i,
 ];
@@ -205,7 +270,6 @@ login() { }
 ### 3.5 Security Headers (Helmet)
 
 ```typescript
-// main.ts
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
@@ -232,134 +296,61 @@ app.enableCors({
 });
 ```
 
-## 4. Audit Logging
+## 4. Wallet Security
 
-### 4.1 Events Logged
+### 4.1 Nonce Management
+
+| Property | Value |
+|----------|-------|
+| **Format** | UUID v4 (cryptographically random) |
+| **Expiry** | 5 minutes from creation |
+| **Usage** | Single-use (marked `is_used` after verification) |
+| **Storage** | `wallet_nonces` table with RLS |
+| **Cleanup** | `cleanup_expired_nonces()` function runs periodically |
+
+### 4.2 Signature Verification
+
+```typescript
+// Solana: Ed25519 signature verification
+import nacl from 'tweetnacl';
+
+const isValid = nacl.sign.detached.verify(
+    new TextEncoder().encode(message),
+    bs58.decode(signature),
+    bs58.decode(walletAddress)
+);
+
+// Ethereum: EIP-191 personal_sign recovery
+import { verifyMessage } from 'ethers';
+const recoveredAddress = verifyMessage(message, signature);
+const isValid = recoveredAddress.toLowerCase() === walletAddress.toLowerCase();
+```
+
+### 4.3 Device Fingerprinting
+
+Wallet connections track device metadata for anomaly detection:
+
+```sql
+-- wallet_connections table includes:
+connected_from_ip INET,
+connected_from_ua TEXT,
+device_fingerprint VARCHAR(128)
+```
+
+## 5. Audit Logging
+
+### 5.1 Events Logged
 
 | Event Type | Examples |
 |------------|----------|
-| `authentication` | Login success/failure, password reset |
+| `authentication` | Login success/failure, password reset, wallet connect |
 | `authorization` | Access denied, role elevation |
+| `wallet` | Deposit, withdraw, wallet linked/unlinked |
 | `data_access` | Sensitive data read/write |
-| `security` | Rate limit exceeded, injection attempt |
+| `security` | Rate limit exceeded, injection attempt, replay attack |
 | `admin_action` | User banned, content removed |
 
-### 4.2 Audit Log Schema
-
-```typescript
-{
-    id: uuid,
-    user_id: uuid | null,
-    event_type: 'authentication' | 'authorization' | ...,
-    action: 'login_success' | 'login_failure' | ...,
-    resource_type: 'user' | 'artwork' | ...,
-    resource_id: uuid | null,
-    ip_address: inet,
-    user_agent: string,
-    metadata: jsonb,
-    created_at: timestamp,
-}
-```
-
-### 4.3 Usage
-
-```typescript
-// Automatic audit logging
-@Injectable()
-export class AuditService {
-    async logAuthEvent(type: 'login_success' | 'login_failure', userId, ip) {
-        await this.supabase.from('audit_logs').insert({
-            event_type: 'authentication',
-            action: type,
-            user_id: userId,
-            ip_address: ip,
-        });
-    }
-}
-```
-
-## 5. Account Security
-
-### 5.1 Password Security
-
-- Minimum 8 characters
-- bcrypt hashing with salt rounds: 12
-- Password comparison with timing-safe functions
-
-### 5.2 Account Lockout
-
-```sql
--- After 5 failed attempts, lock for 15 minutes
-UPDATE users 
-SET 
-    failed_login_attempts = failed_login_attempts + 1,
-    locked_until = CASE 
-        WHEN failed_login_attempts >= 4 
-        THEN NOW() + INTERVAL '15 minutes'
-        ELSE locked_until
-    END
-WHERE email = $1;
-```
-
-### 5.3 Session Management
-
-- Sessions stored in database with expiry
-- Ability to revoke all sessions on security events
-- Session cleanup scheduled job
-
-## 6. Row Level Security (Supabase)
-
-### 6.1 Example Policies
-
-```sql
--- Users can only see their own bookmarks
-CREATE POLICY "Users can view own bookmarks"
-ON bookmarks FOR SELECT
-USING (auth.uid() = user_id);
-
--- Published artworks are public
-CREATE POLICY "Published artworks are viewable"
-ON artworks FOR SELECT
-USING (status = 'published');
-
--- Admin bypass
-CREATE POLICY "Admins can manage all"
-ON artworks FOR ALL
-USING (is_admin());
-```
-
-## 7. Frontend Security
-
-### 7.1 Protected Storage
-
-```typescript
-// Token storage (production)
-// - accessToken: In-memory only (Zustand)
-// - refreshToken: httpOnly cookie
-
-// Current implementation
-const accessToken = sessionStorage.getItem('accessToken');
-```
-
-### 7.2 Route Protection
-
-```tsx
-export const ProtectedRoute: FC<Props> = ({ children, roles }) => {
-    const { user, isAuthenticated, isLoading } = useAuthStore();
-    
-    if (!isAuthenticated) {
-        return <Navigate to="/auth" replace />;
-    }
-    
-    if (roles && !roles.includes(user.role)) {
-        return <Navigate to="/unauthorized" replace />;
-    }
-    
-    return children;
-};
-```
-
-## 8. Security Checklist
+## 6. Security Checklist
 
 - [x] JWT with short-lived access tokens
 - [x] Refresh token rotation
@@ -376,4 +367,8 @@ export const ProtectedRoute: FC<Props> = ({ children, roles }) => {
 - [x] Role-based access control
 - [x] OAuth server-side callback (Google)
 - [x] OAuth state parameter (CSRF protection)
+- [x] Manual wallet signature verification
+- [x] Single-use nonce anti-replay protection
+- [x] Device fingerprinting for wallet sessions
+- [x] Wallet connection rate limiting
 - [ ] Two-factor authentication (planned)

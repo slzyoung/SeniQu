@@ -18,6 +18,8 @@ import { PageContainer } from '../../../components/common/DashboardLayout';
 import { Card, CardHeader, CardContent, Button, Input, Textarea, Avatar, Badge } from '../../../components/ui';
 import { useAuthStore } from '../../../stores/useAuthStore';
 import { useCurrentUser, useUpdateProfile, useUserStats } from '../../../hooks/useUser';
+import { ConnectedWallets } from '../components/ConnectedWallets';
+import { WalletSummaryCard } from '../components/WalletSummaryCard';
 
 export function Profile() {
     const { user: authUser } = useAuthStore();
@@ -290,6 +292,10 @@ export function Profile() {
                         </CardContent>
                     </Card>
 
+
+                    <WalletSummaryCard />
+                    <ConnectedWallets />
+
                     <Card variant="elevated">
                         <CardHeader title="Account Information" />
                         <CardContent className="space-y-2">
@@ -299,20 +305,6 @@ export function Profile() {
                                     <p className="text-sm text-theme-muted break-all">{displayUser?.email}</p>
                                 </div>
                                 <Badge variant="success" dot className="self-start sm:self-center">Verified</Badge>
-                            </div>
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 border-b border-theme-border gap-2">
-                                <div>
-                                    <p className="text-sm font-medium text-theme-text">Wallet Address</p>
-                                    <p className="text-sm text-theme-muted font-mono">
-                                        {displayUser?.walletAddress
-                                            ? `${displayUser.walletAddress.slice(0, 6)}...${displayUser.walletAddress.slice(-4)}`
-                                            : 'Not connected'
-                                        }
-                                    </p>
-                                </div>
-                                <Button variant="outline" size="sm" className="self-start sm:self-center">
-                                    {displayUser?.walletAddress ? 'Change' : 'Connect'}
-                                </Button>
                             </div>
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2">
                                 <div>
@@ -331,9 +323,9 @@ export function Profile() {
                             </div>
                         </CardContent>
                     </Card>
-                </div>
-            </div>
-        </PageContainer>
+                </div >
+            </div >
+        </PageContainer >
     );
 }
 

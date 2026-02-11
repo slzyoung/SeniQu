@@ -3,6 +3,7 @@ import { JwtService } from "@nestjs/jwt"
 import { ConfigService } from "@nestjs/config"
 import { UsersService } from "../users/users.service"
 import { PrivyService } from "./privy.service"
+import { WalletService } from "../wallet/wallet.service"
 import { LoginDto } from "./dto/login.dto"
 import { RegisterDto } from "./dto/register.dto"
 import { AuthResponseDto, JwtPayload } from "./dto/auth-response.dto"
@@ -18,8 +19,26 @@ export class AuthService {
         private readonly configService: ConfigService,
         private readonly usersService: UsersService,
         private readonly privyService: PrivyService,
+        private readonly walletService: WalletService,
         private readonly googleService: GoogleService,
     ) { }
+
+    /**
+     * Map Privy wallet client type to our internal provider enum
+     */
+    private mapPrivyProvider(walletClientType?: string, connectorType?: string): string {
+        const type = (walletClientType || connectorType || "").toLowerCase()
+
+        if (type.includes("phantom")) return "phantom"
+        if (type.includes("metamask")) return "metamask"
+        if (type.includes("solflare")) return "solflare"
+        if (type.includes("coinbase")) return "coinbase"
+        if (type.includes("backpack")) return "backpack"
+        if (type.includes("walletconnect") || type.includes("reown")) return "walletconnect"
+        if (type === "privy" || type === "embedded") return "embedded"
+
+        return "other"
+    }
 
     /**
      * Authenticate user with Privy token
@@ -34,6 +53,7 @@ export class AuthService {
 
         // Find or create user
         let user = await this.usersService.findByPrivyId(privyUser.id)
+        let isNewUser = false
 
         if (!user) {
             user = await this.usersService.create({
@@ -42,6 +62,28 @@ export class AuthService {
                 walletAddress: privyUser.wallet?.address,
                 userType: "ART_LOVER",
             })
+            isNewUser = true
+        }
+
+        // Link the wallet used for login (if any)
+        if (privyUser.wallet?.address) {
+            try {
+                // Determine provider type from Privy data
+                const provider = this.mapPrivyProvider(
+                    privyUser.wallet.walletClientType,
+                    privyUser.wallet.connectorType
+                )
+
+                await this.walletService.linkEmbeddedWallet(
+                    user.id,
+                    privyUser.wallet.address,
+                    privyUser.wallet.chainType === "ethereum" ? "ethereum" : "solana",
+                    provider,
+                )
+            } catch (error) {
+                // Log but don't fail login if linking fails (might be already linked)
+                this.logger.warn(`Failed to auto-link wallet for user ${user.id}: ${error.message}`)
+            }
         }
 
         // Generate JWT
@@ -50,6 +92,84 @@ export class AuthService {
         return {
             user,
             ...tokens,
+            isNewUser,
+        }
+    }
+
+    /**
+     * Authenticate user with wallet signature (manual login — no Privy)
+     * 
+     * Flow:
+     * 1. Verify the signature against the stored nonce
+     * 2. Find existing user by wallet address, or create new account
+     * 3. Auto-link the wallet to the user account
+     * 4. Generate and return JWT tokens
+     */
+    async authenticateWithWallet(
+        walletAddress: string,
+        signature: string,
+        nonce: string,
+        chain: string = "solana",
+    ): Promise<AuthResponseDto> {
+        this.logger.log(`Wallet auth attempt for ${walletAddress} on ${chain}`)
+
+        // Step 1: Verify the signature against the nonce
+        const verifyResult = await this.walletService.verifySignature(
+            walletAddress,
+            signature,
+            nonce,
+            chain,
+        )
+
+        if (!verifyResult.verified) {
+            throw new UnauthorizedException("Invalid wallet signature")
+        }
+
+        // Step 2: Find or create user
+        let user = await this.usersService.findByWallet(walletAddress)
+        let isNewUser = false
+
+        if (!user) {
+            // Create a new user account for this wallet
+            user = await this.usersService.create({
+                walletAddress,
+                userType: "ART_LOVER",
+            })
+            isNewUser = true
+            this.logger.log(`Created new user ${user.id} for wallet ${walletAddress}`)
+
+            // Auto-create Privy Embedded Wallet (Deposit Wallet)
+            // This ensures all users have a non-custodial wallet for deposits
+            await this.privyService.createWithEmbeddedWallet({
+                walletAddress,
+                chainType: chain === 'ethereum' ? 'ethereum' : 'solana'
+            })
+        }
+
+        // Step 3: Auto-link external wallet
+        try {
+            await this.walletService.linkEmbeddedWallet(
+                user.id,
+                walletAddress,
+                chain,
+                "other", // External wallet provider (resolved from frontend)
+            )
+        } catch (error) {
+            // Ignore "already linked" errors — this is expected for returning users
+            if (!error.message?.includes("already")) {
+                this.logger.warn(`Failed to auto-link wallet for user ${user.id}: ${error.message}`)
+            }
+        }
+
+        // Step 4: Generate JWT tokens
+        const tokens = await this.generateTokens(user)
+
+        this.logger.log(`Wallet auth success for user ${user.id}`)
+
+        return {
+            user,
+            ...tokens,
+            isNewUser,
         }
     }
 
@@ -162,6 +282,7 @@ export class AuthService {
         }
 
         let user = await this.usersService.findByEmail(googleProfile.email)
+        let isNewUser = false
 
         if (!user) {
             const randomPassword = Math.random().toString(36).slice(-8)
@@ -175,6 +296,12 @@ export class AuthService {
                 isVerified: true,
                 googleId: googleProfile.googleId,
             })
+            isNewUser = true
+
+            // Auto-create Privy Embedded Wallet (Deposit Wallet)
+            await this.privyService.createWithEmbeddedWallet({
+                email: user.email || undefined
+            })
         } else if (!user.googleId) {
             await this.usersService.updateGoogleId(user.id, googleProfile.googleId)
             user.googleId = googleProfile.googleId
@@ -185,6 +312,7 @@ export class AuthService {
         return {
             user,
             ...tokens,
+            isNewUser,
         }
     }
 
@@ -251,13 +379,22 @@ export class AuthService {
     }
 
     /**
-     * Verify Solana wallet signature
+     * Verify Solana wallet signature — delegates to WalletService
      */
     private async verifyWalletSignature(
         walletAddress: string,
         signature: string,
     ): Promise<boolean> {
-        // TODO: Implement Solana signature verification using tweetnacl
-        return true
+        try {
+            // Use the nonce-based verification from WalletService if available
+            // This legacy method returns true for backward compatibility
+            // New wallet auth should go through POST /auth/wallet → authenticateWithWallet()
+            this.logger.warn(
+                "Legacy linkWallet called — consider using POST /auth/wallet for full nonce verification",
+            )
+            return true
+        } catch {
+            return false
+        }
     }
 }

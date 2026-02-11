@@ -12,11 +12,13 @@ graph TD
         Client[React + Vite]
         Router[React Router]
         Store[Zustand Store]
+        WalletHook[useManualWallet Hook]
     end
     
     subgraph Backend
         API[NestJS API]
         Auth[Auth Service]
+        WalletSvc[Wallet Service]
         Guards[Security Guards]
     end
     
@@ -27,19 +29,26 @@ graph TD
     
     subgraph External
         OAuth[OAuth Providers]
-        Web3[Privy Web3]
+        Privy[Privy Embedded Wallets]
+        WalletExt["Wallet Extensions (Phantom, Solflare, MetaMask)"]
+        WC[WalletConnect / Reown]
+        Solana[Solana RPC]
         Maps[Google Maps API]
     end
     
     Client <--> Router
     Router <--> Store
     Client <--> API
+    WalletHook <--> WalletExt
+    WalletHook <--> WC
     API <--> Auth
+    API <--> WalletSvc
     API <--> Guards
     API <--> Supabase
     Supabase <--> RLS
     Auth <--> OAuth
-    Auth <--> Web3
+    Auth <--> Privy
+    WalletSvc <--> Solana
     API <--> Maps
 ```
 
@@ -97,6 +106,7 @@ seniqu-webapp/
 │   │   │
 │   │   ├── auth/              # Authentication module
 │   │   ├── users/             # User management
+│   │   ├── wallet/            # Wallet connections, balances, transactions
 │   │   ├── artworks/          # Artwork CRUD
 │   │   ├── nfts/              # NFT marketplace
 │   │   ├── collections/       # User collections
@@ -111,11 +121,11 @@ seniqu-webapp/
 │   │   └── admin/             # Admin dashboard
 │   │
 │   └── supabase/
-│       └── migrations/        # SQL schema & functions
+│       └── migrations/        # SQL schema & functions (001-014)
 │           ├── 001_initial_schema.sql
-│           ├── 002_functions.sql
-│           ├── 003_security_policies.sql
-│           └── 004_indexes.sql
+│           ├── ...
+│           ├── 010_wallet_infrastructure.sql
+│           └── 014_wallet_transactions.sql
 │
 ├── frontend/                   # React Client Application
 │   ├── src/
@@ -207,6 +217,11 @@ erDiagram
     users ||--o{ collections : has
     users ||--o{ bookmarks : saves
     users ||--o{ forum_threads : writes
+    users ||--o{ wallet_connections : connects
+    users ||--o{ wallet_transactions : transacts
+    
+    wallet_connections ||--o{ wallet_transactions : records
+    wallet_connections ||--o{ wallet_sessions : tracks
     
     institutions ||--o{ artworks : displays
     artworks ||--o| nfts : tokenized_as

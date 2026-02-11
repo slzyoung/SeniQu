@@ -26,6 +26,7 @@ import { SearchModule } from "./search/search.module"
 import { AnalyticsModule } from "./analytics/analytics.module"
 import { NotificationsModule } from "./notifications/notifications.module"
 import { ArtistModule } from "./artist/artist.module"
+import { WalletModule } from "./wallet/wallet.module"
 
 @Module({
     imports: [
@@ -94,6 +95,7 @@ import { ArtistModule } from "./artist/artist.module"
         AnalyticsModule,
         NotificationsModule,
         ArtistModule,
+        WalletModule,
     ],
     controllers: [AppController],
     providers: [

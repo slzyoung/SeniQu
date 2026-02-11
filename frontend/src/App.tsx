@@ -15,7 +15,7 @@ export function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <PrivyWrapper>
-          {/* Main Router */}
+          {/* Main Router — PrivyAuthBridge is inside AppRouter for useNavigate access */}
           <AppRouter />
         </PrivyWrapper>
       </ThemeProvider>

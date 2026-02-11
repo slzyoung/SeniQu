@@ -10,6 +10,33 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * Detect if device is mobile
+ */
+export function isMobile(): boolean {
+    if (typeof window === 'undefined') return false;
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+/**
+ * Detect if running in a wallet's in-app browser
+ */
+export function isWalletInAppBrowser(): boolean {
+    if (typeof window === 'undefined') return false;
+
+    // Check for common injected providers
+    const ethereum = (window as any).ethereum;
+    const solana = (window as any).solana;
+    const solflare = (window as any).solflare;
+
+    const isMetaMask = !!(ethereum?.isMetaMask);
+    const isPhantom = !!(solana?.isPhantom);
+    const isSolflare = !!(solflare?.isSolflare);
+
+    // If we have an injected provider AND we are on mobile, it's likely an in-app browser
+    return isMobile() && (isMetaMask || isPhantom || isSolflare);
+}
+
+/**
  * Get dashboard route based on user role
  */
 export function getDashboardRoute(role: string | UserRole): string {
@@ -100,4 +127,3 @@ export function extractPagination(data: unknown): { total: number; page: number;
         totalPages: (obj.totalPages as number) || (obj.pages as number) || 1,
     };
 }
-

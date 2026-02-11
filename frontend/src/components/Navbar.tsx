@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Wallet, User, LogOut, LayoutDashboard, Image, FolderHeart, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { User, LogOut, LayoutDashboard, Image, FolderHeart, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { QuickSearch } from './common/QuickSearch';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle } from './ThemeToggle';
@@ -118,24 +118,15 @@ export function Navbar() {
                 <User className="w-4 h-4 transition-transform group-hover:scale-110 relative z-10" />
               </a>
             ) : (
-              <>
-                <button
-                  onClick={() => openAuthModal()}
-                  className="text-theme-text hover:text-gold font-medium text-sm transition-colors">
+              <button
+                onClick={() => openAuthModal()}
+                className="group flex items-center gap-2 px-5 py-2.5 border border-gold/50 rounded-full text-gold hover:bg-gold hover:text-charcoal hover:shadow-lg hover:shadow-gold/20 transition-all duration-300 relative overflow-hidden">
+                <div className="absolute inset-0 bg-gold/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                <span className="text-sm font-medium tracking-wide relative z-10">
                   Sign In
-                </button>
-
-                <button
-                  onClick={() => openAuthModal('wallet-select')}
-                  className="group flex items-center gap-2 px-5 py-2.5 border border-gold/50 rounded-full text-gold hover:bg-gold hover:text-charcoal hover:shadow-lg hover:shadow-gold/20 transition-all duration-300 relative overflow-hidden">
-
-                  <div className="absolute inset-0 bg-gold/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-                  <span className="text-sm font-medium tracking-wide relative z-10">
-                    Connect
-                  </span>
-                  <Wallet className="w-4 h-4 transition-transform group-hover:scale-110 relative z-10" />
-                </button>
-              </>
+                </span>
+                <User className="w-4 h-4 transition-transform group-hover:scale-110 relative z-10" />
+              </button>
             )}
           </div>
 
@@ -261,28 +252,15 @@ export function Navbar() {
                 className="pt-8 border-t border-theme-border flex flex-col gap-4">
 
                 {!isAuthenticated ? (
-                  <>
-                    <button
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        openAuthModal();
-                      }}
-                      className="w-full flex items-center justify-center gap-2 px-6 py-3 border border-theme-border text-theme-text rounded-full font-medium">
-
-                      <span>Sign In</span>
-                      <User className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        openAuthModal('wallet-select');
-                      }}
-                      className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gold text-charcoal rounded-full font-medium shadow-lg shadow-gold/20">
-
-                      <span>Connect</span>
-                      <Wallet className="w-5 h-5" />
-                    </button>
-                  </>
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      openAuthModal();
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gold text-charcoal rounded-full font-medium shadow-lg shadow-gold/20">
+                    <span>Sign In</span>
+                    <User className="w-5 h-5" />
+                  </button>
                 ) : (
                   <button
                     onClick={handleLogout}

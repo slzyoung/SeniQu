@@ -23,6 +23,7 @@ import { JwtAuthGuard } from "./guards/jwt-auth.guard"
 import { PrivyGuard } from "./guards/privy.guard"
 import { GetUser } from "./decorators/get-user.decorator"
 import { Public } from "./decorators/public.decorator"
+import { WalletLoginDto } from "./dto/wallet-login.dto"
 
 @ApiTags("Auth")
 @Controller("auth")
@@ -33,6 +34,27 @@ export class AuthController {
         private readonly authService: AuthService,
         private readonly configService: ConfigService,
     ) { }
+
+    /**
+     * Authenticate with wallet signature (manual — no Privy)
+     * User sends { walletAddress, signature, nonce, chain }
+     * Backend verifies and returns JWT tokens
+     */
+    @Post("wallet")
+    @Public()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: "Authenticate with wallet signature" })
+    @ApiResponse({ status: 200, type: AuthResponseDto })
+    async authenticateWithWallet(
+        @Body() dto: WalletLoginDto,
+    ): Promise<AuthResponseDto> {
+        return this.authService.authenticateWithWallet(
+            dto.walletAddress,
+            dto.signature,
+            dto.nonce,
+            dto.chain || "solana",
+        )
+    }
 
     /**
      * Authenticate with Privy token

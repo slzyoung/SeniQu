@@ -249,3 +249,37 @@ export function useUploadAvatar() {
         },
     });
 }
+
+// ============================================
+// WALLET HOOKS
+// ============================================
+
+export function useConnectedWallets() {
+    return useQuery({
+        queryKey: ['connected-wallets'],
+        queryFn: async () => {
+            // We need to import apiGet here or reuse from lib/api
+            // Since apiGet isn't exported from hooks/useUser.ts, we'll use the imported one if available
+            // Looking at imports: import { getAccessToken } from '../lib/api';
+            // We need to add apiGet and apiDelete to imports
+            const { apiGet } = await import('../lib/api');
+            const response = await apiGet<any>('/wallet/connections');
+            return response.wallets || [];
+        },
+        staleTime: 30000,
+    });
+}
+
+export function useUnlinkWallet() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (walletId: string) => {
+            const { apiDelete } = await import('../lib/api');
+            await apiDelete(`/wallet/link/${walletId}`);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['connected-wallets'] });
+            queryClient.invalidateQueries({ queryKey: ['user-stats'] });
+        },
+    });
+}

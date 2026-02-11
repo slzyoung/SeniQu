@@ -25,12 +25,13 @@ Content-Type: application/json
 | POST | `/auth/login` | Login with email/password | No |
 | GET | `/auth/google/initiate` | Initiate Google OAuth (returns auth URL, sets cookie) | No |
 | GET | `/auth/google/callback` | Google OAuth callback (PKCE + state + nonce verified) | No |
-| POST | `/auth/privy` | Login with Privy wallet | No |
+| POST | `/auth/privy` | Login with Privy embedded wallet | No |
+| POST | `/auth/wallet` | Login with manual wallet signature | No |
 | POST | `/auth/refresh` | Refresh access token | Refresh Token |
 | GET | `/auth/me` | Get current user profile | Yes |
 | POST | `/auth/link-wallet` | Link Solana wallet to account | Yes |
 
-### Request Examples
+### Email/Password Authentication
 
 ```bash
 # Register
@@ -44,9 +45,54 @@ curl -X POST http://localhost:3001/api/v1/auth/login \
   -d '{"email": "user@example.com", "password": "Password1!"}'
 ```
 
-### Google OAuth (Hardened Server-Side Flow)
+### Manual Wallet Authentication
 
-The Google OAuth flow uses PKCE, HMAC-signed state, and nonce verification:
+Authenticate with any supported wallet extension (Phantom, Solflare, MetaMask) via signature verification.
+
+**Step 1 — Request nonce:**
+
+```bash
+curl -X POST http://localhost:3001/api/v1/wallet/nonce \
+  -H "Content-Type: application/json" \
+  -d '{"walletAddress": "7xKX...abc", "chain": "solana"}'
+```
+
+**Response:**
+```json
+{
+  "nonce": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "message": "Sign this message to authenticate with Seniqu:\n\nNonce: a1b2c3d4-e5f6-7890-abcd-ef1234567890\nWallet: 7xKX...abc\nTimestamp: 2026-02-11T10:30:00Z"
+}
+```
+
+**Step 2 — Submit signature:**
+
+```bash
+curl -X POST http://localhost:3001/api/v1/auth/wallet \
+  -H "Content-Type: application/json" \
+  -d '{
+    "walletAddress": "7xKX...abc",
+    "signature": "3xYz...encoded_signature",
+    "nonce": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "chain": "solana"
+  }'
+```
+
+**Response:**
+```json
+{
+  "user": {
+    "id": "uuid",
+    "email": null,
+    "walletAddress": "7xKX...abc",
+    "role": "user"
+  },
+  "accessToken": "eyJhbG...",
+  "refreshToken": "dGhpcyBp..."
+}
+```
+
+### Google OAuth (Hardened Server-Side Flow)
 
 1. Frontend calls `GET /api/v1/auth/google/initiate`
    - Backend generates PKCE pair, signed state, nonce
@@ -54,13 +100,11 @@ The Google OAuth flow uses PKCE, HMAC-signed state, and nonce verification:
    - Returns `{ authUrl: "https://accounts.google.com/o/oauth2/v2/auth?..." }`
 2. Frontend redirects user to `authUrl`
 3. Google redirects to `GET /api/v1/auth/google/callback?code=xxx&state=yyy`
-4. Backend validates state (HMAC signature + 10-min expiry), exchanges code with `code_verifier` (PKCE), verifies `nonce` in ID token
-5. Backend redirects to frontend with JWT in hash fragment:
-   ```
-   https://seniquapp.netlify.app/auth/callback#access_token=...&refresh_token=...&user=...
-   ```
+4. Backend validates state (HMAC + 10-min expiry), exchanges code with PKCE, verifies nonce
+5. Backend redirects to frontend with JWT in hash fragment
 
-> **Security:** PKCE (RFC 7636), HMAC-SHA256 signed state, nonce replay protection, signed httpOnly cookies.
+> [!NOTE]
+> Security: PKCE (RFC 7636), HMAC-SHA256 signed state, nonce replay protection, signed httpOnly cookies.
 
 ---
 
@@ -77,7 +121,64 @@ The Google OAuth flow uses PKCE, HMAC-signed state, and nonce verification:
 
 ---
 
-## 4. Artworks
+## 4. Wallet
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | `/wallet/nonce` | Request a signature nonce | No |
+| GET | `/wallet/connections` | List user's connected wallets | Yes |
+| POST | `/wallet/connections` | Connect a new wallet | Yes |
+| DELETE | `/wallet/connections/:id` | Disconnect wallet | Yes |
+| GET | `/wallet/balances` | Get cached wallet balances | Yes |
+| GET | `/wallet/balances/refresh` | Force-refresh balances from chain | Yes |
+| GET | `/wallet/transactions` | List wallet transactions | Yes |
+| POST | `/wallet/withdraw` | Initiate withdrawal | Yes |
+
+### Withdrawal Request
+
+```bash
+curl -X POST http://localhost:3001/api/v1/wallet/withdraw \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fromWalletId": "uuid-of-embedded-wallet-connection",
+    "toAddress": "7xKX...recipient",
+    "amount": "1.5",
+    "tokenMint": null,
+    "chain": "solana"
+  }'
+```
+
+**Response:**
+```json
+{
+  "transactionId": "uuid",
+  "status": "pending",
+  "txHash": null,
+  "estimatedFee": "0.000005"
+}
+```
+
+### Transaction History
+
+```bash
+curl -X GET "http://localhost:3001/api/v1/wallet/transactions?page=1&limit=20&type=deposit" \
+  -H "Authorization: Bearer <token>"
+```
+
+**Query Parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `page` | number | Page number (default: 1) |
+| `limit` | number | Items per page (default: 20, max: 100) |
+| `type` | string | Filter: `deposit`, `withdraw`, `transfer_in`, `transfer_out` |
+| `status` | string | Filter: `pending`, `confirmed`, `failed` |
+| `chain` | string | Filter by chain: `solana`, `ethereum` |
+
+---
+
+## 5. Artworks
 
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
@@ -103,7 +204,7 @@ The Google OAuth flow uses PKCE, HMAC-signed state, and nonce verification:
 
 ---
 
-## 5. Museums
+## 6. Museums
 
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
@@ -124,7 +225,7 @@ GET /museums/nearby?lat=-6.2088&lng=106.8456&radius=25
 
 ---
 
-## 6. Bookmarks
+## 7. Bookmarks
 
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
@@ -135,7 +236,7 @@ GET /museums/nearby?lat=-6.2088&lng=106.8456&radius=25
 
 ---
 
-## 7. Forum
+## 8. Forum
 
 ### Categories
 
@@ -165,7 +266,7 @@ GET /museums/nearby?lat=-6.2088&lng=106.8456&radius=25
 
 ---
 
-## 8. Search
+## 9. Search
 
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
@@ -173,33 +274,6 @@ GET /museums/nearby?lat=-6.2088&lng=106.8456&radius=25
 | GET | `/search/artworks` | Advanced artwork search | No |
 | GET | `/search/nearby` | Nearby institutions | No |
 | GET | `/search/suggestions` | Autocomplete | No |
-
-### Search Parameters
-
-```bash
-# Global search
-GET /search?q=batik&type=all
-
-# Advanced artwork search
-GET /search/artworks?q=batik&style=traditional&priceMin=1000000&priceMax=10000000
-
-# Nearby search
-GET /search/nearby?lat=-6.2088&lng=106.8456&radius=50
-```
-
----
-
-## 9. Analytics
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| GET | `/analytics/artist` | Artist dashboard stats | Artist |
-| GET | `/analytics/artist/artworks` | Artwork performance | Artist |
-| GET | `/analytics/artist/sales` | Sales analytics | Artist |
-| GET | `/analytics/admin` | Admin dashboard | Admin |
-| GET | `/analytics/admin/users` | User growth | Admin |
-| GET | `/analytics/admin/content` | Content metrics | Admin |
-| POST | `/analytics/track` | Track event | Yes |
 
 ---
 
@@ -239,7 +313,7 @@ All errors follow this format:
   "message": "Validation failed",
   "error": "Bad Request",
   "details": [
-    { "field": "email", "message": "must be a valid email" }
+    { "field": "walletAddress", "message": "must be a valid wallet address" }
   ]
 }
 ```
@@ -254,6 +328,7 @@ All errors follow this format:
 | 401 | Unauthorized (no/invalid token) |
 | 403 | Forbidden (insufficient permissions) |
 | 404 | Not Found |
+| 409 | Conflict (wallet already linked, duplicate) |
 | 429 | Too Many Requests (rate limited) |
 | 500 | Internal Server Error |
 
@@ -266,6 +341,14 @@ All errors follow this format:
 | Short | 10 requests | 1 second |
 | Medium | 50 requests | 10 seconds |
 | Long | 100 requests | 1 minute |
+
+**Wallet-specific limits:**
+
+| Endpoint | Limit | Window |
+|----------|-------|--------|
+| `POST /wallet/nonce` | 5 requests | 1 minute |
+| `POST /auth/wallet` | 3 requests | 1 minute |
+| `POST /wallet/withdraw` | 3 requests | 5 minutes |
 
 When rate limited, response includes:
 

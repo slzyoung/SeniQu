@@ -9,6 +9,7 @@ export { Input, Textarea } from './Input';
 export { Modal, ConfirmModal } from './Modal';
 export { Select } from './Select';
 export type { SelectOption } from './Select';
+export { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from './DropdownMenu';
 
 // Display Components
 export { Avatar, AvatarGroup } from './Avatar';

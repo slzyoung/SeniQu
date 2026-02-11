@@ -93,6 +93,7 @@ export const API_ENDPOINTS = {
     // Auth
     AUTH_LOGIN: '/auth/login',
     AUTH_REGISTER: '/auth/register',
+    AUTH_WALLET: '/auth/wallet',
     AUTH_GOOGLE: '/auth/google',
     AUTH_CALLBACK: '/auth/callback',
     AUTH_REFRESH: '/auth/refresh',

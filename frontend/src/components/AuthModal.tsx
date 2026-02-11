@@ -4,15 +4,21 @@
  * OWASP-compliant with anti-throttling and validation
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Wallet, Mail, Lock, ArrowLeft, Loader2, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
+import { X, Mail, Lock, ArrowLeft, Loader2, Eye, EyeOff, AlertCircle, CheckCircle, Wallet, ShieldCheck } from 'lucide-react';
 import { authService, loginSchema, registerSchema, AuthError } from '../services/authService';
+import { useAppKit, useAppKitAccount, useAppKitProvider } from '../lib/reownConfig';
+import { userService } from '../services/userService';
 import { useAuthStore } from '../stores/useAuthStore';
 import { useToast } from '../stores/useNotificationStore';
 import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardRoute } from '../lib/utils';
+import { useManualWallet, isWalletInstalled } from '../hooks/useManualWallet';
+import { usePrivy } from '@privy-io/react-auth';
+import { setAccessToken } from '../lib/api';
+import type { ManualWalletType, WalletConnectionState } from '../hooks/useManualWallet';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -20,7 +26,7 @@ interface AuthModalProps {
   initialView?: AuthView;
 }
 
-type AuthView = 'main' | 'email-login' | 'email-register' | 'wallet-select';
+type AuthView = 'main' | 'email-login' | 'email-register' | 'wallet-select' | 'wallet-register';
 
 type WalletType = 'metamask' | 'phantom' | 'solflare' | 'walletconnect';
 
@@ -28,7 +34,7 @@ const WALLET_OPTIONS: { id: WalletType; name: string; logo: string; description:
   { id: 'phantom', name: 'Phantom', logo: '/images/wallets/phantom.svg', description: 'Solana\'s most popular wallet' },
   { id: 'solflare', name: 'Solflare', logo: '/images/wallets/solflare.svg', description: 'Advanced Solana wallet' },
   { id: 'metamask', name: 'MetaMask', logo: '/images/wallets/metamask.svg', description: 'Multi-chain browser wallet' },
-  { id: 'walletconnect', name: 'WalletConnect', logo: '/images/wallets/walletconnect.svg', description: 'Connect any mobile wallet' },
+  { id: 'walletconnect', name: 'WalletConnect (Reown)', logo: '/images/wallets/walletconnect.svg', description: 'Mobile apps via Reown' },
 ];
 
 // Password strength indicator
@@ -69,10 +75,62 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
+// Wallet connection status indicator
+function WalletConnectionStatus({ state, walletName }: { state: WalletConnectionState; walletName: string }) {
+  const getStatusInfo = () => {
+    switch (state) {
+      case 'connecting':
+        return { label: `Connecting to ${walletName}...`, color: 'text-blue-400', icon: <Loader2 className="w-4 h-4 animate-spin" /> };
+      case 'connected':
+        return { label: 'Wallet connected', color: 'text-green-400', icon: <CheckCircle className="w-4 h-4" /> };
+      case 'requesting-nonce':
+        return { label: 'Preparing signature request...', color: 'text-blue-400', icon: <Loader2 className="w-4 h-4 animate-spin" /> };
+      case 'awaiting-signature':
+        return { label: 'Please sign the message in your wallet', color: 'text-yellow-400', icon: <ShieldCheck className="w-4 h-4" /> };
+      case 'verifying':
+        return { label: 'Verifying signature...', color: 'text-blue-400', icon: <Loader2 className="w-4 h-4 animate-spin" /> };
+      case 'authenticated':
+        return { label: 'Authentication successful!', color: 'text-green-400', icon: <CheckCircle className="w-4 h-4" /> };
+      case 'error':
+        return { label: 'Connection failed', color: 'text-red-400', icon: <AlertCircle className="w-4 h-4" /> };
+      default:
+        return null;
+    }
+  };
+
+  const info = getStatusInfo();
+  if (!info) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      className={`flex items-center gap-2 p-3 rounded-xl border ${state === 'error'
+        ? 'bg-red-500/10 border-red-500/30'
+        : state === 'authenticated'
+          ? 'bg-green-500/10 border-green-500/30'
+          : state === 'awaiting-signature'
+            ? 'bg-yellow-500/10 border-yellow-500/30'
+            : 'bg-blue-500/10 border-blue-500/30'
+        } ${info.color} text-sm`}
+    >
+      {info.icon}
+      <span>{info.label}</span>
+    </motion.div>
+  );
+}
+
 export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalProps) {
   const navigate = useNavigate();
   const toast = useToast();
   const { login: storeLogin } = useAuthStore();
+  const manualWallet = useManualWallet();
+
+  // Reown AppKit Hooks
+  const { open: openAppKit } = useAppKit();
+  const { address: reownAddress, isConnected: isReownConnected } = useAppKitAccount();
+  const { walletProvider: reownProvider } = useAppKitProvider('solana');
 
   // View state
   const [view, setView] = useState<AuthView>(initialView);
@@ -83,6 +141,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [username, setUsername] = useState('');
+  const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Reset view when modal opens
@@ -92,6 +152,9 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     }
   }, [isOpen, initialView]);
 
+  // Pending auth state for new users (before profile completion)
+  const [pendingAuth, setPendingAuth] = useState<{ user: any; accessToken: string; refreshToken: string } | null>(null);
+
   // Reset form on close
   const handleClose = useCallback(() => {
     // Delay reset slightly to allow close animation to finish
@@ -100,8 +163,11 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
       setEmail('');
       setPassword('');
       setDisplayName('');
+      setUsername('');
+      setAgreeToTerms(false);
       setErrors({});
       setShowPassword(false);
+      setPendingAuth(null);
     }, 300);
     onClose();
   }, [onClose]);
@@ -129,29 +195,203 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     }
   }, [toast]);
 
-  // Handle wallet connect (Privy)
-  const handleWalletConnect = useCallback(async (walletType?: WalletType) => {
+  /**
+   * Handle wallet connect — manual direct connection (no Privy)
+   *
+   * Flow:
+   * 1. Connect to wallet extension (desktop) or deep link (mobile)
+   * 2. Request nonce from backend
+   * 3. User signs the nonce message
+   * 4. Verify signature → authenticate → get JWT
+   *
+   * Anti-Throttling: Rate limited via useManualWallet hook
+   * Anti-Hacking: Nonce expiry, signature verification, sanitized errors
+   */
+  const { login: privyLogin, logout: privyLogout, user: privyUser, authenticated: privyAuthenticated, getAccessToken } = usePrivy();
+
+  // Sync logout: If app logs out, ensure Privy also logs out to prevent auto-relogin loops
+  useEffect(() => {
+    // Check if we are logged out in app but still logged in Privy
+    const authState = useAuthStore.getState();
+    if (!authState.isAuthenticated && privyAuthenticated) {
+      privyLogout();
+    }
+  }, [privyAuthenticated, privyLogout]);
+
+  // Effect: Handle Reown (WalletConnect) Connection -> Manual Login Flow
+  useEffect(() => {
+    const handleReownLogin = async () => {
+      // Only proceed if:
+      // 1. Reown is connected
+      // 2. We have an address and provider
+      // 3. We are NOT currently authenticated in the app (prevent double login)
+      // 4. We are NOT currently processing another wallet login
+      if (isReownConnected && reownAddress && reownProvider && !useAuthStore.getState().isAuthenticated && !manualWallet.isProcessing) {
+
+        // Check if the user meant to login via Reown (maybe check view?)
+        // Or just assume if Reown connects while this modal is mounted, it's a login attempt.
+        // Since we triggered openAppKit() from this modal, it's safe.
+
+        try {
+          const authResponse = await manualWallet.loginWithProvider(reownAddress, reownProvider, 'solana');
+
+          if (authResponse) {
+            if (authResponse.isNewUser) {
+              setPendingAuth(authResponse);
+              const shortAddress = authResponse.user.walletAddress?.slice(0, 8) || 'user';
+              setUsername(shortAddress);
+              setView('wallet-register');
+            } else {
+              // Login logic handled in loginWithProvider (storeLogin + navigate)
+              // Just close modal here
+              handleClose();
+            }
+          }
+        } catch (e) {
+          console.error("Reown login failed", e);
+        }
+      }
+    };
+
+    if (isOpen) {
+      handleReownLogin();
+    }
+  }, [isOpen, isReownConnected, reownAddress, reownProvider, manualWallet, handleClose, setPendingAuth]);
+
+  // Handle wallet connect — manual direct connection or Privy (WalletConnect)
+  const handleWalletConnect = useCallback(async (walletType: ManualWalletType) => {
+    // WalletConnect via Privy (Reown)
+    if (walletType === 'walletconnect') {
+      try {
+        // Trigger Reown AppKit (WalletConnect)
+        await openAppKit();
+      } catch (err) {
+        console.error('Reown login error:', err);
+        toast.error('Connection Failed', 'Could not open WalletConnect modal');
+      }
+      return;
+    }
+
+    // Manual Wallets (MetaMask, Phantom, Solflare)
+    if (isLoading || manualWallet.state === 'connecting' || manualWallet.state === 'verifying') return;
+
+    setErrors({});
+
+    // Trigger manual wallet connection + auth directly
+    const result = await manualWallet.connectAndLogin(walletType);
+
+    if (result) {
+      if (result.isNewUser) {
+        // New user — switch to profile completion
+        setPendingAuth(result); // Store pending auth state
+        const shortAddress = result.user.walletAddress?.slice(0, 8) || 'user';
+        setUsername(shortAddress);
+        setView('wallet-register');
+      } else {
+        // Existing user — success & close (connectAndLogin already stored login)
+        setTimeout(() => {
+          handleClose();
+          manualWallet.reset();
+        }, 800);
+      }
+    }
+  }, [isLoading, manualWallet, handleClose, privyLogin, toast, setPendingAuth]);
+
+  // Effect: Handle Privy authentication success (for WalletConnect)
+  useEffect(() => {
+    // CRITICAL: Only attempt auto-login if the modal is OPEN.
+    // This prevents background auto-login loops when the user logs out.
+    if (!isOpen) return;
+
+    const handlePrivyAuth = async () => {
+      if (privyAuthenticated && privyUser && privyUser.wallet) {
+        // Check if we already have this user in our auth store to avoid loops
+        const currentAuth = useAuthStore.getState();
+        if (currentAuth.isAuthenticated && currentAuth.user?.walletAddress === privyUser.wallet.address) {
+          return;
+        }
+
+        // Authenticate with backend using Privy
+        try {
+          setIsLoading(true);
+          const token = await getAccessToken();
+          if (!token) throw new Error('Failed to get Privy access token');
+
+          const response = await authService.authenticateWithPrivy(token);
+
+          if (response.isNewUser) {
+            setPendingAuth(response); // Store pending auth state
+            const shortAddress = response.user.walletAddress?.slice(0, 8) || 'user';
+            setUsername(shortAddress);
+            setView('wallet-register');
+          } else {
+            // Existing user - store and redirect
+            storeLogin(response.user, response.accessToken, response.refreshToken);
+            toast.success('Welcome!', 'Connected via WalletConnect');
+            handleClose();
+            const redirectPath = getDashboardRoute(response.user.role);
+            navigate(redirectPath);
+          }
+        } catch (error) {
+          console.error('Privy backend auth failed:', error);
+          toast.error('Login Failed', 'Failed to authenticate with backend');
+          // If auth fails, we should logout from Privy strictly to avoid stuck state
+          privyLogout();
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    if (privyAuthenticated && privyUser) {
+      handlePrivyAuth();
+    }
+  }, [isOpen, privyAuthenticated, privyUser, storeLogin, toast, handleClose, navigate, getAccessToken, setPendingAuth, privyLogout]);
+
+  // Handle wallet registration (profile completion)
+  const handleWalletRegister = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!agreeToTerms) {
+      setErrors({ terms: 'You must agree to the Terms of Service' });
+      return;
+    }
+
+    if (!pendingAuth) {
+      setErrors({ general: 'Session expired. Please connect wallet again.' });
+      return;
+    }
+
     setIsLoading(true);
     setErrors({});
 
     try {
-      toast.info('Wallet Connect', `Connecting to ${walletType ? WALLET_OPTIONS.find(w => w.id === walletType)?.name : 'wallet'}...`);
+      // Temporarily set access token for this request
+      setAccessToken(pendingAuth.accessToken);
 
-      // In production, this integrates with Privy SDK
-      // const privyToken = await privy.connectWallet({ walletType });
-      // const response = await authService.authenticateWithPrivy(privyToken);
-      // storeLogin(response.user, response.accessToken, response.refreshToken);
+      // Call userService to complete profile
+      const updatedUser = await userService.updateProfile({
+        displayName,
+        username,
+      });
 
-      // Placeholder for Privy integration
-      toast.warning('Coming Soon', 'Wallet authentication will be available soon.');
+      // Update local state in auth store (finalize login)
+      storeLogin(updatedUser, pendingAuth.accessToken, pendingAuth.refreshToken);
+
+      toast.success('Welcome to Seniqu!', 'Your account has been created successfully.');
+
+      // Redirect
+      const redirectPath = getDashboardRoute(updatedUser.role);
+      navigate(redirectPath);
+
+      handleClose();
     } catch (error) {
       const authError = error as AuthError;
-      toast.error('Wallet Connect Failed', authError.message);
-      setErrors({ general: authError.message });
+      setErrors({ general: authError.message || 'Failed to complete profile' });
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [displayName, username, agreeToTerms, navigate, toast, handleClose, pendingAuth, storeLogin]);
+
 
   // Handle email login
   const handleEmailLogin = useCallback(async (e: React.FormEvent) => {
@@ -262,78 +502,148 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   );
 
   // Render main auth options
-  const renderMainView = () => (
-    <>
-      {/* Header */}
-      <div className="px-8 pt-10 pb-6 text-center">
-        <h2 className="text-2xl font-serif font-bold text-theme-text mb-2">
-          Welcome to <span className="text-gold italic">Seniqu</span>
-        </h2>
-        <p className="text-theme-muted text-sm">
-          Sign in to start collecting and preserving heritage.
-        </p>
-      </div>
+  const renderMainView = () => {
+    const isWalletBusy = manualWallet.state !== 'idle' && manualWallet.state !== 'error' && manualWallet.state !== 'authenticated';
+    const activeWallet = WALLET_OPTIONS.find(w => w.id === manualWallet.activeWalletType);
 
-      {/* Auth Options */}
-      <div className="px-8 pb-10 space-y-4">
-        {/* Error Message */}
-        {errors.general && (
-          <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>{errors.general}</span>
-          </div>
-        )}
-
-        {/* Google Login (Primary) */}
-        <button
-          onClick={handleGoogleLogin}
-          disabled={isLoading}
-          className="w-full flex items-center justify-center gap-3 bg-theme-text text-theme-bg py-3.5 rounded-xl font-medium hover:opacity-90 transition-all shadow-lg shadow-black/5 hover:shadow-gold/10 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isLoading ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
-          ) : (
-            <>
-              <GoogleIcon />
-              <span>Continue with Google</span>
-            </>
-          )}
-        </button>
-
-        {/* Divider */}
-        <div className="relative py-2">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-theme-border"></div>
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-theme-glass px-2 text-theme-muted tracking-wider">
-              Or continue with
-            </span>
-          </div>
+    return (
+      <>
+        {/* Header */}
+        <div className="px-8 pt-10 pb-6 text-center">
+          <h2 className="text-3xl font-serif font-bold text-theme-text mb-2">
+            Welcome to <span className="text-gold italic">Seniqu</span>
+          </h2>
+          <p className="text-theme-muted text-sm">
+            Sign in to preserve and collect digital heritage.
+          </p>
         </div>
 
-        {/* Email Login */}
-        <button
-          onClick={() => switchView('email-login')}
-          disabled={isLoading}
-          className="w-full flex items-center justify-center gap-3 bg-theme-elevated/50 border border-theme-border text-theme-text py-3 rounded-xl font-medium hover:bg-theme-border transition-colors disabled:opacity-50"
-        >
-          <Mail className="w-5 h-5" />
-          <span>Sign in with Email</span>
-        </button>
+        {/* Auth Options */}
+        <div className="px-8 pb-10 space-y-5">
+          {/* Error Message */}
+          {errors.general && (
+            <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm animate-in fade-in slide-in-from-top-1">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{errors.general}</span>
+            </div>
+          )}
 
-        {/* Connect Wallet */}
-        <button
-          onClick={() => switchView('wallet-select')}
-          disabled={isLoading}
-          className="w-full flex items-center justify-center gap-3 bg-transparent border border-gold/40 text-gold py-3 rounded-xl font-medium hover:bg-gold/5 transition-colors disabled:opacity-50"
-        >
-          <Wallet className="w-5 h-5" />
-          <span>Connect Wallet</span>
-        </button>
-      </div>
-    </>
-  );
+          {/* Google Login (Primary) */}
+          <button
+            onClick={handleGoogleLogin}
+            disabled={isLoading || isWalletBusy}
+            className="group w-full flex items-center justify-center gap-3 bg-theme-text text-theme-bg py-3.5 rounded-xl font-medium hover:opacity-90 transition-all shadow-lg hover:shadow-gold/20 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <>
+                <div className="p-0.5 bg-white rounded-full"><GoogleIcon /></div>
+                <span className="font-semibold tracking-wide">Continue with Google</span>
+              </>
+            )}
+          </button>
+
+          {/* Divider */}
+          <div className="relative py-2">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-theme-border/60"></div>
+            </div>
+            <div className="relative flex justify-center text-[11px] uppercase tracking-widest font-semibold">
+              <span className="bg-theme-bg px-3 text-theme-muted">
+                OR
+              </span>
+            </div>
+          </div>
+
+          {/* Email Login */}
+          <button
+            onClick={() => switchView('email-login')}
+            disabled={isLoading || isWalletBusy}
+            className="w-full flex items-center justify-center gap-3 bg-theme-elevated/30 border border-theme-border text-theme-text py-3 rounded-xl font-medium hover:bg-theme-elevated/50 hover:border-theme-muted transition-all disabled:opacity-50"
+          >
+            <Mail className="w-5 h-5" />
+            <span>Sign in with Email</span>
+          </button>
+
+          {/* Wallet Options - Vertical Stack for Premium Feel */}
+          <div className="pt-2 space-y-3">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-theme-border to-transparent" />
+              <div className="flex items-center gap-1.5 text-gold/80">
+                <Wallet className="w-3.5 h-3.5" />
+                <span className="text-xs font-medium tracking-wider uppercase">Connect Wallet</span>
+              </div>
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-theme-border to-transparent" />
+            </div>
+
+            {/* Inline Connection Status */}
+            <AnimatePresence mode="wait">
+              {isWalletBusy && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden mb-3"
+                >
+                  <WalletConnectionStatus
+                    state={manualWallet.state}
+                    walletName={activeWallet?.name || 'Wallet'}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="grid grid-cols-4 gap-2">
+              {WALLET_OPTIONS.map((wallet) => {
+                const isActive = manualWallet.activeWalletType === wallet.id;
+
+                return (
+                  <button
+                    key={wallet.id}
+                    onClick={() => handleWalletConnect(wallet.id)}
+                    disabled={isLoading || (isWalletBusy && !isActive)}
+                    className={`group relative flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all duration-300 w-full h-[88px]
+                        ${isActive
+                        ? 'bg-gold/10 border-gold shadow-[0_0_15px_rgba(255,215,0,0.1)]'
+                        : 'bg-theme-elevated/30 border-theme-border hover:border-gold/50 hover:bg-theme-elevated/50'
+                      }
+                        ${isWalletBusy && !isActive ? 'opacity-30 blur-[1px]' : ''}
+                      `}
+                  >
+                    {/* Wallet Icon */}
+                    <div className={`w-8 h-8 rounded-lg bg-theme-bg/50 border border-theme-border/50 flex items-center justify-center transition-transform duration-300 ${!isWalletBusy ? 'group-hover:scale-110' : ''}`}>
+                      <img
+                        src={wallet.logo}
+                        alt={wallet.name}
+                        className="w-5 h-5 object-contain"
+                        loading="eager"
+                      />
+                    </div>
+
+                    {/* Wallet Name */}
+                    <div className="w-full flex flex-col items-center">
+                      <span className={`font-medium text-xs tracking-tight transition-colors truncate max-w-full ${isActive ? 'text-gold' : 'text-theme-text group-hover:text-theme-text/90'}`}>
+                        {wallet.name.replace(' (Reown)', '')}
+                      </span>
+                    </div>
+
+                    {/* Active Indicator (Corner) */}
+                    {isActive && isWalletBusy && (
+                      <div className="absolute top-1 right-1">
+                        <Loader2 className="w-3 h-3 text-gold animate-spin" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+        </div>
+      </>
+    );
+  };
 
   // Render email login form
   const renderEmailLoginView = () => (
@@ -582,76 +892,204 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     </>
   );
 
-  // Render wallet selection view
-  const renderWalletSelectView = () => (
+  // Render wallet selection view with connection status
+  const renderWalletSelectView = () => {
+    const isWalletBusy = manualWallet.state !== 'idle' && manualWallet.state !== 'error' && manualWallet.state !== 'authenticated';
+    const activeWallet = WALLET_OPTIONS.find(w => w.id === manualWallet.activeWalletType);
+
+    return (
+      <>
+        {/* Header */}
+        <div className="px-8 pt-10 pb-4">
+          <button
+            onClick={() => {
+              manualWallet.reset();
+              initialView === 'wallet-select' ? handleClose() : switchView('main');
+            }}
+            className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-4"
+          >
+            {initialView === 'wallet-select' ? <X className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
+            <span className="text-sm">{initialView === 'wallet-select' ? 'Close' : 'Back'}</span>
+          </button>
+          <h2 className="text-2xl font-serif font-bold text-theme-text mb-2">
+            Connect <span className="text-gold italic">Wallet</span>
+          </h2>
+          <p className="text-theme-muted text-sm">
+            Choose your preferred wallet to sign in.
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-xs px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-400 font-medium border border-purple-500/20">
+              Solana
+            </span>
+            <span className="text-xs px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 font-medium border border-blue-500/20">
+              Ethereum
+            </span>
+            <span className="text-xs text-theme-muted">Secure Direct Connection</span>
+          </div>
+        </div>
+
+        {/* Wallet Options */}
+        <div className="px-8 pb-8 space-y-3">
+          {/* Connection Status */}
+          <AnimatePresence>
+            {(manualWallet.state !== 'idle') && (
+              <WalletConnectionStatus
+                state={manualWallet.state}
+                walletName={activeWallet?.name || 'Wallet'}
+              />
+            )}
+          </AnimatePresence>
+
+          {/* Error from hook */}
+          {manualWallet.error && manualWallet.state === 'error' && (
+            <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{manualWallet.error}</span>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {errors.general && (
+            <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{errors.general}</span>
+            </div>
+          )}
+
+          {WALLET_OPTIONS.map((wallet) => {
+            const isActive = manualWallet.activeWalletType === wallet.id;
+            const installed = isWalletInstalled(wallet.id);
+
+            return (
+              <button
+                key={wallet.id}
+                onClick={() => handleWalletConnect(wallet.id)}
+                disabled={isWalletBusy && !isActive}
+                className={`w-full flex items-center gap-4 p-4 border rounded-xl transition-all duration-200 group ${isActive && isWalletBusy
+                  ? 'bg-gold/5 border-gold/40'
+                  : 'bg-theme-elevated/50 border-theme-border hover:border-gold/40 hover:bg-gold/5'
+                  } ${isWalletBusy && !isActive ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                <div className={`w-10 h-10 rounded-xl bg-theme-surface flex items-center justify-center flex-shrink-0 transition-transform ${!isWalletBusy ? 'group-hover:scale-110' : ''
+                  }`}>
+                  <img
+                    src={wallet.logo}
+                    alt={wallet.name}
+                    className="w-7 h-7"
+                  />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className={`font-medium transition-colors ${isActive && isWalletBusy ? 'text-gold' : 'text-theme-text group-hover:text-gold'
+                    }`}>
+                    {wallet.name}
+                  </p>
+                  <p className="text-xs text-theme-muted">
+                    {wallet.description}
+                  </p>
+                </div>
+                {isActive && isWalletBusy ? (
+                  <Loader2 className="w-4 h-4 text-gold animate-spin flex-shrink-0" />
+                ) : (
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {installed && wallet.id !== 'walletconnect' && (
+                      <span className="text-[10px] text-green-400 font-medium">Installed</span>
+                    )}
+                    <div className={`w-2 h-2 rounded-full ${installed || wallet.id === 'walletconnect'
+                      ? 'bg-green-500/50 group-hover:bg-green-500'
+                      : 'bg-theme-muted/30'
+                      } transition-colors`} />
+                  </div>
+                )}
+              </button>
+            );
+          })}
+
+          <div className="flex items-center gap-2 pt-2">
+            <ShieldCheck className="w-3.5 h-3.5 text-theme-muted" />
+            <p className="text-xs text-theme-muted">
+              You'll be asked to sign a message to verify ownership. No funds will be moved.
+            </p>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  // Render wallet registration (profile completion) view
+  const renderWalletRegisterView = () => (
     <>
-      {/* Header */}
-      <div className="px-8 pt-10 pb-4">
-        <button
-          onClick={() => initialView === 'wallet-select' ? handleClose() : switchView('main')}
-          className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-4"
-        >
-          {initialView === 'wallet-select' ? <X className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
-          <span className="text-sm">{initialView === 'wallet-select' ? 'Close' : 'Back'}</span>
-        </button>
+      <div className="px-8 pt-8 pb-6">
         <h2 className="text-2xl font-serif font-bold text-theme-text mb-2">
-          Connect <span className="text-gold italic">Wallet</span>
+          Complete Profile
         </h2>
         <p className="text-theme-muted text-sm">
-          Choose your preferred wallet to connect.
+          Finish setting up your account to start collecting.
         </p>
-        <div className="mt-3 flex items-center gap-2">
-          <span className="text-xs px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-400 font-medium border border-purple-500/20">
-            Solana
-          </span>
-          <span className="text-xs text-theme-muted">Powered by Privy</span>
-        </div>
       </div>
 
-      {/* Wallet Options */}
-      <div className="px-8 pb-8 space-y-3">
-        {/* Error Message */}
-        {errors.general && (
-          <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>{errors.general}</span>
+      <form onSubmit={handleWalletRegister} className="px-8 pb-10 space-y-4">
+        {/* Username Input */}
+        <div>
+          <label className="block text-sm font-medium text-theme-text mb-2">Username</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-muted">@</span>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+              placeholder="username"
+              required
+              minLength={3}
+              maxLength={20}
+              className="w-full pl-8 pr-4 py-3 bg-gray-50 dark:bg-theme-elevated border border-theme-border rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50"
+            />
           </div>
-        )}
+        </div>
 
-        {WALLET_OPTIONS.map((wallet) => (
+        {/* Display Name Input */}
+        <div>
+          <label className="block text-sm font-medium text-theme-text mb-2">Display Name</label>
+          <input
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Your Name"
+            required
+            className="w-full px-4 py-3 bg-gray-50 dark:bg-theme-elevated border border-theme-border rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50"
+          />
+        </div>
+
+        {/* Terms Checkbox */}
+        <div className="flex items-start gap-3 pt-2">
           <button
-            key={wallet.id}
-            onClick={() => handleWalletConnect(wallet.id)}
-            disabled={isLoading}
-            className="w-full flex items-center gap-4 p-4 bg-theme-elevated/50 border border-theme-border hover:border-gold/40 hover:bg-gold/5 rounded-xl transition-all duration-200 disabled:opacity-50 group"
+            type="button"
+            onClick={() => setAgreeToTerms(!agreeToTerms)}
+            className={`mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-colors ${agreeToTerms
+              ? 'bg-gold border-gold text-theme-bg'
+              : 'bg-transparent border-theme-border text-transparent hover:border-gold'
+              }`}
           >
-            <div className="w-10 h-10 rounded-xl bg-theme-surface flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-              <img
-                src={wallet.logo}
-                alt={wallet.name}
-                className="w-7 h-7"
-              />
-            </div>
-            <div className="flex-1 text-left">
-              <p className="font-medium text-theme-text group-hover:text-gold transition-colors">
-                {wallet.name}
-              </p>
-              <p className="text-xs text-theme-muted">
-                {wallet.description}
-              </p>
-            </div>
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 text-theme-muted animate-spin flex-shrink-0" />
-            ) : (
-              <div className="w-2 h-2 rounded-full bg-green-500/50 group-hover:bg-green-500 transition-colors flex-shrink-0" />
-            )}
+            <CheckCircle className="w-3.5 h-3.5" />
           </button>
-        ))}
+          <div className="text-sm text-theme-muted leading-tight">
+            I agree to the{' '}
+            <a href="/terms" className="text-gold hover:underline">Terms of Service</a>
+            {' '}and{' '}
+            <a href="/privacy" className="text-gold hover:underline">Privacy Policy</a>.
+          </div>
+        </div>
+        {errors.terms && <p className="text-xs text-red-400">{errors.terms}</p>}
+        {errors.general && <p className="text-xs text-red-400">{errors.general}</p>}
 
-        <p className="text-xs text-center text-theme-muted pt-2">
-          Your wallet will be securely connected via encrypted channels.
-        </p>
-      </div>
+        {/* Submit Button */}
+        <button
+          type="submit"
+          disabled={isLoading || !agreeToTerms || !username || !displayName}
+          className="w-full flex items-center justify-center gap-2 bg-gold text-theme-bg py-3.5 rounded-xl font-medium hover:bg-gold/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+        >
+          {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span>Complete Registration</span>}
+        </button>
+      </form>
     </>
   );
 
@@ -701,6 +1139,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                   {view === 'email-login' && renderEmailLoginView()}
                   {view === 'email-register' && renderEmailRegisterView()}
                   {view === 'wallet-select' && renderWalletSelectView()}
+                  {view === 'wallet-register' && renderWalletRegisterView()}
                 </motion.div>
               </AnimatePresence>
 

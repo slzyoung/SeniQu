@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common"
+import { Module, forwardRef } from "@nestjs/common"
 import { ConfigModule, ConfigService } from "@nestjs/config"
 import { JwtModule } from "@nestjs/jwt"
 import { PassportModule } from "@nestjs/passport"
@@ -20,6 +20,7 @@ import { PrivyGuard } from "./guards/privy.guard"
 
 // Other modules
 import { UsersModule } from "../users/users.module"
+import { WalletModule } from "../wallet/wallet.module"
 
 @Module({
     imports: [
@@ -45,6 +46,7 @@ import { UsersModule } from "../users/users.module"
             inject: [ConfigService],
         }),
         UsersModule,
+        forwardRef(() => WalletModule),
     ],
     providers: [
         AuthService,

@@ -5,7 +5,7 @@ import { UpdateUserDto } from "./dto/update-user.dto"
 
 export interface User {
     id: string
-    email: string
+    email: string | null
     password?: string
     displayName?: string
     userType: string
