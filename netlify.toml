@@ -3,6 +3,10 @@
   publish = "frontend/dist"
   command = "npm run build:frontend"
 
+[build.environment]
+  NODE_OPTIONS = "--max-old-space-size=4096"
+  NPM_FLAGS = "--legacy-peer-deps"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
