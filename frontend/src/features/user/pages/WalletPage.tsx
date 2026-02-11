@@ -24,7 +24,7 @@ import { useToast } from '../../../stores/useNotificationStore';
 import { useWalletTransactions } from '../../../hooks/useWalletData';
 import { useTokenPrices } from '../../../hooks/useTokenPrices';
 import { Connection, PublicKey, LAMPORTS_PER_SOL, clusterApiUrl, Transaction, SystemProgram } from '@solana/web3.js';
-import { useAuthStore } from '../../../stores/useAuthStore';
+
 
 // ============================================
 // ASSETS & CONFIG
@@ -204,6 +204,9 @@ export function WalletPage() {
         }
 
         setIsCreating(true);
+        // var to hold the toast id
+        let loadingId: string | undefined;
+
         try {
             // Ensure Privy is authenticated.
             // If the App is authenticated but Privy isn't, we force a login (which handles sync/modal).
@@ -221,9 +224,9 @@ export function WalletPage() {
 
             // Check if we have ANY embedded wallet (Solana or Eth)
             if (!embeddedSolanaWallet && !embeddedEthereumWallet) {
-                toast.loading("Generating secure wallet...", { id: 'create-wallet' });
+                loadingId = toast.info("Generating secure wallet...", "Please wait...");
                 const wallet = await createWallet();
-                toast.dismiss('create-wallet');
+                if (loadingId) toast.dismiss(loadingId);
 
                 if (wallet) {
                     toast.success("Ready", "Wallet created successfully.");
@@ -235,7 +238,7 @@ export function WalletPage() {
                 // Calling createWallet() is generally safe/idempotent for embedded wallets if configured correctly.
 
                 if (!activeWallet) {
-                    toast.loading(`Creating ${activeChain} wallet...`, { id: 'create-wallet-chain' });
+                    loadingId = toast.info(`Creating ${activeChain} wallet...`, "Please wait...");
                     try {
                         const wallet = await createWallet();
                         if (wallet) {
@@ -245,7 +248,7 @@ export function WalletPage() {
                         // Ignore "already exists" errors
                         console.log("Wallet creation check:", e);
                     }
-                    toast.dismiss('create-wallet-chain');
+                    if (loadingId) toast.dismiss(loadingId);
                 }
 
                 // Show modal after a brief delay ensuring state updates
@@ -265,6 +268,7 @@ export function WalletPage() {
                 toast.error("Error", "Failed to create wallet. Please try again.");
             }
         } finally {
+            if (loadingId) toast.dismiss(loadingId);
             setIsCreating(false);
         }
     };
