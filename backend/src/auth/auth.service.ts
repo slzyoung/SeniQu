@@ -188,6 +188,7 @@ export class AuthService {
         const user = await this.usersService.create({
             email: dto.email,
             password: hashedPassword,
+            username: dto.username,
             displayName: dto.displayName,
             userType: dto.userType || "ART_LOVER",
         })

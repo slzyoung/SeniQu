@@ -10,8 +10,8 @@ Seniqu implements a robust multi-strategy authentication system with enterprise-
 |--------|--------|-------------|
 | **Email/Password** | ✅ Active | Traditional login with bcrypt hashing |
 | **Google OAuth 2.0** | ✅ Active | Social login via Google (PKCE + HMAC state) |
-| **Manual Wallet** | ✅ Active | Direct wallet signature (Phantom, Solflare, MetaMask) |
-| **WalletConnect / Reown** | ✅ Active | Mobile QR-based wallet connection |
+| **Manual Wallet (Desktop)** | ✅ Active | Direct connection via browser extension (MetaMask, Phantom) |
+| **Reown / WalletConnect (Mobile)** | ✅ Active | Mobile-optimized wallet picker (Solana + EVM) via AppKit |
 | **Privy Embedded Wallet** | ✅ Active | Auto-created non-custodial wallets for all users |
 
 ### 1.2 JWT Token Flow
@@ -40,7 +40,23 @@ sequenceDiagram
     API-->>Client: { accessToken }
 ```
 
-### 1.3 Manual Wallet Authentication Flow
+### 1.3 Hybrid Wallet Strategy
+
+Seniqu employs a **Hybrid Wallet Strategy** to optimize user experience across devices while bypassing third-party restrictions:
+
+1.  **Desktop (Browser Extensions)**:
+    *   **Direct Connection**: Uses `window.ethereum` (MetaMask) or `window.solana` (Phantom) directly.
+    *   **Reason**: Bypasses Privy's UI for a faster, native feel. Avoids "Coinbase Wallet" interference by strictly filtering providers.
+    *   **Flow**: Connect → Request Nonce → Sign → Verify.
+
+2.  **Mobile (Reown / WalletConnect)**:
+    *   **AppKit Modal**: Uses Reown AppKit for a unified mobile wallet picker.
+    *   **Configuration**:
+        *   **Socials Disabled**: Email/Social logins hidden to prevent clutter.
+        *   **Multi-Chain**: Supports both Solana and EVM (Ethereum) wallets via `EthersAdapter`.
+    *   **Reason**: Best-in-class mobile experience for deep linking to wallet apps.
+
+### 1.4 Manual Wallet Authentication Flow (Desktop)
 
 Direct wallet-to-backend authentication bypasses third-party SDKs for wallet login. The flow uses cryptographic signature verification and single-use nonces.
 
@@ -72,8 +88,26 @@ sequenceDiagram
     Backend->>Backend: Generate JWT tokens
     Backend-->>Frontend: { user, accessToken, refreshToken }
 
-    Frontend->>Frontend: Store tokens, redirect to dashboard
+    Frontend->>Frontend: Store tokens, Check Profile Completion
 ```
+
+### 1.5 Mandatory Profile Completion
+
+After *any* successful login (Email, Google, or Wallet), the system enforces a profile completion check.
+
+```mermaid
+flowchart TD
+    A[User Logs In] --> B{username & displayName set?}
+    B -->|Yes| C[Dashboard]
+    B -->|No| D[Redirect to /complete-profile]
+    D --> E[User Enters Details]
+    E --> F[API: PUT /users/me]
+    F --> C
+```
+
+- **Trigger**: `needsProfileCompletion(user)` helper in frontend.
+- **Requirement**: `username` (unique) and `displayName` must be present.
+- **Route**: `/complete-profile` (standalone page).
 
 **Security features:**
 
@@ -85,7 +119,7 @@ sequenceDiagram
 | **Anti-replay** | Nonce cannot be reused; `wallet_nonces` table enforces uniqueness |
 | **Sanitized errors** | Internal errors never leak stack traces; user rejections detected separately |
 
-### 1.4 Google OAuth Server-Side Callback Flow (Hardened)
+### 1.6 Google OAuth Server-Side Callback Flow (Hardened)
 
 Google OAuth uses a fully hardened **server-side** pattern with PKCE, HMAC-signed state, and nonce verification.
 
@@ -124,7 +158,7 @@ sequenceDiagram
 | **Cookie** | Signed httpOnly, Secure, SameSite=Lax — client JS cannot read or tamper |
 | **Cleanup** | Cookie cleared after every callback, regardless of success or failure |
 
-### 1.5 Privy Embedded Wallet
+### 1.7 Privy Embedded Wallet
 
 After any successful authentication (email, Google, or manual wallet), Privy automatically creates a **non-custodial embedded Solana wallet** for the user if one doesn't exist.
 
@@ -146,7 +180,7 @@ sequenceDiagram
 > [!IMPORTANT]
 > The embedded wallet is non-custodial — only the user controls the private key via Privy's MPC infrastructure. Seniqu never has access to the private key.
 
-### 1.6 Token Configuration
+### 1.8 Token Configuration
 
 ```typescript
 JWT_SECRET=your-super-secret-jwt-key-min-32-chars

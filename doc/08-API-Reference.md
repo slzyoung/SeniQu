@@ -37,7 +37,7 @@ Content-Type: application/json
 # Register
 curl -X POST http://localhost:3001/api/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "password": "Password1!", "displayName": "John"}'
+  -d '{"email": "user@example.com", "password": "Password1!", "username": "johndoe", "displayName": "John"}'
 
 # Login
 curl -X POST http://localhost:3001/api/v1/auth/login \
@@ -84,6 +84,7 @@ curl -X POST http://localhost:3001/api/v1/auth/wallet \
   "user": {
     "id": "uuid",
     "email": null,
+    "username": "wallet_user_123",
     "walletAddress": "7xKX...abc",
     "role": "user"
   },

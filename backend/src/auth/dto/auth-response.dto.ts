@@ -14,6 +14,9 @@ export class UserResponseDto {
     @ApiProperty({ required: false })
     email?: string | null
 
+    @ApiProperty({ required: false })
+    username?: string
+
     @ApiProperty()
     displayName?: string
 

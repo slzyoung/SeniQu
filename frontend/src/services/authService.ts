@@ -50,11 +50,19 @@ export const loginSchema = z.object({
     password: z.string().min(1, 'Password is required'),
 });
 
+const usernameSchema = z
+    .string()
+    .min(3, 'Username must be at least 3 characters')
+    .max(20, 'Username must be at most 20 characters')
+    .regex(/^[a-z0-9_]+$/, 'Only lowercase letters, numbers, and underscores')
+    .transform((val) => sanitizeInput(val.trim().toLowerCase()));
+
 // Register credentials schema
 export const registerSchema = z.object({
     email: emailSchema,
     password: passwordSchema,
     displayName: displayNameSchema.optional(),
+    username: usernameSchema.optional(),
     userType: z.enum(['ART_LOVER', 'ARTIST', 'COLLECTOR', 'INSTITUTION']).default('ART_LOVER'),
 });
 
@@ -78,6 +86,7 @@ export interface RegisterCredentials {
     email: string;
     password: string;
     displayName?: string;
+    username?: string;
     userType?: 'ART_LOVER' | 'ARTIST' | 'COLLECTOR' | 'INSTITUTION';
 }
 
@@ -245,6 +254,7 @@ class AuthService {
         return {
             id: backendUser.id,
             email: backendUser.email,
+            username: backendUser.username || '',
             displayName: backendUser.displayName || backendUser.display_name || '',
             role: role as any,
             walletAddress: backendUser.walletAddress || backendUser.wallet_address,
@@ -252,6 +262,7 @@ class AuthService {
             updatedAt: backendUser.updatedAt || backendUser.createdAt || new Date().toISOString(),
             isVerified: backendUser.isVerified || false,
             isPremium: backendUser.isPremium || false,
+            embeddedWalletAddress: backendUser.embeddedWalletAddress || backendUser.embedded_wallet_address,
         };
     }
 
@@ -476,7 +487,7 @@ class AuthService {
     /**
      * Authenticate with Privy (wallet)
      */
-    async authenticateWithPrivy(privyToken: string): Promise<AuthResponse> {
+    async authenticateWithPrivy(privyToken: string, embeddedWalletAddress?: string): Promise<AuthResponse> {
         // Rate limit check
         const rateLimit = checkAuthRateLimit('oauth');
         if (!rateLimit.allowed) {
@@ -497,7 +508,7 @@ class AuthService {
         try {
             const rawResponse = await apiPost<any>(
                 '/auth/privy',
-                {},
+                { embeddedWalletAddress },
                 {
                     headers: {
                         ...getSecurityHeaders(),

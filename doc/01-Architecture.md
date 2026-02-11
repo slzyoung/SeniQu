@@ -67,6 +67,8 @@ graph TD
 | Framer Motion | Animations |
 | Recharts | Data visualization |
 | Lucide React | Icon library |
+| Reown AppKit | WalletConnect & Multi-chain Modal |
+| Ethers.js | EVM Blockchain Interaction |
 
 ### **Backend**
 

@@ -410,8 +410,14 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
       toast.success('Welcome back!', 'You have successfully signed in.');
 
-      // Redirect to dashboard FIRST (before modal closes)
-      const redirectPath = getDashboardRoute(response.user.role);
+      // Check if profile needs completion (missing displayName or username)
+      const { needsProfileCompletion } = await import('../lib/authHelpers');
+      const needsCompletion = needsProfileCompletion(response.user);
+
+      // Redirect to profile completion or dashboard
+      const redirectPath = needsCompletion
+        ? '/complete-profile'
+        : getDashboardRoute(response.user.role);
       navigate(redirectPath);
 
       // Then close modal
@@ -445,7 +451,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
       const validatedData = registerSchema.parse({
         email,
         password,
-        displayName: displayName || undefined
+        displayName: displayName || undefined,
+        username: username || undefined,
       });
 
       const response = await authService.register(validatedData);
@@ -477,7 +484,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     } finally {
       setIsLoading(false);
     }
-  }, [email, password, displayName, storeLogin, toast, handleClose, navigate]);
+  }, [email, password, displayName, username, storeLogin, toast, handleClose, navigate]);
 
   // Google Icon SVG
   const GoogleIcon = () => (
@@ -783,21 +790,49 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
           </div>
         )}
 
-        {/* Display Name Input (Optional) */}
+        {/* Display Name Input */}
         <div>
           <label className="block text-sm font-medium text-theme-text mb-2">
-            Display Name <span className="text-theme-muted">(optional)</span>
+            Display Name <span className="text-red-400">*</span>
           </label>
           <input
             type="text"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="Your name"
+            required
+            minLength={2}
+            maxLength={50}
             className={`w-full px-4 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.displayName ? 'border-red-500' : 'border-theme-border'
               } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
           />
           {errors.displayName && (
             <p className="mt-1 text-xs text-red-400">{errors.displayName}</p>
+          )}
+        </div>
+
+        {/* Username Input */}
+        <div>
+          <label className="block text-sm font-medium text-theme-text mb-2">
+            Username <span className="text-red-400">*</span>
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-muted">@</span>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+              placeholder="username"
+              required
+              minLength={3}
+              maxLength={20}
+              className={`w-full pl-8 pr-4 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.username ? 'border-red-500' : 'border-theme-border'
+                } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
+            />
+          </div>
+          <p className="mt-1 text-xs text-theme-muted">Lowercase letters, numbers, and underscores only</p>
+          {errors.username && (
+            <p className="mt-1 text-xs text-red-400">{errors.username}</p>
           )}
         </div>
 

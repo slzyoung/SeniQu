@@ -17,6 +17,7 @@ export interface User {
     isVerified: boolean;
     isPremium: boolean;
     socialLinks?: SocialLinks;
+    embeddedWalletAddress?: string;
 }
 
 export interface SocialLinks {

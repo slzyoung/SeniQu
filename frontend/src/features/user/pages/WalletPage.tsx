@@ -1,9 +1,4 @@
-/**
- * Wallet Page for User Dashboard
- * Displays Aggregated Wallet details, balance, and transaction functionality
- */
-
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
     Wallet,
     Copy,
@@ -25,7 +20,8 @@ import { Card, Button, Badge, Input, Modal } from '../../../components/ui';
 import { usePrivyWallet } from '../../../hooks/usePrivyWallet';
 import { useToast } from '../../../stores/useNotificationStore';
 import { ConnectedWallets } from '../components/ConnectedWallets';
-import { useWalletPortfolio, useWalletTransactions, useWalletWithdraw } from '../../../hooks/useWalletData';
+import { useWalletTransactions } from '../../../hooks/useWalletData';
+import { Connection, PublicKey, LAMPORTS_PER_SOL, clusterApiUrl, Transaction, SystemProgram } from '@solana/web3.js';
 
 // ============================================
 // COMPONENTS
@@ -88,14 +84,20 @@ export function WalletPage() {
     const { embeddedWallet } = usePrivyWallet();
     const toast = useToast();
 
-    const { data: portfolio, isLoading: portfolioLoading, refetch: refetchPortfolio } = useWalletPortfolio();
-    const { data: transactions = [], isLoading: txLoading, refetch: refetchTransactions } = useWalletTransactions();
-    const withdrawMutation = useWalletWithdraw();
+    // Use backend just for transaction history (since that's stored easier there, or we could fetch from chain too)
+    // For now, let's keep the transaction history hook if it provides value, otherwise we might want to fetch from chain eventually.
+    // Assuming backend history tracks what we do via API, but since we are moving to direct chain, backend history might get out of sync 
+    // unless we implement an indexer. For this step, we will focus on Real Balance and Real Withdrawal.
+    const { data: rawTransactions, isLoading: txLoading, refetch: refetchTransactions } = useWalletTransactions();
+    const transactions = Array.isArray(rawTransactions) ? rawTransactions : (rawTransactions as any)?.data ?? [];
 
-    const loading = portfolioLoading || txLoading;
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [solBalance, setSolBalance] = useState<number | null>(null);
+    const [solPrice, setSolPrice] = useState<number>(0); // Store price separately
 
-    // Modals
+    // Initial loading state: only wait for wallet and balance. 
+    // Do NOT wait for transactions (txLoading) to prevent blocking the UI if backend is down.
+    const loading = (!solBalance && solBalance !== 0 && !embeddedWallet);
     const [showReceiveModal, setShowReceiveModal] = useState(false);
     const [showSendModal, setShowSendModal] = useState(false);
     const [showScanModal, setShowScanModal] = useState(false);
@@ -105,10 +107,39 @@ export function WalletPage() {
     const [sendAddress, setSendAddress] = useState('');
     const [isSending, setIsSending] = useState(false);
 
+    // Fetch Real Balance
+    const fetchBalance = useCallback(async () => {
+        if (!embeddedWallet?.address) return;
+        try {
+            const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
+            const publicKey = new PublicKey(embeddedWallet.address);
+            const balance = await connection.getBalance(publicKey);
+            setSolBalance(balance / LAMPORTS_PER_SOL);
+        } catch (error) {
+            console.error('Failed to fetch balance:', error);
+            // Don't show toast on background fetch failure to avoid annoyance
+        }
+    }, [embeddedWallet?.address]);
+
+    // Simple mock price fetcher (or just hardcode for devnet demo)
+    const fetchPrice = useCallback(async () => {
+        // In a real app, fetch from Coingecko
+        setSolPrice(150.00); // Mock price for display
+    }, []);
+
+    useEffect(() => {
+        if (embeddedWallet?.address) {
+            fetchBalance();
+            fetchPrice();
+        }
+    }, [embeddedWallet?.address, fetchBalance, fetchPrice]);
+
+
     const handleRefresh = async () => {
         setIsRefreshing(true);
         try {
-            await Promise.all([refetchPortfolio(), refetchTransactions()]);
+            await Promise.all([fetchBalance(), refetchTransactions()]);
+            toast.success('Updated', 'Wallet balance refreshed');
         } finally {
             setIsRefreshing(false);
         }
@@ -123,40 +154,70 @@ export function WalletPage() {
     };
 
     const handleSend = async () => {
-        if (!sendAddress || !sendAmount) return;
+        if (!sendAddress || !sendAmount || !embeddedWallet) return;
 
         setIsSending(true);
         try {
-            await withdrawMutation.mutateAsync({
-                amount: parseFloat(sendAmount),
-                token: 'SOL',
-                destination: sendAddress
-            });
-            toast.success('Withdrawal Initiated', 'Transaction has been submitted.');
+            const amount = parseFloat(sendAmount);
+            if (isNaN(amount) || amount <= 0) {
+                toast.error('Invalid Amount', 'Please enter a valid amount.');
+                setIsSending(false);
+                return;
+            }
+
+            // Client-Side Signing Logic
+            const provider = await (embeddedWallet as any).getProvider();
+            const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
+
+            const transaction = new Transaction().add(
+                SystemProgram.transfer({
+                    fromPubkey: new PublicKey(embeddedWallet.address),
+                    toPubkey: new PublicKey(sendAddress),
+                    lamports: amount * LAMPORTS_PER_SOL,
+                })
+            );
+
+            transaction.feePayer = new PublicKey(embeddedWallet.address);
+            const { blockhash } = await connection.getLatestBlockhash();
+            transaction.recentBlockhash = blockhash;
+
+            const signedTx = await provider.signTransaction(transaction);
+            const signature = await connection.sendRawTransaction(signedTx.serialize());
+            await connection.confirmTransaction(signature);
+
+            toast.success('Transfer Successful', `Sent ${amount} SOL to ${sendAddress.slice(0, 4)}...${sendAddress.slice(-4)}`);
             setShowSendModal(false);
             setSendAddress('');
             setSendAmount('');
+            fetchBalance(); // Refresh balance immediately
+
         } catch (error: any) {
             console.error('Withdrawal failed:', error);
-            toast.error('Withdrawal Failed', error.response?.data?.message || 'Transaction failed');
+            if (error.message?.includes("User rejected")) {
+                toast.info("Cancelled", "Transaction cancelled by user.");
+            } else {
+                toast.error('Withdrawal Failed', 'Transaction failed. Please check your balance and try again.');
+            }
         } finally {
             setIsSending(false);
         }
     };
 
-    // Loading State
-    if (loading && !portfolio) {
+    // const loading = ... (already declared above)
+
+    // Only show loading if we really have no data yet and are trying to get it
+    if (loading && !embeddedWallet) {
         return (
             <PageContainer title="Seniqu Wallet" subtitle="Loading your portfolio...">
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                     <Loader2 className="w-10 h-10 text-gold animate-spin mb-4" />
-                    <p className="text-theme-muted">Fetching valid assets...</p>
+                    <p className="text-theme-muted">Connecting to Solana network...</p>
                 </div>
             </PageContainer>
         );
     }
 
-    const solBalance = portfolio?.assets?.find((a: any) => a.symbol === 'SOL');
+    const valueUsd = (solBalance || 0) * solPrice;
 
     return (
         <PageContainer
@@ -185,14 +246,14 @@ export function WalletPage() {
                         <div className="mb-6">
                             <div className="flex items-end gap-2">
                                 <p className="text-4xl font-bold text-theme-text font-mono">
-                                    ${portfolio?.totalBalanceUsd?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                                    ${valueUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                                 <span className="text-lg font-medium text-theme-muted mb-1.5">USD</span>
                             </div>
                             <p className="text-sm text-theme-muted mt-1 flex items-center gap-2">
-                                {solBalance?.amount?.toFixed(4) || '0.0000'} SOL
+                                {(solBalance || 0).toFixed(4)} SOL
                                 <span className="w-1 h-1 rounded-full bg-theme-muted/50" />
-                                1 SOL ≈ ${solBalance?.price || '0.00'}
+                                1 SOL ≈ ${solPrice.toFixed(2)}
                             </p>
                         </div>
 
@@ -247,24 +308,22 @@ export function WalletPage() {
                     <div>
                         <h3 className="text-lg font-bold text-theme-text mb-4">Your Assets</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {portfolio?.assets?.map((asset: any) => (
-                                <Card key={asset.symbol} variant="elevated" className="flex items-center justify-between p-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${asset.symbol === 'SOL' ? 'bg-purple-500/10 text-purple-400' : 'bg-blue-500/10 text-blue-400'}`}>
-                                            {/* Simple Icon Placeholder based on symbol */}
-                                            <span className="font-bold text-xs">{asset.symbol.slice(0, 1)}</span>
-                                        </div>
-                                        <div>
-                                            <p className="font-bold text-theme-text">{asset.symbol}</p>
-                                            <p className="text-xs text-theme-muted">${asset.price.toFixed(2)}</p>
-                                        </div>
+                            {/* Static SOL Asset Card for now, since we only fetch SOL */}
+                            <Card variant="elevated" className="flex items-center justify-between p-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-500/10 text-purple-400">
+                                        <span className="font-bold text-xs">S</span>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="font-bold text-theme-text">{asset.amount.toLocaleString()}</p>
-                                        <p className="text-xs text-theme-muted">${asset.valueUsd.toLocaleString()}</p>
+                                    <div>
+                                        <p className="font-bold text-theme-text">SOL</p>
+                                        <p className="text-xs text-theme-muted">${solPrice.toFixed(2)}</p>
                                     </div>
-                                </Card>
-                            ))}
+                                </div>
+                                <div className="text-right">
+                                    <p className="font-bold text-theme-text">{(solBalance || 0).toLocaleString()}</p>
+                                    <p className="text-xs text-theme-muted">${valueUsd.toLocaleString()}</p>
+                                </div>
+                            </Card>
                         </div>
                     </div>
 
@@ -275,14 +334,19 @@ export function WalletPage() {
                             <Button variant="ghost" size="sm" className="text-xs">View All</Button>
                         </div>
                         <Card variant="elevated" className="overflow-hidden">
-                            {transactions.length === 0 ? (
+                            {txLoading ? (
+                                <div className="p-8 text-center text-theme-muted">
+                                    <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin opacity-50" />
+                                    <p>Loading transactions...</p>
+                                </div>
+                            ) : transactions.length === 0 ? (
                                 <div className="p-8 text-center text-theme-muted">
                                     <History className="w-8 h-8 mx-auto mb-2 opacity-50" />
                                     <p>No transactions yet</p>
                                 </div>
                             ) : (
                                 <div className="divide-y divide-theme-border">
-                                    {transactions.map((tx) => (
+                                    {transactions.map((tx: any) => (
                                         <div key={tx.id} className="p-4 flex items-center justify-between hover:bg-theme-elevated/50 transition-colors">
                                             <div className="flex items-center gap-3">
                                                 <div className={`p-2 rounded-lg ${tx.tx_type === 'deposit' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
@@ -423,9 +487,9 @@ export function WalletPage() {
                                     placeholder="0.00"
                                 />
                                 <div className="flex justify-between items-center mt-2 px-1">
-                                    <span className="text-xs text-theme-muted">Available: {solBalance?.amount?.toFixed(4) || '0.00'} SOL</span>
+                                    <span className="text-xs text-theme-muted">Available: {(solBalance || 0).toFixed(4)} SOL</span>
                                     <button
-                                        onClick={() => setSendAmount(solBalance ? (solBalance.amount - 0.0001).toString() : '0')}
+                                        onClick={() => setSendAmount(solBalance ? (solBalance - 0.0001).toFixed(4) : '0')}
                                         className="text-xs text-gold hover:underline font-medium"
                                     >
                                         Max

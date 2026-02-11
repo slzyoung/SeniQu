@@ -94,6 +94,7 @@ const PrivacyPolicy = lazy(() => import('../components/common/Legal').then(modul
 
 // Auth callback (still needed for OAuth)
 const AuthCallback = lazy(() => import('../features/auth/pages/AuthCallback'));
+const CompleteProfilePage = lazy(() => import('../features/auth/pages/CompleteProfilePage'));
 
 import { GlobalLayout } from '../components/common/GlobalLayout';
 import { PublicLayout } from '../components/common/PublicLayout';
@@ -113,6 +114,7 @@ const router = createBrowserRouter(
             <Route path={ROUTES.LOGIN} element={<LandingPage openAuthModal />} />
             <Route path={ROUTES.REGISTER} element={<LandingPage openAuthModal />} />
             <Route path={ROUTES.CALLBACK} element={<AuthCallback />} />
+            <Route path="/complete-profile" element={<CompleteProfilePage />} />
 
             {/* Public Layout Routes - Marketplace, Community, AI, Gallery */}
             <Route element={<PublicLayout />}>

@@ -60,6 +60,9 @@ export function ConnectedWallets() {
     const [transferAmount, setTransferAmount] = useState('');
     const [isTransferring, setIsTransferring] = useState(false);
 
+    const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
+    const [selectedWithdrawDestination, setSelectedWithdrawDestination] = useState<any>(null);
+
     // Per-wallet SOL balances
     const [balances, setBalances] = useState<Record<string, number | null>>({});
     const [isRefreshingBalances, setIsRefreshingBalances] = useState(false);
@@ -186,6 +189,76 @@ export function ConnectedWallets() {
         } catch (error) {
             console.error('Transfer error:', error);
             toast.error('Error', 'An error occurred during transfer.');
+        } finally {
+            setIsTransferring(false);
+        }
+    };
+
+    const initiateWithdraw = async () => {
+        if (!embeddedWallet) {
+            toast.error('No App Wallet', 'You do not have a Seniqu App Wallet setup yet.');
+            return;
+        }
+
+        // Filter valid destinations (external wallets)
+        const validDestinations = wallets.filter((w: any) => !w.isEmbedded && w.chain === 'solana');
+
+        if (validDestinations.length === 0) {
+            toast.error('No Linked Wallets', 'Please connect an external wallet (like Phantom) to withdraw funds to.');
+            return;
+        }
+
+        // Default to first available or primary
+        const primary = validDestinations.find((w: any) => w.isPrimary) || validDestinations[0];
+        setSelectedWithdrawDestination(primary);
+        setWithdrawModalOpen(true);
+    };
+
+    const handleWithdraw = async () => {
+        if (!selectedWithdrawDestination || !embeddedWallet || !transferAmount) return;
+
+        setIsTransferring(true);
+        try {
+            const amount = parseFloat(transferAmount);
+            if (isNaN(amount) || amount <= 0) {
+                toast.error('Invalid Amount', 'Please enter a valid amount.');
+                setIsTransferring(false);
+                return;
+            }
+
+            // Withdraw from Embedded Wallet -> External Wallet
+            const provider = await (embeddedWallet as any).getProvider();
+            const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
+
+            const transaction = new Transaction().add(
+                SystemProgram.transfer({
+                    fromPubkey: new PublicKey(embeddedWallet.address),
+                    toPubkey: new PublicKey(selectedWithdrawDestination.walletAddress),
+                    lamports: amount * LAMPORTS_PER_SOL,
+                })
+            );
+
+            transaction.feePayer = new PublicKey(embeddedWallet.address);
+            const { blockhash } = await connection.getLatestBlockhash();
+            transaction.recentBlockhash = blockhash;
+
+            try {
+                const signedTx = await provider.signTransaction(transaction);
+                const signature = await connection.sendRawTransaction(signedTx.serialize());
+                await connection.confirmTransaction(signature);
+
+                toast.success('Withdrawal Successful', `Sent ${amount} SOL to ${selectedWithdrawDestination.label || 'your wallet'}.`);
+                setWithdrawModalOpen(false);
+                setTransferAmount('');
+                refreshBalances();
+            } catch (txError: any) {
+                console.error("Tx Error", txError);
+                toast.error('Withdrawal Failed', 'Could not complete the transaction. Ensure you have enough SOL for fees.');
+            }
+
+        } catch (error) {
+            console.error('Withdraw error:', error);
+            toast.error('Error', 'An error occurred during withdrawal.');
         } finally {
             setIsTransferring(false);
         }
@@ -321,6 +394,13 @@ export function ConnectedWallets() {
                                         </DropdownMenuItem>
                                     )}
 
+                                    {wallet.isEmbedded && (
+                                        <DropdownMenuItem onClick={initiateWithdraw} className="text-gold focus:text-gold mt-1 border-t border-theme-border">
+                                            <ArrowRightLeft className="w-3 h-3 mr-2" />
+                                            Withdraw to Wallet
+                                        </DropdownMenuItem>
+                                    )}
+
                                     {!wallet.isEmbedded && (
                                         <DropdownMenuItem
                                             className="text-red-500 focus:text-red-500 mt-1 border-t border-theme-border"
@@ -378,6 +458,59 @@ export function ConnectedWallets() {
                         disabled={!transferAmount || isTransferring}
                     >
                         {isTransferring ? 'Processing...' : 'Confirm Transfer'}
+                    </Button>
+                </div>
+            </Modal>
+
+            {/* Withdraw Modal */}
+            <Modal
+                isOpen={withdrawModalOpen}
+                onClose={() => setWithdrawModalOpen(false)}
+                title="Withdraw from App Wallet"
+                description="Securely withdraw funds to one of your connected wallets."
+                size="sm"
+            >
+                <div className="space-y-4">
+                    <div className="bg-theme-elevated p-3 rounded-xl text-xs text-theme-muted mb-2">
+                        <div className="flex justify-between mb-1">
+                            <span>From (App Wallet):</span>
+                            <span className="font-mono text-gold">{embeddedWallet?.address.slice(0, 6)}...</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span>To:</span>
+                            <select
+                                className="bg-theme-bg border border-theme-border text-theme-text rounded px-2 py-1 text-xs"
+                                value={selectedWithdrawDestination?.id || ''}
+                                onChange={(e) => {
+                                    const w = wallets.find((wal: any) => wal.id === e.target.value);
+                                    if (w) setSelectedWithdrawDestination(w);
+                                }}
+                            >
+                                {wallets?.filter((w: any) => !w.isEmbedded && w.chain === 'solana').map((w: any) => (
+                                    <option key={w.id} value={w.id}>
+                                        {w.label || w.walletAddress.slice(0, 6) + '...'}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <Input
+                        label="Amount (SOL)"
+                        type="number"
+                        value={transferAmount}
+                        onChange={(e) => setTransferAmount(e.target.value)}
+                        placeholder="0.00"
+                    />
+
+                    <Button
+                        variant="primary"
+                        className="w-full mt-2"
+                        onClick={handleWithdraw}
+                        isLoading={isTransferring}
+                        disabled={!transferAmount || isTransferring}
+                    >
+                        {isTransferring ? 'Processing...' : 'Confirm Withdrawal'}
                     </Button>
                 </div>
             </Modal>

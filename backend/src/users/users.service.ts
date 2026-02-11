@@ -7,6 +7,7 @@ export interface User {
     id: string
     email: string | null
     password?: string
+    username?: string
     displayName?: string
     userType: string
     adminRole?: string
@@ -32,6 +33,7 @@ export class UsersService {
             .insert({
                 email: dto.email,
                 password_hash: dto.password,
+                username: dto.username,
                 display_name: dto.displayName,
                 role: this.mapUserTypeToRole(dto.userType || "ART_LOVER"),
                 privy_id: dto.privyId,
@@ -119,8 +121,11 @@ export class UsersService {
         const { data, error } = await client
             .from("users")
             .update({
-                display_name: dto.displayName,
-                role: dto.userType ? this.mapUserTypeToRole(dto.userType) : undefined,
+                ...(dto.username !== undefined && { username: dto.username }),
+                ...(dto.displayName !== undefined && { display_name: dto.displayName }),
+                ...(dto.userType && { role: this.mapUserTypeToRole(dto.userType) }),
+                ...(dto.bio !== undefined && { bio: dto.bio }),
+                ...(dto.avatarUrl !== undefined && { avatar_url: dto.avatarUrl }),
                 updated_at: new Date().toISOString(),
             })
             .eq("id", id)
@@ -192,6 +197,7 @@ export class UsersService {
             id: data.id,
             email: data.email,
             password: data.password_hash,
+            username: data.username,
             displayName: data.display_name,
             userType: this.mapRoleToUserType(data.role),
             adminRole: data.admin_role,

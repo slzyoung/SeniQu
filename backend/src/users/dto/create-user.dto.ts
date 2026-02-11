@@ -11,6 +11,10 @@ export class CreateUserDto {
 
     @IsString()
     @IsOptional()
+    username?: string
+
+    @IsString()
+    @IsOptional()
     displayName?: string
 
     @IsString()

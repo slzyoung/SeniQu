@@ -8,7 +8,6 @@ import { motion } from 'framer-motion';
 import {
     Home,
     Search,
-    Bookmark,
     User,
     Palette,
     BarChart3,
@@ -47,7 +46,6 @@ const guestNavItems: NavItem[] = [
 const userNavItems: NavItem[] = [
     { path: ROUTES.USER_DASHBOARD, icon: Home, label: 'Home' },
     { path: ROUTES.USER_GALLERY, icon: Search, label: 'Explore' },
-    { path: ROUTES.USER_BOOKMARKS, icon: Bookmark, label: 'Bookmarks' },
     { path: ROUTES.USER_WALLET, icon: Wallet, label: 'Wallet' },
     { path: ROUTES.USER_PROFILE, icon: User, label: 'Profile' },
 ];

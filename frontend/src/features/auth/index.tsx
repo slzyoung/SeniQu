@@ -222,37 +222,46 @@ export function AuthCallback() {
         if (processed.current) return;
         processed.current = true;
 
-        const hash = window.location.hash;
+        const processCallback = async () => {
+            const hash = window.location.hash;
 
-        if (!hash) {
-            setStatus('error');
-            setErrorMessage('No authentication data received.');
-            setTimeout(() => navigate(ROUTES.LOGIN), 3000);
-            return;
-        }
+            if (!hash) {
+                setStatus('error');
+                setErrorMessage('No authentication data received.');
+                setTimeout(() => navigate(ROUTES.LOGIN), 3000);
+                return;
+            }
 
-        try {
-            // Parse tokens from hash fragment (set by backend redirect)
-            const response = authService.handleGoogleCallbackFromHash(hash);
+            try {
+                // Parse tokens from hash fragment (set by backend redirect)
+                const response = authService.handleGoogleCallbackFromHash(hash);
 
-            // Update store
-            storeLogin(response.user, response.accessToken, response.refreshToken);
+                // Update store
+                storeLogin(response.user, response.accessToken, response.refreshToken);
 
-            setStatus('success');
-            toast.success('Welcome!', 'You have successfully signed in.');
+                setStatus('success');
+                toast.success('Welcome!', 'You have successfully signed in.');
 
-            // Clear hash from URL
-            window.history.replaceState(null, '', window.location.pathname);
+                // Clear hash from URL
+                window.history.replaceState(null, '', window.location.pathname);
 
-            const redirectPath = getDashboardRoute(response.user.role);
-            setTimeout(() => navigate(redirectPath), 1500);
-        } catch (error) {
-            const authError = error as AuthError;
-            setStatus('error');
-            setErrorMessage(authError.message || 'Authentication failed.');
-            toast.error('Authentication Failed', authError.message);
-            setTimeout(() => navigate(ROUTES.LOGIN), 3000);
-        }
+                // Check if profile needs completion (missing displayName or username)
+                const { needsProfileCompletion } = await import('../../lib/authHelpers');
+                const needsCompletion = needsProfileCompletion(response.user);
+                const redirectPath = needsCompletion
+                    ? '/complete-profile'
+                    : getDashboardRoute(response.user.role);
+                setTimeout(() => navigate(redirectPath, { replace: true }), 1500);
+            } catch (error) {
+                const authError = error as AuthError;
+                setStatus('error');
+                setErrorMessage(authError.message || 'Authentication failed.');
+                toast.error('Authentication Failed', authError.message);
+                setTimeout(() => navigate(ROUTES.LOGIN), 3000);
+            }
+        };
+
+        processCallback();
     }, [storeLogin, navigate, toast]);
 
     return (

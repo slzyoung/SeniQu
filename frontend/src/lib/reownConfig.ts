@@ -1,7 +1,8 @@
-import { createAppKit } from '@reown/appkit/react'
-import { SolanaAdapter } from '@reown/appkit-adapter-solana'
-import { solana, solanaDevnet } from '@reown/appkit/networks'
-import { SolflareWalletAdapter, PhantomWalletAdapter } from '@solana/wallet-adapter-wallets'
+// import { createAppKit } from '@reown/appkit/react'
+// import { SolanaAdapter } from '@reown/appkit-adapter-solana'
+// import { mainnet, solana, solanaDevnet } from '@reown/appkit/networks'
+// import { SolflareWalletAdapter, PhantomWalletAdapter } from '@solana/wallet-adapter-wallets'
+// import { EthersAdapter } from '@reown/appkit-adapter-ethers'
 
 // 1. Get Project ID from .env
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
@@ -15,27 +16,18 @@ if (!projectId) {
     // throw new Error('VITE_WALLETCONNECT_PROJECT_ID is not set') // Don't crash, just let Reown complain or use fallback
 }
 
-// 2. Set up Solana Adapter
-const solanaWeb3JsAdapter = new SolanaAdapter({
-    wallets: [new PhantomWalletAdapter(), new SolflareWalletAdapter()]
-})
+// 3. Create modal - COMMENTED OUT TO PREVENT CONFLICT WITH PRIVY
+// Privy handles WalletConnect initialization internally via 'toSolanaWalletConnectors'
+// export const appKit = createAppKit({ ... }) 
 
-// 3. Create modal
-// This is a singleton that can be imported and used anywhere
-export const appKit = createAppKit({
-    adapters: [solanaWeb3JsAdapter as any],
-    networks: [solana, solanaDevnet],
-    metadata: {
-        name: 'Seniqu',
-        description: 'Seniqu Art Platform',
-        url: import.meta.env.VITE_APP_URL || 'https://seniqu.com',
-        icons: ['https://seniqu.com/logo.png']
-    },
-    projectId,
-    features: {
-        analytics: true
-    }
-})
+// Export dummy/null to satisfy imports if any, or just leave commented if unused.
+// For now, let's keep the config but NOT initialize to see if that solves the specific error.
+// Actually, 'createAppKit' HAS side effects.
+export const appKit = null;
 
 // Export hook for usage in components
-export { useAppKit, useAppKitAccount, useAppKitProvider } from '@reown/appkit/react'
+// Export hook for usage in components
+// export { useAppKit, useAppKitAccount, useAppKitProvider } from '@reown/appkit/react'
+export const useAppKit = () => ({ open: (options?: any) => console.log('Reown AppKit disabled (using Privy)', options) });
+export const useAppKitAccount = () => ({ address: null, isConnected: false });
+export const useAppKitProvider = (network?: string) => ({ walletProvider: null });
