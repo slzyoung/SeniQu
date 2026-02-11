@@ -205,47 +205,64 @@ export function WalletPage() {
 
         setIsCreating(true);
         try {
-            const isAppAuthenticated = useAuthStore.getState().isAuthenticated;
-
-            // Ensure authenticated
+            // Ensure Privy is authenticated.
+            // If the App is authenticated but Privy isn't, we force a login (which handles sync/modal).
             if (!authenticated) {
-                if (isAppAuthenticated) {
-                    toast.info("Synchronizing...", "Please wait for wallet sync.");
-                    return;
-                } else {
-                    await login();
-                    return;
-                }
+                toast.info("Initializing Wallet", "Verifying identity...");
+                await login();
+                // We return here because login() is async and might not update 'authenticated' immediately in this closure.
+                // The user can click "Deposit" again once logged in (or we could wait, but it's safer to let the auth flow finish).
+                return;
             }
 
+            // If we are authenticated, we check for wallets.
+            // Privy's 'ethereum-and-solana' chain type means createWallet() should attempt to create both
+            // if they don't exist, or specific ones depending on internal logic.
+
             // Check if we have ANY embedded wallet (Solana or Eth)
-            // If we have one but not the other, it might be a sync issue or we just need to wait, 
-            // but usually createWallet is idempotent for the user's embedded wallet.
             if (!embeddedSolanaWallet && !embeddedEthereumWallet) {
-                // Completely new wallet
+                toast.loading("Generating secure wallet...", { id: 'create-wallet' });
                 const wallet = await createWallet();
+                toast.dismiss('create-wallet');
+
                 if (wallet) {
                     toast.success("Ready", "Wallet created successfully.");
-                    // Short delay to allow hooks to update
                     setTimeout(() => setShowReceiveModal(true), 1500);
                 }
             } else {
-                // We have one but not the active one?
-                // This shouldn't happen often with 'ethereum-and-solana' config, 
-                // but if it does, calling createWallet again might fix or just return existing.
-                // We'll try to just show the modal after a short delay if it syncs up.
-                toast.info("Syncing Wallet", "Updating chain availability...");
-                await createWallet(); // Retry creation/sync
-                setTimeout(() => setShowReceiveModal(true), 1500);
+                // We have at least one wallet, but maybe not the active one.
+                // Or maybe we just need to confirm creation.
+                // Calling createWallet() is generally safe/idempotent for embedded wallets if configured correctly.
+
+                if (!activeWallet) {
+                    toast.loading(`Creating ${activeChain} wallet...`, { id: 'create-wallet-chain' });
+                    try {
+                        const wallet = await createWallet();
+                        if (wallet) {
+                            toast.success("Created", `${activeChain} wallet ready.`);
+                        }
+                    } catch (e) {
+                        // Ignore "already exists" errors
+                        console.log("Wallet creation check:", e);
+                    }
+                    toast.dismiss('create-wallet-chain');
+                }
+
+                // Show modal after a brief delay ensuring state updates
+                setTimeout(() => setShowReceiveModal(true), 1000);
             }
 
         } catch (error: any) {
             console.error("Wallet creation error:", error);
-            // If error says "already exists", we just proceed
-            if (error?.message?.includes('already exists') || error?.toString().includes('already exists')) {
+            const errMsg = error?.message || error?.toString();
+
+            if (errMsg?.includes('already exists')) {
                 setShowReceiveModal(true);
+            } else if (errMsg?.includes('User not authenticated')) {
+                toast.error("Auth Error", "Please log in again.");
+                login();
             } else {
-                toast.error("Error", "Failed to create/sync wallet.");
+                toast.error("Error", "Failed to create wallet. Please try again.");
             }
         } finally {
             setIsCreating(false);
