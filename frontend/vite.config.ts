@@ -60,33 +60,21 @@ export default defineConfig({
             return 'vendor-utils';
           }
 
-          // Web3 - Solana (Distinct Ecosystem)
-          if (id.includes('node_modules/@solana') ||
-            id.includes('node_modules/@reown/appkit-adapter-solana') ||
-            id.includes('node_modules/@walletconnect/solana-adapter')) {
-            return 'vendor-solana';
-          }
-
-          // Web3 - EVM (Distinct Ecosystem)
-          if (id.includes('node_modules/viem') ||
-            id.includes('node_modules/ethers') ||
-            id.includes('node_modules/@ethersproject') ||
-            id.includes('node_modules/abitype')) {
-            return 'vendor-evm';
-          }
-
-          // Web3 - Core / Auth / WalletConnect / Utils
+          // Web3 & Auth (Unified Buffer to avoid circular deps)
           if (id.includes('node_modules/@privy-io') ||
+            id.includes('node_modules/@solana') ||
+            id.includes('node_modules/@reown') ||
             id.includes('node_modules/@walletconnect') ||
             id.includes('node_modules/@web3modal') ||
-            id.includes('node_modules/@reown') ||
-            id.includes('node_modules/@base-org') ||
-            id.includes('node_modules/ox') ||
+            id.includes('node_modules/viem') ||
+            id.includes('node_modules/ethers') ||
+            id.includes('node_modules/@ethersproject') ||
             id.includes('node_modules/bs58') ||
             id.includes('node_modules/buffer') ||
             id.includes('node_modules/elliptic') ||
-            id.includes('node_modules/bn.js')) {
-            return 'vendor-web3-core';
+            id.includes('node_modules/bn.js') ||
+            id.includes('node_modules/ox')) {
+            return 'vendor-web3';
           }
         },
       },
