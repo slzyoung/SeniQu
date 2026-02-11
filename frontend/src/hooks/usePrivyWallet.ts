@@ -1,26 +1,38 @@
-import { useWallets } from '@privy-io/react-auth';
 
-/**
- * Hook to manage Privy Embedded Wallets vs External Wallets
- * Helps distinguish the "App Wallet" (Embedded) from user's personal wallets (Phantom, etc.)
- */
+import { usePrivy, useWallets } from '@privy-io/react-auth';
+
 export const usePrivyWallet = () => {
     const { wallets } = useWallets();
+    // In Privy v3, loginWithCustomToken is removed and replaced by useSyncJwtBasedAuthState
+    // which handles syncing automatically. We don't expose manual login anymore.
+    const { ready, authenticated, createWallet, user, login, logout, connectWallet } = usePrivy();
 
-    // The embedded wallet created by Privy (Non-custodial)
-    const embeddedWallet = wallets.find(wallet => wallet.walletClientType === 'privy');
+    // Removed useSolanaWallets as it is not exported from @privy-io/react-auth/solana
+    // internal createWallet handles chains based on provider config.
 
-    // External wallets connected by the user (Phantom, Metamask, etc.)
-    const externalWallets = wallets.filter(wallet => wallet.walletClientType !== 'privy');
+    const solanaWallets = wallets.filter((wallet) => (wallet as any).chainType === 'solana');
+    const ethereumWallets = wallets.filter((wallet) => (wallet as any).chainType === 'ethereum');
 
-    // The currently active wallet (usually the last connected or selected one)
-    // Note: Privy's useWallets() doesn't explicitly denote "active" in the array, 
-    // but usually the first one or we use usePrivy().user.wallet
+    // Helper to find specific embedded wallet
+    const embeddedSolanaWallet = solanaWallets.find((w) => w.walletClientType === 'privy');
+    const embeddedEthereumWallet = ethereumWallets.find((w) => w.walletClientType === 'privy');
 
     return {
-        hasEmbeddedWallet: !!embeddedWallet,
-        embeddedWallet,
-        externalWallets,
-        allWallets: wallets
+        ready,
+        authenticated,
+        user,
+        createWallet,
+        login,
+        logout,
+        connectWallet,
+
+        wallets,
+        solanaWallets,
+        ethereumWallets,
+        embeddedSolanaWallet,
+        embeddedEthereumWallet,
+
+        // Removed raw: { createSolanaWallet } as distinct hook is unavailable/unnecessary
+        raw: {}
     };
 };

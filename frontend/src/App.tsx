@@ -14,6 +14,7 @@ export function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
+        {/* PrivyWrapper includes PrivySyncManager internally */}
         <PrivyWrapper>
           {/* Main Router — PrivyAuthBridge is inside AppRouter for useNavigate access */}
           <AppRouter />

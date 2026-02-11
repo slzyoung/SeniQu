@@ -77,6 +77,7 @@ backend/src/
 | **Artworks** | `/artworks/*` | CRUD for artworks |
 | **NFTs** | `/nfts/*` | Minting, listing, trading |
 | **Collections** | `/collections/*` | User artwork collections |
+| **Wallet** | `/wallet/*` | Nonce generation, wallet linking, balance checks |
 
 ### 4.2 New Modules
 

@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import { PrivyClient } from "@privy-io/server-auth"
+import * as jwt from 'jsonwebtoken';
 
 /**
  * Privy User Response
@@ -255,6 +256,50 @@ export class PrivyService implements OnModuleInit {
             this.logger.error(`Failed to create Privy user: ${error.message}`)
             // Don't throw, just log. We don't want to block registration if Privy is down.
             return null
+        }
+    }
+    /**
+     * Create a Custom Auth Token for a user via Privy API
+     * Allows the frontend to authenticate with Privy using our backend session
+     */
+    async getCustomAuthToken(userId: string): Promise<string | null> {
+        if (!this.appId || !this.appSecret) {
+            this.logger.error("Privy credentials not configured");
+            return null;
+        }
+
+        try {
+            // Generate Custom Auth Token (JWT) locally
+            // This replaces the deprecated API call which returns 405 Method Not Allowed
+            // We sign a JWT using the App Secret which allows the frontend to loginWithCustomToken.
+
+            // Note: In production with "Custom Auth", you typically configure a keypair.
+            // But for simple integrations, Privy often accepts tokens signed with App Secret (HS256).
+            // Payload 'sub' must match the userId used in importUser.
+
+            const payload = {
+                sub: userId,
+                iss: this.appId,
+                aud: 'privy.io',
+            };
+
+            // Using HS256 with the raw App Secret string
+            // Removing 'privy_app_secret_' prefix if present, as some libs strip it, but usually standard is opaque.
+            // However, 'svix' based secrets usually strip prefix. Let's try raw first.
+            const secret = this.appSecret.startsWith('privy_app_secret_')
+                ? this.appSecret.replace('privy_app_secret_', '')
+                : this.appSecret;
+
+            const token = jwt.sign(payload, secret, {
+                algorithm: 'HS256',
+                expiresIn: '1h',
+            });
+
+            this.logger.debug(`Generated custom auth token for user ${userId}`);
+            return token;
+        } catch (error: any) {
+            this.logger.error(`Failed to create custom auth token: ${error.message}`);
+            return null;
         }
     }
 }

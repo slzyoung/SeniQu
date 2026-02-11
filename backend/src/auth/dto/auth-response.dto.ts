@@ -45,4 +45,7 @@ export class AuthResponseDto {
 
     @ApiResponseProperty()
     isNewUser?: boolean
+
+    @ApiProperty({ required: false })
+    privyToken?: string
 }

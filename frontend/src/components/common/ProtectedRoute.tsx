@@ -28,6 +28,8 @@ function PageLoader() {
     );
 }
 
+import { needsProfileCompletion } from '../../lib/authHelpers';
+
 export function ProtectedRoute({
     children,
     roles = [],
@@ -37,8 +39,6 @@ export function ProtectedRoute({
 }: ProtectedRouteProps) {
     const { isAuthenticated, user, isLoading } = useAuthStore();
     const location = useLocation();
-
-
 
     // Show loading while checking auth state
     if (isLoading) {
@@ -64,13 +64,16 @@ export function ProtectedRoute({
         if (!hasRequiredRole) {
             // Redirect using centralized logic
             const defaultRedirect = getDashboardRoute(user.role);
+            return <Navigate to={defaultRedirect} replace />;
+        }
+    }
 
-            // Prevent infinite redirect loop - don't redirect to same path
-            if (defaultRedirect === location.pathname) {
-                // Already on default redirect path, render children to prevent loop
-            } else {
-                return <Navigate to={defaultRedirect} replace />;
-            }
+    // Enforce Profile Completion
+    // If user is authenticated but missing details, force them to complete profile
+    if (user && needsProfileCompletion(user)) {
+        // Prevent redirect loop if already on complete-profile
+        if (location.pathname !== '/complete-profile') {
+            return <Navigate to="/complete-profile" replace />;
         }
     }
 
@@ -106,7 +109,11 @@ export function PublicOnlyRoute({
             return <Navigate to={from.pathname} replace />;
         }
 
-        // Otherwise redirect based on role
+        // Check profile completion
+        if (needsProfileCompletion(user)) {
+            return <Navigate to="/complete-profile" replace />;
+        }
+
         // Otherwise redirect based on role
         const defaultRedirect = redirectTo || getDashboardRoute(user.role);
         return <Navigate to={defaultRedirect} replace />;

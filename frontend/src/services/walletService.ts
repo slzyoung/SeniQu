@@ -100,7 +100,9 @@ class WalletService {
             },
         });
 
-        return response.data;
+        // Unwrap response envelope { success: true, data: ... }
+        const body = response.data;
+        return body.data || body;
     }
 
     /**
@@ -130,7 +132,8 @@ class WalletService {
             },
         });
 
-        return response.data;
+        const body = response.data;
+        return body.data || body;
     }
 
     /**
@@ -152,7 +155,8 @@ class WalletService {
             },
         });
 
-        return response.data;
+        const body = response.data;
+        return body.data || body;
     }
 
     /**
@@ -173,7 +177,8 @@ class WalletService {
             },
         });
 
-        return response.data;
+        const body = response.data;
+        return body.data || body;
     }
 
     /**
@@ -188,7 +193,8 @@ class WalletService {
             },
         });
 
-        return response.data;
+        const body = response.data;
+        return body.data || body;
     }
 
     /**
@@ -201,14 +207,17 @@ class WalletService {
         }
 
         const response = await api.get('/wallet/connections');
-        return response.data;
+        const body = response.data;
+        return body.data || body;
     }
+
     /**
      * Get aggregated portfolio for the authenticated user
      */
     async getPortfolio(): Promise<any> {
         const response = await api.get('/wallet/portfolio');
-        return response.data;
+        const body = response.data;
+        return body.data || body;
     }
 
     /**
@@ -216,7 +225,8 @@ class WalletService {
      */
     async getTransactions(): Promise<any[]> {
         const response = await api.get('/wallet/transactions');
-        return response.data;
+        const body = response.data;
+        return body.data || body;
     }
 
     /**
@@ -237,7 +247,8 @@ class WalletService {
             },
         });
 
-        return response.data;
+        const body = response.data;
+        return body.data || body;
     }
 }
 

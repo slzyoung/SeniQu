@@ -1,8 +1,8 @@
-// import { createAppKit } from '@reown/appkit/react'
-// import { SolanaAdapter } from '@reown/appkit-adapter-solana'
-// import { mainnet, solana, solanaDevnet } from '@reown/appkit/networks'
-// import { SolflareWalletAdapter, PhantomWalletAdapter } from '@solana/wallet-adapter-wallets'
-// import { EthersAdapter } from '@reown/appkit-adapter-ethers'
+import { createAppKit } from '@reown/appkit/react'
+import { SolanaAdapter } from '@reown/appkit-adapter-solana'
+import { mainnet, solana, solanaDevnet } from '@reown/appkit/networks'
+import { SolflareWalletAdapter, PhantomWalletAdapter } from '@solana/wallet-adapter-wallets'
+import { EthersAdapter } from '@reown/appkit-adapter-ethers'
 
 // 1. Get Project ID from .env
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
@@ -16,18 +16,31 @@ if (!projectId) {
     // throw new Error('VITE_WALLETCONNECT_PROJECT_ID is not set') // Don't crash, just let Reown complain or use fallback
 }
 
-// 3. Create modal - COMMENTED OUT TO PREVENT CONFLICT WITH PRIVY
-// Privy handles WalletConnect initialization internally via 'toSolanaWalletConnectors'
-// export const appKit = createAppKit({ ... }) 
+// 2. Set up adapters
+export const networks = [solana, solanaDevnet, mainnet]
 
-// Export dummy/null to satisfy imports if any, or just leave commented if unused.
-// For now, let's keep the config but NOT initialize to see if that solves the specific error.
-// Actually, 'createAppKit' HAS side effects.
-export const appKit = null;
+// 3. Create modal
+export const appKit = createAppKit({
+    adapters: [
+        new SolanaAdapter({
+            wallets: [new PhantomWalletAdapter(), new SolflareWalletAdapter()]
+        }),
+        new EthersAdapter()
+    ],
+    networks: networks as any,
+    projectId: projectId || 'c4f79cc...', // Fallback or strict fail
+    features: {
+        analytics: true,
+        email: false, // Disable email, we use custom auth
+        socials: [],
+    },
+    themeMode: 'dark',
+    themeVariables: {
+        '--w3m-accent': '#D4AF37', // Gold
+        '--w3m-border-radius-master': '1px'
+    }
+})
 
 // Export hook for usage in components
-// Export hook for usage in components
-// export { useAppKit, useAppKitAccount, useAppKitProvider } from '@reown/appkit/react'
-export const useAppKit = () => ({ open: (options?: any) => console.log('Reown AppKit disabled (using Privy)', options) });
-export const useAppKitAccount = () => ({ address: null, isConnected: false });
-export const useAppKitProvider = (network?: string) => ({ walletProvider: null });
+export { useAppKit, useAppKitAccount, useAppKitProvider } from '@reown/appkit/react'
+

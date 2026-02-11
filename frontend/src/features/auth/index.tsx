@@ -13,6 +13,7 @@ import { useToast } from '../../stores/useNotificationStore';
 import { ROUTES } from '../../lib/constants';
 import { getDashboardRoute } from '../../lib/utils';
 import { authService, loginSchema, AuthError } from '../../services/authService';
+import { needsProfileCompletion } from '../../lib/authHelpers';
 import { z } from 'zod';
 
 // ============================================
@@ -246,14 +247,20 @@ export function AuthCallback() {
                 window.history.replaceState(null, '', window.location.pathname);
 
                 // Check if profile needs completion (missing displayName or username)
-                const { needsProfileCompletion } = await import('../../lib/authHelpers');
                 const needsCompletion = needsProfileCompletion(response.user);
+
+                console.log('[AuthCallback] Google Login Success. User:', response.user.username);
+                console.log('[AuthCallback] Needs Completion?', needsCompletion);
+
                 const redirectPath = needsCompletion
                     ? '/complete-profile'
                     : getDashboardRoute(response.user.role);
-                setTimeout(() => navigate(redirectPath, { replace: true }), 1500);
+
+                // Small delay to let the success state show briefly
+                setTimeout(() => navigate(redirectPath, { replace: true }), 1000);
             } catch (error) {
                 const authError = error as AuthError;
+                console.error('[AuthCallback] Google Login Error:', authError);
                 setStatus('error');
                 setErrorMessage(authError.message || 'Authentication failed.');
                 toast.error('Authentication Failed', authError.message);

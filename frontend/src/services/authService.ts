@@ -75,6 +75,7 @@ export interface AuthResponse {
     accessToken: string;
     refreshToken: string;
     isNewUser?: boolean;
+    privyToken?: string;
 }
 
 export interface LoginCredentials {
@@ -227,10 +228,13 @@ class AuthService {
             throw new Error('Invalid user data received from server');
         }
 
+        // Unwrap if wrapped in data property
+        const user = backendUser.data || backendUser;
+
         let role = 'user';
 
         // Map userType to role
-        switch (backendUser.userType) {
+        switch (user.userType) {
             case 'ARTIST':
                 role = 'artist';
                 break;
@@ -247,22 +251,22 @@ class AuthService {
         }
 
         // Override if admin
-        if (backendUser.adminRole) {
-            role = backendUser.adminRole === 'SUPER_ADMIN' ? 'super_admin' : 'admin';
+        if (user.adminRole) {
+            role = user.adminRole === 'SUPER_ADMIN' ? 'super_admin' : 'admin';
         }
 
         return {
-            id: backendUser.id,
-            email: backendUser.email,
-            username: backendUser.username || '',
-            displayName: backendUser.displayName || backendUser.display_name || '',
+            id: user.id,
+            email: user.email,
+            username: user.username || '',
+            displayName: user.displayName || user.display_name || '',
             role: role as any,
-            walletAddress: backendUser.walletAddress || backendUser.wallet_address,
-            createdAt: backendUser.createdAt || new Date().toISOString(),
-            updatedAt: backendUser.updatedAt || backendUser.createdAt || new Date().toISOString(),
-            isVerified: backendUser.isVerified || false,
-            isPremium: backendUser.isPremium || false,
-            embeddedWalletAddress: backendUser.embeddedWalletAddress || backendUser.embedded_wallet_address,
+            walletAddress: user.walletAddress || user.wallet_address,
+            createdAt: user.createdAt || new Date().toISOString(),
+            updatedAt: user.updatedAt || user.createdAt || new Date().toISOString(),
+            isVerified: user.isVerified || false,
+            isPremium: user.isPremium || false,
+            embeddedWalletAddress: user.embeddedWalletAddress || user.embedded_wallet_address,
         };
     }
 
@@ -539,6 +543,25 @@ class AuthService {
             return authResponse;
         } catch (error) {
             throw sanitizeError(error);
+        }
+    }
+
+    /**
+     * Get Privy Sync Token for Session Hydration
+     */
+    async getPrivySyncToken(): Promise<{ privyToken: string | null }> {
+        try {
+            const response = await apiGet<{ privyToken: string | null }>(
+                '/auth/sync-privy',
+                { headers: getSecurityHeaders() }
+            );
+            // Handle { data: { privyToken } } if wrapped, or just { privyToken }
+            const data = (response as any).data || response;
+            return { privyToken: data.privyToken || null };
+        } catch (error) {
+            // detailed logging for debug
+            console.warn('[Helper] Failed to get Privy sync token', error);
+            return { privyToken: null };
         }
     }
 

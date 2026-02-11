@@ -14,6 +14,7 @@ Welcome to the official documentation for the **Seniqu WebApp**, an enterprise-g
 | 6 | [Development Workflow](./06-Development-Workflow.md) | Setup, coding standards, deployment |
 | 7 | [Database Schema](./07-Database-Schema.md) | Supabase tables, functions, RLS |
 | 8 | [API Reference](./08-API-Reference.md) | Endpoints, parameters, examples |
+| 9 | [Wallet Integration](./09-Wallet-Integration.md) | Hybrid Wallet Strategy and Auto-Sync |
 
 ---
 

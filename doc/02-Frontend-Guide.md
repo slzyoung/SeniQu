@@ -54,7 +54,15 @@ Authentication state is managed via `useAuthStore` (Zustand).
 - **Theme Provider**: `src/hooks/useTheme.tsx` manages Dark/Light mode.
 - **Colors**: Defined in `tailwind.config.js`. Use `bg-theme-bg`, `text-theme-text` for dark-mode compatible semantic colors.
 
-### 2.5 Folder Structure Best Practices
+### 2.5 Web3 Integration & Wallets
+We use a **Hybrid Wallet Strategy**:
+- **Internal**: `PrivyProvider` wraps the app to provide embedded wallets for email users.
+- **Sync**: `PrivySyncManager` component runs globally to keep auth states in sync.
+- **External**: `useManualWallet` hook handles direct connections (Phantom/MetaMask) for crypto-native users.
+
+Detailed documentation: [09-Wallet-Integration.md](./09-Wallet-Integration.md)
+
+### 2.6 Folder Structure Best Practices
 When creating a new feature:
 1. Create a folder in `src/features/[feature-name]`.
 2. Create `pages/` for route components.

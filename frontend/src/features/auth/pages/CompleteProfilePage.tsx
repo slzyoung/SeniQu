@@ -28,7 +28,7 @@ const SUBMIT_COOLDOWN_MS = 3000;
 export default function CompleteProfilePage() {
     const navigate = useNavigate();
     const toast = useToast();
-    const { user, isAuthenticated, updateUser } = useAuthStore();
+    const { user, isAuthenticated, updateUser, setUser } = useAuthStore();
 
     const [displayName, setDisplayName] = useState(user?.displayName || '');
     const [username, setUsername] = useState(user?.username || '');
@@ -44,13 +44,51 @@ export default function CompleteProfilePage() {
         }
     }, [isAuthenticated, navigate]);
 
-    // Auto-redirect if profile is already complete
+    // Auto-redirect if profile is already complete (Local State Check)
     useEffect(() => {
         if (user && !needsProfileCompletion(user)) {
             const dashboardRoute = getDashboardRoute(user.role);
+            console.log('[CompleteProfile] Local user is complete. Redirecting to:', dashboardRoute);
             navigate(dashboardRoute, { replace: true });
         }
     }, [user, navigate]);
+
+    // SELF-HEALING: Fetch latest profile from backend on mount
+    // This handles cases where local state is stale but backend is actually complete.
+    useEffect(() => {
+        const verifyBackendState = async () => {
+            if (!isAuthenticated) return;
+
+            try {
+                const freshUser = await userService.getMyProfile();
+                console.log('[CompleteProfile] Fetched fresh user:', JSON.stringify(freshUser, null, 2));
+
+                if (!needsProfileCompletion(freshUser)) {
+                    console.log('[CompleteProfile] Backend says profile is COMPLETE. Updating store and redirecting...');
+                    setUser(freshUser);
+                    // Force navigation
+                    const dashboardRoute = getDashboardRoute(freshUser.role);
+                    window.location.href = dashboardRoute;
+                } else {
+                    console.log('[CompleteProfile] Backend confirms profile is INCOMPLETE.');
+
+                    // DEBUG: Why is it incomplete?
+                    const hasDisplayName = !!freshUser.displayName && freshUser.displayName.trim().length >= 2;
+                    const hasUsername = !!freshUser.username && freshUser.username.trim().length >= 3;
+                    console.log(`[CompleteProfile] Completeness Check: DisplayName="${freshUser.displayName}" (${hasDisplayName}), Username="${freshUser.username}" (${hasUsername})`);
+
+                    // Update local state with fresh data anyway, to pre-fill form
+                    setUser(freshUser);
+                    setDisplayName(prev => prev || freshUser.displayName || '');
+                    setUsername(prev => prev || freshUser.username || '');
+                }
+            } catch (err) {
+                console.error('[CompleteProfile] Failed to verify backend state:', err);
+            }
+        };
+
+        verifyBackendState();
+    }, [isAuthenticated, setUser]);
 
     // Validate username format (lowercase alphanumeric + underscore)
     const validateUsername = useCallback((value: string): string | null => {
@@ -97,19 +135,49 @@ export default function CompleteProfilePage() {
         lastSubmitRef.current = now;
 
         try {
+            const cleanDisplayName = displayName.trim();
+            const cleanUsername = username.toLowerCase().trim();
+
             const updatedUser = await userService.updateProfile({
-                displayName: displayName.trim(),
-                username: username.toLowerCase().trim(),
+                displayName: cleanDisplayName,
+                username: cleanUsername,
             });
 
-            // Update auth store with the new user data
-            updateUser(updatedUser);
+            console.log('[CompleteProfile] Backend update success:', updatedUser);
+
+            // CRITICAL FIX: Force hard update of local store
+            // We use setUser to completely replace the user object, ensuring
+            // no stale properties linger. We explicitly merge the submitted values.
+            if (user) {
+                const finalUser = {
+                    ...user,
+                    ...updatedUser, // Backend response might override some fields
+                    displayName: cleanDisplayName, // Enforce our submitted values
+                    username: cleanUsername,
+                    role: updatedUser.role || user.role
+                };
+
+                console.log('[CompleteProfile] Setting final user state:', finalUser);
+                setUser(finalUser);
+
+                // Small delay to ensure Zustand persist middleware writes to localStorage
+                // before navigation occurs.
+                // WE USE window.location.href TO FORCE A FULL APP RELOAD.
+                // This guarantees that the app re-initializes with the fresh state from storage,
+                // eliminating any potential in-memory race conditions or stale router state
+                // that was causing the "double submit" bug.
+                setTimeout(() => {
+                    const dashboardRoute = getDashboardRoute(finalUser.role);
+                    console.log('[CompleteProfile] Hard reloading to:', dashboardRoute);
+                    window.location.href = dashboardRoute;
+                }, 300);
+            } else {
+                // Fallback
+                setUser(updatedUser);
+                navigate(getDashboardRoute(updatedUser.role), { replace: true });
+            }
 
             toast.success('Profile Complete!', 'Welcome to Seniqu.');
-
-            // Navigate to dashboard
-            const dashboardRoute = getDashboardRoute(updatedUser.role || user?.role);
-            navigate(dashboardRoute, { replace: true });
         } catch (error: any) {
             const message = error?.message || 'Failed to update profile. Please try again.';
 

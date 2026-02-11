@@ -176,7 +176,7 @@ export function Profile() {
                                 </div>
                                 <div className="text-center">
                                     <p className="text-lg font-bold text-theme-text">{stats.nftCount || 0}</p>
-                                    <p className="text-xs text-theme-muted">NFTs</p>
+                                    <p className="text-xs text-theme-muted">Arts</p>
                                 </div>
                             </div>
                         )}

@@ -1,6 +1,8 @@
 import React from 'react';
 import { PrivyProvider as PrivySDKProvider } from '@privy-io/react-auth';
-import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
+// import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
+// Import the new sync manager
+import { PrivySyncManager } from './PrivySyncManager';
 
 // ============================================================
 // CHAIN DEFINITIONS
@@ -26,13 +28,23 @@ const solanaDevnet = {
     },
 };
 
+const ethereumMainnet = {
+    id: 1,
+    name: 'Ethereum',
+    network: 'mainnet',
+    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+    rpcUrls: {
+        default: { http: ['https://cloudflare-eth.com'] },
+    },
+};
+
 // ============================================================
 // EXTERNAL WALLET CONNECTORS
 // ============================================================
 
-const solanaConnectors = toSolanaWalletConnectors({
-    shouldAutoConnect: false,
-});
+// const solanaConnectors = toSolanaWalletConnectors({
+//     shouldAutoConnect: false,
+// });
 
 // ============================================================
 // ENVIRONMENT VARIABLES & VALIDATION
@@ -155,8 +167,8 @@ export const PrivyProvider: React.FC<PrivyProviderProps> = ({ children }) => {
                             'phantom',
                             'solflare',
                             'metamask',
-                            'wallet_connect',
-                            'coinbase_wallet',
+                            // 'wallet_connect', // Handled by Reown AppKit externally to prevent "Init already called" errors
+                            // 'coinbase_wallet', 
                             'detected_solana_wallets',
                             'detected_ethereum_wallets',
                         ],
@@ -164,16 +176,23 @@ export const PrivyProvider: React.FC<PrivyProviderProps> = ({ children }) => {
                     },
                     loginMethods: ['google', 'email', 'wallet'],
                     embeddedWallets: {
-                        solana: { createOnLogin: 'all-users' },
-                        ethereum: { createOnLogin: 'all-users' },
+                        solana: { createOnLogin: 'users-without-wallets' },
+                        ethereum: { createOnLogin: 'users-without-wallets' },
                     },
                     externalWallets: {
-                        solana: { connectors: solanaConnectors },
+                        // solana: { connectors: solanaConnectors }, // Disabled: Conflict with Reown AppKit "Already Initialized" error
                     },
-                    supportedChains: [solanaMainnet, solanaDevnet],
+                    // Revert chain order for general sanity now that Coinbase is gone
+                    supportedChains: [solanaMainnet, solanaDevnet, ethereumMainnet],
                     defaultChain: solanaMainnet,
+                    // walletConnectCloudProjectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID, // Disabled: Conflict with Reown AppKit
                 }}
             >
+                {/* 
+                  PrivySyncManager handles automatic synchronization of the Privy session 
+                  using the backend-generated custom auth token. This replaces manual loginWithCustomToken.
+                */}
+                <PrivySyncManager />
                 {children}
             </PrivySDKProvider>
         </PrivyErrorBoundary>

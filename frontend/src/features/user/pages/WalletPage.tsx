@@ -11,7 +11,9 @@ import {
     CheckCircle,
     Loader2,
     History,
-    ArrowUpRight
+    ArrowUpRight,
+    TrendingUp,
+    ArrowRightLeft
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { QrReader } from 'react-qr-reader';
@@ -19,15 +21,40 @@ import { PageContainer, StatsGrid } from '../../../components/common/DashboardLa
 import { Card, Button, Badge, Input, Modal } from '../../../components/ui';
 import { usePrivyWallet } from '../../../hooks/usePrivyWallet';
 import { useToast } from '../../../stores/useNotificationStore';
-import { ConnectedWallets } from '../components/ConnectedWallets';
 import { useWalletTransactions } from '../../../hooks/useWalletData';
+import { useTokenPrices } from '../../../hooks/useTokenPrices';
 import { Connection, PublicKey, LAMPORTS_PER_SOL, clusterApiUrl, Transaction, SystemProgram } from '@solana/web3.js';
+import { useAuthStore } from '../../../stores/useAuthStore';
+
+// ============================================
+// ASSETS & CONFIG
+// ============================================
+
+// Images from public/images/crypto
+const ICONS = {
+    solana: '/images/crypto/solana.svg',
+    ethereum: '/images/crypto/ethereum.svg',
+    usdt: '/images/crypto/usdt.svg',
+    usdc: '/images/crypto/usdc.svg',
+};
+
+type ChainType = 'solana' | 'ethereum';
+
+interface TokenAsset {
+    symbol: string;
+    name: string;
+    balance: number;
+    price: number;
+    value: number;
+    icon: string;
+    isNative?: boolean;
+}
 
 // ============================================
 // COMPONENTS
 // ============================================
 
-function WalletAddress({ address, label }: { address: string; label?: string }) {
+function WalletAddress({ address, label, chain }: { address: string; label?: string; chain: ChainType }) {
     const [copied, setCopied] = useState(false);
     const toast = useToast();
 
@@ -44,12 +71,17 @@ function WalletAddress({ address, label }: { address: string; label?: string }) 
 
     const shortAddr = `${address.slice(0, 6)}...${address.slice(-4)}`;
 
+    // Explorer URL based on chain
+    const explorerUrl = chain === 'solana'
+        ? `https://solscan.io/account/${address}?cluster=devnet`
+        : `https://etherscan.io/address/${address}`;
+
     return (
         <div className="flex items-center gap-3">
             {label && (
                 <span className="text-xs text-theme-muted">{label}</span>
             )}
-            <code className="text-sm font-mono text-theme-text bg-theme-elevated px-3 py-1.5 rounded-lg">
+            <code className="text-sm font-mono text-theme-text bg-theme-elevated px-3 py-1.5 rounded-lg border border-theme-border">
                 {shortAddr}
             </code>
             <button
@@ -64,11 +96,11 @@ function WalletAddress({ address, label }: { address: string; label?: string }) 
                 )}
             </button>
             <a
-                href={`https://solscan.io/account/${address}?cluster=devnet`} // Defaulting to devnet for now
+                href={explorerUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-1.5 rounded-lg hover:bg-theme-elevated text-theme-muted hover:text-gold transition-colors"
-                title="View on Solscan"
+                title={`View on ${chain === 'solana' ? 'Solscan' : 'Etherscan'}`}
             >
                 <ExternalLink className="w-4 h-4" />
             </a>
@@ -81,23 +113,30 @@ function WalletAddress({ address, label }: { address: string; label?: string }) 
 // ============================================
 
 export function WalletPage() {
-    const { embeddedWallet } = usePrivyWallet();
-    const toast = useToast();
+    // 1. Auth & Wallet Hooks
+    const {
+        embeddedSolanaWallet,
+        embeddedEthereumWallet, // NEW: Support Ethereum
+        authenticated,
+        login,
+        createWallet
+    } = usePrivyWallet();
 
-    // Use backend just for transaction history (since that's stored easier there, or we could fetch from chain too)
-    // For now, let's keep the transaction history hook if it provides value, otherwise we might want to fetch from chain eventually.
-    // Assuming backend history tracks what we do via API, but since we are moving to direct chain, backend history might get out of sync 
-    // unless we implement an indexer. For this step, we will focus on Real Balance and Real Withdrawal.
+    const toast = useToast();
+    const { prices } = useTokenPrices(); // NEW: Real-time prices
     const { data: rawTransactions, isLoading: txLoading, refetch: refetchTransactions } = useWalletTransactions();
     const transactions = Array.isArray(rawTransactions) ? rawTransactions : (rawTransactions as any)?.data ?? [];
 
+    // 2. Local State
+    const [activeChain, setActiveChain] = useState<ChainType>('solana');
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const [solBalance, setSolBalance] = useState<number | null>(null);
-    const [solPrice, setSolPrice] = useState<number>(0); // Store price separately
+    const [isCreating, setIsCreating] = useState(false);
 
-    // Initial loading state: only wait for wallet and balance. 
-    // Do NOT wait for transactions (txLoading) to prevent blocking the UI if backend is down.
-    const loading = (!solBalance && solBalance !== 0 && !embeddedWallet);
+    // Balances
+    const [solBalance, setSolBalance] = useState<number>(0);
+    const [ethBalance, setEthBalance] = useState<number>(0);
+
+    // Modals
     const [showReceiveModal, setShowReceiveModal] = useState(false);
     const [showSendModal, setShowSendModal] = useState(false);
     const [showScanModal, setShowScanModal] = useState(false);
@@ -107,54 +146,119 @@ export function WalletPage() {
     const [sendAddress, setSendAddress] = useState('');
     const [isSending, setIsSending] = useState(false);
 
-    // Fetch Real Balance
-    const fetchBalance = useCallback(async () => {
-        if (!embeddedWallet?.address) return;
-        try {
-            const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
-            const publicKey = new PublicKey(embeddedWallet.address);
-            const balance = await connection.getBalance(publicKey);
-            setSolBalance(balance / LAMPORTS_PER_SOL);
-        } catch (error) {
-            console.error('Failed to fetch balance:', error);
-            // Don't show toast on background fetch failure to avoid annoyance
-        }
-    }, [embeddedWallet?.address]);
+    // 3. Derived Helpers
+    const activeWallet = activeChain === 'solana' ? embeddedSolanaWallet : embeddedEthereumWallet;
 
-    // Simple mock price fetcher (or just hardcode for devnet demo)
-    const fetchPrice = useCallback(async () => {
-        // In a real app, fetch from Coingecko
-        setSolPrice(150.00); // Mock price for display
-    }, []);
+
+    // 4. Fetch Logic
+    const fetchBalances = useCallback(async () => {
+        // Fetch Solana
+        if (embeddedSolanaWallet?.address) {
+            try {
+                const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
+                const pubKey = new PublicKey(embeddedSolanaWallet.address);
+                const bal = await connection.getBalance(pubKey);
+                setSolBalance(bal / LAMPORTS_PER_SOL);
+            } catch (err) {
+                console.error("[WalletPage] Sol balance error", err);
+            }
+        }
+
+        // Fetch Ethereum
+        if (embeddedEthereumWallet?.address) {
+            try {
+                const provider = await (embeddedEthereumWallet as any).getProvider();
+                // EIP-1193 request
+                const balHex = await provider.request({
+                    method: 'eth_getBalance',
+                    params: [embeddedEthereumWallet.address, 'latest']
+                });
+                const balWei = parseInt(balHex, 16);
+                setEthBalance(balWei / 1e18);
+            } catch (err) {
+                console.error("[WalletPage] Eth balance error", err);
+            }
+        }
+    }, [embeddedSolanaWallet, embeddedEthereumWallet]);
 
     useEffect(() => {
-        if (embeddedWallet?.address) {
-            fetchBalance();
-            fetchPrice();
-        }
-    }, [embeddedWallet?.address, fetchBalance, fetchPrice]);
-
+        fetchBalances();
+    }, [fetchBalances]);
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
         try {
-            await Promise.all([fetchBalance(), refetchTransactions()]);
-            toast.success('Updated', 'Wallet balance refreshed');
+            await Promise.all([fetchBalances(), refetchTransactions()]);
+            toast.success('Updated', 'Portfolio refreshed');
         } finally {
             setIsRefreshing(false);
         }
     };
 
-    const handleScan = (result: any) => {
-        if (result?.text) {
-            setSendAddress(result.text);
-            setShowScanModal(false);
-            toast.success('Scanned', 'Address captured successfully');
+    // 5. Create Wallet Handler
+    const handleCreateOrDeposit = async () => {
+        // Check if we already have the wallet for the ACTIVE chain
+        if (activeWallet) {
+            setShowReceiveModal(true);
+            return;
+        }
+
+        setIsCreating(true);
+        try {
+            const isAppAuthenticated = useAuthStore.getState().isAuthenticated;
+
+            // Ensure authenticated
+            if (!authenticated) {
+                if (isAppAuthenticated) {
+                    toast.info("Synchronizing...", "Please wait for wallet sync.");
+                    return;
+                } else {
+                    await login();
+                    return;
+                }
+            }
+
+            // Check if we have ANY embedded wallet (Solana or Eth)
+            // If we have one but not the other, it might be a sync issue or we just need to wait, 
+            // but usually createWallet is idempotent for the user's embedded wallet.
+            if (!embeddedSolanaWallet && !embeddedEthereumWallet) {
+                // Completely new wallet
+                const wallet = await createWallet();
+                if (wallet) {
+                    toast.success("Ready", "Wallet created successfully.");
+                    // Short delay to allow hooks to update
+                    setTimeout(() => setShowReceiveModal(true), 1500);
+                }
+            } else {
+                // We have one but not the active one?
+                // This shouldn't happen often with 'ethereum-and-solana' config, 
+                // but if it does, calling createWallet again might fix or just return existing.
+                // We'll try to just show the modal after a short delay if it syncs up.
+                toast.info("Syncing Wallet", "Updating chain availability...");
+                await createWallet(); // Retry creation/sync
+                setTimeout(() => setShowReceiveModal(true), 1500);
+            }
+
+        } catch (error: any) {
+            console.error("Wallet creation error:", error);
+            // If error says "already exists", we just proceed
+            if (error?.message?.includes('already exists') || error?.toString().includes('already exists')) {
+                setShowReceiveModal(true);
+            } else {
+                toast.error("Error", "Failed to create/sync wallet.");
+            }
+        } finally {
+            setIsCreating(false);
         }
     };
 
+    // 6. Send Handler (Solana Only for now as requested, but structure supports both)
     const handleSend = async () => {
-        if (!sendAddress || !sendAmount || !embeddedWallet) return;
+        if (!sendAddress || !sendAmount || !activeWallet) return;
+        if (activeChain === 'ethereum') {
+            toast.info("Coming Soon", "ETH sending is coming soon.");
+            return;
+        }
 
         setIsSending(true);
         try {
@@ -165,19 +269,18 @@ export function WalletPage() {
                 return;
             }
 
-            // Client-Side Signing Logic
-            const provider = await (embeddedWallet as any).getProvider();
+            const provider = await (activeWallet as any).getProvider();
             const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
 
             const transaction = new Transaction().add(
                 SystemProgram.transfer({
-                    fromPubkey: new PublicKey(embeddedWallet.address),
+                    fromPubkey: new PublicKey(activeWallet.address),
                     toPubkey: new PublicKey(sendAddress),
                     lamports: amount * LAMPORTS_PER_SOL,
                 })
             );
 
-            transaction.feePayer = new PublicKey(embeddedWallet.address);
+            transaction.feePayer = new PublicKey(activeWallet.address);
             const { blockhash } = await connection.getLatestBlockhash();
             transaction.recentBlockhash = blockhash;
 
@@ -185,99 +288,189 @@ export function WalletPage() {
             const signature = await connection.sendRawTransaction(signedTx.serialize());
             await connection.confirmTransaction(signature);
 
-            toast.success('Transfer Successful', `Sent ${amount} SOL to ${sendAddress.slice(0, 4)}...${sendAddress.slice(-4)}`);
+            toast.success('Sent!', `Transferred ${amount} SOL.`);
             setShowSendModal(false);
             setSendAddress('');
             setSendAmount('');
-            fetchBalance(); // Refresh balance immediately
+            fetchBalances();
 
         } catch (error: any) {
-            console.error('Withdrawal failed:', error);
-            if (error.message?.includes("User rejected")) {
-                toast.info("Cancelled", "Transaction cancelled by user.");
-            } else {
-                toast.error('Withdrawal Failed', 'Transaction failed. Please check your balance and try again.');
-            }
+            console.error("Send failed", error);
+            toast.error("Failed", "Transaction failed to send.");
         } finally {
             setIsSending(false);
         }
     };
 
-    // const loading = ... (already declared above)
+    // 7. Assets Logic
+    // Construct the asset list based on active chain
+    const getAssets = (): TokenAsset[] => {
+        if (activeChain === 'solana') {
+            return [
+                {
+                    symbol: 'SOL',
+                    name: 'Solana',
+                    balance: solBalance,
+                    price: prices.solana,
+                    value: solBalance * prices.solana,
+                    icon: ICONS.solana,
+                    isNative: true
+                },
+                {
+                    symbol: 'USDC',
+                    name: 'USD Coin',
+                    balance: 0, // Mock for now
+                    price: prices['usd-coin'],
+                    value: 0,
+                    icon: ICONS.usdc
+                },
+                {
+                    symbol: 'USDT',
+                    name: 'Tether',
+                    balance: 0, // Mock for now
+                    price: prices.tether,
+                    value: 0,
+                    icon: ICONS.usdt
+                }
+            ];
+        } else {
+            return [
+                {
+                    symbol: 'ETH',
+                    name: 'Ethereum',
+                    balance: ethBalance,
+                    price: prices.ethereum,
+                    value: ethBalance * prices.ethereum,
+                    icon: ICONS.ethereum,
+                    isNative: true
+                },
+                {
+                    symbol: 'USDC',
+                    name: 'USD Coin',
+                    balance: 0,
+                    price: prices['usd-coin'],
+                    value: 0,
+                    icon: ICONS.usdc
+                },
+                {
+                    symbol: 'USDT',
+                    name: 'Tether',
+                    balance: 0,
+                    price: prices.tether,
+                    value: 0,
+                    icon: ICONS.usdt
+                }
+            ];
+        }
+    };
 
-    // Only show loading if we really have no data yet and are trying to get it
-    if (loading && !embeddedWallet) {
-        return (
-            <PageContainer title="Seniqu Wallet" subtitle="Loading your portfolio...">
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <Loader2 className="w-10 h-10 text-gold animate-spin mb-4" />
-                    <p className="text-theme-muted">Connecting to Solana network...</p>
-                </div>
-            </PageContainer>
-        );
-    }
+    const assets = getAssets();
+    const totalPortfolioValue = assets.reduce((acc, curr) => acc + curr.value, 0);
 
-    const valueUsd = (solBalance || 0) * solPrice;
+    // ============================================
+    // RENDER
+    // ============================================
 
     return (
         <PageContainer
             title="Seniqu Wallet"
-            subtitle="Manage your assets with your secure, embedded wallet"
+            subtitle="Secure, multi-chain embedded wallet"
         >
+            {/* Header / Network Toggle */}
+            <div className="flex items-center gap-4 mb-6">
+                <div className="flex bg-theme-elevated p-1 rounded-xl border border-theme-border">
+                    <button
+                        onClick={() => setActiveChain('solana')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeChain === 'solana'
+                            ? 'bg-gold text-black shadow-lg shadow-gold/20'
+                            : 'text-theme-muted hover:text-theme-text'
+                            }`}
+                    >
+                        <div className="flex items-center gap-2">
+                            <img src={ICONS.solana} alt="Solana" className="w-4 h-4" />
+                            Solana
+                        </div>
+                    </button>
+                    <button
+                        onClick={() => setActiveChain('ethereum')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeChain === 'ethereum'
+                            ? 'bg-gold text-black shadow-lg shadow-gold/20'
+                            : 'text-theme-muted hover:text-theme-text'
+                            }`}
+                    >
+                        <div className="flex items-center gap-2">
+                            <img src={ICONS.ethereum} alt="Ethereum" className="w-4 h-4" />
+                            Ethereum
+                        </div>
+                    </button>
+                </div>
+
+                {activeWallet && (
+                    <Badge variant={activeChain === 'solana' ? 'gold' : 'default'} className="hidden sm:flex">
+                        {activeChain === 'solana' ? 'Devnet' : 'Mainnet'}
+                    </Badge>
+                )}
+            </div>
+
             {/* Wallet Overview */}
             <StatsGrid>
-                {/* Main Card */}
+                {/* Main Balance Card */}
                 <Card variant="elevated" className="col-span-full sm:col-span-2 relative overflow-hidden border-gold/20">
                     <div className="absolute top-0 right-0 w-40 h-40 bg-gold/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
+
                     <div className="relative z-10">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="p-3 bg-gradient-to-br from-gold/20 to-gold/5 rounded-xl border border-gold/10">
-                                <Wallet className="w-6 h-6 text-gold" />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-theme-text">Total Balance</h3>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                    <Badge variant="gold" className="text-[10px] px-1.5 py-0">Non-Custodial</Badge>
-                                    <span className="text-xs text-theme-muted">Solana</span>
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="p-3 bg-gradient-to-br from-gold/20 to-gold/5 rounded-xl border border-gold/10 shadow-inner">
+                                    <Wallet className="w-6 h-6 text-gold" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-theme-text">Total Balance</h3>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                        <Badge variant="default" className="text-[10px] uppercase tracking-wider text-theme-muted border-theme-border">
+                                            {activeChain}
+                                        </Badge>
+                                    </div>
                                 </div>
                             </div>
+                            <button
+                                onClick={handleRefresh}
+                                disabled={isRefreshing}
+                                className="p-2 rounded-lg hover:bg-theme-bg/50 text-theme-muted hover:text-gold transition-colors"
+                            >
+                                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                            </button>
                         </div>
 
-                        <div className="mb-6">
+                        <div className="mb-8">
                             <div className="flex items-end gap-2">
-                                <p className="text-4xl font-bold text-theme-text font-mono">
-                                    ${valueUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <p className="text-5xl font-bold text-theme-text font-mono tracking-tight">
+                                    ${totalPortfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
-                                <span className="text-lg font-medium text-theme-muted mb-1.5">USD</span>
+                                <span className="text-lg font-medium text-theme-muted mb-2">USD</span>
                             </div>
-                            <p className="text-sm text-theme-muted mt-1 flex items-center gap-2">
-                                {(solBalance || 0).toFixed(4)} SOL
-                                <span className="w-1 h-1 rounded-full bg-theme-muted/50" />
-                                1 SOL ≈ ${solPrice.toFixed(2)}
-                            </p>
                         </div>
 
-                        <div className="bg-theme-bg/50 rounded-xl p-4 border border-theme-border backdrop-blur-sm">
-                            <p className="text-xs text-theme-muted mb-2 uppercase tracking-wider font-semibold">Your Address</p>
-                            <WalletAddress address={embeddedWallet?.address || 'Loading...'} />
+                        <div className="bg-theme-bg/40 rounded-xl p-4 border border-theme-border/50 backdrop-blur-sm">
+                            <p className="text-xs text-theme-muted mb-2 uppercase tracking-wider font-semibold">
+                                Your {activeChain === 'solana' ? 'Solana' : 'Ethereum'} Address
+                            </p>
+                            {activeWallet ? (
+                                <WalletAddress address={activeWallet.address} chain={activeChain} />
+                            ) : (
+                                <p className="text-sm text-theme-muted italic">Wallet not created yet</p>
+                            )}
                         </div>
                     </div>
-
-                    <button
-                        onClick={handleRefresh}
-                        disabled={isRefreshing}
-                        className="absolute top-4 right-4 p-2 rounded-lg hover:bg-theme-elevated text-theme-muted hover:text-gold transition-colors"
-                    >
-                        <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    </button>
                 </Card>
 
                 {/* Quick Actions */}
                 <div className="col-span-full sm:col-span-1 grid grid-rows-3 gap-3">
                     <Button
                         variant="gold"
-                        className="h-full w-full justify-start px-6 text-base font-semibold"
-                        onClick={() => setShowReceiveModal(true)}
+                        className="h-full w-full justify-start px-6 text-base font-semibold shadow-gold/5"
+                        onClick={handleCreateOrDeposit}
+                        isLoading={isCreating}
                         leftIcon={<ArrowDownLeft className="w-5 h-5" />}
                     >
                         Deposit
@@ -286,6 +479,7 @@ export function WalletPage() {
                         variant="secondary"
                         className="h-full w-full justify-start px-6 text-base font-semibold border-theme-border hover:border-gold/30"
                         onClick={() => setShowSendModal(true)}
+                        disabled={!activeWallet}
                         leftIcon={<Send className="w-5 h-5" />}
                     >
                         Withdraw
@@ -293,7 +487,7 @@ export function WalletPage() {
                     <Button
                         variant="secondary"
                         className="h-full w-full justify-start px-6 text-base font-semibold border-theme-border hover:border-gold/30"
-                        onClick={() => setShowReceiveModal(true)}
+                        onClick={handleCreateOrDeposit}
                         leftIcon={<QrCode className="w-5 h-5" />}
                     >
                         Show QR
@@ -302,47 +496,58 @@ export function WalletPage() {
             </StatsGrid>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
-                {/* Left Column: Assets & Wallets */}
+                {/* Left Column: Assets */}
                 <div className="lg:col-span-2 space-y-8">
                     {/* Assets List */}
                     <div>
-                        <h3 className="text-lg font-bold text-theme-text mb-4">Your Assets</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {/* Static SOL Asset Card for now, since we only fetch SOL */}
-                            <Card variant="elevated" className="flex items-center justify-between p-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-500/10 text-purple-400">
-                                        <span className="font-bold text-xs">S</span>
+                        <h3 className="text-lg font-bold text-theme-text mb-4 flex items-center gap-2">
+                            <TrendingUp className="w-5 h-5 text-gold" />
+                            Your Assets
+                        </h3>
+                        <div className="grid grid-cols-1 gap-4">
+                            {assets.map((asset) => (
+                                <Card key={asset.symbol} variant="elevated" className="flex items-center justify-between p-4 hover:border-gold/20 transition-all group">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-theme-bg p-2 border border-theme-border group-hover:border-gold/20 transition-colors">
+                                            <img src={asset.icon} alt={asset.name} className="w-full h-full object-contain" />
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-theme-text text-lg">{asset.symbol}</p>
+                                            <p className="text-xs text-theme-muted flex items-center gap-1">
+                                                {asset.name}
+                                                <span className="w-1 h-1 rounded-full bg-theme-muted/50" />
+                                                ${asset.price.toLocaleString()}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="font-bold text-theme-text">SOL</p>
-                                        <p className="text-xs text-theme-muted">${solPrice.toFixed(2)}</p>
+                                    <div className="text-right">
+                                        <p className="font-bold text-theme-text text-lg">{asset.balance.toLocaleString(undefined, { maximumFractionDigits: 6 })}</p>
+                                        <p className="text-sm text-theme-muted">${asset.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                     </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="font-bold text-theme-text">{(solBalance || 0).toLocaleString()}</p>
-                                    <p className="text-xs text-theme-muted">${valueUsd.toLocaleString()}</p>
-                                </div>
-                            </Card>
+                                </Card>
+                            ))}
                         </div>
                     </div>
 
                     {/* Transactions */}
                     <div>
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold text-theme-text">Transaction History</h3>
-                            <Button variant="ghost" size="sm" className="text-xs">View All</Button>
+                            <h3 className="text-lg font-bold text-theme-text flex items-center gap-2">
+                                <History className="w-5 h-5 text-gold" />
+                                Activity
+                            </h3>
+                            <Button variant="ghost" size="sm" className="text-xs text-theme-muted hover:text-gold">View Explorer</Button>
                         </div>
-                        <Card variant="elevated" className="overflow-hidden">
+                        <Card variant="elevated" className="overflow-hidden min-h-[200px]">
                             {txLoading ? (
-                                <div className="p-8 text-center text-theme-muted">
-                                    <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin opacity-50" />
-                                    <p>Loading transactions...</p>
+                                <div className="flex flex-col items-center justify-center py-12 text-theme-muted">
+                                    <Loader2 className="w-6 h-6 animate-spin mb-2 opacity-50" />
+                                    <span className="text-sm">Syncing history...</span>
                                 </div>
                             ) : transactions.length === 0 ? (
-                                <div className="p-8 text-center text-theme-muted">
-                                    <History className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                                    <p>No transactions yet</p>
+                                <div className="flex flex-col items-center justify-center py-12 text-theme-muted/50">
+                                    <ArrowRightLeft className="w-8 h-8 mb-2" />
+                                    <span className="text-sm">No recent transactions</span>
                                 </div>
                             ) : (
                                 <div className="divide-y divide-theme-border">
@@ -375,36 +580,55 @@ export function WalletPage() {
                     </div>
                 </div>
 
-                {/* Right Column: Connected Wallets */}
+                {/* Right Column: Security (Was Wallets) */}
                 <div className="space-y-6">
-                    <ConnectedWallets />
-
-                    {/* Security Info */}
-                    <div className="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-6">
-                        <div className="flex items-center gap-3 mb-3">
-                            <Shield className="w-5 h-5 text-blue-400" />
+                    {/* Security Info Card */}
+                    <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-2xl p-6 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
+                        <div className="flex items-center gap-3 mb-4 relative z-10">
+                            <div className="p-2 bg-blue-500/20 rounded-lg text-blue-400">
+                                <Shield className="w-5 h-5" />
+                            </div>
                             <h4 className="text-sm font-bold text-theme-text">Unbreakable Security</h4>
                         </div>
-                        <p className="text-xs text-theme-muted leading-relaxed">
-                            Your assets are secured by Privy's embedded wallet technology and Solana's blockchain.
+                        <p className="text-xs text-theme-muted leading-relaxed relative z-10 mb-4">
+                            Your assets are secured by Privy's embedded wallet technology and the {activeChain === 'solana' ? 'Solana' : 'Ethereum'} blockchain.
                             We never store your private keys. You retain full control.
                         </p>
+                        <ul className="space-y-2 relative z-10">
+                            <li className="flex items-center gap-2 text-xs text-theme-muted">
+                                <CheckCircle className="w-3 h-3 text-green-500" />
+                                Non-custodial Architecture
+                            </li>
+                            <li className="flex items-center gap-2 text-xs text-theme-muted">
+                                <CheckCircle className="w-3 h-3 text-green-500" />
+                                Instant Settlements
+                            </li>
+                        </ul>
                     </div>
+
+                    {/* Info Card */}
+                    <Card variant="default" className="p-5 border-theme-border/50">
+                        <h4 className="text-sm font-bold text-theme-text mb-2">Did you know?</h4>
+                        <p className="text-xs text-theme-muted">
+                            You can deposit USDC or USDT directly to get started with trading NFTs instantly.
+                        </p>
+                    </Card>
                 </div>
             </div>
 
-            {/* QR Receive Modal */}
+            {/* DEPOSIT MODAL */}
             <Modal
                 isOpen={showReceiveModal}
                 onClose={() => setShowReceiveModal(false)}
-                title="Deposit Assets"
-                description="Scan to deposit funds into your Seniqu Wallet"
+                title={`Deposit ${activeChain === 'solana' ? 'Solana' : 'Ethereum'} Assets`}
+                description={`Scan to deposit funds into your selected network`}
                 size="sm"
             >
                 <div className="flex flex-col items-center">
                     <div className="p-4 bg-white rounded-2xl mb-6 shadow-xl shadow-gold/5 border-2 border-gold/10">
                         <QRCode
-                            value={embeddedWallet?.address || ''}
+                            value={activeWallet?.address || ''}
                             size={200}
                             level="M"
                             viewBox={`0 0 256 256`}
@@ -412,13 +636,20 @@ export function WalletPage() {
                     </div>
 
                     <div className="w-full bg-theme-elevated p-4 rounded-xl mb-6 text-center border border-theme-border">
-                        <p className="text-xs text-theme-muted mb-2 uppercase tracking-wide">Your Address</p>
-                        <p className="text-sm font-mono text-theme-text break-all select-all">{embeddedWallet?.address}</p>
+                        <p className="text-xs text-theme-muted mb-2 uppercase tracking-wide">Your {activeChain} Address</p>
+                        <p className="text-sm font-mono text-theme-text break-all select-all">{activeWallet?.address}</p>
+                    </div>
+
+                    <div className="flex justify-center gap-2 mb-6">
+                        {/* Supported Tokens Icons */}
+                        <img src={ICONS[activeChain]} alt="Native" className="w-6 h-6 grayscale hover:grayscale-0 transition-all opacity-50 hover:opacity-100" title={`Native ${activeChain}`} />
+                        <img src={ICONS.usdt} alt="USDT" className="w-6 h-6 grayscale hover:grayscale-0 transition-all opacity-50 hover:opacity-100" title="USDT" />
+                        <img src={ICONS.usdc} alt="USDC" className="w-6 h-6 grayscale hover:grayscale-0 transition-all opacity-50 hover:opacity-100" title="USDC" />
                     </div>
 
                     <Button className="w-full" variant="gold" onClick={() => {
-                        if (embeddedWallet?.address) {
-                            navigator.clipboard.writeText(embeddedWallet.address);
+                        if (activeWallet?.address) {
+                            navigator.clipboard.writeText(activeWallet.address);
                             toast.success('Copied', 'Address copied to clipboard');
                         }
                     }}>
@@ -428,89 +659,93 @@ export function WalletPage() {
                 </div>
             </Modal>
 
-            {/* Withdraw Modal */}
+            {/* WITHDRAW MODAL */}
             <Modal
                 isOpen={showSendModal}
                 onClose={() => setShowSendModal(false)}
-                title="Withdraw Funds"
-                description="Send SOL to another wallet"
+                title={`Withdraw ${activeChain === 'solana' ? 'SOL' : 'ETH'}`}
+                description="Send funds to another wallet"
                 size="sm"
             >
-                <div className="space-y-5">
-                    {/* Scanner Toggle */}
-                    {!showScanModal && (
-                        <div className="flex justify-end">
-                            <Button variant="ghost" size="sm" onClick={() => setShowScanModal(true)} leftIcon={<QrCode className="w-4 h-4" />}>
-                                Scan QR
-                            </Button>
-                        </div>
-                    )}
-
-                    {showScanModal ? (
-                        <div className="relative overflow-hidden rounded-xl bg-black aspect-square">
-                            <QrReader
-                                constraints={{ facingMode: 'environment' }}
-                                onResult={(result, error) => {
-                                    if (!!result) {
-                                        handleScan(result);
-                                    }
-                                    if (!!error) {
-                                        console.info(error);
-                                    }
-                                }}
-                                className="w-full h-full object-cover"
-                            />
-                            <Button
-                                variant="secondary"
-                                size="sm"
-                                className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10"
-                                onClick={() => setShowScanModal(false)}
-                            >
-                                Cancel Scan
-                            </Button>
-                        </div>
-                    ) : (
-                        <>
-                            <Input
-                                label="Recipient Address"
-                                value={sendAddress}
-                                onChange={(e) => setSendAddress(e.target.value)}
-                                placeholder="Enter Solana address..."
-                            />
-
-                            <div>
-                                <Input
-                                    label="Amount (SOL)"
-                                    type="number"
-                                    value={sendAmount}
-                                    onChange={(e) => setSendAmount(e.target.value)}
-                                    placeholder="0.00"
-                                />
-                                <div className="flex justify-between items-center mt-2 px-1">
-                                    <span className="text-xs text-theme-muted">Available: {(solBalance || 0).toFixed(4)} SOL</span>
-                                    <button
-                                        onClick={() => setSendAmount(solBalance ? (solBalance - 0.0001).toFixed(4) : '0')}
-                                        className="text-xs text-gold hover:underline font-medium"
-                                    >
-                                        Max
-                                    </button>
-                                </div>
-                            </div>
-                        </>
-                    )}
-
-                    <div className="pt-4">
-                        <Button
-                            variant="primary"
-                            className="w-full h-12 text-base"
-                            onClick={handleSend}
-                            disabled={!sendAddress || !sendAmount || isSending}
-                            isLoading={isSending}
-                        >
-                            {isSending ? 'Processing...' : 'Confirm Withdrawal'}
-                        </Button>
+                {activeChain === 'ethereum' ? (
+                    <div className="text-center py-8">
+                        <p className="text-theme-muted">Ethereum withdrawals are currently disabled for maintenance.</p>
                     </div>
-                </div>
+                ) : (
+                    <div className="space-y-5">
+                        {!showScanModal && (
+                            <div className="flex justify-end">
+                                <Button variant="ghost" size="sm" onClick={() => setShowScanModal(true)} leftIcon={<QrCode className="w-4 h-4" />}>
+                                    Scan QR
+                                </Button>
+                            </div>
+                        )}
+
+                        {showScanModal ? (
+                            <div className="relative overflow-hidden rounded-xl bg-black aspect-square">
+                                <QrReader
+                                    constraints={{ facingMode: 'environment' }}
+                                    onResult={(result: any) => {
+                                        if (result?.text) {
+                                            setSendAddress(result.text);
+                                            setShowScanModal(false);
+                                            toast.success('Scanned', 'Address captured.');
+                                        }
+                                    }}
+                                    className="w-full h-full object-cover"
+                                />
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10"
+                                    onClick={() => setShowScanModal(false)}
+                                >
+                                    Cancel Scan
+                                </Button>
+                            </div>
+                        ) : (
+                            <>
+                                <Input
+                                    label="Recipient Address"
+                                    value={sendAddress}
+                                    onChange={(e) => setSendAddress(e.target.value)}
+                                    placeholder="Enter Solana address..."
+                                />
+
+                                <div>
+                                    <Input
+                                        label="Amount"
+                                        type="number"
+                                        value={sendAmount}
+                                        onChange={(e) => setSendAmount(e.target.value)}
+                                        placeholder="0.00"
+                                    />
+                                    <div className="flex justify-between items-center mt-2 px-1">
+                                        <span className="text-xs text-theme-muted">Available: {(solBalance || 0).toFixed(4)} SOL</span>
+                                        <button
+                                            onClick={() => setSendAmount(solBalance ? (solBalance - 0.0001).toFixed(4) : '0')}
+                                            className="text-xs text-gold hover:underline font-medium"
+                                        >
+                                            Max
+                                        </button>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        <div className="pt-4">
+                            <Button
+                                variant="primary"
+                                className="w-full h-12 text-base"
+                                onClick={handleSend}
+                                disabled={!sendAddress || !sendAmount || isSending}
+                                isLoading={isSending}
+                            >
+                                {isSending ? 'Processing...' : 'Confirm Withdrawal'}
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </Modal>
         </PageContainer>
     );

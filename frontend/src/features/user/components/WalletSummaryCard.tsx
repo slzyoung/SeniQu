@@ -50,6 +50,11 @@ export function WalletSummaryCard() {
                     {solBalance && (
                         <div className="ml-1 pl-3 border-l-2 border-gold/30">
                             <div className="flex items-center gap-2">
+                                <img
+                                    src="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png"
+                                    alt="SOL"
+                                    className="w-4 h-4 object-contain"
+                                />
                                 <span className="text-sm font-medium text-theme-text font-mono">
                                     {solBalance.amount?.toFixed(4)} SOL
                                 </span>

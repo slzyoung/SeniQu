@@ -51,6 +51,26 @@ interface WalletProvider {
     isSolflare?: boolean;
 }
 
+// EIP-6963 Types
+interface EIP6963ProviderInfo {
+    uuid: string;
+    name: string;
+    icon: string;
+    rdns: string;
+}
+
+interface EIP6963ProviderDetail {
+    info: EIP6963ProviderInfo;
+    provider: any;
+}
+
+interface EIP6963AnnounceProviderEvent extends CustomEvent {
+    detail: {
+        info: EIP6963ProviderInfo;
+        provider: any;
+    };
+}
+
 // ============================================================
 // HELPERS
 // ============================================================
@@ -108,10 +128,66 @@ function getMetaMaskProvider(): any {
     return null;
 }
 
+/**
+ * Discover MetaMask Provider via EIP-6963
+ * This avoids conflicts with Coinbase Wallet or other extensions that override window.ethereum
+ */
+function getMetaMaskProviderViaEIP6963(): Promise<any> {
+    return new Promise((resolve) => {
+        if (typeof window === 'undefined') {
+            resolve(null);
+            return;
+        }
+
+        let resolved = false;
+        const providers: EIP6963ProviderDetail[] = [];
+
+        function onAnnounceProvider(event: EIP6963AnnounceProviderEvent) {
+            providers.push(event.detail);
+
+            // Check for MetaMask specifically by RDNS or Name
+            if (event.detail.info.rdns === 'io.metamask' || event.detail.info.name.toLowerCase().includes('metamask')) {
+                if (!resolved) {
+                    resolved = true;
+                    cleanup();
+                    resolve(event.detail.provider);
+                }
+            }
+        }
+
+        function cleanup() {
+            window.removeEventListener('eip6963:announceProvider', onAnnounceProvider as EventListener);
+        }
+
+        window.addEventListener('eip6963:announceProvider', onAnnounceProvider as EventListener);
+
+        // Dispatch request for providers
+        window.dispatchEvent(new Event('eip6963:requestProvider'));
+
+        // Short timeout fallback to check window.ethereum if EIP-6963 is not supported/too slow
+        setTimeout(() => {
+            if (!resolved) {
+                // If we found any provider that claims to be MetaMask but didn't match RDNS perfectly, try it
+                const bestGuess = providers.find(p => p.info.name.toLowerCase().includes('metamask'));
+                if (bestGuess) {
+                    resolved = true;
+                    cleanup();
+                    resolve(bestGuess.provider);
+                } else {
+                    // Fallback to standard injection check
+                    resolved = true;
+                    cleanup();
+                    resolve(getMetaMaskProvider());
+                }
+            }
+        }, 1000); // Wait 1 second for announcements
+    });
+}
+
 /** Check if wallet extension is installed */
 export function isWalletInstalled(walletType: ManualWalletType): boolean {
     if (walletType === 'walletconnect') return true; // Always available
-    if (walletType === 'metamask') return !!getMetaMaskProvider();
+    if (walletType === 'metamask') return true; // We'll double check in try/catch via EIP-6963
     return !!getWalletProvider(walletType);
 }
 
@@ -242,9 +318,9 @@ export function useManualWallet() {
                             // Passing extra arguments can cause issues or UI hangs
                             signResult = await provider.signMessage(message);
                         } else {
-                            // Solflare: Suggest 'utf8' encoding to avoid "Invalid Transaction" errors
-                            // especially on mobile adapters which might misinterpret raw bytes
-                            signResult = await (provider as any).signMessage(message, 'utf8');
+                            // Solflare: Standard signMessage just like Phantom.
+                            // Previously 'utf8' was passed but it causes "Invalid transaction" errors.
+                            signResult = await (provider as any).signMessage(message);
                         }
 
                         console.log(`[ManualWallet] Got sign result type:`, signResult?.constructor?.name);
@@ -288,7 +364,13 @@ export function useManualWallet() {
         address: string;
         signMessage: (msg: Uint8Array) => Promise<Uint8Array>;
     }> => {
-        const ethereum = getMetaMaskProvider();
+        // Try EIP-6963 discovery first, then fallback to standard injection
+        let ethereum = await getMetaMaskProviderViaEIP6963();
+
+        if (!ethereum) {
+            // Final fallback check
+            ethereum = getMetaMaskProvider();
+        }
 
         if (!ethereum) {
             throw new Error('MetaMask not found. Please install the MetaMask extension.');
@@ -394,19 +476,28 @@ export function useManualWallet() {
                 setState('idle');
                 return null; // Return null to indicate "handled elsewhere" or "no-op"
             } else if (walletType === 'metamask') {
-                // Check if installed
-                if (!isWalletInstalled('metamask') && !isMobileDevice) {
-                    const installUrl = getWalletInstallUrl('metamask');
-                    setError('MetaMask not installed.');
-                    toast.error('MetaMask Not Found', 'Please install MetaMask extension.');
-                    window.open(installUrl, '_blank');
-                    setState('error');
-                    isProcessingRef.current = false;
-                    return;
+                // MetaMask Check is now inside connectMetaMask via EIP-6963
+                // We don't pre-check strictly here because EIP-6963 is async
+
+                try {
+                    const result = await connectMetaMask();
+                    address = result.address;
+                    signMessage = result.signMessage;
+                } catch (err: any) {
+                    // If specifically "MetaMask not found"
+                    if (err.message.includes('MetaMask not found')) {
+                        if (!isMobileDevice) {
+                            const installUrl = getWalletInstallUrl('metamask');
+                            setError('MetaMask not installed.');
+                            toast.error('MetaMask Not Found', 'Please install MetaMask extension.');
+                            window.open(installUrl, '_blank');
+                            setState('error');
+                            isProcessingRef.current = false;
+                            return;
+                        }
+                    }
+                    throw err;
                 }
-                const result = await connectMetaMask();
-                address = result.address;
-                signMessage = result.signMessage;
             } else {
                 // Phantom / Solflare
                 if (!isWalletInstalled(walletType) && !isMobileDevice) {
@@ -447,14 +538,26 @@ export function useManualWallet() {
 
             const messageBytes = new TextEncoder().encode(nonceResponse.message);
             const signatureBytes = await signMessage(messageBytes);
-            const signatureBase64 = uint8ArrayToBase64(signatureBytes);
+
+            // Encode signature based on chain/wallet type
+            let signatureEncoded: string;
+
+            if (walletType === 'metamask') {
+                // Ethereum expects 0x-prefixed hex string
+                signatureEncoded = '0x' + Array.from(signatureBytes)
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join('');
+            } else {
+                // Solana expects Base64 (or Base58, but backend handles Base64)
+                signatureEncoded = uint8ArrayToBase64(signatureBytes);
+            }
 
             // === STEP 4: Verify and authenticate ===
             setState('verifying');
 
             const authResponse = await authService.authenticateWithWallet(
                 address,
-                signatureBase64,
+                signatureEncoded,
                 nonceResponse.nonce,
                 chain,
             );

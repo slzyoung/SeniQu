@@ -275,6 +275,18 @@ export class AuthController {
     }
 
     /**
+     * Get Privy Sync Token for Wallet Auto-Sync
+     */
+    @Get("sync-privy")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth("JWT-auth")
+    @ApiOperation({ summary: "Get Privy custom auth token for session sync" })
+    async getPrivySyncToken(@GetUser("id") userId: string) {
+        const privyToken = await this.authService.getPrivyToken(userId);
+        return { privyToken };
+    }
+
+    /**
      * Get current user profile
      */
     @Get("me")

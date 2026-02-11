@@ -163,12 +163,14 @@ export class AuthService {
 
         // Step 4: Generate JWT tokens
         const tokens = await this.generateTokens(user)
+        const privyToken = await this.privyService.getCustomAuthToken(user.id)
 
         this.logger.log(`Wallet auth success for user ${user.id}`)
 
         return {
             user,
             ...tokens,
+            privyToken: privyToken || undefined,
             isNewUser,
         }
     }
@@ -219,10 +221,18 @@ export class AuthService {
 
         const tokens = await this.generateTokens(user)
 
+        // Generate Privy Custom Auth Token for seamless wallet integration
+        const privyToken = await this.privyService.getCustomAuthToken(user.id)
+
         return {
             user,
             ...tokens,
+            privyToken: privyToken || undefined, // Return the token for frontend hydration
         }
+    }
+
+    async getPrivyToken(userId: string): Promise<string | null> {
+        return this.privyService.getCustomAuthToken(userId)
     }
 
     /**
@@ -309,10 +319,12 @@ export class AuthService {
         }
 
         const tokens = await this.generateTokens(user)
+        const privyToken = await this.privyService.getCustomAuthToken(user.id)
 
         return {
             user,
             ...tokens,
+            privyToken: privyToken || undefined,
             isNewUser,
         }
     }

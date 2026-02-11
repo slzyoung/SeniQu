@@ -158,23 +158,27 @@ sequenceDiagram
 | **Cookie** | Signed httpOnly, Secure, SameSite=Lax — client JS cannot read or tamper |
 | **Cleanup** | Cookie cleared after every callback, regardless of success or failure |
 
-### 1.7 Privy Embedded Wallet
+### 1.7 Privy Embedded Wallet (Auto-Sync)
 
-After any successful authentication (email, Google, or manual wallet), Privy automatically creates a **non-custodial embedded Solana wallet** for the user if one doesn't exist.
+Users who sign in via Web2 methods (Email, Google) automatically get a non-custodial embedded wallet powered by Privy.
+
+- **Mechanism**: `PrivySyncManager` uses `useSyncJwtBasedAuthState` to keep the Privy session in sync with the app's auth state.
+- **Benefits**: No popups, no manual wallet creation steps for users.
+- **Reference**: See `09-Wallet-Integration.md` for full implementation details.
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant Frontend
-    participant Privy
+    participant Frontend (PrivySyncManager)
+    participant Privy SDK
     participant Backend
 
-    User->>Frontend: Successfully authenticated
-    Frontend->>Privy: Create embedded wallet (if not exists)
-    Privy-->>Frontend: Embedded wallet address
-    Frontend->>Backend: POST /auth/link-wallet { walletAddress, isEmbedded: true }
-    Backend->>Backend: Store in users.embedded_wallet_address
-    Backend-->>Frontend: Success
+    User->>Frontend: Login (Email/Google)
+    Frontend->>Backend: Request Auth + Privy Token
+    Backend-->>Frontend: { accessToken, privyToken }
+    Frontend->>Privy SDK: useSyncJwtBasedAuthState(privyToken)
+    Privy SDK-->>Frontend: Authenticated (User has wallet)
+    Frontend->>Backend: Link Wallet (Background)
 ```
 
 > [!IMPORTANT]

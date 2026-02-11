@@ -9,15 +9,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Mail, Lock, ArrowLeft, Loader2, Eye, EyeOff, AlertCircle, CheckCircle, Wallet, ShieldCheck } from 'lucide-react';
 import { authService, loginSchema, registerSchema, AuthError } from '../services/authService';
 import { useAppKit, useAppKitAccount, useAppKitProvider } from '../lib/reownConfig';
-import { userService } from '../services/userService';
+
 import { useAuthStore } from '../stores/useAuthStore';
 import { useToast } from '../stores/useNotificationStore';
 import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardRoute } from '../lib/utils';
 import { useManualWallet, isWalletInstalled } from '../hooks/useManualWallet';
+import { needsProfileCompletion } from '../lib/authHelpers';
 import { usePrivy } from '@privy-io/react-auth';
-import { setAccessToken } from '../lib/api';
+
 import type { ManualWalletType, WalletConnectionState } from '../hooks/useManualWallet';
 
 interface AuthModalProps {
@@ -26,7 +27,7 @@ interface AuthModalProps {
   initialView?: AuthView;
 }
 
-type AuthView = 'main' | 'email-login' | 'email-register' | 'wallet-select' | 'wallet-register';
+type AuthView = 'main' | 'email-login' | 'email-register' | 'wallet-select';
 
 type WalletType = 'metamask' | 'phantom' | 'solflare' | 'walletconnect';
 
@@ -142,7 +143,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
-  const [agreeToTerms, setAgreeToTerms] = useState(false);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Reset view when modal opens
@@ -152,8 +153,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     }
   }, [isOpen, initialView]);
 
-  // Pending auth state for new users (before profile completion)
-  const [pendingAuth, setPendingAuth] = useState<{ user: any; accessToken: string; refreshToken: string } | null>(null);
+
 
   // Reset form on close
   const handleClose = useCallback(() => {
@@ -164,10 +164,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
       setPassword('');
       setDisplayName('');
       setUsername('');
-      setAgreeToTerms(false);
       setErrors({});
       setShowPassword(false);
-      setPendingAuth(null);
     }, 300);
     onClose();
   }, [onClose]);
@@ -207,7 +205,11 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
    * Anti-Throttling: Rate limited via useManualWallet hook
    * Anti-Hacking: Nonce expiry, signature verification, sanitized errors
    */
-  const { login: privyLogin, logout: privyLogout, user: privyUser, authenticated: privyAuthenticated, getAccessToken } = usePrivy();
+  // Privy Hooks
+  const { logout: privyLogout, user: privyUser, authenticated: privyAuthenticated, getAccessToken } = usePrivy();
+
+  // NOTE: Syncing is now handled automatically by PrivySyncManager monitoring auth store.
+  // We no longer manually call loginWithCustomToken here.
 
   // Sync logout: If app logs out, ensure Privy also logs out to prevent auto-relogin loops
   useEffect(() => {
@@ -221,34 +223,42 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   // Effect: Handle Reown (WalletConnect) Connection -> Manual Login Flow
   useEffect(() => {
     const handleReownLogin = async () => {
-      // Only proceed if:
-      // 1. Reown is connected
-      // 2. We have an address and provider
-      // 3. We are NOT currently authenticated in the app (prevent double login)
-      // 4. We are NOT currently processing another wallet login
-      if (isReownConnected && reownAddress && reownProvider && !useAuthStore.getState().isAuthenticated && !manualWallet.isProcessing) {
+      if (isReownConnected && reownAddress && reownProvider) {
+        // If we're already processing, skip
+        if (manualWallet.state === 'authenticated' || manualWallet.state === 'verifying' || manualWallet.state === 'requesting-nonce') return;
 
-        // Check if the user meant to login via Reown (maybe check view?)
-        // Or just assume if Reown connects while this modal is mounted, it's a login attempt.
-        // Since we triggered openAppKit() from this modal, it's safe.
+        // If user is already logged in to our app with this address, skip
+        const authState = useAuthStore.getState();
+        if (authState.isAuthenticated && authState.user?.walletAddress === reownAddress) {
+          return;
+        }
 
-        try {
-          const authResponse = await manualWallet.loginWithProvider(reownAddress, reownProvider, 'solana');
+        console.log('[AuthModal] Detected Reown connection', reownAddress);
 
-          if (authResponse) {
-            if (authResponse.isNewUser) {
-              setPendingAuth(authResponse);
-              const shortAddress = authResponse.user.walletAddress?.slice(0, 8) || 'user';
-              setUsername(shortAddress);
-              setView('wallet-register');
-            } else {
-              // Login logic handled in loginWithProvider (storeLogin + navigate)
-              // Just close modal here
+        // Trigger manual login flow using the provider from Reown
+        const result = await manualWallet.loginWithProvider(reownAddress, reownProvider, 'solana');
+
+        if (result) {
+          // AUTOMATIC: Sync Privy Session handled by PrivySyncManager
+
+          if (result.isNewUser) {
+            // Log in the user (even if incomplete) so CompleteProfilePage can see them
+            storeLogin(result.user, result.accessToken, result.refreshToken);
+            handleClose();
+            navigate('/complete-profile');
+          } else {
+            const needsCompletion = needsProfileCompletion(result.user);
+            if (needsCompletion) {
+              storeLogin(result.user, result.accessToken, result.refreshToken);
               handleClose();
+              navigate('/complete-profile');
+            } else {
+              setTimeout(() => {
+                handleClose();
+                manualWallet.reset();
+              }, 800);
             }
           }
-        } catch (e) {
-          console.error("Reown login failed", e);
         }
       }
     };
@@ -256,17 +266,16 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     if (isOpen) {
       handleReownLogin();
     }
-  }, [isOpen, isReownConnected, reownAddress, reownProvider, manualWallet, handleClose, setPendingAuth]);
+  }, [isOpen, isReownConnected, reownAddress, reownProvider, manualWallet, handleClose]);
 
-  // Handle wallet connect — manual direct connection or Privy (WalletConnect)
+  // Handle wallet connect — manual direct connection or Reown (WalletConnect)
   const handleWalletConnect = useCallback(async (walletType: ManualWalletType) => {
-    // WalletConnect via Privy (Reown)
+    // WalletConnect via Reown AppKit
     if (walletType === 'walletconnect') {
       try {
-        // Trigger Reown AppKit (WalletConnect)
         await openAppKit();
       } catch (err) {
-        console.error('Reown login error:', err);
+        console.error('Reown open error:', err);
         toast.error('Connection Failed', 'Could not open WalletConnect modal');
       }
       return;
@@ -281,21 +290,32 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     const result = await manualWallet.connectAndLogin(walletType);
 
     if (result) {
+      // AUTOMATIC: Sync Privy Session handled by PrivySyncManager
+
       if (result.isNewUser) {
-        // New user — switch to profile completion
-        setPendingAuth(result); // Store pending auth state
-        const shortAddress = result.user.walletAddress?.slice(0, 8) || 'user';
-        setUsername(shortAddress);
-        setView('wallet-register');
+        // New user — switch to profile completion page
+        storeLogin(result.user, result.accessToken, result.refreshToken);
+        handleClose();
+        navigate('/complete-profile');
       } else {
-        // Existing user — success & close (connectAndLogin already stored login)
-        setTimeout(() => {
+        // Existing user — check if profile is complete
+        const needsCompletion = needsProfileCompletion(result.user);
+
+        if (needsCompletion) {
+          // Incomplete profile -> redirect
+          storeLogin(result.user, result.accessToken, result.refreshToken);
           handleClose();
-          manualWallet.reset();
-        }, 800);
+          navigate('/complete-profile');
+        } else {
+          // Fully complete — success & close
+          setTimeout(() => {
+            handleClose();
+            manualWallet.reset();
+          }, 800);
+        }
       }
     }
-  }, [isLoading, manualWallet, handleClose, privyLogin, toast, setPendingAuth]);
+  }, [isLoading, manualWallet, handleClose, openAppKit, toast]);
 
   // Effect: Handle Privy authentication success (for WalletConnect)
   useEffect(() => {
@@ -320,16 +340,22 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
           const response = await authService.authenticateWithPrivy(token);
 
           if (response.isNewUser) {
-            setPendingAuth(response); // Store pending auth state
-            const shortAddress = response.user.walletAddress?.slice(0, 8) || 'user';
-            setUsername(shortAddress);
-            setView('wallet-register');
+            storeLogin(response.user, response.accessToken, response.refreshToken);
+            handleClose();
+            navigate('/complete-profile');
           } else {
-            // Existing user - store and redirect
+            // Existing user - check profile completion
+            const needsCompletion = needsProfileCompletion(response.user);
+
             storeLogin(response.user, response.accessToken, response.refreshToken);
             toast.success('Welcome!', 'Connected via WalletConnect');
             handleClose();
-            const redirectPath = getDashboardRoute(response.user.role);
+
+            // Redirect to profile completion or dashboard
+            const redirectPath = needsCompletion
+              ? '/complete-profile'
+              : getDashboardRoute(response.user.role);
+
             navigate(redirectPath);
           }
         } catch (error) {
@@ -346,51 +372,9 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     if (privyAuthenticated && privyUser) {
       handlePrivyAuth();
     }
-  }, [isOpen, privyAuthenticated, privyUser, storeLogin, toast, handleClose, navigate, getAccessToken, setPendingAuth, privyLogout]);
+  }, [isOpen, privyAuthenticated, privyUser, storeLogin, toast, handleClose, navigate, getAccessToken, privyLogout]);
 
-  // Handle wallet registration (profile completion)
-  const handleWalletRegister = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!agreeToTerms) {
-      setErrors({ terms: 'You must agree to the Terms of Service' });
-      return;
-    }
 
-    if (!pendingAuth) {
-      setErrors({ general: 'Session expired. Please connect wallet again.' });
-      return;
-    }
-
-    setIsLoading(true);
-    setErrors({});
-
-    try {
-      // Temporarily set access token for this request
-      setAccessToken(pendingAuth.accessToken);
-
-      // Call userService to complete profile
-      const updatedUser = await userService.updateProfile({
-        displayName,
-        username,
-      });
-
-      // Update local state in auth store (finalize login)
-      storeLogin(updatedUser, pendingAuth.accessToken, pendingAuth.refreshToken);
-
-      toast.success('Welcome to Seniqu!', 'Your account has been created successfully.');
-
-      // Redirect
-      const redirectPath = getDashboardRoute(updatedUser.role);
-      navigate(redirectPath);
-
-      handleClose();
-    } catch (error) {
-      const authError = error as AuthError;
-      setErrors({ general: authError.message || 'Failed to complete profile' });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [displayName, username, agreeToTerms, navigate, toast, handleClose, pendingAuth, storeLogin]);
 
 
   // Handle email login
@@ -407,6 +391,9 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
       // Update auth store
       storeLogin(response.user, response.accessToken, response.refreshToken);
+
+      // AUTOMATIC: Sync Privy Session handled by PrivySyncManager
+      // if ((response as any).privyToken) ...
 
       toast.success('Welcome back!', 'You have successfully signed in.');
 
@@ -459,6 +446,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
       // Update auth store
       storeLogin(response.user, response.accessToken, response.refreshToken);
+
+      // AUTOMATIC: Sync Privy Session handled by PrivySyncManager
 
       toast.success('Welcome to Seniqu!', 'Your account has been created successfully.');
 
@@ -1050,83 +1039,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     );
   };
 
-  // Render wallet registration (profile completion) view
-  const renderWalletRegisterView = () => (
-    <>
-      <div className="px-8 pt-8 pb-6">
-        <h2 className="text-2xl font-serif font-bold text-theme-text mb-2">
-          Complete Profile
-        </h2>
-        <p className="text-theme-muted text-sm">
-          Finish setting up your account to start collecting.
-        </p>
-      </div>
 
-      <form onSubmit={handleWalletRegister} className="px-8 pb-10 space-y-4">
-        {/* Username Input */}
-        <div>
-          <label className="block text-sm font-medium text-theme-text mb-2">Username</label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-muted">@</span>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-              placeholder="username"
-              required
-              minLength={3}
-              maxLength={20}
-              className="w-full pl-8 pr-4 py-3 bg-gray-50 dark:bg-theme-elevated border border-theme-border rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50"
-            />
-          </div>
-        </div>
-
-        {/* Display Name Input */}
-        <div>
-          <label className="block text-sm font-medium text-theme-text mb-2">Display Name</label>
-          <input
-            type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Your Name"
-            required
-            className="w-full px-4 py-3 bg-gray-50 dark:bg-theme-elevated border border-theme-border rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50"
-          />
-        </div>
-
-        {/* Terms Checkbox */}
-        <div className="flex items-start gap-3 pt-2">
-          <button
-            type="button"
-            onClick={() => setAgreeToTerms(!agreeToTerms)}
-            className={`mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-colors ${agreeToTerms
-              ? 'bg-gold border-gold text-theme-bg'
-              : 'bg-transparent border-theme-border text-transparent hover:border-gold'
-              }`}
-          >
-            <CheckCircle className="w-3.5 h-3.5" />
-          </button>
-          <div className="text-sm text-theme-muted leading-tight">
-            I agree to the{' '}
-            <a href="/terms" className="text-gold hover:underline">Terms of Service</a>
-            {' '}and{' '}
-            <a href="/privacy" className="text-gold hover:underline">Privacy Policy</a>.
-          </div>
-        </div>
-        {errors.terms && <p className="text-xs text-red-400">{errors.terms}</p>}
-        {errors.general && <p className="text-xs text-red-400">{errors.general}</p>}
-
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={isLoading || !agreeToTerms || !username || !displayName}
-          className="w-full flex items-center justify-center gap-2 bg-gold text-theme-bg py-3.5 rounded-xl font-medium hover:bg-gold/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4"
-        >
-          {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span>Complete Registration</span>}
-        </button>
-      </form>
-    </>
-  );
 
   return (
     <AnimatePresence>
@@ -1174,7 +1087,6 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                   {view === 'email-login' && renderEmailLoginView()}
                   {view === 'email-register' && renderEmailRegisterView()}
                   {view === 'wallet-select' && renderWalletSelectView()}
-                  {view === 'wallet-register' && renderWalletRegisterView()}
                 </motion.div>
               </AnimatePresence>
 

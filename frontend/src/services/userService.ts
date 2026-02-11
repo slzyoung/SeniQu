@@ -66,17 +66,60 @@ class UserService {
     }
 
     /**
+     * Helper to map backend user to frontend user
+     * Duplicates logic from AuthService to ensure consistency
+     */
+    private mapUser(backendUser: any): User {
+        if (!backendUser) return backendUser;
+
+        // Unwrap if wrapped in data property (standard API response)
+        const user = backendUser.data || backendUser;
+
+        let role = 'user';
+
+        // Map userType to role
+        if (user.userType) {
+            switch (user.userType) {
+                case 'ARTIST': role = 'artist'; break;
+                case 'COLLECTOR': role = 'collector'; break;
+                case 'INSTITUTION': role = 'institution'; break;
+                case 'ART_LOVER':
+                default: role = 'user'; break;
+            }
+        } else if (user.role) {
+            // If backend already returns role (some endpoints might)
+            role = user.role;
+        }
+
+        // Override if admin
+        if (user.adminRole) {
+            role = user.adminRole === 'SUPER_ADMIN' ? 'super_admin' : 'admin';
+        }
+
+        return {
+            ...user,
+            username: user.username || '',
+            displayName: user.displayName || user.display_name || '',
+            role: role as any,
+            walletAddress: user.walletAddress || user.wallet_address,
+            embeddedWalletAddress: user.embeddedWalletAddress || user.embedded_wallet_address,
+        };
+    }
+
+    /**
      * Get current user profile
      */
     async getMyProfile(): Promise<User> {
-        return apiGet<User>('/users/me');
+        const user = await apiGet<any>('/users/me');
+        return this.mapUser(user);
     }
 
     /**
      * Get user by ID
      */
     async getUserById(id: string): Promise<User> {
-        return apiGet<User>(`/users/${id}`);
+        const user = await apiGet<any>(`/users/${id}`);
+        return this.mapUser(user);
     }
 
     /**
@@ -84,7 +127,8 @@ class UserService {
      */
     async updateProfile(data: UpdateProfileData): Promise<User> {
         const validData = updateProfileSchema.parse(data);
-        return apiPut<User>('/users/me', validData);
+        const user = await apiPut<any>('/users/me', validData);
+        return this.mapUser(user);
     }
 
     /**

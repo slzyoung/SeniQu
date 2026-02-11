@@ -341,6 +341,8 @@ export class WalletService {
             return existing
         }
 
+        const isPrimary = !(await this.hasExistingWallet(userId))
+
         const { data, error } = await client
             .from("wallet_connections")
             .insert({
@@ -349,7 +351,7 @@ export class WalletService {
                 chain,
                 provider: provider as any,
                 is_embedded: provider === "embedded",
-                is_primary: !(await this.hasExistingWallet(userId)),
+                is_primary: isPrimary,
                 status: "active",
                 verified_at: new Date().toISOString(),
                 connected_from_ip: ip,
@@ -365,14 +367,16 @@ export class WalletService {
             )
         }
 
-        // Update user's wallet address
-        await client
-            .from("users")
-            .update({
-                wallet_address: walletAddress,
-                updated_at: new Date().toISOString(),
-            })
-            .eq("id", userId)
+        // Update user's wallet address if primary
+        if (isPrimary) {
+            await client
+                .from("users")
+                .update({
+                    wallet_address: walletAddress,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", userId)
+        }
 
         this.logger.log(
             `Embedded wallet ${walletAddress.slice(0, 8)}... linked to user ${userId.slice(0, 8)}...`,
