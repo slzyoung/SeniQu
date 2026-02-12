@@ -1,31 +1,39 @@
 import { useEffect } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
-
-// Module-level variable to track if sync is blocked for this session (prevents log spam)
-// let isSyncBlocked = false;
+import api from '../../lib/api';
 
 export const PrivySyncManager = () => {
-    // 1. Check if user is authenticated in OUR app
-    // const authState = useAuthStore.getState();
-
-    // 2. Monitor Privy State
-    const { ready, authenticated, user } = usePrivy();
+    // Monitor Privy State
+    const { ready, authenticated, user, getAccessToken } = usePrivy();
 
     useEffect(() => {
-        console.log(`[PrivySyncManager] State Update: ready=${ready}, auth=${authenticated}, user=${user?.id}`);
+        const syncPrivyParams = async () => {
+            if (ready && authenticated && user) {
+                try {
+                    // Get the Privy Access Token
+                    const token = await getAccessToken();
+                    if (token) {
+                        // Sync with backend: This ensures the backend knows about the Privy ID and any linked wallet
+                        // It also handles the case where the user created a wallet on the frontend
+                        // and we need to link it to their backend account.
+                        await api.post('/auth/privy', {}, {
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            },
+                            // Skip our own auth interceptor which adds the backend JWT
+                            __skipAuthInterceptor: true
+                        } as any);
 
-        if (ready && authenticated && user) {
-            console.log("[PrivySyncManager] User is fully authenticated with Privy:", user.id);
-            // Here we could potentially sync with backend if needed, 
-            // but Free Plan limits prevent "pushing" auth. 
-        }
-    }, [ready, authenticated, user]);
+                        console.log("[PrivySyncManager] Synced Privy session with backend.");
+                    }
+                } catch (error) {
+                    console.error("[PrivySyncManager] Sync failed:", error);
+                }
+            }
+        };
 
-    // PRIVY FREE PLAN ADAPTATION
-    // ---------------------------
-    // Custom Auth (loginWithCustomToken) is NOT supported on the Free Plan.
-    // We strictly rely on client-side auth (Email, Google, Wallet).
-    // This component now just monitors state consistency but DOES NOT attempt to sync/mint tokens.
+        syncPrivyParams();
+    }, [ready, authenticated, user, getAccessToken]);
 
     return null;
 };

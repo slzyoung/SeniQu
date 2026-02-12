@@ -5,6 +5,7 @@
 import {
     LogOut,
 } from 'lucide-react';
+import { usePrivy } from '@privy-io/react-auth';
 import { Link, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '../../components/common/DashboardLayout';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -14,9 +15,11 @@ import { adminSidebarSections } from '../../config/sidebar';
 
 function SidebarFooter() {
     const { user, logout } = useAuthStore();
+    const { logout: privyLogout } = usePrivy();
     const navigate = useNavigate();
 
     const handleLogout = async () => {
+        await privyLogout();
         await new Promise(resolve => setTimeout(resolve, 100));
         logout();
         navigate(ROUTES.LOGIN);

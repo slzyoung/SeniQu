@@ -19,6 +19,7 @@ import {
     ChevronRight,
     LogOut
 } from 'lucide-react';
+import { usePrivy } from '@privy-io/react-auth';
 import { PageContainer } from '../../../components/common/DashboardLayout';
 import { Card, CardHeader, CardContent, Button, Tabs, TabPanel, Badge } from '../../../components/ui';
 import { useTheme } from '../../../hooks/useTheme';
@@ -87,6 +88,7 @@ export function Settings() {
     const { toggleTheme, isDark } = useTheme();
     const toast = useToast();
     const navigate = useNavigate();
+    const { logout: privyLogout } = usePrivy();
     const [activeTab, setActiveTab] = useState('general');
 
     // Notification settings state
@@ -128,7 +130,8 @@ export function Settings() {
         }
     };
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        await privyLogout();
         authService.logout();
         navigate(ROUTES.HOME);
         toast.success('Logged Out', 'See you next time!');

@@ -23,6 +23,7 @@ import { usePrivyWallet } from '../../../hooks/usePrivyWallet';
 import { useToast } from '../../../stores/useNotificationStore';
 import { useWalletTransactions } from '../../../hooks/useWalletData';
 import { useTokenPrices } from '../../../hooks/useTokenPrices';
+import { useAuthStore } from '../../../stores/useAuthStore';
 
 import { Connection, PublicKey, LAMPORTS_PER_SOL, clusterApiUrl, Transaction, SystemProgram } from '@solana/web3.js';
 
@@ -132,6 +133,7 @@ export function WalletPage() {
     const transactions = Array.isArray(rawTransactions) ? rawTransactions : (rawTransactions as any)?.data ?? [];
 
     // 2. Local State
+    const { user: backendUser } = useAuthStore();
     const [activeChain, setActiveChain] = useState<ChainType>('solana');
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
@@ -224,7 +226,17 @@ export function WalletPage() {
             return;
         }
 
-        // C. No wallet at all -> Create one.
+        // C. Check if Backend User already has a wallet (but Privy not auth'd)
+        // This handles "Old Users" or "Different Device" flow
+        if (backendUser?.walletAddress && !authenticated) {
+            console.log("[WalletPage] Backend user has wallet, but Privy not authenticated. Triggering login to unlock.");
+            setPendingDeposit(true);
+            toast.info("Security Check", "Please sign in to unlock your secure wallet.");
+            await login();
+            return;
+        }
+
+        // D. No wallet at all -> Create one.
         if (isCreating) return; // Prevent double clicks
 
         setIsCreating(true);
@@ -240,19 +252,15 @@ export function WalletPage() {
             console.log("[WalletPage] handleCreateOrDeposit state:", { ready, authenticated, user: user?.id });
 
             // 1. Ensure Auth
-            // Professional UX:
-            // Since we are on Free Plan (Client-Side Auth), we MUST be authenticated with Privy to create a wallet.
-            // If the user is logged into Backend but not Privy (desync), we must prompt them to log in to Privy again.
             if (!authenticated) {
                 console.warn("[WalletPage] User is not authenticated in Privy. Triggering login.");
                 setPendingDeposit(true);
-                toast.info("Authentication Required", "Please sign in to create a wallet.");
+                toast.info("Authentication Required", "Please sign in to create a secure wallet.");
                 await login();
                 return;
             }
 
             // 2. Double-check embeddedWallet didn't appear after login (Race condition check)
-            // We re-check the ref/state here right before action
             if (embeddedWallet) {
                 setShowReceiveModal(true);
                 return;
@@ -269,7 +277,6 @@ export function WalletPage() {
                 toast.success("Success", "Wallet generated successfully!");
 
                 // Force a refresh of wallet list and balances
-                // Small delay ensures Privy state updates propagate
                 setTimeout(() => {
                     fetchBalances();
                     setShowReceiveModal(true);
@@ -296,7 +303,7 @@ export function WalletPage() {
         } finally {
             setIsCreating(false);
         }
-    }, [activeWallet, embeddedWallet, isCreating, authenticated, login, createWallet, toast, fetchBalances]);
+    }, [activeWallet, embeddedWallet, isCreating, authenticated, login, createWallet, toast, fetchBalances, backendUser?.walletAddress, ready, user?.id]);
 
     // Effect: Handle Auto-Deposit after Login
     useEffect(() => {
@@ -525,8 +532,10 @@ export function WalletPage() {
                                 <WalletAddress address={activeWallet.address} chain={activeChain} />
                             ) : (
                                 <div className="flex items-center gap-2 text-sm text-theme-muted italic">
-                                    <span>Wallet not created yet.</span>
-                                    <button onClick={handleCreateOrDeposit} className="text-gold hover:underline not-italic">Create now</button>
+                                    <span>{backendUser?.walletAddress ? 'Wallet locked.' : 'Wallet not created yet.'}</span>
+                                    <button onClick={handleCreateOrDeposit} className="text-gold hover:underline not-italic">
+                                        {backendUser?.walletAddress ? 'Unlock now' : 'Create now'}
+                                    </button>
                                 </div>
                             )}
                         </div>

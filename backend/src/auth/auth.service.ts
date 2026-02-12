@@ -51,18 +51,51 @@ export class AuthService {
             throw new UnauthorizedException("Invalid Privy token")
         }
 
-        // Find or create user
+        // Check if user already exists
         let user = await this.usersService.findByPrivyId(privyUser.id)
+
         let isNewUser = false
+        if (!user) {
+            // Fallback: Check by email to prevent duplicate accounts
+            // This handles cases where user registered via email/google but hasn't linked privy_id yet
+            const emailAccount = privyUser.linkedAccounts.find(
+                (a) => a.type === "email" || a.type === "google_oauth",
+            )
+            if (emailAccount && emailAccount.address) {
+                user = await this.usersService.findByEmail(emailAccount.address)
+                if (user) {
+                    this.logger.log(
+                        `Found existing user ${user.id} by email ${emailAccount.address}. Linking Privy ID.`,
+                    )
+                    await this.usersService.updatePrivyId(user.id, privyUser.id)
+                    user.privyId = privyUser.id
+                }
+            }
+        }
 
         if (!user) {
+            // Create a new user if not found
+            // Extract email from linked accounts
+            const email = privyUser.linkedAccounts.find(
+                (a) => a.type === "email" || a.type === "google_oauth",
+            )?.address
+
+            // Extract wallet address from linked accounts
+            const walletAddress = privyUser.linkedAccounts.find(
+                (a) => a.type === "wallet",
+            )?.address
+
             user = await this.usersService.create({
+                email,
                 privyId: privyUser.id,
-                email: privyUser.email?.address,
-                walletAddress: privyUser.wallet?.address,
-                userType: "ART_LOVER",
+                displayName: `User ${privyUser.id.substring(0, 8)}`,
+                walletAddress,
+                userType: "ART_LOVER", // Default role
             })
             isNewUser = true
+            this.logger.log(`Created new user ${user.id} from Privy auth`)
+        } else {
+            this.logger.debug(`User ${user.id} authenticated via Privy`)
         }
 
         // Link the wallet used for login (if any)
@@ -195,6 +228,9 @@ export class AuthService {
             userType: dto.userType || "ART_LOVER",
         })
 
+        // Auto-provision embedded wallet if needed
+        await this.ensureEmbeddedWallet(user)
+
         const tokens = await this.generateTokens(user)
 
         return {
@@ -218,6 +254,9 @@ export class AuthService {
         if (!isPasswordValid) {
             throw new UnauthorizedException("Invalid credentials")
         }
+
+        // Auto-provision embedded wallet if needed
+        await this.ensureEmbeddedWallet(user)
 
         const tokens = await this.generateTokens(user)
 
@@ -318,6 +357,9 @@ export class AuthService {
             user.googleId = googleProfile.googleId
         }
 
+        // Ensure existing users also get a wallet if they don't have one
+        await this.ensureEmbeddedWallet(user)
+
         const tokens = await this.generateTokens(user)
         const privyToken = await this.privyService.getCustomAuthToken(user.id)
 
@@ -394,6 +436,68 @@ export class AuthService {
     /**
      * Verify Solana wallet signature — delegates to WalletService
      */
+    /**
+     * Helper to ensure user has an embedded wallet
+     * If not, create one via Privy and link it
+     */
+    private async ensureEmbeddedWallet(user: any): Promise<void> {
+        // If user already has a wallet, skip
+        if (user.walletAddress || user.wallet_address) return
+
+        this.logger.log(`Provisioning missing embedded wallet for user ${user.id}`)
+
+        try {
+            // Create embedded wallet via Privy
+            const privyUser = await this.privyService.createWithEmbeddedWallet({
+                email: user.email,
+                // We don't pass walletAddress here because we want Privy to generate one
+            })
+
+            if (privyUser && privyUser.wallet) {
+                // Update user's wallet address AND Privy ID in DB
+                await this.usersService.updateWallet(user.id, privyUser.wallet.address)
+
+                // We also need to update the privy_id so future logins work seamlessly
+                // Note: UsersService.update might not expose privy_id update directly, so we use direct DB call logic or add method
+                // For now, we'll assume we can't easily update privy_id without a specific method, 
+                // but let's check if we can add one or if it's auto-handled.
+                // Actually, let's just use the wallet update for now, and handle privy_id in the auth flow or add updatePrivyId method.
+
+                // Let's assume we added updatePrivyId to UsersService (we should)
+                // await this.usersService.updatePrivyId(user.id, privyUser.id);
+                // Since we haven't added it yet, let's rely on authenticateWithPrivy's email fallback to link it later.
+                // But wait, "later" might be "never" if they always use email login.
+                // It's better to update it now.
+
+                try {
+                    // Quick DB update using existing service if possible, or we need to add method.
+                    // Let's add updatePrivyId to UsersService first, asking for it in next step.
+                    // For this tool call, I will stick to what creates the wallet.
+                    // I'll add the method call assuming I will add the method immediately after.
+                    await this.usersService.updatePrivyId(user.id, privyUser.id)
+                } catch (e) {
+                    this.logger.warn(`Failed to update privyId for user ${user.id}: ${e.message}`)
+                }
+
+                // Update the local user object reference
+                user.walletAddress = privyUser.wallet.address
+                user.privyId = privyUser.id
+                if (user.wallet_address !== undefined) {
+                    user.wallet_address = privyUser.wallet.address
+                }
+
+                this.logger.log(
+                    `Successfully provisioned embedded wallet ${privyUser.wallet.address} for user ${user.id}`,
+                )
+            }
+        } catch (error) {
+            this.logger.error(
+                `Failed to ensure embedded wallet for user ${user.id}: ${error.message}`,
+            )
+            // We don't throw here to avoid blocking login/register if Privy is down
+        }
+    }
+
     private async verifyWalletSignature(
         walletAddress: string,
         signature: string,

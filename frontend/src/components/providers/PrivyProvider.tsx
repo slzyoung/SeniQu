@@ -186,8 +186,8 @@ export const PrivyProvider: React.FC<PrivyProviderProps> = ({ children }) => {
             },
             loginMethods: ['google', 'email', 'wallet'] as any[],
             embeddedWallets: {
-                solana: { createOnLogin: 'users-without-wallets' as 'users-without-wallets' },
-                ethereum: { createOnLogin: 'users-without-wallets' as 'users-without-wallets' },
+                solana: { createOnLogin: 'all-users' as 'all-users' },
+                ethereum: { createOnLogin: 'all-users' as 'all-users' },
             },
             externalWallets: {
                 solana: { connectors: solanaConnectors },

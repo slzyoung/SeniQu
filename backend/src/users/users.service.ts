@@ -172,6 +172,23 @@ export class UsersService {
         }
     }
 
+    async updatePrivyId(userId: string, privyId: string): Promise<void> {
+        const client = this.db.getAdminClient()
+
+        const { error } = await client
+            .from("users")
+            .update({
+                privy_id: privyId,
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", userId)
+
+        if (error) {
+            this.logger.error(`Failed to update Privy ID: ${error.message}`)
+            // Don't throw error here to allow flow to proceed
+        }
+    }
+
     async findAll(page = 1, limit = 20): Promise<{ users: User[]; total: number }> {
         const client = this.db.getClient()
         const offset = (page - 1) * limit

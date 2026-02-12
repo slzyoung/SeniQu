@@ -792,6 +792,8 @@ export function useManualWallet() {
         isProcessing: isProcessingRef.current,
         isWalletInstalled,
         getWalletInstallUrl,
+        connectSolanaWallet,
+        connectMetaMask,
     };
 }
 

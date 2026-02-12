@@ -1,3 +1,4 @@
+
 /**
  * AuthModal Component
  * Secure authentication modal with Google, Email, and Wallet options

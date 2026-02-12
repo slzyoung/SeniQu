@@ -5,6 +5,7 @@
 import {
     LogOut,
 } from 'lucide-react';
+import { usePrivy } from '@privy-io/react-auth';
 import { DashboardLayout } from '../../components/common/DashboardLayout';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { Avatar } from '../../components/ui';
@@ -14,12 +15,14 @@ import { userSidebarSections } from '../../config/sidebar';
 
 function SidebarFooter() {
     const { user, logout } = useAuthStore();
+    const { logout: privyLogout } = usePrivy();
     const navigate = useNavigate();
 
     const handleLogout = async () => {
         // Implement async logout as requested
+        await privyLogout(); // Logout from Privy first
         await new Promise(resolve => setTimeout(resolve, 100)); // Simulate network/process delay for better UX
-        logout();
+        logout(); // Clear local state
         navigate(ROUTES.LOGIN);
     };
 

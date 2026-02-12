@@ -5,6 +5,7 @@
 import {
     LogOut,
 } from 'lucide-react';
+import { usePrivy } from '@privy-io/react-auth';
 import { Link, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '../../components/common/DashboardLayout';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -17,8 +18,10 @@ export function ArtistLayout() {
 
     const SidebarFooter = () => {
         const navigate = useNavigate();
+        const { logout: privyLogout } = usePrivy();
 
         const handleLogout = async () => {
+            await privyLogout();
             await new Promise(resolve => setTimeout(resolve, 100));
             logout();
             navigate(ROUTES.LOGIN);
