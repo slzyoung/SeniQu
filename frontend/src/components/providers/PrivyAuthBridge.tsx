@@ -271,7 +271,7 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
             const timer = setTimeout(() => {
                 createWallet().then(wallet => {
                     console.log("[PrivyAuthBridge] Auto-created wallet:", wallet.address);
-                }).catch(err => {
+                }).catch(() => {
                     // console.error("[PrivyAuthBridge] Auto-create failed:", err);
                 });
             }, 1000);
