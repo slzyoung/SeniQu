@@ -48,7 +48,8 @@ export const getAppKit = () => {
             themeMode: 'dark',
             themeVariables: {
                 '--w3m-accent': '#D4AF37', // Gold
-                '--w3m-border-radius-master': '1px'
+                '--w3m-border-radius-master': '1px',
+                '--w3m-font-family': 'Inter, sans-serif' // Match app font to prevent unused preload warning
             }
         });
     } catch (e: any) {

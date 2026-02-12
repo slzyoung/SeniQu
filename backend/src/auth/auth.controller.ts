@@ -66,8 +66,9 @@ export class AuthController {
     @ApiResponse({ status: 200, type: AuthResponseDto })
     async authenticateWithPrivy(
         @Headers("x-privy-token") privyToken: string,
+        @Body() body: { embeddedWalletAddress?: string },
     ): Promise<AuthResponseDto> {
-        return this.authService.authenticateWithPrivy(privyToken)
+        return this.authService.authenticateWithPrivy(privyToken, body.embeddedWalletAddress)
     }
 
     /**

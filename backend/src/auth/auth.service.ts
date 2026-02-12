@@ -43,7 +43,7 @@ export class AuthService {
     /**
      * Authenticate user with Privy token
      */
-    async authenticateWithPrivy(privyToken: string): Promise<AuthResponseDto> {
+    async authenticateWithPrivy(privyToken: string, embeddedWalletAddress?: string): Promise<AuthResponseDto> {
         // Verify Privy token
         const privyUser = await this.privyService.verifyToken(privyToken)
 
@@ -88,10 +88,10 @@ export class AuthService {
                 (a) => a.type === "email" || a.type === "google_oauth",
             )?.address
 
-            // Extract wallet address from linked accounts
+            // Extract wallet address from linked accounts OR use provided embedded address
             const walletAddress = privyUser.linkedAccounts.find(
                 (a) => a.type === "wallet",
-            )?.address
+            )?.address || embeddedWalletAddress
 
             user = await this.usersService.create({
                 email,
@@ -106,19 +106,34 @@ export class AuthService {
             this.logger.debug(`User ${user.id} authenticated via Privy`)
         }
 
-        // Link the wallet used for login (if any)
-        if (privyUser.wallet?.address) {
+        // Link the wallet used for login (if any) or the embedded wallet reported by frontend
+        const targetWalletAddress = privyUser.wallet?.address || embeddedWalletAddress;
+
+        if (targetWalletAddress) {
             try {
-                // Determine provider type from Privy data
-                const provider = this.mapPrivyProvider(
-                    privyUser.wallet.walletClientType,
-                    privyUser.wallet.connectorType
-                )
+                // Determine provider type from Privy data or default to embedded if frontend reported it
+                let provider = "embedded"; // Default assumption for the reported address
+                let chain = "solana"; // Default
+
+                if (privyUser.wallet?.address === targetWalletAddress) {
+                    provider = this.mapPrivyProvider(
+                        privyUser.wallet.walletClientType,
+                        privyUser.wallet.connectorType
+                    );
+                    chain = privyUser.wallet.chainType === "ethereum" ? "ethereum" : "solana";
+                }
+
+                // Update local DB if missing or different
+                if (!user.walletAddress) {
+                    this.logger.log(`Updating missing wallet for user ${user.id} -> ${targetWalletAddress}`);
+                    await this.usersService.updateWallet(user.id, targetWalletAddress);
+                    user.walletAddress = targetWalletAddress; // Update in-memory user object
+                }
 
                 await this.walletService.linkEmbeddedWallet(
                     user.id,
-                    privyUser.wallet.address,
-                    privyUser.wallet.chainType === "ethereum" ? "ethereum" : "solana",
+                    targetWalletAddress,
+                    chain,
                     provider,
                 )
             } catch (error) {
@@ -129,6 +144,32 @@ export class AuthService {
 
         // Generate JWT
         const tokens = await this.generateTokens(user)
+
+        // Inject Multi-Chain Wallets into User Response
+        // This ensures frontend has both SOL and ETH addresses for persistence
+        if (privyUser.linkedAccounts) {
+            const solanaWallet = privyUser.linkedAccounts.find(
+                (a: any) => a.type === 'wallet' && (a.chainType === 'solana' || a.chain_type === 'solana')
+            );
+            const ethereumWallet = privyUser.linkedAccounts.find(
+                (a: any) => a.type === 'wallet' && (a.chainType === 'ethereum' || a.chain_type === 'ethereum')
+            );
+
+            // 1. Ensure walletAddress is populated (if missing) with Solana preferred
+            if (!user.walletAddress && solanaWallet) {
+                user.walletAddress = (solanaWallet as any).address;
+            } else if (!user.walletAddress && embeddedWalletAddress) {
+                user.walletAddress = embeddedWalletAddress;
+            }
+
+            // 2. Inject embeddedWalletAddress for the secondary chain
+            // If primary is SOL, embedded is ETH. If primary is ETH, embedded is SOL.
+            if (ethereumWallet && (ethereumWallet as any).address !== user.walletAddress) {
+                (user as any).embeddedWalletAddress = (ethereumWallet as any).address;
+            } else if (solanaWallet && (solanaWallet as any).address !== user.walletAddress) {
+                (user as any).embeddedWalletAddress = (solanaWallet as any).address;
+            }
+        }
 
         return {
             user,

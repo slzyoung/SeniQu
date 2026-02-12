@@ -1,13 +1,32 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Seniqu Gallery & Digital Archive</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/index.tsx"></script>
-  </body>
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Seniqu Gallery & Digital Archive</title>
+  <script>
+    (function () {
+      const originalWarn = console.warn;
+      const originalLog = console.log;
+      const originalError = console.error;
+      const shouldSuppress = (args) => {
+        const msg = args.map(a => String(a)).join(' ');
+        return msg.includes('SES Removing unpermitted intrinsics') ||
+          msg.includes('lockdown-install.js') ||
+          msg.includes('MaxListenersExceededWarning');
+      };
+      console.warn = function (...args) { if (!shouldSuppress(args)) originalWarn.apply(console, args); };
+      console.log = function (...args) { if (!shouldSuppress(args)) originalLog.apply(console, args); };
+      console.error = function (...args) { if (!shouldSuppress(args)) originalError.apply(console, args); };
+    })();
+  </script>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/index.tsx"></script>
+</body>
+
 </html>

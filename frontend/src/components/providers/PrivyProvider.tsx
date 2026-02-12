@@ -150,8 +150,8 @@ const privyConfig = {
     },
     loginMethods: ['google', 'email', 'wallet'] as any[],
     embeddedWallets: {
-        solana: { createOnLogin: 'all-users' as 'all-users' },
-        ethereum: { createOnLogin: 'all-users' as 'all-users' },
+        solana: { createOnLogin: 'off' as 'off' },
+        ethereum: { createOnLogin: 'off' as 'off' },
     },
     externalWallets: {
         solana: { connectors: solanaConnectors },

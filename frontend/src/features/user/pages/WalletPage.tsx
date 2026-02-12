@@ -73,6 +73,7 @@ export function WalletPage() {
         user,
         authenticated,
         login,
+        logout,
         createWallet
     } = usePrivyWallet();
 
@@ -240,8 +241,19 @@ export function WalletPage() {
 
             console.log("[WalletPage] handleCreateOrDeposit state:", { ready, authenticated, user: user?.id, activeChain });
 
-            // 1. Ensure Auth - check both authenticated state and user object
-            if (!authenticated || !user) {
+            // Debug State
+            console.log("[WalletPage Debug]", {
+                ready,
+                authenticated,
+                hasActiveWallet: !!activeWallet,
+                activeChain,
+                backendAddress: backendUser?.walletAddress,
+                embeddedAddress: embeddedWallet?.address,
+                userObjectWallet: user?.wallet?.address
+            });
+
+            // 1. Ensure Auth
+            if (!authenticated) {
                 console.warn("[WalletPage] User is not authenticated in Privy. Triggering login.");
                 setPendingDeposit(true);
                 toast.info("Authentication Required", "Please sign in to create a secure wallet.");
@@ -249,46 +261,53 @@ export function WalletPage() {
                 return;
             }
 
-            // 2. Double-check embeddedWallet (Race condition check)
+            // 1.5 Force Logout if authenticated but no wallet (Stale session fix)
+            // Fix: Check BOTH embeddedWallet (hook) AND user.wallet (direct object) to avoid race conditions.
+            // If user.wallet exists, we should NOT logout, just wait for the hook to catch up.
+            const hasWalletInUserObject = !!user?.wallet?.address;
+
+            if (authenticated && !embeddedWallet && !hasWalletInUserObject && !pendingDeposit) {
+                console.log("[WalletPage] Authenticated but no wallet found (checked hook & user object). Forcing session refresh...");
+                await logout();
+                setPendingDeposit(true);
+                await login();
+                return;
+            }
+
+            // 2. Double-check embeddedWallet didn't appear after login (Race condition check)
+            // If we have the specific wallet we need, just show it
             if (activeWallet) {
                 setShowReceiveModal(true);
                 return;
             }
 
-            // 3. Check if wallet actually exists in linkedAccounts (but wasn't picked up activeWallet for some reason)
-            // This prevents trying to create a wallet that already exists
-            const existingAccount = user.linkedAccounts?.find(
-                (a: any) => a.type === 'wallet' &&
-                    (a.walletClientType === 'privy' || a.connectorType === 'embedded') &&
-                    (a.chainType === activeChain || a.chain_type === activeChain)
-            );
-
-            if (existingAccount) {
-                console.log("[WalletPage] Found existing wallet in linkedAccounts, skipping creation:", existingAccount);
-                // We can't easily "set" activeWallet since it's a hook derivation, 
-                // but we CAN just show the modal and let the modal read from user.linkedAccounts if activeWallet is null.
-                // We'll handle that in the modal logic or just rely on the fallback we added to UsePrivyWallet.
-                // If UsePrivyWallet isn't updating fast enough, force a re-check or just open modal if we valid address.
-                setShowReceiveModal(true);
-                toast.success("Wallet Found", "Accessing your secure wallet...");
-                return;
-            }
-
-            // 4. Create
+            // 3. Create
             loadingId = toast.info("Securing Wallet", `Generating your unique ${activeChain} identity...`);
 
-            await createWallet();
+            // Try to create wallet. Note: createWallet might be generic, 
+            // but if multi-wallet is enabled, we rely on Privy to handle it or us to find it.
+            // If the user already has an embedded wallet (but for other chain), createWallet() might throw 'already exists'
+            // or return the existing one.
+            let wallet;
+            try {
+                wallet = await createWallet();
+            } catch (createErr: any) {
+                // If specific chain wallet is missing but another exists, specific handling might be needed here
+                // depending on SDK version. For now we catch 'already exists'
+                throw createErr;
+            }
 
-            // If successful, the hook updates activeWallet, but it might take a moment.
             if (loadingId) toast.dismiss(loadingId);
-            toast.success("Success", "Wallet generated successfully!");
 
-            // Allow time for hook to update
-            setTimeout(() => {
-                fetchBalances();
-                setShowReceiveModal(true);
-            }, 1000);
+            if (wallet) {
+                toast.success("Success", "Wallet generated successfully!");
 
+                // Force a refresh of wallet list and balances
+                setTimeout(() => {
+                    fetchBalances();
+                    setShowReceiveModal(true);
+                }, 1000);
+            }
         } catch (error: any) {
             console.error("Wallet creation error:", error);
             const errMsg = error?.message || error?.toString();
@@ -297,23 +316,28 @@ export function WalletPage() {
 
             // Handle "User already has an embedded wallet" gracefully
             if (errMsg?.toLowerCase().includes('already has') || errMsg?.toLowerCase().includes('exists')) {
-                console.log("[WalletPage] Wallet already exists error caught.");
+                // If Privy says it exists but we didn't find it in 'activeWallet':
+                // 1. It might be on the other chain (e.g. have ETH, need SOL).
+                // 2. It might be a sync issue.
 
-                // Fallback: Check generic embedded wallet or search again
-                // Implementation note: if createWallet failed, it implies Privy knows about the wallet.
-                // We should just show the modal and try to display whatever address we can find.
+                console.log("[WalletPage] Wallet already exists. Checking if we can find it...");
 
-                const fallbackAddress = user?.wallet?.address ||
-                    (user?.linkedAccounts?.find((a: any) => a.type === 'wallet' && a.walletClientType === 'privy') as any)?.address;
-
-                if (fallbackAddress) {
-                    toast.info("Wallet Restored", "Your wallet is ready.");
+                // If we are looking for Solana but have Ethereum (or vice versa), 
+                // and createWallet failed, it implies we hit the limit (1 wallet per user?).
+                // Check if the generic 'embeddedWallet' is available
+                if (embeddedWallet) {
+                    toast.info("Wallet Found", `Using your existing secure identity.`);
                     setShowReceiveModal(true);
                 } else {
-                    // Worst case
-                    toast.warning("Syncing", "Wallet exists but is syncing. Please refresh.");
+                    toast.success("Wallet Synced", "Retrieving your wallet addresses...");
+                    // Force a reload to sync state if it's really stuck
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
                 }
+
             } else if (errMsg?.toLowerCase().includes('allow user to close') || errMsg?.toLowerCase().includes('reject')) {
+                // User closed the modal
                 toast.error("Cancelled", "Wallet creation was cancelled.");
                 setPendingDeposit(false);
             } else {
@@ -558,37 +582,75 @@ export function WalletPage() {
                                 <span className="text-[10px] text-theme-muted uppercase tracking-wider font-semibold mb-1">
                                     Your {activeChain === 'solana' ? 'Solana' : 'Ethereum'} Address
                                 </span>
-                                {activeWallet || backendUser?.walletAddress || backendUser?.embeddedWalletAddress ? (
-                                    <div className="flex items-center gap-2">
-                                        <code className={`text-xs md:text-sm font-mono truncate max-w-[150px] md:max-w-xs ${activeWallet ? 'text-theme-text' : 'text-theme-muted opacity-70'}`}>
-                                            {activeWallet?.address || backendUser?.walletAddress || backendUser?.embeddedWalletAddress || 'Syncing...'}
-                                        </code>
-                                        <button
-                                            onClick={() => {
-                                                const addr = activeWallet?.address || backendUser?.walletAddress || backendUser?.embeddedWalletAddress;
-                                                if (addr) {
-                                                    navigator.clipboard.writeText(addr);
-                                                    toast.success('Copied', 'Address copied');
-                                                }
-                                            }}
-                                            className="text-theme-muted hover:text-gold transition-colors"
-                                        >
-                                            <Copy className="w-3 h-3" />
-                                        </button>
-                                        {!activeWallet && (backendUser?.walletAddress || backendUser?.embeddedWalletAddress) && (
-                                            <Badge variant="gold" className="text-[9px] h-4 px-1 ml-2 border-gold/30 text-gold/80 animate-pulse">
-                                                By Seniqu
-                                            </Badge>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-2 text-xs text-theme-muted italic">
-                                        <span>Wallet locked or initializing...</span>
-                                        <button onClick={handleCreateOrDeposit} className="text-gold hover:underline not-italic ml-2">
-                                            Unlock
-                                        </button>
-                                    </div>
-                                )}
+                                {(() => {
+                                    // Restore fallback logic for persistence on refresh
+
+                                    // Check BOTH potential sources against the active chain requirements
+                                    const primaryAddr = backendUser?.walletAddress;
+                                    const secondaryAddr = backendUser?.embeddedWalletAddress;
+
+
+
+                                    let displayAddress = activeWallet?.address;
+
+                                    // IMPROVED FALLBACK LOGIC
+                                    // If Privy wallet is not yet ready or address is missing,
+                                    // strictly fall back to the backend-provided address to prevent flickering.
+                                    if (!displayAddress) {
+                                        // Define strict validators
+                                        const isSolanaAddr = (addr?: string) => addr && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr);
+                                        const isEthAddr = (addr?: string) => addr && /^0x[a-fA-F0-9]{40}$/.test(addr);
+                                        const isMockup = (addr?: string) => addr?.startsWith('0xBd3f9ebEdA34720F0');
+
+                                        if (activeChain === 'solana') {
+                                            // Priority 1: Backend Wallet Address (if Solana)
+                                            if (isSolanaAddr(primaryAddr) && !isMockup(primaryAddr)) {
+                                                displayAddress = primaryAddr;
+                                            }
+                                            // Priority 2: Backend Embedded Address (if Solana)
+                                            else if (isSolanaAddr(secondaryAddr) && !isMockup(secondaryAddr)) {
+                                                displayAddress = secondaryAddr;
+                                            }
+                                        } else if (activeChain === 'ethereum') {
+                                            // Priority 1: Backend Wallet Address (if Eth)
+                                            if (isEthAddr(primaryAddr) && !isMockup(primaryAddr)) {
+                                                displayAddress = primaryAddr;
+                                            }
+                                            // Priority 2: Backend Embedded Address (if Eth)
+                                            else if (isEthAddr(secondaryAddr) && !isMockup(secondaryAddr)) {
+                                                displayAddress = secondaryAddr;
+                                            }
+                                        }
+                                    }
+
+                                    return displayAddress ? (
+                                        <div className="flex items-center gap-2">
+                                            <code className={`text-xs md:text-sm font-mono truncate max-w-[150px] md:max-w-xs ${activeWallet ? 'text-theme-text' : 'text-theme-muted/80'}`}>
+                                                {displayAddress}
+                                            </code>
+                                            <button
+                                                onClick={() => {
+                                                    if (displayAddress) {
+                                                        navigator.clipboard.writeText(displayAddress);
+                                                        toast.success('Copied', 'Address copied');
+                                                    }
+                                                }}
+                                                className="text-theme-muted hover:text-gold transition-colors"
+                                            >
+                                                <Copy className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2 text-xs text-theme-muted italic">
+                                            <span>
+                                                Hidden for security
+                                            </span>
+                                            <button onClick={handleCreateOrDeposit} className="text-gold hover:underline not-italic ml-2 font-bold">
+                                                Unlock
+                                            </button>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                             <div className="flex gap-2">
                                 <Button
