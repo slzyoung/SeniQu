@@ -275,6 +275,24 @@ export class AuthController {
     }
 
     /**
+     * Provision a new wallet for specific chain
+     * Fallback for when frontend creation fails
+     */
+    @Post("wallet/provision")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth("JWT-auth")
+    @ApiOperation({ summary: "Provision a new wallet for specific chain" })
+    async provisionWallet(
+        @GetUser("id") userId: string,
+        @Body("chainType") chainType: 'ethereum' | 'solana',
+    ) {
+        if (!chainType || !['ethereum', 'solana'].includes(chainType)) {
+            throw new Error("Invalid chain type");
+        }
+        return this.authService.provisionWallet(userId, chainType);
+    }
+
+    /**
      * Get Privy Custom Auth Token
      */
     @Get("privy-token")

@@ -13,7 +13,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Loader2, User, AtSign, CheckCircle, AlertCircle, ShieldCheck } from 'lucide-react';
 import { useAuthStore } from '../../../stores/useAuthStore';
@@ -27,6 +27,7 @@ const SUBMIT_COOLDOWN_MS = 2000;
 
 export default function CompleteProfilePage() {
     const navigate = useNavigate();
+    const location = useLocation();
     const toast = useToast();
     const { user, isAuthenticated, setUser } = useAuthStore();
 
@@ -65,9 +66,14 @@ export default function CompleteProfilePage() {
             // Verify if we actually need to be here
             if (user) {
                 // Check local state first for immediate feedback
+                // Determine redirect target
+                const locationState = location.state as { from?: { pathname: string } } | null;
+                const redirectPath = locationState?.from?.pathname || getDashboardRoute(user.role);
+
                 if (!needsProfileCompletion(user)) {
-                    console.log('[CompleteProfile] Profile already complete (Local). Redirecting...');
-                    navigate(getDashboardRoute(user.role), { replace: true });
+                    console.log('[CompleteProfile] Profile already complete (Local). Hard Redirecting to:', redirectPath);
+                    // FORCE RELOAD to ensure ProtectedRoute sees fresh state
+                    window.location.href = redirectPath;
                     return;
                 }
 
@@ -75,9 +81,11 @@ export default function CompleteProfilePage() {
                 try {
                     const freshUser = await userService.getMyProfile();
                     if (!needsProfileCompletion(freshUser)) {
-                        console.log('[CompleteProfile] Profile already complete (Backend). Syncing & Redirecting...');
+                        const freshRedirectPath = locationState?.from?.pathname || getDashboardRoute(freshUser.role);
+                        console.log('[CompleteProfile] Profile already complete (Backend). Syncing & Hard Redirecting to:', freshRedirectPath);
                         setUser(freshUser);
-                        navigate(getDashboardRoute(freshUser.role), { replace: true });
+                        // FORCE RELOAD to ensure ProtectedRoute sees fresh state
+                        window.location.href = freshRedirectPath;
                         return;
                     }
                     // Is incomplete, stay here.
@@ -172,11 +180,15 @@ export default function CompleteProfilePage() {
                 // Success Feedback
                 toast.success('Profile Complete', 'Welcome to Seniqu!');
 
-                // Navigate immediately - NO window.location.reload()
-                // The global store update above will trigger the side effects in other components
-                // but here we just route them away.
+                // Determine redirect target
+                const locationState = location.state as { from?: { pathname: string } } | null;
+                const redirectPath = locationState?.from?.pathname || getDashboardRoute(finalUser.role);
+
+                console.log('[CompleteProfile] Redirecting to:', redirectPath);
+
+                // Navigate immediately - FORCE RELOAD to ensure fresh state
                 setTimeout(() => {
-                    navigate(getDashboardRoute(finalUser.role), { replace: true });
+                    window.location.href = redirectPath;
                 }, 500);
             }
         } catch (error: any) {

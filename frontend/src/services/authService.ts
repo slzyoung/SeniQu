@@ -624,6 +624,24 @@ class AuthService {
             resetRateLimit(`auth:oauth:${walletAddress}`);
 
             return authResponse;
+            return authResponse;
+        } catch (error) {
+            throw sanitizeError(error);
+        }
+    }
+
+    /**
+     * Provision a wallet for specific chain via backend
+     * Fallback when client-side creation fails
+     */
+    async provisionWallet(chainType: 'ethereum' | 'solana'): Promise<any> {
+        try {
+            const rawResponse = await apiPost<any>(
+                '/auth/wallet/provision',
+                { chainType },
+                { headers: getSecurityHeaders() }
+            );
+            return rawResponse?.data || rawResponse;
         } catch (error) {
             throw sanitizeError(error);
         }

@@ -48,7 +48,7 @@ async function bootstrap() {
     const cleanOrigins = rawAllowedOrigins.map(origin => origin.trim()).filter(Boolean)
 
     const defaultOrigins = [
-        "http://localhost:3000",
+        "http://localhost:3001",
         "http://localhost:5173",
         "https://seniquapp.netlify.app",
         "https://seniquwebapp.onrender.com",

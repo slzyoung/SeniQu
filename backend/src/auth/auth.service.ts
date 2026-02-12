@@ -51,6 +51,14 @@ export class AuthService {
             throw new UnauthorizedException("Invalid Privy token")
         }
 
+        // DEBUG: Insprect Privy User to see available wallets
+        this.logger.debug(`Privy User Debug: ${JSON.stringify({
+            id: privyUser.id,
+            wallet: privyUser.wallet,
+            wallets: privyUser.wallets,
+            linkedAccounts: privyUser.linkedAccounts?.map(a => ({ type: a.type, chain: a.chainType, walletType: (a as any).walletClientType }))
+        })}`);
+
         // Check if user already exists
         let user = await this.usersService.findByPrivyId(privyUser.id)
 
@@ -275,6 +283,18 @@ export class AuthService {
     }
 
     /**
+     * Provision a wallet for a user on a specific chain
+     */
+    async provisionWallet(userId: string, chainType: 'ethereum' | 'solana') {
+        const privyUser = await this.privyService.provisionWallet(userId, chainType);
+
+        // If successful, update our local user record with the new wallet info if applicable
+        // (e.g. if we want to store multiple wallets, or update the primary one)
+        // For now, we just return the result.
+        return privyUser;
+    }
+
+    /**
      * Generate OAuth security parameters (PKCE, state, nonce)
      */
     generateOAuthParams() {
@@ -440,61 +460,64 @@ export class AuthService {
      * Helper to ensure user has an embedded wallet
      * If not, create one via Privy and link it
      */
+    /**
+     * Helper to ensure user has an embedded wallet
+     * If not, create one via Privy and link it
+     */
     private async ensureEmbeddedWallet(user: any): Promise<void> {
-        // If user already has a wallet, skip
-        if (user.walletAddress || user.wallet_address) return
+        // If user already has a wallet, we might still want to sync privyId if missing
+        if (user.walletAddress && user.privyId) return;
 
-        this.logger.log(`Provisioning missing embedded wallet for user ${user.id}`)
+        this.logger.log(`Provisioning/Syncing embedded wallet for user ${user.id}`);
 
         try {
-            // Create embedded wallet via Privy
-            const privyUser = await this.privyService.createWithEmbeddedWallet({
-                email: user.email,
-                // We don't pass walletAddress here because we want Privy to generate one
-            })
+            let privyUser;
 
-            if (privyUser && privyUser.wallet) {
-                // Update user's wallet address AND Privy ID in DB
-                await this.usersService.updateWallet(user.id, privyUser.wallet.address)
-
-                // We also need to update the privy_id so future logins work seamlessly
-                // Note: UsersService.update might not expose privy_id update directly, so we use direct DB call logic or add method
-                // For now, we'll assume we can't easily update privy_id without a specific method, 
-                // but let's check if we can add one or if it's auto-handled.
-                // Actually, let's just use the wallet update for now, and handle privy_id in the auth flow or add updatePrivyId method.
-
-                // Let's assume we added updatePrivyId to UsersService (we should)
-                // await this.usersService.updatePrivyId(user.id, privyUser.id);
-                // Since we haven't added it yet, let's rely on authenticateWithPrivy's email fallback to link it later.
-                // But wait, "later" might be "never" if they always use email login.
-                // It's better to update it now.
-
-                try {
-                    // Quick DB update using existing service if possible, or we need to add method.
-                    // Let's add updatePrivyId to UsersService first, asking for it in next step.
-                    // For this tool call, I will stick to what creates the wallet.
-                    // I'll add the method call assuming I will add the method immediately after.
-                    await this.usersService.updatePrivyId(user.id, privyUser.id)
-                } catch (e) {
-                    this.logger.warn(`Failed to update privyId for user ${user.id}: ${e.message}`)
-                }
-
-                // Update the local user object reference
-                user.walletAddress = privyUser.wallet.address
-                user.privyId = privyUser.id
-                if (user.wallet_address !== undefined) {
-                    user.wallet_address = privyUser.wallet.address
-                }
-
-                this.logger.log(
-                    `Successfully provisioned embedded wallet ${privyUser.wallet.address} for user ${user.id}`,
-                )
+            // Scenario A: User has privyId but no wallet in DB -> Sync from Privy
+            if (user.privyId) {
+                privyUser = await this.privyService.getUserById(user.privyId);
             }
-        } catch (error) {
+
+            // Scenario B: User has no privyId -> Create/Import into Privy
+            if (!privyUser) {
+                privyUser = await this.privyService.createWithEmbeddedWallet({
+                    email: user.email,
+                    // We don't pass walletAddress here because we want Privy to generate one if it doesn't exist
+                    // If user was imported from Google, they might not have a wallet yet.
+                });
+            }
+
+            if (privyUser) {
+                // 1. Sync Privy ID if missing
+                if (!user.privyId) {
+                    try {
+                        await this.usersService.updatePrivyId(user.id, privyUser.id);
+                        user.privyId = privyUser.id;
+                    } catch (e) {
+                        this.logger.warn(`Failed to update privyId: ${e.message}`);
+                    }
+                }
+
+                // 2. Sync Wallet Address if missing
+                // Note: Privy User has 'wallet' (primary) and 'wallets' (array).
+                // We typically store the primary wallet address.
+                // For "One Wallet Per Chain", the frontend derives the specific chain address from the Privy User.
+                // The backend just needs to ensure the Privy User exists and is linked.
+                if (!user.walletAddress && privyUser.wallet) {
+                    await this.usersService.updateWallet(user.id, privyUser.wallet.address);
+                    user.walletAddress = privyUser.wallet.address;
+                    if (user.wallet_address !== undefined) {
+                        user.wallet_address = privyUser.wallet.address;
+                    }
+                }
+
+                this.logger.log(`Synced Privy user ${privyUser.id} for local user ${user.id}`);
+            }
+        } catch (error: any) {
             this.logger.error(
                 `Failed to ensure embedded wallet for user ${user.id}: ${error.message}`,
-            )
-            // We don't throw here to avoid blocking login/register if Privy is down
+            );
+            // We don't throw here to avoid blocking login
         }
     }
 
@@ -505,13 +528,13 @@ export class AuthService {
         try {
             // Use the nonce-based verification from WalletService if available
             // This legacy method returns true for backward compatibility
-            // New wallet auth should go through POST /auth/wallet → authenticateWithWallet()
+            // New wallet auth should go through POST /auth/wallet -> authenticateWithWallet()
             this.logger.warn(
-                "Legacy linkWallet called — consider using POST /auth/wallet for full nonce verification",
-            )
-            return true
+                "Legacy linkWallet called -- consider using POST /auth/wallet for full nonce verification",
+            );
+            return true;
         } catch {
-            return false
+            return false;
         }
     }
 }

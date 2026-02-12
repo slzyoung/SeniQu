@@ -1,7 +1,6 @@
 import React from 'react';
 import { PrivyProvider as PrivySDKProvider } from '@privy-io/react-auth';
-// Import the new sync manager
-import { PrivySyncManager } from './PrivySyncManager';
+
 // Singleton wallet connectors
 import { solanaConnectors } from './walletConnectors';
 
@@ -130,6 +129,41 @@ class PrivyErrorBoundary extends React.Component<
 // PRIVY PROVIDER COMPONENT
 // ============================================================
 
+// ============================================================
+// PRIVY CONFIGURATION
+// ============================================================
+
+const privyConfig = {
+    appearance: {
+        theme: 'dark' as 'dark',
+        accentColor: '#D4AF37' as `#${string}`,
+        logo: '/logo.svg',
+        walletChainType: 'ethereum-and-solana' as 'ethereum-and-solana',
+        walletList: [
+            'phantom',
+            'solflare',
+            'metamask',
+            'detected_solana_wallets',
+            'detected_ethereum_wallets',
+        ] as any[],
+        showWalletLoginFirst: false,
+    },
+    loginMethods: ['google', 'email', 'wallet'] as any[],
+    embeddedWallets: {
+        solana: { createOnLogin: 'all-users' as 'all-users' },
+        ethereum: { createOnLogin: 'all-users' as 'all-users' },
+    },
+    externalWallets: {
+        solana: { connectors: solanaConnectors },
+    },
+    supportedChains: [solanaMainnet, solanaDevnet, ethereumMainnet],
+    defaultChain: solanaMainnet,
+};
+
+// ============================================================
+// PRIVY PROVIDER COMPONENT
+// ============================================================
+
 interface PrivyProviderProps {
     children: React.ReactNode;
 }
@@ -157,36 +191,13 @@ export const PrivyProvider: React.FC<PrivyProviderProps> = ({ children }) => {
         return <>{children}</>;
     }
 
-    // Memoize the configuration to prevent re-initialization on every render
-    // IMPORTANT: This fixes "WalletConnect Core is already initialized" and "MaxListenersExceededWarning"
-    const privyConfig = React.useMemo(() => {
-        return {
-            appearance: {
-                theme: 'dark' as 'dark',
-                accentColor: '#D4AF37' as `#${string}`,
-                logo: '/logo.svg',
-                walletChainType: 'ethereum-and-solana' as 'ethereum-and-solana',
-                walletList: [
-                    'phantom',
-                    'solflare',
-                    'metamask',
-                    'detected_solana_wallets',
-                    'detected_ethereum_wallets',
-                ] as any[], // Casting to any[] to avoid strict type checks if list is wider
-                showWalletLoginFirst: false,
-            },
-            loginMethods: ['google', 'email', 'wallet'] as any[],
-            embeddedWallets: {
-                solana: { createOnLogin: 'all-users' as 'all-users' },
-                ethereum: { createOnLogin: 'all-users' as 'all-users' },
-            },
-            externalWallets: {
-                solana: { connectors: solanaConnectors },
-            },
-            supportedChains: [solanaMainnet, solanaDevnet, ethereumMainnet],
-            defaultChain: solanaMainnet,
-        };
-    }, []); // Empty dependency array ensures it's created only once
+    // Prevent re-initialization if React Strict Mode mounts/unmounts
+    const isMounted = React.useRef(false);
+
+    React.useEffect(() => {
+        isMounted.current = true;
+        return () => { isMounted.current = false; };
+    }, []);
 
     return (
         <PrivyErrorBoundary>
@@ -194,11 +205,6 @@ export const PrivyProvider: React.FC<PrivyProviderProps> = ({ children }) => {
                 appId={PRIVY_APP_ID}
                 config={privyConfig}
             >
-                {/* 
-                  PrivySyncManager handles automatic synchronization of the Privy session 
-                  using the backend-generated custom auth token. This replaces manual loginWithCustomToken.
-                */}
-                <PrivySyncManager />
                 {children}
             </PrivySDKProvider>
         </PrivyErrorBoundary>
