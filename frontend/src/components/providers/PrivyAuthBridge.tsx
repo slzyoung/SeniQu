@@ -25,13 +25,14 @@ interface PrivyAuthBridgeProps {
 }
 
 export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
-    const { authenticated, ready, user, getAccessToken, createWallet } = usePrivy();
+    const { authenticated, ready, user, getAccessToken, createWallet, logout } = usePrivy();
     const {
         isAuthenticated: backendAuthenticated,
         login: storeLogin,
         logout: storeLogout,
         isCustomAuthDisabled,
-        disableCustomAuth
+        disableCustomAuth,
+        isLoading // FIX: Need to know if store is still rehydrating
     } = useAuthStore();
     const navigate = useNavigate();
     const location = useLocation();
@@ -133,9 +134,6 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
         } catch (err: any) {
             console.error('[PrivyAuthBridge] Token exchange failed:', err);
             failedAttemptsRef.current += 1;
-
-            // If it's a 429 or 4xx, maybe we should stop retrying immediately?
-            // For now, let the retry counter handle it.
         } finally {
             isExchangingRef.current = false;
         }
@@ -169,14 +167,29 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
     useEffect(() => {
         if (!ready) return;
 
+        let logoutTimer: NodeJS.Timeout;
+
         if (!authenticated && backendAuthenticated && wasPrivyLoginRef.current) {
-            console.log('[PrivyAuthBridge] Privy logged out — syncing backend logout');
-            wasPrivyLoginRef.current = false;
-            storeLogout();
-            // Reset state
-            lastExchangedPrivyIdRef.current = null;
-            failedAttemptsRef.current = 0;
+            console.log('[PrivyAuthBridge] Privy logged out — scheduling backend logout (debounce 2s)');
+
+            // Debounce logout to prevent transient states (e.g. page reload or wallet switching)
+            logoutTimer = setTimeout(() => {
+                // Double check state before executing
+                // verifying ready ensures we don't logout during initialization
+                if (!authenticated && backendAuthenticated && wasPrivyLoginRef.current) {
+                    console.log('[PrivyAuthBridge] Confirmed sync backend logout');
+                    wasPrivyLoginRef.current = false;
+                    storeLogout();
+                    // Reset state
+                    lastExchangedPrivyIdRef.current = null;
+                    failedAttemptsRef.current = 0;
+                }
+            }, 2000);
         }
+
+        return () => {
+            if (logoutTimer) clearTimeout(logoutTimer);
+        };
     }, [ready, authenticated, backendAuthenticated, storeLogout]);
 
     /**
@@ -184,11 +197,21 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
      * (e.g., user manually logs out or token expires)
      */
     useEffect(() => {
+        // CRITICAL FIX: Don't trigger logout while the auth store is still loading (hydrating from storage).
+        // This prevents a race condition on page refresh where backendAuthenticated is temporarily false.
+        if (isLoading) return;
+
         if (!backendAuthenticated) {
+            // If backend logs out (user clicks Sign Out), ensure Privy also logs out
+            if (authenticated) {
+                console.log('[PrivyAuthBridge] Backend logged out — syncing Privy logout');
+                logout();
+            }
+            // Reset tracking
             wasPrivyLoginRef.current = false;
             lastExchangedPrivyIdRef.current = null;
         }
-    }, [backendAuthenticated]);
+    }, [backendAuthenticated, authenticated, logout, isLoading]);
 
     /**
      * HYDRATION: Backend -> Privy

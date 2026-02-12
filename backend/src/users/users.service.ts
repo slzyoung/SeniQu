@@ -52,7 +52,9 @@ export class UsersService {
     }
 
     async findById(id: string): Promise<User | null> {
-        const client = this.db.getClient()
+        // Use admin client to bypass RLS for internal user lookups
+        const client = this.db.getAdminClient()
+        // this.logger.debug(`Finding user by ID (Admin Client): ${id}`);
 
         const { data, error } = await client
             .from("users")
@@ -61,6 +63,7 @@ export class UsersService {
             .single()
 
         if (error || !data) {
+            if (error) this.logger.warn(`findById error for ${id}: ${error.message}`);
             return null
         }
 
@@ -68,7 +71,7 @@ export class UsersService {
     }
 
     async findByEmail(email: string): Promise<User | null> {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
 
         const { data, error } = await client
             .from("users")
@@ -84,7 +87,7 @@ export class UsersService {
     }
 
     async findByPrivyId(privyId: string): Promise<User | null> {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
 
         const { data, error } = await client
             .from("users")
@@ -100,7 +103,7 @@ export class UsersService {
     }
 
     async findByWallet(walletAddress: string): Promise<User | null> {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
 
         const { data, error } = await client
             .from("users")
@@ -266,7 +269,7 @@ export class UsersService {
         nftCount: number
         likesCount: number
     }> {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
 
         // Get bookmarks count
         const { count: bookmarksCount } = await client

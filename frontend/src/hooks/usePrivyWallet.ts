@@ -22,7 +22,12 @@ export const usePrivyWallet = () => {
 
         // 2. Fallback to user linked accounts (address only)
         // This is crucial when the wallet exists on the user profile but hasn't been loaded into the 'wallets' array by the SDK yet.
-        const inLinked = user?.linkedAccounts?.find(a => a.type === 'wallet' && (a as any).chainType === chain && (a as any).walletClientType === 'privy');
+        const inLinked = user?.linkedAccounts?.find(a =>
+            a.type === 'wallet' &&
+            (a as any).walletClientType === 'privy' &&
+            // Check both camelCase and snake_case to be safe
+            ((a as any).chainType === chain || (a as any).chain_type === chain)
+        );
         if (inLinked) {
             return {
                 address: (inLinked as any).address,

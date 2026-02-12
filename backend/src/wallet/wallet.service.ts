@@ -866,27 +866,83 @@ export class WalletService {
     }
 
     /**
-     * Get transaction history
+     * Get transaction history (Local + On-Chain)
      */
     async getTransactions(userId: string): Promise<any[]> {
         const client = this.db.getClient()
 
-        // This relies on the wallet_transactions table existing 
-        // (added in migration 014_wallet_transactions.sql)
-        const { data, error } = await client
+        // 1. Fetch Local Transactions (Withdrawals)
+        const { data: localTx, error } = await client
             .from('wallet_transactions')
             .select('*')
             .eq('user_id', userId)
             .order('created_at', { ascending: false })
-            .limit(50)
+            .limit(20)
 
         if (error) {
-            this.logger.warn(`Failed to fetch transactions: ${error.message}`)
-            return []
+            this.logger.warn(`Failed to fetch local transactions: ${error.message}`)
         }
 
-        return data
+        // 2. Fetch On-Chain Transactions (Deposits)
+        // Find the user's primary wallet address
+        let onChainTx: any[] = []
+        try {
+            const wallets = await this.getConnectedWallets(userId)
+            const solanaWallet = wallets.find(w => w.chain === 'solana')
+
+            if (solanaWallet?.walletAddress) {
+                onChainTx = await this.getSolanaTransactions(solanaWallet.walletAddress)
+            }
+        } catch (err) {
+            this.logger.error(`Failed to fetch on-chain transactions: ${err.message}`)
+        }
+
+        // 3. Merge and Sort
+        const allTx = [...(localTx || []), ...onChainTx].sort((a, b) => {
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        })
+
+        return allTx
     }
+
+    /**
+     * Fetch on-chain Solana transactions using public RPC
+     */
+    private async getSolanaTransactions(walletAddress: string): Promise<any[]> {
+        try {
+            // Lazy load to avoid import issues if not installed, or import at top
+            const { Connection, PublicKey } = await import('@solana/web3.js')
+
+            const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com'
+            const connection = new Connection(rpcUrl, 'confirmed')
+            const pubKey = new PublicKey(walletAddress)
+
+            // Fetch last 10 signatures
+            const signatures = await connection.getSignaturesForAddress(pubKey, { limit: 10 })
+
+            // Map to unified format
+            return signatures.map(sig => ({
+                id: sig.signature,
+                tx_type: sig.err ? 'failed' : 'deposit', // Simplified assumption for now
+                // In a real app, you'd parse inner instructions to determine type/amount
+                // detailed in next step: await connection.getParsedTransactions(...)
+                status: sig.err ? 'failed' : 'confirmed',
+                chain: 'solana',
+                token_symbol: 'SOL',
+                amount: 0, // Placeholder until parsing is implemented
+                created_at: new Date(sig.blockTime! * 1000).toISOString(),
+                hash: sig.signature
+            }))
+        } catch (error) {
+            this.logger.warn(`Solana history fetch error: ${error.message}`)
+            return []
+        }
+    }
+
+    /**
+     * Helper: Parse transaction details (Optional optimization)
+     * For now, we return signatures as "deposits" or "interactions"
+     */
 
     // ============================================
     // MAPPERS

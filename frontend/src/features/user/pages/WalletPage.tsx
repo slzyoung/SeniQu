@@ -114,9 +114,7 @@ export function WalletPage() {
         // Fetch Solana
         if (embeddedSolanaWallet?.address) {
             try {
-                // Use env var or reliable RPC. Public mainnet-beta often 403s.
-                // Fallback to devnet if env not set for stability in dev output, or use a better public RPC if available.
-                const rpcUrl = import.meta.env.VITE_SOLANA_RPC_URL || clusterApiUrl('devnet');
+                const rpcUrl = import.meta.env.VITE_SOLANA_RPC_URL || 'https://rpc.ankr.com/solana';
                 const connection = new Connection(rpcUrl, 'confirmed');
                 const pubKey = new PublicKey(embeddedSolanaWallet.address);
                 const bal = await connection.getBalance(pubKey);
@@ -242,8 +240,8 @@ export function WalletPage() {
 
             console.log("[WalletPage] handleCreateOrDeposit state:", { ready, authenticated, user: user?.id, activeChain });
 
-            // 1. Ensure Auth
-            if (!authenticated) {
+            // 1. Ensure Auth - check both authenticated state and user object
+            if (!authenticated || !user) {
                 console.warn("[WalletPage] User is not authenticated in Privy. Triggering login.");
                 setPendingDeposit(true);
                 toast.info("Authentication Required", "Please sign in to create a secure wallet.");
@@ -251,40 +249,46 @@ export function WalletPage() {
                 return;
             }
 
-            // 2. Double-check embeddedWallet didn't appear after login (Race condition check)
-            // If we have the specific wallet we need, just show it
+            // 2. Double-check embeddedWallet (Race condition check)
             if (activeWallet) {
                 setShowReceiveModal(true);
                 return;
             }
 
-            // 3. Create
+            // 3. Check if wallet actually exists in linkedAccounts (but wasn't picked up activeWallet for some reason)
+            // This prevents trying to create a wallet that already exists
+            const existingAccount = user.linkedAccounts?.find(
+                (a: any) => a.type === 'wallet' &&
+                    (a.walletClientType === 'privy' || a.connectorType === 'embedded') &&
+                    (a.chainType === activeChain || a.chain_type === activeChain)
+            );
+
+            if (existingAccount) {
+                console.log("[WalletPage] Found existing wallet in linkedAccounts, skipping creation:", existingAccount);
+                // We can't easily "set" activeWallet since it's a hook derivation, 
+                // but we CAN just show the modal and let the modal read from user.linkedAccounts if activeWallet is null.
+                // We'll handle that in the modal logic or just rely on the fallback we added to UsePrivyWallet.
+                // If UsePrivyWallet isn't updating fast enough, force a re-check or just open modal if we valid address.
+                setShowReceiveModal(true);
+                toast.success("Wallet Found", "Accessing your secure wallet...");
+                return;
+            }
+
+            // 4. Create
             loadingId = toast.info("Securing Wallet", `Generating your unique ${activeChain} identity...`);
 
-            // Try to create wallet. Note: createWallet might be generic, 
-            // but if multi-wallet is enabled, we rely on Privy to handle it or us to find it.
-            // If the user already has an embedded wallet (but for other chain), createWallet() might throw 'already exists'
-            // or return the existing one.
-            let wallet;
-            try {
-                wallet = await createWallet();
-            } catch (createErr: any) {
-                // If specific chain wallet is missing but another exists, specific handling might be needed here
-                // depending on SDK version. For now we catch 'already exists'
-                throw createErr;
-            }
+            await createWallet();
 
+            // If successful, the hook updates activeWallet, but it might take a moment.
             if (loadingId) toast.dismiss(loadingId);
+            toast.success("Success", "Wallet generated successfully!");
 
-            if (wallet) {
-                toast.success("Success", "Wallet generated successfully!");
+            // Allow time for hook to update
+            setTimeout(() => {
+                fetchBalances();
+                setShowReceiveModal(true);
+            }, 1000);
 
-                // Force a refresh of wallet list and balances
-                setTimeout(() => {
-                    fetchBalances();
-                    setShowReceiveModal(true);
-                }, 1000);
-            }
         } catch (error: any) {
             console.error("Wallet creation error:", error);
             const errMsg = error?.message || error?.toString();
@@ -293,28 +297,23 @@ export function WalletPage() {
 
             // Handle "User already has an embedded wallet" gracefully
             if (errMsg?.toLowerCase().includes('already has') || errMsg?.toLowerCase().includes('exists')) {
-                // If Privy says it exists but we didn't find it in 'activeWallet':
-                // 1. It might be on the other chain (e.g. have ETH, need SOL).
-                // 2. It might be a sync issue.
+                console.log("[WalletPage] Wallet already exists error caught.");
 
-                console.log("[WalletPage] Wallet already exists. Checking if we can find it...");
+                // Fallback: Check generic embedded wallet or search again
+                // Implementation note: if createWallet failed, it implies Privy knows about the wallet.
+                // We should just show the modal and try to display whatever address we can find.
 
-                // If we are looking for Solana but have Ethereum (or vice versa), 
-                // and createWallet failed, it implies we hit the limit (1 wallet per user?).
-                // Check if the generic 'embeddedWallet' is available
-                if (embeddedWallet) {
-                    toast.info("Wallet Found", `Using your existing secure identity.`);
+                const fallbackAddress = user?.wallet?.address ||
+                    (user?.linkedAccounts?.find((a: any) => a.type === 'wallet' && a.walletClientType === 'privy') as any)?.address;
+
+                if (fallbackAddress) {
+                    toast.info("Wallet Restored", "Your wallet is ready.");
                     setShowReceiveModal(true);
                 } else {
-                    toast.success("Wallet Synced", "Retrieving your wallet addresses...");
-                    // Force a reload to sync state if it's really stuck
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1000);
+                    // Worst case
+                    toast.warning("Syncing", "Wallet exists but is syncing. Please refresh.");
                 }
-
             } else if (errMsg?.toLowerCase().includes('allow user to close') || errMsg?.toLowerCase().includes('reject')) {
-                // User closed the modal
                 toast.error("Cancelled", "Wallet creation was cancelled.");
                 setPendingDeposit(false);
             } else {

@@ -38,7 +38,9 @@ export const useTokenPrices = () => {
             });
             setIsLoading(false);
         } catch (error) {
-            console.warn('[useTokenPrices] Failed to fetch live prices, using defaults.', error);
+            // Suppress noise for common network errors (dev env, offline, blocked)
+            // console.warn('[useTokenPrices] Failed to fetch live prices, using defaults.');
+            setPrices(DEFAULT_PRICES);
             setIsLoading(false);
         }
     };

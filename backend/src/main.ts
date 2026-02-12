@@ -51,7 +51,9 @@ async function bootstrap() {
         "http://localhost:3001",
         "http://localhost:5173",
         "https://seniquapp.netlify.app",
+        "https://rpc.ankr.com/solana",
         "https://seniquwebapp.onrender.com",
+        "https://solana-mainnet.rpc.extrnode.com/",
     ]
 
     const allowedOrigins = [...new Set([...cleanOrigins, ...defaultOrigins])]
