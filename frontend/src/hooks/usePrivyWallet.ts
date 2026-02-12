@@ -14,11 +14,31 @@ export const usePrivyWallet = () => {
     const ethereumWallets = wallets.filter((wallet) => (wallet as any).chainType === 'ethereum');
 
     // Helper to find specific embedded wallet
-    const embeddedSolanaWallet = solanaWallets.find((w) => w.walletClientType === 'privy');
-    const embeddedEthereumWallet = ethereumWallets.find((w) => w.walletClientType === 'privy');
+    // Helper to find specific embedded wallet
+    const findEmbedded = (chain: 'solana' | 'ethereum') => {
+        // 1. Try to find in active wallets list (has provider)
+        const inWallets = wallets.find(w => (w as any).chainType === chain && w.walletClientType === 'privy');
+        if (inWallets) return inWallets;
+
+        // 2. Fallback to user linked accounts (address only)
+        // This is crucial when the wallet exists on the user profile but hasn't been loaded into the 'wallets' array by the SDK yet.
+        const inLinked = user?.linkedAccounts?.find(a => a.type === 'wallet' && (a as any).chainType === chain && (a as any).walletClientType === 'privy');
+        if (inLinked) {
+            return {
+                address: (inLinked as any).address,
+                chainType: chain,
+                walletClientType: 'privy',
+                // Mock properties to satisfy types if needed, though mostly we just need address
+            } as any;
+        }
+
+        return undefined;
+    };
+
+    const embeddedSolanaWallet = findEmbedded('solana');
+    const embeddedEthereumWallet = findEmbedded('ethereum');
 
     // Generic embedded wallet (first one found)
-    // Useful for checking if *any* embedded wallet exists to prevent duplicate creation attempts
     const embeddedWallet = embeddedSolanaWallet || embeddedEthereumWallet;
 
     return {

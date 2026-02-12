@@ -1,8 +1,9 @@
 import React from 'react';
 import { PrivyProvider as PrivySDKProvider } from '@privy-io/react-auth';
-import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
 // Import the new sync manager
 import { PrivySyncManager } from './PrivySyncManager';
+// Singleton wallet connectors
+import { solanaConnectors } from './walletConnectors';
 
 // ============================================================
 // CHAIN DEFINITIONS
@@ -46,18 +47,8 @@ const ethereumMainnet = {
 // EXTERNAL WALLET CONNECTORS
 // ============================================================
 
-// Singleton pattern for connectors to avoid re-creation on HMR
-let solanaConnectors: any;
-
-try {
-    solanaConnectors = toSolanaWalletConnectors({
-        shouldAutoConnect: false,
-    });
-} catch (e) {
-    console.warn('[PrivyProvider] Failed to initialize Solana connectors (likely HMR re-init):', e);
-    // If it fails, it might be because of "WalletConnect Core is already initialized"
-    // We can try to proceed without re-initializing or catch the specific error
-}
+// Singleton pattern for connectors now handled in walletConnectors.ts
+// to avoid re-creation on HMR
 
 // ============================================================
 // ENVIRONMENT VARIABLES & VALIDATION

@@ -275,15 +275,28 @@ export class AuthController {
     }
 
     /**
+     * Get Privy Custom Auth Token
+     */
+    @Get("privy-token")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth("JWT-auth")
+    @ApiOperation({ summary: "Get Privy custom auth token" })
+    async getPrivyToken(@GetUser("id") userId: string) {
+        const token = await this.authService.getPrivyToken(userId);
+        return { token };
+    }
+
+    /**
      * Get Privy Sync Token for Wallet Auto-Sync
+     * @deprecated Use /privy-token instead
      */
     @Get("sync-privy")
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth("JWT-auth")
     @ApiOperation({ summary: "Get Privy custom auth token for session sync" })
     async getPrivySyncToken(@GetUser("id") userId: string) {
-        const privyToken = await this.authService.getPrivyToken(userId);
-        return { privyToken };
+        const token = await this.authService.getPrivyToken(userId);
+        return { privyToken: token };
     }
 
     /**

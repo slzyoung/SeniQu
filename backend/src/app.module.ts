@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config"
 import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler"
 import { APP_GUARD } from "@nestjs/core"
 import { configuration, validationSchema } from "./config/configuration"
+import { JwksController } from "./auth/jwks.controller"
 import { AppController } from "./app.controller"
 import { AppService } from "./app.service"
 
@@ -97,7 +98,7 @@ import { WalletModule } from "./wallet/wallet.module"
         ArtistModule,
         WalletModule,
     ],
-    controllers: [AppController],
+    controllers: [AppController, JwksController],
     providers: [
         AppService,
         // Global rate limiting guard

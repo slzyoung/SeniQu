@@ -102,7 +102,9 @@ async function bootstrap() {
     // API PREFIX & VERSIONING
     // ===========================================
 
-    app.setGlobalPrefix("api/v1")
+    app.setGlobalPrefix("api/v1", {
+        exclude: [".well-known/(.*)"],
+    })
 
     // ===========================================
     // SWAGGER DOCUMENTATION

@@ -10,14 +10,15 @@ import {
     Shield,
     CheckCircle,
     Loader2,
-    History,
     ArrowUpRight,
     TrendingUp,
-    ArrowRightLeft
+    ArrowRightLeft,
+    Eye,
+    EyeOff
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { QrReader } from 'react-qr-reader';
-import { PageContainer, StatsGrid } from '../../../components/common/DashboardLayout';
+import { PageContainer } from '../../../components/common/DashboardLayout';
 import { Card, Button, Badge, Input, Modal } from '../../../components/ui';
 import { usePrivyWallet } from '../../../hooks/usePrivyWallet';
 import { useToast } from '../../../stores/useNotificationStore';
@@ -56,59 +57,7 @@ interface TokenAsset {
 // COMPONENTS
 // ============================================
 
-function WalletAddress({ address, label, chain }: { address: string; label?: string; chain: ChainType }) {
-    const [copied, setCopied] = useState(false);
-    const toast = useToast();
 
-    const handleCopy = async () => {
-        try {
-            await navigator.clipboard.writeText(address);
-            setCopied(true);
-            toast.success('Copied!', 'Address copied to clipboard');
-            setTimeout(() => setCopied(false), 2000);
-        } catch {
-            toast.error('Error', 'Failed to copy address');
-        }
-    };
-
-    const shortAddr = `${address.slice(0, 6)}...${address.slice(-4)}`;
-
-    // Explorer URL based on chain
-    const explorerUrl = chain === 'solana'
-        ? `https://solscan.io/account/${address}?cluster=devnet`
-        : `https://etherscan.io/address/${address}`;
-
-    return (
-        <div className="flex items-center gap-3">
-            {label && (
-                <span className="text-xs text-theme-muted">{label}</span>
-            )}
-            <code className="text-sm font-mono text-theme-text bg-theme-elevated px-3 py-1.5 rounded-lg border border-theme-border">
-                {shortAddr}
-            </code>
-            <button
-                onClick={handleCopy}
-                className="p-1.5 rounded-lg hover:bg-theme-elevated text-theme-muted hover:text-gold transition-colors"
-                title="Copy address"
-            >
-                {copied ? (
-                    <CheckCircle className="w-4 h-4 text-green-500" />
-                ) : (
-                    <Copy className="w-4 h-4" />
-                )}
-            </button>
-            <a
-                href={explorerUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-1.5 rounded-lg hover:bg-theme-elevated text-theme-muted hover:text-gold transition-colors"
-                title={`View on ${chain === 'solana' ? 'Solscan' : 'Etherscan'}`}
-            >
-                <ExternalLink className="w-4 h-4" />
-            </a>
-        </div>
-    );
-}
 
 // ============================================
 // MAIN COMPONENT
@@ -149,28 +98,23 @@ export function WalletPage() {
     const [showReceiveModal, setShowReceiveModal] = useState(false);
     const [showSendModal, setShowSendModal] = useState(false);
     const [showScanModal, setShowScanModal] = useState(false);
+    const [isBalanceHidden, setIsBalanceHidden] = useState(false); // NEW: Privacy mode
 
     // Send Form
     const [sendAmount, setSendAmount] = useState('');
     const [sendAddress, setSendAddress] = useState('');
     const [isSending, setIsSending] = useState(false);
 
+    // ... (keep existing derived helpers) ...
     // 3. Derived Helpers
-    // If activeChain is Solana, we want the solana wallet. If not available, but generic wallet exists, 
-    // we might still be able to use it if Privy allows cross-chain derivation (or it just hasn't loaded securely yet).
     const activeWallet = activeChain === 'solana' ? embeddedSolanaWallet : embeddedEthereumWallet;
-
-    // Fallback: If we don't have the specific chain wallet but have A wallet, we can show that address 
-    // (though strictly speaking we should have both).
-    // For now, adhere to strict types.
-
 
     // 4. Fetch Logic
     const fetchBalances = useCallback(async () => {
         // Fetch Solana
         if (embeddedSolanaWallet?.address) {
             try {
-                const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
+                const connection = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
                 const pubKey = new PublicKey(embeddedSolanaWallet.address);
                 const bal = await connection.getBalance(pubKey);
                 setSolBalance(bal / LAMPORTS_PER_SOL);
@@ -227,12 +171,12 @@ export function WalletPage() {
         }
 
         // C. Check if Backend User already has a wallet (but Privy not auth'd)
-        // This handles "Old Users" or "Different Device" flow
+        // The PrivyAuthBridge should handle the unlock automatically.
+        // We just show a waiting state here if they click while it's syncing.
         if (backendUser?.walletAddress && !authenticated) {
-            console.log("[WalletPage] Backend user has wallet, but Privy not authenticated. Triggering login to unlock.");
-            setPendingDeposit(true);
-            toast.info("Security Check", "Please sign in to unlock your secure wallet.");
-            await login();
+            console.log("[WalletPage] Backend auth active, waiting for Privy bridge sync...");
+            toast.info("Unlocking Wallet", "Verifying secure session...");
+            setPendingDeposit(true); // Auto-open modal when authenticated becomes true
             return;
         }
 
@@ -291,6 +235,7 @@ export function WalletPage() {
             // Handle "User already has an embedded wallet" gracefully
             if (errMsg?.toLowerCase().includes('already has') || errMsg?.toLowerCase().includes('exists')) {
                 toast.success("Wallet Found", "Opening existing wallet...");
+                setPendingDeposit(false); // Stop the retry loop!
                 setShowReceiveModal(true);
             } else if (errMsg?.toLowerCase().includes('allow user to close') || errMsg?.toLowerCase().includes('reject')) {
                 // User closed the modal
@@ -309,22 +254,24 @@ export function WalletPage() {
     useEffect(() => {
         // Only proceed if user clicked Deposit (pendingDeposit) AND is now authenticated
         if (authenticated && pendingDeposit && !isCreating) {
+            console.log("[WalletPage] Auto-Deposit triggered. Authenticated:", authenticated);
+
             // If wallet already appeared (e.g. from createOnLogin), just show it
             if (activeWallet || embeddedWallet) {
+                console.log("[WalletPage] Wallet found immediately. Opening modal.");
                 setPendingDeposit(false);
                 setShowReceiveModal(true);
-                // toast.success('Welcome back!', 'Wallet ready.');
             } else {
                 // If no wallet yet, trigger creation automatically
-                // We use a small timeout to let Privy state settle if it just logged in
+                // We use a timeout to let Privy state settle/sync
+                console.log("[WalletPage] No wallet found yet. Retrying creation in 1s...");
                 const timer = setTimeout(() => {
                     handleCreateOrDeposit();
-                }, 500);
+                }, 1000);
                 return () => clearTimeout(timer);
             }
         }
     }, [authenticated, pendingDeposit, activeWallet, embeddedWallet, isCreating, handleCreateOrDeposit]);
-
 
 
     // 6. Send Handler (Solana Only for now as requested, but structure supports both)
@@ -345,7 +292,7 @@ export function WalletPage() {
             }
 
             const provider = await (activeWallet as any).getProvider();
-            const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
+            const connection = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
 
             const transaction = new Transaction().add(
                 SystemProgram.transfer({
@@ -386,8 +333,8 @@ export function WalletPage() {
                     symbol: 'SOL',
                     name: 'Solana',
                     balance: solBalance,
-                    price: prices.solana,
-                    value: solBalance * prices.solana,
+                    price: prices.solana || 0,
+                    value: solBalance * (prices.solana || 0),
                     icon: ICONS.solana,
                     isNative: true
                 },
@@ -395,7 +342,7 @@ export function WalletPage() {
                     symbol: 'USDC',
                     name: 'USD Coin',
                     balance: 0, // Mock for now
-                    price: prices['usd-coin'],
+                    price: prices['usd-coin'] || 1,
                     value: 0,
                     icon: ICONS.usdc
                 },
@@ -403,7 +350,7 @@ export function WalletPage() {
                     symbol: 'USDT',
                     name: 'Tether',
                     balance: 0, // Mock for now
-                    price: prices.tether,
+                    price: prices.tether || 1,
                     value: 0,
                     icon: ICONS.usdt
                 }
@@ -414,8 +361,8 @@ export function WalletPage() {
                     symbol: 'ETH',
                     name: 'Ethereum',
                     balance: ethBalance,
-                    price: prices.ethereum,
-                    value: ethBalance * prices.ethereum,
+                    price: prices.ethereum || 0,
+                    value: ethBalance * (prices.ethereum || 0),
                     icon: ICONS.ethereum,
                     isNative: true
                 },
@@ -423,7 +370,7 @@ export function WalletPage() {
                     symbol: 'USDC',
                     name: 'USD Coin',
                     balance: 0,
-                    price: prices['usd-coin'],
+                    price: prices['usd-coin'] || 1,
                     value: 0,
                     icon: ICONS.usdc
                 },
@@ -431,7 +378,7 @@ export function WalletPage() {
                     symbol: 'USDT',
                     name: 'Tether',
                     balance: 0,
-                    price: prices.tether,
+                    price: prices.tether || 1,
                     value: 0,
                     icon: ICONS.usdt
                 }
@@ -442,18 +389,16 @@ export function WalletPage() {
     const assets = getAssets();
     const totalPortfolioValue = assets.reduce((acc, curr) => acc + curr.value, 0);
 
-    // ============================================
-    // RENDER
-    // ============================================
-
+    // ... (Render) ...
     return (
         <PageContainer
             title="Seniqu Wallet"
             subtitle="Secure, multi-chain embedded wallet"
         >
             {/* Header / Network Toggle */}
-            <div className="flex items-center gap-4 mb-6">
-                <div className="flex bg-theme-elevated p-1 rounded-xl border border-theme-border">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                {/* Network Switcher */}
+                <div className="flex bg-theme-elevated p-1 rounded-xl border border-theme-border self-start">
                     <button
                         onClick={() => setActiveChain('solana')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeChain === 'solana'
@@ -480,130 +425,189 @@ export function WalletPage() {
                     </button>
                 </div>
 
-                <Badge variant={activeChain === 'solana' ? 'gold' : 'default'} className="hidden sm:flex">
-                    {activeChain === 'solana' ? 'Devnet' : 'Mainnet'}
-                </Badge>
+                <div className="flex items-center gap-2">
+                    <Badge variant={activeChain === 'solana' ? 'gold' : 'default'} className="hidden sm:flex">
+                        {activeChain === 'solana' ? 'Mainnet' : 'Mainnet'}
+                    </Badge>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsBalanceHidden(!isBalanceHidden)}
+                        className="text-theme-muted hover:text-gold"
+                        title={isBalanceHidden ? "Show Balance" : "Hide Balance"}
+                    >
+                        {isBalanceHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                </div>
             </div>
 
             {/* Wallet Overview */}
-            <StatsGrid>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                 {/* Main Balance Card */}
-                <Card variant="elevated" className="col-span-full sm:col-span-2 relative overflow-hidden border-gold/20">
-                    <div className="absolute top-0 right-0 w-40 h-40 bg-gold/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
+                <Card variant="elevated" className="col-span-1 lg:col-span-2 relative overflow-hidden border-gold/20 shadow-xl shadow-black/40">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-gold/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
 
-                    <div className="relative z-10">
-                        <div className="flex items-center justify-between mb-6">
-                            <div className="flex items-center gap-3">
-                                <div className="p-3 bg-gradient-to-br from-gold/20 to-gold/5 rounded-xl border border-gold/10 shadow-inner">
+                    <div className="relative z-10 flex flex-col justify-between h-full min-h-[220px]">
+                        <div>
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="p-3 bg-gradient-to-br from-gold/20 to-gold/5 rounded-2xl border border-gold/10 shadow-inner backdrop-blur-md">
                                     <Wallet className="w-6 h-6 text-gold" />
                                 </div>
                                 <div>
-                                    <h3 className="text-lg font-bold text-theme-text">Total Balance</h3>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                        <Badge variant="default" className="text-[10px] uppercase tracking-wider text-theme-muted border-theme-border">
-                                            {activeChain}
+                                    <h3 className="text-sm font-medium text-theme-muted uppercase tracking-wider">Total Balance</h3>
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant="default" className="text-[10px] text-theme-muted border-theme-border/50 bg-black/20">
+                                            {activeChain} Network
+                                        </Badge>
+                                        <Badge variant="success" className="text-[10px] flex items-center gap-1">
+                                            <Shield className="w-3 h-3" />
+                                            Secured
                                         </Badge>
                                     </div>
                                 </div>
                             </div>
-                            <button
-                                onClick={handleRefresh}
-                                disabled={isRefreshing}
-                                className="p-2 rounded-lg hover:bg-theme-bg/50 text-theme-muted hover:text-gold transition-colors"
-                            >
-                                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                            </button>
-                        </div>
 
-                        <div className="mb-8">
-                            <div className="flex items-end gap-2">
-                                <p className="text-5xl font-bold text-theme-text font-mono tracking-tight">
-                                    ${totalPortfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </p>
-                                <span className="text-lg font-medium text-theme-muted mb-2">USD</span>
+                            <div className="mb-8">
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-3xl md:text-5xl font-bold text-theme-text font-mono tracking-tight">
+                                        {isBalanceHidden ? '••••••' : `$${totalPortfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                    </span>
+                                    {!isBalanceHidden && <span className="text-lg font-medium text-theme-muted">USD</span>}
+                                </div>
                             </div>
                         </div>
 
-                        <div className="bg-theme-bg/40 rounded-xl p-4 border border-theme-border/50 backdrop-blur-sm">
-                            <p className="text-xs text-theme-muted mb-2 uppercase tracking-wider font-semibold">
-                                Your {activeChain === 'solana' ? 'Solana' : 'Ethereum'} Address
-                            </p>
-                            {activeWallet ? (
-                                <WalletAddress address={activeWallet.address} chain={activeChain} />
-                            ) : (
-                                <div className="flex items-center gap-2 text-sm text-theme-muted italic">
-                                    <span>{backendUser?.walletAddress ? 'Wallet locked.' : 'Wallet not created yet.'}</span>
-                                    <button onClick={handleCreateOrDeposit} className="text-gold hover:underline not-italic">
-                                        {backendUser?.walletAddress ? 'Unlock now' : 'Create now'}
-                                    </button>
-                                </div>
-                            )}
+                        {/* Address Bar */}
+                        <div className="bg-black/30 rounded-xl p-3 border border-white/5 backdrop-blur-md flex items-center justify-between">
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-theme-muted uppercase tracking-wider font-semibold mb-1">
+                                    Your {activeChain === 'solana' ? 'Solana' : 'Ethereum'} Address
+                                </span>
+                                {activeWallet ? (
+                                    <div className="flex items-center gap-2">
+                                        <code className="text-xs md:text-sm text-theme-text font-mono truncate max-w-[150px] md:max-w-xs">
+                                            {activeWallet.address}
+                                        </code>
+                                        <button
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(activeWallet.address);
+                                                toast.success('Copied', 'Address copied');
+                                            }}
+                                            className="text-theme-muted hover:text-gold transition-colors"
+                                        >
+                                            <Copy className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2 text-xs text-theme-muted italic">
+                                        <span>Wallet locked or initializing...</span>
+                                        <button onClick={handleCreateOrDeposit} className="text-gold hover:underline not-italic ml-2">
+                                            Unlock
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex gap-2">
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => setShowReceiveModal(true)}
+                                    className="h-8 w-8 p-0 rounded-lg bg-white/5 hover:bg-white/10 text-theme-text"
+                                    title="Show QR"
+                                >
+                                    <QrCode className="w-4 h-4" />
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </Card>
 
-                {/* Quick Actions */}
-                <div className="col-span-full sm:col-span-1 grid grid-rows-3 gap-3">
-                    <Button
-                        variant="gold"
-                        className="h-full w-full justify-start px-6 text-base font-semibold shadow-gold/5"
-                        onClick={handleCreateOrDeposit}
-                        isLoading={isCreating}
-                        leftIcon={<ArrowDownLeft className="w-5 h-5" />}
-                    >
-                        Deposit
-                    </Button>
-                    <Button
-                        variant="secondary"
-                        className="h-full w-full justify-start px-6 text-base font-semibold border-theme-border hover:border-gold/30"
-                        onClick={() => setShowSendModal(true)}
-                        disabled={!activeWallet}
-                        leftIcon={<Send className="w-5 h-5" />}
-                    >
-                        Withdraw
-                    </Button>
-                    <Button
-                        variant="secondary"
-                        className="h-full w-full justify-start px-6 text-base font-semibold border-theme-border hover:border-gold/30"
-                        onClick={handleCreateOrDeposit}
-                        leftIcon={<QrCode className="w-5 h-5" />}
-                    >
-                        Show QR
-                    </Button>
-                </div>
-            </StatsGrid>
+                {/* Quick Actions Panel */}
+                <div className="col-span-1 flex flex-col gap-4">
+                    <Card variant="default" className="flex-1 flex flex-col justify-center gap-3 p-5 border-theme-border/60 bg-theme-elevated/30">
+                        <h4 className="text-sm font-bold text-theme-text mb-1 flex items-center gap-2">
+                            <TrendingUp className="w-4 h-4 text-gold" />
+                            Quick Actions
+                        </h4>
 
-            {/* Assets & History */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
-                {/* Left Column: Assets */}
+                        <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
+                            <Button
+                                variant="gold"
+                                className="w-full justify-center lg:justify-start h-12 text-sm font-bold shadow-gold/10 hover:shadow-gold/20 transition-all"
+                                onClick={handleCreateOrDeposit}
+                                isLoading={isCreating}
+                                leftIcon={<ArrowDownLeft className="w-4 h-4" />}
+                            >
+                                Deposit
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                className="w-full justify-center lg:justify-start h-12 text-sm font-bold border-theme-border hover:border-gold/30 bg-theme-bg"
+                                onClick={() => setShowSendModal(true)}
+                                disabled={!activeWallet}
+                                leftIcon={<Send className="w-4 h-4" />}
+                            >
+                                Withdraw
+                            </Button>
+                        </div>
+                    </Card>
+
+                    {/* Mini Security Card (Mobile Compact) */}
+                    <div className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-xl p-4 border border-blue-500/10 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                                <Shield className="w-4 h-4" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-blue-100">Bank-Grade Security</p>
+                                <p className="text-[10px] text-blue-200/60">Non-custodial & Encrypted</p>
+                            </div>
+                        </div>
+                        <CheckCircle className="w-4 h-4 text-green-500 opacity-80" />
+                    </div>
+                </div>
+            </div>
+
+            {/* Assets & Activity Tabs (or Split View) */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Left Column: Assets & History */}
                 <div className="lg:col-span-2 space-y-8">
                     {/* Assets List */}
                     <div>
-                        <h3 className="text-lg font-bold text-theme-text mb-4 flex items-center gap-2">
-                            <TrendingUp className="w-5 h-5 text-gold" />
-                            Your Assets
-                        </h3>
-                        <div className="grid grid-cols-1 gap-4">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-bold text-theme-text flex items-center gap-2">
+                                Your Assets
+                            </h3>
+                            <button onClick={handleRefresh} disabled={isRefreshing} className="p-1.5 rounded-lg hover:bg-theme-elevated text-theme-muted hover:text-gold transition-colors">
+                                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3">
                             {assets.map((asset) => (
-                                <Card key={asset.symbol} variant="elevated" className="flex items-center justify-between p-4 hover:border-gold/20 transition-all group">
+                                <div key={asset.symbol} className="flex items-center justify-between p-4 rounded-xl bg-theme-elevated/40 border border-theme-border hover:border-gold/30 hover:bg-theme-elevated/60 transition-all group cursor-default">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-theme-bg p-2 border border-theme-border group-hover:border-gold/20 transition-colors">
+                                        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-theme-bg p-2 border border-theme-border group-hover:border-gold/20 transition-colors">
                                             <img src={asset.icon} alt={asset.name} className="w-full h-full object-contain" />
                                         </div>
                                         <div>
-                                            <p className="font-bold text-theme-text text-lg">{asset.symbol}</p>
+                                            <p className="font-bold text-theme-text">{asset.symbol}</p>
                                             <p className="text-xs text-theme-muted flex items-center gap-1">
                                                 {asset.name}
-                                                <span className="w-1 h-1 rounded-full bg-theme-muted/50" />
+                                                <span className="w-0.5 h-0.5 rounded-full bg-theme-muted/50" />
                                                 ${asset.price.toLocaleString()}
                                             </p>
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <p className="font-bold text-theme-text text-lg">{asset.balance.toLocaleString(undefined, { maximumFractionDigits: 6 })}</p>
-                                        <p className="text-sm text-theme-muted">${asset.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                        <p className="font-bold text-theme-text">
+                                            {isBalanceHidden ? '••••' : asset.balance.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                                        </p>
+                                        <p className="text-xs text-theme-muted">
+                                            {isBalanceHidden ? '••••' : `$${asset.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                        </p>
                                     </div>
-                                </Card>
+                                </div>
                             ))}
                         </div>
                     </div>
@@ -612,38 +616,39 @@ export function WalletPage() {
                     <div>
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-bold text-theme-text flex items-center gap-2">
-                                <History className="w-5 h-5 text-gold" />
-                                Activity
+                                History
                             </h3>
-                            <Button variant="ghost" size="sm" className="text-xs text-theme-muted hover:text-gold">View Explorer</Button>
+                            <Button variant="ghost" size="sm" className="text-xs text-theme-muted hover:text-gold" onClick={() => window.open(activeChain === 'solana' ? `https://solscan.io/account/${activeWallet?.address}` : `https://etherscan.io/address/${activeWallet?.address}`, '_blank')}>
+                                View Explorer <ExternalLink className="w-3 h-3 ml-1" />
+                            </Button>
                         </div>
-                        <Card variant="elevated" className="overflow-hidden min-h-[200px]">
+                        <Card variant="elevated" className="overflow-hidden min-h-[150px] border-theme-border/50">
                             {txLoading ? (
                                 <div className="flex flex-col items-center justify-center py-12 text-theme-muted">
-                                    <Loader2 className="w-6 h-6 animate-spin mb-2 opacity-50" />
-                                    <span className="text-sm">Syncing history...</span>
+                                    <Loader2 className="w-5 h-5 animate-spin mb-2 opacity-50" />
+                                    <span className="text-xs">Syncing history...</span>
                                 </div>
                             ) : transactions.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-12 text-theme-muted/50">
-                                    <ArrowRightLeft className="w-8 h-8 mb-2" />
+                                <div className="flex flex-col items-center justify-center py-12 text-theme-muted/40">
+                                    <ArrowRightLeft className="w-8 h-8 mb-2 opacity-50" />
                                     <span className="text-sm">No recent transactions</span>
                                 </div>
                             ) : (
-                                <div className="divide-y divide-theme-border">
+                                <div className="divide-y divide-theme-border/50">
                                     {transactions.map((tx: any) => (
-                                        <div key={tx.id} className="p-4 flex items-center justify-between hover:bg-theme-elevated/50 transition-colors">
+                                        <div key={tx.id} className="p-4 flex items-center justify-between hover:bg-theme-elevated/30 transition-colors">
                                             <div className="flex items-center gap-3">
                                                 <div className={`p-2 rounded-lg ${tx.tx_type === 'deposit' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
                                                     {tx.tx_type === 'deposit' ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
                                                 </div>
                                                 <div>
                                                     <p className="text-sm font-medium text-theme-text capitalize">{tx.tx_type} {tx.token_symbol}</p>
-                                                    <p className="text-xs text-theme-muted">{new Date(tx.created_at).toLocaleDateString()}</p>
+                                                    <p className="text-[10px] text-theme-muted">{new Date(tx.created_at).toLocaleDateString()}</p>
                                                 </div>
                                             </div>
                                             <div className="text-right">
                                                 <p className={`text-sm font-bold ${tx.tx_type === 'deposit' ? 'text-green-400' : 'text-theme-text'}`}>
-                                                    {tx.tx_type === 'deposit' ? '+' : '-'}{tx.amount} {tx.token_symbol}
+                                                    {isBalanceHidden ? '••••' : `${tx.tx_type === 'deposit' ? '+' : '-'}${tx.amount} ${tx.token_symbol}`}
                                                 </p>
                                                 <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded-full ${tx.status === 'confirmed' ? 'bg-green-500/10 text-green-400' :
                                                     tx.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'
@@ -659,38 +664,29 @@ export function WalletPage() {
                     </div>
                 </div>
 
-                {/* Right Column: Security */}
-                <div className="space-y-6">
-                    {/* Security Info Card */}
-                    <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-2xl p-6 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
-                        <div className="flex items-center gap-3 mb-4 relative z-10">
-                            <div className="p-2 bg-blue-500/20 rounded-lg text-blue-400">
-                                <Shield className="w-5 h-5" />
-                            </div>
-                            <h4 className="text-sm font-bold text-theme-text">Unbreakable Security</h4>
-                        </div>
-                        <p className="text-xs text-theme-muted leading-relaxed relative z-10 mb-4">
-                            Your assets are secured by Privy's embedded wallet technology and the {activeChain === 'solana' ? 'Solana' : 'Ethereum'} blockchain.
-                            We never store your private keys. You retain full control.
-                        </p>
-                        <ul className="space-y-2 relative z-10">
-                            <li className="flex items-center gap-2 text-xs text-theme-muted">
-                                <CheckCircle className="w-3 h-3 text-green-500" />
-                                Non-custodial Architecture
+                {/* Right Column: Info & Tips (Mobile: Bottom) */}
+                <div className="space-y-4">
+                    <div className="p-5 rounded-2xl bg-gradient-to-br from-theme-elevated to-theme-bg border border-theme-border/50">
+                        <h4 className="text-sm font-bold text-theme-text mb-3">Wallet Features</h4>
+                        <ul className="space-y-3">
+                            <li className="flex items-start gap-3 text-xs text-theme-muted">
+                                <Shield className="w-4 h-4 text-gold shrink-0 mt-0.5" />
+                                <span>
+                                    <strong className="text-theme-text">Non-Custodial:</strong> You own your keys. Encrypted locally on your device properly.
+                                </span>
                             </li>
-                            <li className="flex items-center gap-2 text-xs text-theme-muted">
-                                <CheckCircle className="w-3 h-3 text-green-500" />
-                                Instant Settlements
+                            <li className="flex items-start gap-3 text-xs text-theme-muted">
+                                <RefreshCw className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                                <span>
+                                    <strong className="text-theme-text">Auto-Sync:</strong> Transactions update in real-time across devices.
+                                </span>
                             </li>
                         </ul>
                     </div>
 
-                    {/* Info Card */}
-                    <Card variant="default" className="p-5 border-theme-border/50">
-                        <h4 className="text-sm font-bold text-theme-text mb-2">Did you know?</h4>
-                        <p className="text-xs text-theme-muted">
-                            You can deposit USDC or USDT directly to get started with trading Arts instantly.
+                    <Card variant="default" className="p-4 border-theme-border/30 bg-theme-bg/30">
+                        <p className="text-xs text-theme-muted text-center italic">
+                            "Secure navigation is our priority. Always check the URL before connecting."
                         </p>
                     </Card>
                 </div>

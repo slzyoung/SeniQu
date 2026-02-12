@@ -33,3 +33,14 @@ yarn-error.log*
 
 # Vite specific
 stats.html
+# Misc
+.coverage
+.nyc_output
+.tmp
+.temp
+
+# PEM Files (Added for Security)
+*.pem
+private.pem
+public.pem
+certificate.pem

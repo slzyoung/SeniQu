@@ -263,42 +263,59 @@ export class PrivyService implements OnModuleInit {
      * Allows the frontend to authenticate with Privy using our backend session
      */
     async getCustomAuthToken(userId: string): Promise<string | null> {
-        if (!this.appId || !this.appSecret) {
-            this.logger.error("Privy credentials not configured");
+        if (!this.appId) {
+            this.logger.error("Privy App ID not configured");
             return null;
         }
 
         try {
-            // PRIVY FREE PLAN ADAPTATION:
-            // Custom Auth is not supported on Free Plan.
-            // We return null to indicate this feature is disabled.
-            this.logger.warn("getCustomAuthToken called but Custom Auth is disabled (Free Plan). Returning null.");
-            return null;
+            // Read the private key from environment variable (preferred) or file system (fallback)
+            let privateKey: string
+            const envKey = this.configService.get<string>("PRIVY_SIGNING_KEY")
 
-            /* 
-            // OLD IMPL FOR PRO PLAN
-            
-            // Generate Custom Auth Token (JWT) locally
-            // ...
-            
+            if (envKey) {
+                // Ensure newlines are correctly formatted if passed as a single string
+                privateKey = envKey.replace(/\\n/g, "\n")
+            } else {
+                this.logger.warn(
+                    "PRIVY_SIGNING_KEY not found in environment. Falling back to local file system (INSECURE for production).",
+                )
+                try {
+                    const privateKeyPath = process.cwd() + "/private.pem"
+                    const fs = await import("fs")
+
+                    if (fs.existsSync(privateKeyPath)) {
+                        privateKey = fs.readFileSync(privateKeyPath, "utf8")
+                    } else {
+                        // Fallback try one level up if in dist
+                        const upOne = process.cwd() + "/../private.pem"
+                        if (fs.existsSync(upOne)) {
+                            privateKey = fs.readFileSync(upOne, "utf8")
+                        } else {
+                            throw new Error(`Private key not found at ${privateKeyPath}`)
+                        }
+                    }
+                } catch (fsError) {
+                    this.logger.error(`Failed to read private key: ${fsError.message}`)
+                    return null
+                }
+            }
+
+            // Generate Custom Auth Token (JWT) locally using RS256
             const payload = {
                 sub: userId,
                 iss: this.appId,
                 aud: 'privy.io',
             };
 
-            const secret = this.appSecret.startsWith('privy_app_secret_')
-                ? this.appSecret.replace('privy_app_secret_', '')
-                : this.appSecret;
-
-            const token = jwt.sign(payload, secret, {
-                algorithm: 'HS256',
-                expiresIn: '1h',
-            });
+            const token = jwt.sign(payload, privateKey, {
+                algorithm: "RS256",
+                expiresIn: "1h",
+                keyid: "seniqu-auth-key-1", // Match the kid in JWKS
+            })
 
             this.logger.debug(`Generated custom auth token for user ${userId}`);
             return token;
-            */
         } catch (error: any) {
             this.logger.error(`Failed to create custom auth token: ${error.message}`);
             return null;

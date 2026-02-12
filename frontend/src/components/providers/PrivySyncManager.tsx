@@ -18,9 +18,9 @@ export const PrivySyncManager = () => {
                         // and we need to link it to their backend account.
                         await api.post('/auth/privy', {}, {
                             headers: {
-                                'Authorization': `Bearer ${token}`
+                                'x-privy-token': token
                             },
-                            // Skip our own auth interceptor which adds the backend JWT
+                            // Skip our own auth interceptor which adds the backend JWT (if any)
                             __skipAuthInterceptor: true
                         } as any);
 

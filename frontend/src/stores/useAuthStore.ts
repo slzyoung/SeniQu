@@ -28,6 +28,10 @@ interface AuthState {
     isAdmin: () => boolean;
     isArtist: () => boolean;
     isInstitution: () => boolean;
+
+    // Feature flags / Capabilities
+    isCustomAuthDisabled: boolean;
+    disableCustomAuth: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -37,12 +41,15 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
             isLoading: true, // Start loading to check stored auth
             error: null,
+            isCustomAuthDisabled: false,
 
             setUser: (user) => set({ user, isAuthenticated: !!user }),
 
             setLoading: (isLoading) => set({ isLoading }),
 
             setError: (error) => set({ error }),
+
+            disableCustomAuth: () => set({ isCustomAuthDisabled: true }),
 
             login: (user, accessToken, refreshToken) => {
                 // Store access token in memory and secure storage
@@ -54,6 +61,7 @@ export const useAuthStore = create<AuthState>()(
                     isAuthenticated: true,
                     isLoading: false,
                     error: null,
+                    isCustomAuthDisabled: false, // Reset flag on fresh login
                 });
             },
 
@@ -66,6 +74,9 @@ export const useAuthStore = create<AuthState>()(
                     isAuthenticated: false,
                     isLoading: false,
                     error: null,
+                    // We don't reset isCustomAuthDisabled here, so it persists across logouts until refresh
+                    // But maybe we should reset it on *login*? 
+                    // No, if it's a plan limit, it won't change on login.
                 });
             },
 
@@ -102,6 +113,7 @@ export const useAuthStore = create<AuthState>()(
             partialize: (state) => ({
                 user: state.user,
                 isAuthenticated: state.isAuthenticated,
+                // Don't persist isCustomAuthDisabled so hard refresh retries the sync
             }),
             // Restore access token and set isLoading to false after rehydration
             onRehydrateStorage: () => (state, error) => {

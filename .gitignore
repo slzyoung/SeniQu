@@ -1,39 +1,32 @@
-# Dependencies
+# Common
 node_modules/
-package-lock.json
-yarn.lock
-
-# Build Outputs
-dist/
-build/
-out/
-
-# Environment Variables
+npm-debug.log
+yarn-error.log
+.DS_Store
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
-*.env
+.env.production
+.env.test
 
-# IDEs & Editors
+# IDEs
 .vscode/
 .idea/
-*.swp
-*.swo
-.DS_Store
 
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Testing
+# Builds
+dist/
+build/
+.next/
+out/
 coverage/
 
-# NestJS Helper
-backend/dist/
+# Misc
+.coverage
+.nyc_output
+.tmp
+.temp
 
-# Frontend Helper
-frontend/dist/
-frontend/build/
+# PEM Files (Added for Security)
+*.pem
+private.pem
+public.pem
+certificate.pem
