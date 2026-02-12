@@ -1,6 +1,6 @@
 import React from 'react';
 import { PrivyProvider as PrivySDKProvider } from '@privy-io/react-auth';
-// import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
+import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
 // Import the new sync manager
 import { PrivySyncManager } from './PrivySyncManager';
 
@@ -42,9 +42,22 @@ const ethereumMainnet = {
 // EXTERNAL WALLET CONNECTORS
 // ============================================================
 
-// const solanaConnectors = toSolanaWalletConnectors({
-//     shouldAutoConnect: false,
-// });
+// ============================================================
+// EXTERNAL WALLET CONNECTORS
+// ============================================================
+
+// Singleton pattern for connectors to avoid re-creation on HMR
+let solanaConnectors: any;
+
+try {
+    solanaConnectors = toSolanaWalletConnectors({
+        shouldAutoConnect: false,
+    });
+} catch (e) {
+    console.warn('[PrivyProvider] Failed to initialize Solana connectors (likely HMR re-init):', e);
+    // If it fails, it might be because of "WalletConnect Core is already initialized"
+    // We can try to proceed without re-initializing or catch the specific error
+}
 
 // ============================================================
 // ENVIRONMENT VARIABLES & VALIDATION
@@ -153,40 +166,42 @@ export const PrivyProvider: React.FC<PrivyProviderProps> = ({ children }) => {
         return <>{children}</>;
     }
 
+    // Memoize the configuration to prevent re-initialization on every render
+    // IMPORTANT: This fixes "WalletConnect Core is already initialized" and "MaxListenersExceededWarning"
+    const privyConfig = React.useMemo(() => {
+        return {
+            appearance: {
+                theme: 'dark' as 'dark',
+                accentColor: '#D4AF37' as `#${string}`,
+                logo: '/logo.svg',
+                walletChainType: 'ethereum-and-solana' as 'ethereum-and-solana',
+                walletList: [
+                    'phantom',
+                    'solflare',
+                    'metamask',
+                    'detected_solana_wallets',
+                    'detected_ethereum_wallets',
+                ] as any[], // Casting to any[] to avoid strict type checks if list is wider
+                showWalletLoginFirst: false,
+            },
+            loginMethods: ['google', 'email', 'wallet'] as any[],
+            embeddedWallets: {
+                solana: { createOnLogin: 'users-without-wallets' as 'users-without-wallets' },
+                ethereum: { createOnLogin: 'users-without-wallets' as 'users-without-wallets' },
+            },
+            externalWallets: {
+                solana: { connectors: solanaConnectors },
+            },
+            supportedChains: [solanaMainnet, solanaDevnet, ethereumMainnet],
+            defaultChain: solanaMainnet,
+        };
+    }, []); // Empty dependency array ensures it's created only once
+
     return (
         <PrivyErrorBoundary>
             <PrivySDKProvider
                 appId={PRIVY_APP_ID}
-                config={{
-                    appearance: {
-                        theme: 'dark',
-                        accentColor: '#D4AF37',
-                        logo: '/logo.svg',
-                        walletChainType: 'ethereum-and-solana',
-                        walletList: [
-                            'phantom',
-                            'solflare',
-                            'metamask',
-                            // 'wallet_connect', // Handled by Reown AppKit externally to prevent "Init already called" errors
-                            // 'coinbase_wallet', 
-                            'detected_solana_wallets',
-                            'detected_ethereum_wallets',
-                        ],
-                        showWalletLoginFirst: false,
-                    },
-                    loginMethods: ['google', 'email', 'wallet'],
-                    embeddedWallets: {
-                        solana: { createOnLogin: 'users-without-wallets' },
-                        ethereum: { createOnLogin: 'users-without-wallets' },
-                    },
-                    externalWallets: {
-                        // solana: { connectors: solanaConnectors }, // Disabled: Conflict with Reown AppKit "Already Initialized" error
-                    },
-                    // Revert chain order for general sanity now that Coinbase is gone
-                    supportedChains: [solanaMainnet, solanaDevnet, ethereumMainnet],
-                    defaultChain: solanaMainnet,
-                    // walletConnectCloudProjectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID, // Disabled: Conflict with Reown AppKit
-                }}
+                config={privyConfig}
             >
                 {/* 
                   PrivySyncManager handles automatic synchronization of the Privy session 

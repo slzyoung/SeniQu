@@ -1,5 +1,5 @@
-const appId = 'cmlhqery405jajm0bxzrubefr';
-const appSecret = 'privy_app_secret_5u8S4Rgs2C9otyvzQ1wHL3fZbzcwxvTMhTTormcHTvzu9hYUdcTBXgjEV6atzX2WN7S5cAo9ZUquv2NGrj3H6Vdf';
+const appId = process.env.PRIVY_APP_ID;
+const appSecret = process.env.PRIVY_APP_SECRET;
 const userId = 'test-user-123';
 
 const endpoints = [

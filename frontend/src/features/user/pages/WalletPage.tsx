@@ -23,6 +23,7 @@ import { usePrivyWallet } from '../../../hooks/usePrivyWallet';
 import { useToast } from '../../../stores/useNotificationStore';
 import { useWalletTransactions } from '../../../hooks/useWalletData';
 import { useTokenPrices } from '../../../hooks/useTokenPrices';
+
 import { Connection, PublicKey, LAMPORTS_PER_SOL, clusterApiUrl, Transaction, SystemProgram } from '@solana/web3.js';
 
 
@@ -117,6 +118,9 @@ export function WalletPage() {
     const {
         embeddedSolanaWallet,
         embeddedEthereumWallet, // NEW: Support Ethereum
+        embeddedWallet, // GENERIC: First found wallet
+        ready,
+        user,
         authenticated,
         login,
         createWallet
@@ -131,6 +135,9 @@ export function WalletPage() {
     const [activeChain, setActiveChain] = useState<ChainType>('solana');
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
+    // Track if user clicked "Deposit" but needed to login first
+    const [pendingDeposit, setPendingDeposit] = useState(false);
+
 
     // Balances
     const [solBalance, setSolBalance] = useState<number>(0);
@@ -147,7 +154,13 @@ export function WalletPage() {
     const [isSending, setIsSending] = useState(false);
 
     // 3. Derived Helpers
+    // If activeChain is Solana, we want the solana wallet. If not available, but generic wallet exists, 
+    // we might still be able to use it if Privy allows cross-chain derivation (or it just hasn't loaded securely yet).
     const activeWallet = activeChain === 'solana' ? embeddedSolanaWallet : embeddedEthereumWallet;
+
+    // Fallback: If we don't have the specific chain wallet but have A wallet, we can show that address 
+    // (though strictly speaking we should have both).
+    // For now, adhere to strict types.
 
 
     // 4. Fetch Logic
@@ -196,82 +209,116 @@ export function WalletPage() {
     };
 
     // 5. Create Wallet Handler
-    const handleCreateOrDeposit = async () => {
-        // Check if we already have the wallet for the ACTIVE chain
+    const handleCreateOrDeposit = useCallback(async () => {
+        // A. If wallet for ACTIVE chain exists -> Just show modal.
         if (activeWallet) {
             setShowReceiveModal(true);
             return;
         }
 
+        // B. If ANY embedded wallet exists -> Show modal with warning if address missing
+        // Prevents loop of trying to create duplicate wallet
+        if (embeddedWallet) {
+            console.warn("[WalletPage] Embedded wallet exists, but active chain address is missing. Showing modal anyway.");
+            setShowReceiveModal(true);
+            return;
+        }
+
+        // C. No wallet at all -> Create one.
+        if (isCreating) return; // Prevent double clicks
+
         setIsCreating(true);
-        // var to hold the toast id
         let loadingId: string | undefined;
 
         try {
-            // Ensure Privy is authenticated.
-            // If the App is authenticated but Privy isn't, we force a login (which handles sync/modal).
-            if (!authenticated) {
-                toast.info("Initializing Wallet", "Verifying identity...");
-                await login();
-                // We return here because login() is async and might not update 'authenticated' immediately in this closure.
-                // The user can click "Deposit" again once logged in (or we could wait, but it's safer to let the auth flow finish).
+            // 0. Wait for Privy to be ready
+            if (!ready) {
+                console.warn("[WalletPage] Privy not ready yet. Ignoring click.");
                 return;
             }
 
-            // If we are authenticated, we check for wallets.
-            // Privy's 'ethereum-and-solana' chain type means createWallet() should attempt to create both
-            // if they don't exist, or specific ones depending on internal logic.
+            console.log("[WalletPage] handleCreateOrDeposit state:", { ready, authenticated, user: user?.id });
 
-            // Check if we have ANY embedded wallet (Solana or Eth)
-            if (!embeddedSolanaWallet && !embeddedEthereumWallet) {
-                loadingId = toast.info("Generating secure wallet...", "Please wait...");
-                const wallet = await createWallet();
-                if (loadingId) toast.dismiss(loadingId);
-
-                if (wallet) {
-                    toast.success("Ready", "Wallet created successfully.");
-                    setTimeout(() => setShowReceiveModal(true), 1500);
-                }
-            } else {
-                // We have at least one wallet, but maybe not the active one.
-                // Or maybe we just need to confirm creation.
-                // Calling createWallet() is generally safe/idempotent for embedded wallets if configured correctly.
-
-                if (!activeWallet) {
-                    loadingId = toast.info(`Creating ${activeChain} wallet...`, "Please wait...");
-                    try {
-                        const wallet = await createWallet();
-                        if (wallet) {
-                            toast.success("Created", `${activeChain} wallet ready.`);
-                        }
-                    } catch (e) {
-                        // Ignore "already exists" errors
-                        console.log("Wallet creation check:", e);
-                    }
-                    if (loadingId) toast.dismiss(loadingId);
-                }
-
-                // Show modal after a brief delay ensuring state updates
-                setTimeout(() => setShowReceiveModal(true), 1000);
+            // 1. Ensure Auth
+            // Professional UX:
+            // Since we are on Free Plan (Client-Side Auth), we MUST be authenticated with Privy to create a wallet.
+            // If the user is logged into Backend but not Privy (desync), we must prompt them to log in to Privy again.
+            if (!authenticated) {
+                console.warn("[WalletPage] User is not authenticated in Privy. Triggering login.");
+                setPendingDeposit(true);
+                toast.info("Authentication Required", "Please sign in to create a wallet.");
+                await login();
+                return;
             }
 
+            // 2. Double-check embeddedWallet didn't appear after login (Race condition check)
+            // We re-check the ref/state here right before action
+            if (embeddedWallet) {
+                setShowReceiveModal(true);
+                return;
+            }
+
+            // 3. Create
+            loadingId = toast.info("Securing Wallet", "Generating your unique on-chain identity...");
+
+            const wallet = await createWallet();
+
+            if (loadingId) toast.dismiss(loadingId);
+
+            if (wallet) {
+                toast.success("Success", "Wallet generated successfully!");
+
+                // Force a refresh of wallet list and balances
+                // Small delay ensures Privy state updates propagate
+                setTimeout(() => {
+                    fetchBalances();
+                    setShowReceiveModal(true);
+                }, 1000);
+            }
         } catch (error: any) {
             console.error("Wallet creation error:", error);
             const errMsg = error?.message || error?.toString();
 
-            if (errMsg?.includes('already exists')) {
+            if (loadingId) toast.dismiss(loadingId);
+
+            // Handle "User already has an embedded wallet" gracefully
+            if (errMsg?.toLowerCase().includes('already has') || errMsg?.toLowerCase().includes('exists')) {
+                toast.success("Wallet Found", "Opening existing wallet...");
                 setShowReceiveModal(true);
-            } else if (errMsg?.includes('User not authenticated')) {
-                toast.error("Auth Error", "Please log in again.");
-                login();
+            } else if (errMsg?.toLowerCase().includes('allow user to close') || errMsg?.toLowerCase().includes('reject')) {
+                // User closed the modal
+                toast.error("Cancelled", "Wallet creation was cancelled.");
+                setPendingDeposit(false); // Clear pending if user cancelled
             } else {
-                toast.error("Error", "Failed to create wallet. Please try again.");
+                toast.error("Creation Failed", "Could not generate wallet. Please try again.");
+                setPendingDeposit(false);
             }
         } finally {
-            if (loadingId) toast.dismiss(loadingId);
             setIsCreating(false);
         }
-    };
+    }, [activeWallet, embeddedWallet, isCreating, authenticated, login, createWallet, toast, fetchBalances]);
+
+    // Effect: Handle Auto-Deposit after Login
+    useEffect(() => {
+        // Only proceed if user clicked Deposit (pendingDeposit) AND is now authenticated
+        if (authenticated && pendingDeposit && !isCreating) {
+            // If wallet already appeared (e.g. from createOnLogin), just show it
+            if (activeWallet || embeddedWallet) {
+                setPendingDeposit(false);
+                setShowReceiveModal(true);
+                // toast.success('Welcome back!', 'Wallet ready.');
+            } else {
+                // If no wallet yet, trigger creation automatically
+                // We use a small timeout to let Privy state settle if it just logged in
+                const timer = setTimeout(() => {
+                    handleCreateOrDeposit();
+                }, 500);
+                return () => clearTimeout(timer);
+            }
+        }
+    }, [authenticated, pendingDeposit, activeWallet, embeddedWallet, isCreating, handleCreateOrDeposit]);
+
+
 
     // 6. Send Handler (Solana Only for now as requested, but structure supports both)
     const handleSend = async () => {
@@ -426,11 +473,9 @@ export function WalletPage() {
                     </button>
                 </div>
 
-                {activeWallet && (
-                    <Badge variant={activeChain === 'solana' ? 'gold' : 'default'} className="hidden sm:flex">
-                        {activeChain === 'solana' ? 'Devnet' : 'Mainnet'}
-                    </Badge>
-                )}
+                <Badge variant={activeChain === 'solana' ? 'gold' : 'default'} className="hidden sm:flex">
+                    {activeChain === 'solana' ? 'Devnet' : 'Mainnet'}
+                </Badge>
             </div>
 
             {/* Wallet Overview */}
@@ -479,7 +524,10 @@ export function WalletPage() {
                             {activeWallet ? (
                                 <WalletAddress address={activeWallet.address} chain={activeChain} />
                             ) : (
-                                <p className="text-sm text-theme-muted italic">Wallet not created yet</p>
+                                <div className="flex items-center gap-2 text-sm text-theme-muted italic">
+                                    <span>Wallet not created yet.</span>
+                                    <button onClick={handleCreateOrDeposit} className="text-gold hover:underline not-italic">Create now</button>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -516,6 +564,7 @@ export function WalletPage() {
                 </div>
             </StatsGrid>
 
+            {/* Assets & History */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
                 {/* Left Column: Assets */}
                 <div className="lg:col-span-2 space-y-8">
@@ -601,7 +650,7 @@ export function WalletPage() {
                     </div>
                 </div>
 
-                {/* Right Column: Security (Was Wallets) */}
+                {/* Right Column: Security */}
                 <div className="space-y-6">
                     {/* Security Info Card */}
                     <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-2xl p-6 relative overflow-hidden">
@@ -632,7 +681,7 @@ export function WalletPage() {
                     <Card variant="default" className="p-5 border-theme-border/50">
                         <h4 className="text-sm font-bold text-theme-text mb-2">Did you know?</h4>
                         <p className="text-xs text-theme-muted">
-                            You can deposit USDC or USDT directly to get started with trading NFTs instantly.
+                            You can deposit USDC or USDT directly to get started with trading Arts instantly.
                         </p>
                     </Card>
                 </div>
@@ -649,7 +698,7 @@ export function WalletPage() {
                 <div className="flex flex-col items-center">
                     <div className="p-4 bg-white rounded-2xl mb-6 shadow-xl shadow-gold/5 border-2 border-gold/10">
                         <QRCode
-                            value={activeWallet?.address || ''}
+                            value={activeWallet?.address || 'Loading...'}
                             size={200}
                             level="M"
                             viewBox={`0 0 256 256`}
@@ -658,7 +707,9 @@ export function WalletPage() {
 
                     <div className="w-full bg-theme-elevated p-4 rounded-xl mb-6 text-center border border-theme-border">
                         <p className="text-xs text-theme-muted mb-2 uppercase tracking-wide">Your {activeChain} Address</p>
-                        <p className="text-sm font-mono text-theme-text break-all select-all">{activeWallet?.address}</p>
+                        <p className="text-sm font-mono text-theme-text break-all select-all">
+                            {activeWallet?.address || 'Generating...'}
+                        </p>
                     </div>
 
                     <div className="flex justify-center gap-2 mb-6">
@@ -673,7 +724,7 @@ export function WalletPage() {
                             navigator.clipboard.writeText(activeWallet.address);
                             toast.success('Copied', 'Address copied to clipboard');
                         }
-                    }}>
+                    }} disabled={!activeWallet}>
                         <Copy className="w-4 h-4 mr-2" />
                         Copy Address
                     </Button>

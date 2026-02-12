@@ -17,6 +17,10 @@ export const usePrivyWallet = () => {
     const embeddedSolanaWallet = solanaWallets.find((w) => w.walletClientType === 'privy');
     const embeddedEthereumWallet = ethereumWallets.find((w) => w.walletClientType === 'privy');
 
+    // Generic embedded wallet (first one found)
+    // Useful for checking if *any* embedded wallet exists to prevent duplicate creation attempts
+    const embeddedWallet = embeddedSolanaWallet || embeddedEthereumWallet;
+
     return {
         ready,
         authenticated,
@@ -31,6 +35,7 @@ export const usePrivyWallet = () => {
         ethereumWallets,
         embeddedSolanaWallet,
         embeddedEthereumWallet,
+        embeddedWallet,
 
         // Removed raw: { createSolanaWallet } as distinct hook is unavailable/unnecessary
         raw: {}
