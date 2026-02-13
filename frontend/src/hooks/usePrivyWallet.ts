@@ -46,6 +46,9 @@ export const usePrivyWallet = () => {
     // Generic embedded wallet (first one found)
     const embeddedWallet = embeddedSolanaWallet || embeddedEthereumWallet;
 
+    // External wallets are those that are NOT embedded (Privy)
+    const externalWallets = wallets.filter(w => w.walletClientType !== 'privy');
+
     return {
         ready,
         authenticated,
@@ -56,6 +59,7 @@ export const usePrivyWallet = () => {
         connectWallet,
 
         wallets,
+        externalWallets,
         solanaWallets,
         ethereumWallets,
         embeddedSolanaWallet,

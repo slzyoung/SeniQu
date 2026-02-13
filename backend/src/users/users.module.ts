@@ -4,7 +4,10 @@ import { UsersController } from "./users.controller"
 import { DatabaseModule } from "../database/database.module"
 
 @Module({
-    imports: [DatabaseModule],
+    imports: [
+        DatabaseModule,
+        forwardRef(() => require("../auth/auth.module").AuthModule),
+    ],
     providers: [UsersService],
     controllers: [UsersController],
     exports: [UsersService],

@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, Logger } from "@nestjs/common"
+import { Injectable, NotFoundException, Logger, Inject, forwardRef } from "@nestjs/common"
 import { DatabaseService } from "../database/database.service"
 import { CreateUserDto } from "./dto/create-user.dto"
 import { UpdateUserDto } from "./dto/update-user.dto"
+import { PrivyService } from "../auth/privy.service"
 
 export interface User {
     id: string
@@ -15,6 +16,8 @@ export interface User {
     privyId?: string
     googleId?: string
     walletAddress?: string
+    embeddedWalletAddress?: string
+    wallets?: { chainType: string; address: string; verifiedAt: Date }[]
     createdAt: Date
     updatedAt: Date
 }
@@ -23,7 +26,11 @@ export interface User {
 export class UsersService {
     private readonly logger = new Logger(UsersService.name)
 
-    constructor(private readonly db: DatabaseService) { }
+    constructor(
+        private readonly db: DatabaseService,
+        @Inject(forwardRef(() => PrivyService))
+        private readonly privyService: PrivyService
+    ) { }
 
     async create(dto: CreateUserDto): Promise<User> {
         const client = this.db.getAdminClient()
@@ -67,7 +74,45 @@ export class UsersService {
             return null
         }
 
-        return this.mapToUser(data)
+        const user = this.mapToUser(data);
+
+        // Fetch Canonical Privy Wallets (Secure Source of Truth)
+        // These are strictly validated 1-per-chain wallets
+        const { data: privyWallets } = await client
+            .from("privy_wallets")
+            .select("wallet_address, chain_type, created_at, updated_at")
+            .eq("user_id", id);
+
+        if (privyWallets && privyWallets.length > 0) {
+            // Map canonical wallets to user object
+
+            // NEW: Comprehensive list
+            user.wallets = privyWallets.map(w => ({
+                chainType: w.chain_type,
+                address: w.wallet_address,
+                verifiedAt: new Date(w.updated_at || w.created_at || Date.now())
+            }));
+
+            const solanaWallet = privyWallets.find(w => w.chain_type === 'solana');
+            const ethereumWallet = privyWallets.find(w => w.chain_type === 'ethereum' || w.chain_type === 'polygon');
+
+            // 1. Set 'embeddedWalletAddress' explicitly based on available wallets
+            if (solanaWallet) {
+                user.embeddedWalletAddress = solanaWallet.wallet_address;
+            } else if (ethereumWallet) {
+                user.embeddedWalletAddress = ethereumWallet.wallet_address;
+            }
+
+            // 2. Ensure user.walletAddress is set (Primary) - Prefer Solana
+            if (!user.walletAddress) {
+                if (solanaWallet) user.walletAddress = solanaWallet.wallet_address;
+                else if (ethereumWallet) user.walletAddress = ethereumWallet.wallet_address;
+            }
+
+            return user;
+        }
+
+        return user;
     }
 
     async findByEmail(email: string): Promise<User | null> {
@@ -225,6 +270,7 @@ export class UsersService {
             privyId: data.privy_id,
             googleId: data.google_id,
             walletAddress: data.wallet_address,
+            // embeddedWalletAddress is mapped dynamically in findById, not stored directly in users table yet
             createdAt: new Date(data.created_at),
             updatedAt: new Date(data.updated_at),
         }
@@ -412,5 +458,104 @@ export class UsersService {
         }
 
         return data
+    }
+
+    // ============================================
+    // WALLET SYNC
+    // ============================================
+
+    async syncWallets(userId: string): Promise<any> {
+        const client = this.db.getAdminClient()
+        // this.logger.log(`[syncWallets] Starting sync for user ${userId}`);
+
+        // 1. Get User to find Privy ID
+        const { data: user, error: userError } = await client
+            .from("users")
+            .select("privy_id")
+            .eq("id", userId)
+            .single()
+
+        if (userError || !user?.privy_id) {
+            this.logger.warn(`Cannot sync wallets: User ${userId} has no linked Privy ID`)
+            return { success: false, reason: "No Privy ID found" }
+        }
+
+        // 2. Fetch authoritative data from Privy
+        const privyUser = await this.privyService.getUserById(user.privy_id)
+
+        if (!privyUser) {
+            this.logger.error(`Privy user not found for ID: ${user.privy_id}`)
+            return { success: false, reason: "Privy user not found" }
+        }
+
+        // 3. Extract Wallets (Solana & Ethereum)
+        const wallets = privyUser.linkedAccounts.filter(
+            (acc: any) => acc.type === "wallet"
+        )
+
+        const solanaWallet = wallets.find((w: any) => w.chainType === "solana")
+        const ethereumWallet = wallets.find((w: any) => w.chainType === "ethereum")
+
+        const updates = []
+
+        // 4. Sync Solana Wallet
+        if (solanaWallet) {
+            // this.logger.log(`[syncWallets] Found Solana wallet: ${solanaWallet.address}`);
+            const { error } = await client
+                .from("privy_wallets")
+                .upsert(
+                    {
+                        user_id: userId,
+                        chain_type: "solana",
+                        wallet_address: solanaWallet.address,
+                        last_verified_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                    },
+                    { onConflict: "user_id, chain_type" }
+                )
+
+            if (error) this.logger.error(`Failed to sync Solana wallet: ${error.message}`)
+            else updates.push("solana")
+        }
+
+        // 5. Sync Ethereum Wallet
+        if (ethereumWallet) {
+            // this.logger.log(`[syncWallets] Found Ethereum wallet: ${ethereumWallet.address}`);
+            const { error } = await client
+                .from("privy_wallets")
+                .upsert(
+                    {
+                        user_id: userId,
+                        chain_type: "ethereum",
+                        wallet_address: ethereumWallet.address,
+                        last_verified_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                    },
+                    { onConflict: "user_id, chain_type" }
+                )
+
+            if (error) this.logger.error(`Failed to sync Ethereum wallet: ${error.message}`)
+            else updates.push("ethereum")
+        }
+
+        // 6. Update Main User Cache (ALWAYS)
+        let primaryWallet = solanaWallet?.address || ethereumWallet?.address
+
+        if (primaryWallet) {
+            const { error: updateError } = await client
+                .from("users")
+                .update({ wallet_address: primaryWallet })
+                .eq("id", userId)
+
+            if (updateError) {
+                this.logger.error(`Failed to update user wallet cache: ${updateError.message}`)
+            } else {
+                this.logger.log(`User ${userId} wallet synced. Cache updated to ${primaryWallet}`)
+            }
+        } else {
+            this.logger.warn(`User ${userId} has no wallets to sync.`);
+        }
+
+        return { success: true, synced: updates }
     }
 }

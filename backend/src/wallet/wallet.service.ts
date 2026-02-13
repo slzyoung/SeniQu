@@ -325,8 +325,29 @@ export class WalletService {
         provider: string = "embedded",
         ip?: string,
     ): Promise<any> {
+        // Validate Address Format to prevent Injection
+        this.validateWalletAddress(walletAddress, chain);
+
         const client = this.db.getAdminClient()
 
+        // 1. Securely Upsert into privy_wallets (One Wallet Per Chain Policy)
+        // This ensures that even if Privy generates a new wallet, we track the latest authoritative one.
+        const { error: privyError } = await client
+            .from("privy_wallets")
+            .upsert({
+                user_id: userId,
+                chain_type: chain,
+                wallet_address: walletAddress,
+                last_verified_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'user_id, chain_type' })
+
+        if (privyError) {
+            this.logger.error(`Failed to sync privy_wallets: ${privyError.message}`);
+            // We don't throw here to avoid breaking the legacy flow, but we log it as critical
+        }
+
+        // 2. Legacy / Connection Linking (for transaction history and displaying in UI list)
         // Check if already linked
         const { data: existing } = await client
             .from("wallet_connections")

@@ -307,12 +307,13 @@ export class AuthController {
 
     /**
      * Get Privy Sync Token for Wallet Auto-Sync
-     * @deprecated Use /privy-token instead
+     * @deprecated THIS IS FOR SESSION HYDRATION ONLY. DOES NOT SYNC WALLETS TO DB.
+     * Use POST /users/me/sync-wallets for database persistence.
      */
     @Get("sync-privy")
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth("JWT-auth")
-    @ApiOperation({ summary: "Get Privy custom auth token for session sync" })
+    @ApiOperation({ summary: "Get Privy custom auth token for session sync (DEPRECATED for DB usage)" })
     async getPrivySyncToken(@GetUser("id") userId: string) {
         const token = await this.authService.getPrivyToken(userId);
         return { privyToken: token };

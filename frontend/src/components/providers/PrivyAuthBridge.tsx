@@ -79,28 +79,24 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
             // 1. Ensure Embedded Wallet Exists
             let embeddedWalletAddress = user?.wallet?.address;
 
-            // Debug: Check all linked accounts
-            // console.log('[PrivyAuthBridge] Checking wallets:', {
-            //     embedded: embeddedWalletAddress,
-            //     linked: user?.linkedAccounts?.filter(a => a.type === 'wallet')
-            // });
+            // Wait for wallet to be ready if it's potentially being created
+            if (!embeddedWalletAddress && createWallet) {
+                // Check if it exists in linked accounts even if user.wallet is null (sync issue)
+                const linkedWallet = user?.linkedAccounts?.find(a => a.type === 'wallet' && (a as any).walletClientType === 'privy');
 
-            if (!embeddedWalletAddress && user && createWallet) {
-                // console.log('[PrivyAuthBridge] No embedded wallet found. Attempting to create one...');
-                try {
-                    const wallet = await createWallet();
-                    embeddedWalletAddress = wallet.address;
-                    // console.log('[PrivyAuthBridge] Embedded wallet created:', embeddedWalletAddress);
-                } catch (wErr: any) {
-                    console.error('[PrivyAuthBridge] Failed to create embedded wallet:', wErr);
-                    // Do NOT fail the entire login just because wallet creation failed
-                    // The backend can try to provision it later
-
-                    // Fallback: Check if it exists in linked accounts even if user.wallet is null (sync issue)
-                    const linkedWallet = user.linkedAccounts.find(a => a.type === 'wallet' && (a as any).walletClientType === 'privy');
-                    if (linkedWallet) {
-                        embeddedWalletAddress = (linkedWallet as any).address;
-                        // console.log('[PrivyAuthBridge] Found wallet in linked accounts fallback:', embeddedWalletAddress);
+                if (linkedWallet) {
+                    embeddedWalletAddress = (linkedWallet as any).address;
+                    console.log('[PrivyAuthBridge] Found wallet in linked accounts:', embeddedWalletAddress);
+                } else {
+                    // Try to auto-create if missing
+                    console.log('[PrivyAuthBridge] No embedded wallet found. Attempting to create one...');
+                    try {
+                        const wallet = await createWallet();
+                        embeddedWalletAddress = wallet.address;
+                        console.log('[PrivyAuthBridge] Embedded wallet created:', embeddedWalletAddress);
+                    } catch (wErr: any) {
+                        console.error('[PrivyAuthBridge] Failed to create embedded wallet:', wErr);
+                        // Continue anyway - backend can handle it
                     }
                 }
             }
@@ -111,6 +107,15 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
             // Mark this as a Privy-initiated login BEFORE storing
             wasPrivyLoginRef.current = true;
 
+            // CRITICAL: Don't overwrite local user data if response is missing wallet but we have one
+            // If the response user has no wallet, but we found one locally, we should assume the backend is just catching up
+            // and we should keep the local knowledge or force a patch.
+            if (!response.user.walletAddress && embeddedWalletAddress) {
+                console.warn('[PrivyAuthBridge] Backend returned user without wallet, but local wallet exists. Patching local state.');
+                response.user.walletAddress = embeddedWalletAddress;
+                // Ideally we'd trigger a backend update here too, but authenticateWithPrivy should have done it.
+            }
+
             // Store in auth store
             storeLogin(response.user, response.accessToken, response.refreshToken);
 
@@ -120,7 +125,7 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
 
             console.log('[PrivyAuthBridge] Token exchange successful, user:', response.user.id);
 
-            // Redirect to dashboard if currently on landing or auth pages
+            // Redirect if needed
             const isOnPublicPage = ['/', '/gallery', '/auth/callback'].includes(location.pathname) ||
                 location.pathname.startsWith('/auth');
 
@@ -137,7 +142,7 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
         } finally {
             isExchangingRef.current = false;
         }
-    }, [user?.id, ready, getAccessToken, storeLogin, navigate, location.pathname, createWallet]); // Using user.id instead of user object to prevent churn
+    }, [user?.id, ready, getAccessToken, storeLogin, navigate, location.pathname, createWallet, user?.linkedAccounts, user?.wallet?.address]);
 
     /**
      * Effect: When Privy authenticates but backend is not authenticated,
@@ -167,29 +172,10 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
     useEffect(() => {
         if (!ready) return;
 
-        let logoutTimer: NodeJS.Timeout;
-
         if (!authenticated && backendAuthenticated && wasPrivyLoginRef.current) {
-            console.log('[PrivyAuthBridge] Privy logged out — scheduling backend logout (debounce 2s)');
-
-            // Debounce logout to prevent transient states (e.g. page reload or wallet switching)
-            logoutTimer = setTimeout(() => {
-                // Double check state before executing
-                // verifying ready ensures we don't logout during initialization
-                if (!authenticated && backendAuthenticated && wasPrivyLoginRef.current) {
-                    console.log('[PrivyAuthBridge] Confirmed sync backend logout');
-                    wasPrivyLoginRef.current = false;
-                    storeLogout();
-                    // Reset state
-                    lastExchangedPrivyIdRef.current = null;
-                    failedAttemptsRef.current = 0;
-                }
-            }, 2000);
+            console.log('[PrivyAuthBridge] Privy logged out.');
+            // FIX: Auto-logout disabled to prevent session instability.
         }
-
-        return () => {
-            if (logoutTimer) clearTimeout(logoutTimer);
-        };
     }, [ready, authenticated, backendAuthenticated, storeLogout]);
 
     /**
@@ -204,8 +190,12 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
         if (!backendAuthenticated) {
             // If backend logs out (user clicks Sign Out), ensure Privy also logs out
             if (authenticated) {
-                console.log('[PrivyAuthBridge] Backend logged out — syncing Privy logout');
-                logout();
+                console.warn('[PrivyAuthBridge] Backend logged out. SKIPPING Privy logout to prevent loop.');
+
+                // FIX: Disable backend -> Privy logout sync.
+                // If the backend session expires (401), we don't want to kill the wallet connection immediately.
+                // This allows the user to re-authenticate without reconnecting their wallet.
+                // logout(); 
             }
             // Reset tracking
             wasPrivyLoginRef.current = false;

@@ -11,25 +11,27 @@ let solanaConnectors: any;
 const globalAny: any = globalThis;
 
 // Initialize strictly once
+// Initialize strictly once
 if (!globalAny._seniquSolanaConnectors) {
     try {
-        // Double check before initializing to be safe against race conditions
-        if (!globalAny._seniquSolanaConnectors) {
-            console.log('[WalletConnectors] Initializing Solana connectors...');
-            globalAny._seniquSolanaConnectors = toSolanaWalletConnectors({
-                shouldAutoConnect: false,
-            });
-        }
+        console.log('[WalletConnectors] Initializing Solana connectors...');
+        globalAny._seniquSolanaConnectors = toSolanaWalletConnectors({
+            shouldAutoConnect: true, // Auto-connect specifically for Solana
+        });
+        console.log('[WalletConnectors] Solana connectors initialized successfully.');
     } catch (error: any) {
         // Ignore "WalletConnect Core is already initialized" error
+        // This happens during HMR or strict mode double-mount
         if (error?.message?.includes('WalletConnect Core is already initialized') ||
             error?.message?.includes('Init() was called')) {
             console.debug('[WalletConnectors] Core already initialized (HMR/Race Condition) - ignoring.');
         } else {
             console.warn('[WalletConnectors] Failed to initialize Solana connectors:', error);
-            globalAny._seniquSolanaConnectors = [];
+            // Don't set it to empty array on error, leaving it undefined allows retry
         }
     }
+} else {
+    // console.debug('[WalletConnectors] Skipping initialization - already exists.');
 }
 
 solanaConnectors = globalAny._seniquSolanaConnectors;

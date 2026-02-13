@@ -111,4 +111,10 @@ export class UsersController {
     async updateProfile(@GetUser("id") userId: string, @Body() dto: UpdateUserDto) {
         return this.usersService.update(userId, dto)
     }
+
+    @Post("me/sync-wallets")
+    @ApiOperation({ summary: "Sync Privy embedded wallets to database" })
+    async syncWallets(@GetUser("id") userId: string) {
+        return this.usersService.syncWallets(userId)
+    }
 }

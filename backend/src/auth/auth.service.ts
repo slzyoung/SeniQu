@@ -107,38 +107,61 @@ export class AuthService {
         }
 
         // Link the wallet used for login (if any) or the embedded wallet reported by frontend
-        const targetWalletAddress = privyUser.wallet?.address || embeddedWalletAddress;
+        const targetWalletAddress = embeddedWalletAddress || privyUser.wallet?.address;
 
-        if (targetWalletAddress) {
+        // Link ALL wallets (Solana & Ethereum) to Ensure Persistence
+        if (privyUser.linkedAccounts) {
+            const walletAccounts = privyUser.linkedAccounts.filter((a: any) => a.type === 'wallet');
+
+            for (const account of walletAccounts) {
+                const address = (account as any).address;
+                const chainType = (account as any).chainType || (account as any).chain_type;
+                const walletClientType = (account as any).walletClientType;
+                const connectorType = (account as any).connectorType;
+
+                if (address) {
+                    try {
+                        let provider = this.mapPrivyProvider(walletClientType, connectorType);
+                        let chain = chainType === 'ethereum' ? 'ethereum' : 'solana';
+
+                        // Check if this is the primary wallet for the user (matches user.walletAddress)
+                        // If user.walletAddress is null, the first one becomes primary via linkEmbeddedWallet logic
+                        // But we should try to align with what Privy thinks is primary if possible,
+                        // or just let the first one win if it's a new user.
+
+                        await this.walletService.linkEmbeddedWallet(
+                            user.id,
+                            address,
+                            chain,
+                            provider,
+                        );
+                        this.logger.log(`Linked wallet ${address} (${chain}) for user ${user.id}`);
+                    } catch (error) {
+                        // Log but don't fail login if linking fails (might be already linked)
+                        // this.logger.warn(`Failed to link wallet ${address}: ${error.message}`);
+                    }
+                }
+            }
+        } else if (targetWalletAddress) {
+            // Fallback for cases with no linkedAccounts (should be rare/impossible for Privy)
             try {
-                // Determine provider type from Privy data or default to embedded if frontend reported it
-                let provider = "embedded"; // Default assumption for the reported address
-                let chain = "solana"; // Default
-
+                let provider = "embedded";
+                let chain = "solana";
                 if (privyUser.wallet?.address === targetWalletAddress) {
                     provider = this.mapPrivyProvider(
-                        privyUser.wallet.walletClientType,
-                        privyUser.wallet.connectorType
+                        privyUser.wallet?.walletClientType,
+                        privyUser.wallet?.connectorType
                     );
-                    chain = privyUser.wallet.chainType === "ethereum" ? "ethereum" : "solana";
+                    chain = privyUser.wallet?.chainType === "ethereum" ? "ethereum" : "solana";
                 }
-
-                // Update local DB if missing or different
-                if (!user.walletAddress) {
-                    this.logger.log(`Updating missing wallet for user ${user.id} -> ${targetWalletAddress}`);
-                    await this.usersService.updateWallet(user.id, targetWalletAddress);
-                    user.walletAddress = targetWalletAddress; // Update in-memory user object
-                }
-
                 await this.walletService.linkEmbeddedWallet(
                     user.id,
                     targetWalletAddress,
                     chain,
                     provider,
                 )
-            } catch (error) {
-                // Log but don't fail login if linking fails (might be already linked)
-                this.logger.warn(`Failed to auto-link wallet for user ${user.id}: ${error.message}`)
+            } catch (e) {
+                this.logger.warn(`Fallback linking failed: ${e.message}`);
             }
         }
 

@@ -129,6 +129,9 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   const { login: storeLogin } = useAuthStore();
   const manualWallet = useManualWallet();
 
+  // Privy Hooks - MOVED UP
+  const { logout: privyLogout, user: privyUser, authenticated: privyAuthenticated, getAccessToken } = usePrivy();
+
   // Reown AppKit Hooks
   const { open: openAppKit } = useAppKit();
   const { address: reownAddress, isConnected: isReownConnected } = useAppKitAccount();
@@ -147,29 +150,46 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Reset view when modal opens
-  React.useEffect(() => {
+  // Track modal open state for async operations
+  const isOpenRef = React.useRef(isOpen);
+
+  useEffect(() => {
+    isOpenRef.current = isOpen;
     if (isOpen) {
       setView(initialView);
     }
   }, [isOpen, initialView]);
 
+  // COMPLETE RESET of all state
+  const resetState = useCallback(() => {
+    setView('main');
+    setEmail('');
+    setPassword('');
+    setDisplayName('');
+    setUsername('');
+    setErrors({});
+    setShowPassword(false);
+    setIsLoading(false);
 
+    // If we are partly authenticated in Privy but not Backend, Force Logout from Privy
+    // This ensures next time user opens modal, they start fresh
+    if (privyAuthenticated && !useAuthStore.getState().isAuthenticated) {
+      console.log('[AuthModal] Closing with partial auth - forcing Privy logout for fresh start');
+      privyLogout().catch(console.error);
+    }
+  }, [privyAuthenticated, privyLogout]);
 
   // Reset form on close
   const handleClose = useCallback(() => {
-    // Delay reset slightly to allow close animation to finish
-    setTimeout(() => {
-      setView('main'); // Reset to main for next time by default
-      setEmail('');
-      setPassword('');
-      setDisplayName('');
-      setUsername('');
-      setErrors({});
-      setShowPassword(false);
-    }, 300);
+    // Immediate close for UX
     onClose();
-  }, [onClose]);
+
+    // Reset state after animation
+    setTimeout(() => {
+      resetState();
+      manualWallet.reset();
+    }, 300);
+  }, [onClose, resetState, manualWallet]);
 
   // Reset form when switching views
   const switchView = useCallback((newView: AuthView) => {
@@ -203,11 +223,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
    * 3. User signs the nonce message
    * 4. Verify signature → authenticate → get JWT
    *
-   * Anti-Throttling: Rate limited via useManualWallet hook
    * Anti-Hacking: Nonce expiry, signature verification, sanitized errors
    */
-  // Privy Hooks
-  const { logout: privyLogout, user: privyUser, authenticated: privyAuthenticated, getAccessToken } = usePrivy();
 
   // NOTE: Syncing is now handled automatically by PrivySyncManager monitoring auth store.
   // We no longer manually call loginWithCustomToken here.
@@ -290,6 +307,12 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     // Trigger manual wallet connection + auth directly
     const result = await manualWallet.connectAndLogin(walletType);
 
+    // CRITICAL: Check if modal is still open before processing result
+    if (!isOpenRef.current) {
+      console.log('[AuthModal] Modal closed during wallet connection - ignoring result');
+      return;
+    }
+
     if (result) {
       // AUTOMATIC: Sync Privy Session handled by PrivySyncManager
 
@@ -311,12 +334,12 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
           // Fully complete — success & close
           setTimeout(() => {
             handleClose();
-            manualWallet.reset();
+            // manualWallet.reset(); // Already called in handleClose
           }, 800);
         }
       }
     }
-  }, [isLoading, manualWallet, handleClose, openAppKit, toast]);
+  }, [isLoading, manualWallet, handleClose, openAppKit, toast, navigate, storeLogin]);
 
   // Effect: Handle Privy authentication success (for WalletConnect)
   useEffect(() => {

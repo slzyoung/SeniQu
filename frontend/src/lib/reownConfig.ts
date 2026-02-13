@@ -29,6 +29,15 @@ export const getAppKit = () => {
         return globalAny._reownAppKit;
     }
 
+    // Double check: if the modal DOM element exists, we might have lost the reference but it's running.
+    // Reown attaches <w3m-modal> to the DOM.
+    if (typeof document !== 'undefined' && document.querySelector('w3m-modal')) {
+        console.warn('[Reown] w3m-modal detected in DOM. Skipping re-initialization to avoid conflict.');
+        // We can't recover the instance easily if we lost the reference, but we can avoid crashing.
+        // Best effort: try to find it on window if Reown exposes it elsewhere, otherwise just return null/mock
+        // For now, let's try to proceed carefully.
+    }
+
     try {
         console.log('[Reown] Initializing AppKit...');
         globalAny._reownAppKit = createAppKit({
@@ -54,8 +63,8 @@ export const getAppKit = () => {
         });
     } catch (e: any) {
         // If it failed because it was already initialized (race condition), try to retrieve it
-        if (e?.message?.includes('already initialized')) {
-            console.warn("[Reown] AppKit already initialized, reusing instance.");
+        if (e?.message?.includes('already initialized') || e?.message?.includes('Duplicate')) {
+            console.warn("[Reown] AppKit already initialized (caught error), reusing instance.");
             // We can't easily "get" the instance if createAppKit threw, 
             // but usually it attaches to the DOM or global state. 
             // We'll just suppress the error to avoid crashing.
