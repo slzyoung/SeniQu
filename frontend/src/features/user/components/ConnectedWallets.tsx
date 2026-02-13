@@ -69,7 +69,8 @@ export function ConnectedWallets() {
             const isVerifiedInBackend = backendUser?.wallets?.some(
                 (bw: any) => bw.address === w.walletAddress
             );
-            return { ...w, isVerified: isVerifiedInBackend };
+            const isEmbedded = w.walletClientType === 'privy' || w.connectorType === 'embedded';
+            return { ...w, isVerified: isVerifiedInBackend, isEmbedded };
         });
 
         // Also include wallets from auth store (wallet_logins) not already in connections
@@ -80,14 +81,15 @@ export function ConnectedWallets() {
                 id: `login-wallet-${idx}`,
                 walletAddress: bw.address,
                 chain: bw.chainType || 'solana',
-                provider: 'external',
-                isEmbedded: false,
+                provider: bw.isEmbedded ? 'embedded' : 'external',
+                isEmbedded: !!bw.isEmbedded,
                 isPrimary: false,
                 isVerified: true,
                 label: null,
             }));
 
-        return [...connectionWallets, ...extraWallets];
+        // Filter out embedded wallets to show only external login wallets
+        return [...connectionWallets, ...extraWallets].filter(w => !w.isEmbedded);
     })();
 
     const [transferModalOpen, setTransferModalOpen] = useState(false);

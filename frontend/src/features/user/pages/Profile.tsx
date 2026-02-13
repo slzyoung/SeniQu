@@ -322,36 +322,38 @@ export function Profile() {
                                 </div>
                             </div>
 
-                            {/* Wallet Addresses */}
-                            {displayUser?.wallets && displayUser.wallets.length > 0 && (
-                                <div className="py-3 border-t border-theme-border">
-                                    <p className="text-sm font-medium text-theme-text mb-2">Wallet Addresses</p>
-                                    <div className="space-y-2">
-                                        {displayUser.wallets.map((w, idx) => (
-                                            <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-theme-bg">
-                                                <div className="flex items-center gap-2">
-                                                    <Badge
-                                                        variant={w.chainType === 'solana' ? 'primary' : 'default'}
-                                                        className="text-[10px] px-1.5 py-0 h-4 uppercase"
-                                                    >
-                                                        {w.chainType}
-                                                    </Badge>
-                                                    <p className="text-xs text-theme-muted font-mono">
-                                                        {w.address.slice(0, 6)}...{w.address.slice(-4)}
-                                                    </p>
-                                                </div>
-                                                <button
-                                                    onClick={() => navigator.clipboard.writeText(w.address)}
-                                                    className="text-xs text-gold hover:text-gold-light transition-colors"
-                                                    title="Copy address"
+                            {/* Connected Login Wallet (External Only) */}
+                            {displayUser?.wallets && (() => {
+                                const loginWallet = displayUser.wallets.find(w => !w.isEmbedded);
+                                if (!loginWallet) return null;
+
+                                return (
+                                    <div className="py-3 border-t border-theme-border">
+                                        <p className="text-sm font-medium text-theme-text mb-2">Connected Wallet</p>
+                                        <div className="flex items-center justify-between p-2 rounded-lg bg-theme-bg">
+                                            <div className="flex items-center gap-2">
+                                                <Badge
+                                                    variant={loginWallet.chainType === 'solana' ? 'primary' : 'default'}
+                                                    className="text-[10px] px-1.5 py-0 h-4 uppercase"
                                                 >
-                                                    Copy
-                                                </button>
+                                                    {loginWallet.chainType}
+                                                </Badge>
+                                                <p className="text-xs text-theme-muted font-mono">
+                                                    {loginWallet.address.slice(0, 6)}...{loginWallet.address.slice(-4)}
+                                                </p>
+                                                <Badge variant="gold" className="text-[9px] px-1 py-0 h-3">Login</Badge>
                                             </div>
-                                        ))}
+                                            <button
+                                                onClick={() => navigator.clipboard.writeText(loginWallet.address)}
+                                                className="text-xs text-gold hover:text-gold-light transition-colors"
+                                                title="Copy address"
+                                            >
+                                                Copy
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            )}
+                                );
+                            })()}
                         </CardContent>
                     </Card>
                 </div >

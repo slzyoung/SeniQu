@@ -111,7 +111,7 @@ export function WalletPage() {
     // 3. Derived Helpers
     // Active Wallet is now derived primarily from Backend Data for security
     // We try to find a matching wallet in backendUser.wallets
-    const activeBackendWallet = backendUser?.wallets?.find((w: any) => w.chainType === activeChain);
+    const activeBackendWallet = backendUser?.wallets?.find((w: any) => w.chainType === activeChain && w.isEmbedded);
 
     // We still keep the "embedded" one for signing/provider capability usage (client-side)
     // But for "existence" checks, we verify against backend.
@@ -686,17 +686,27 @@ export function WalletPage() {
                                     let isVerified = false;
 
                                     if (backendUser && backendUser.wallets && Array.isArray(backendUser.wallets)) {
-                                        const exactMatch = backendUser.wallets.find((w: any) => w.chainType === activeChain);
+                                        // Prioritize EMBEDDED wallet for this chain
+                                        const exactMatch = backendUser.wallets.find((w: any) => w.chainType === activeChain && w.isEmbedded);
                                         if (exactMatch) {
                                             displayAddress = exactMatch.address;
                                             isVerified = true;
                                         }
                                     }
 
-                                    // Fallback: If backend is not synced yet but we have a client wallet, hide it or show "Syncing..."
-                                    // We do NOT show the raw client address to avoid "flickering" or spoofing.
-                                    // However, for UX, if we are sure it's the same user, we might show it with a warning.
-                                    // For "Anti-Hacking" mode => Strict Backend Only.
+                                    // Fallback: If backend is not synced yet but we have a client wallet, show it with "Syncing..." status
+                                    if (!displayAddress) {
+                                        if (activeChain === 'solana' && embeddedSolanaWallet?.address) {
+                                            displayAddress = embeddedSolanaWallet.address;
+                                            isVerified = false;
+                                        } else if (activeChain === 'ethereum' && embeddedEthereumWallet?.address) {
+                                            displayAddress = embeddedEthereumWallet.address;
+                                            isVerified = false;
+                                        } else if (embeddedWallet?.address && (embeddedWallet.chainType === activeChain || !embeddedWallet.chainType)) {
+                                            displayAddress = embeddedWallet.address;
+                                            isVerified = false;
+                                        }
+                                    }
 
                                     return displayAddress ? (
                                         <div className="flex flex-col gap-1">
@@ -716,10 +726,15 @@ export function WalletPage() {
                                                     <Copy className="w-3 h-3" />
                                                 </button>
                                             </div>
-                                            {isVerified && (
+                                            {isVerified ? (
                                                 <div className="flex items-center gap-1 text-[10px] text-green-400 font-medium">
                                                     <Shield className="w-3 h-3" />
                                                     <span>Verified by Seniqu</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-1 text-[10px] text-yellow-500 font-medium">
+                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                    <span>Syncing Profile...</span>
                                                 </div>
                                             )}
                                         </div>

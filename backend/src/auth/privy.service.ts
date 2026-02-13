@@ -372,9 +372,11 @@ export class PrivyService implements OnModuleInit {
                 const user = await this.privyClient.getUser(userId);
                 const parsed = this.parsePrivyUser(user);
 
-                // Check if the specific chain wallet is present
+                // Check if the specific EMBEDDED chain wallet is present
                 const hasWallet = parsed.linkedAccounts.some(
-                    (acc: any) => acc.type === 'wallet' && (acc.chainType === chainType || acc.chain_type === chainType)
+                    (acc: any) => acc.type === 'wallet' &&
+                        (acc.chainType === chainType || acc.chain_type === chainType) &&
+                        (acc.walletClientType === 'privy' || acc.connectorType === 'embedded')
                 );
 
                 if (hasWallet) {

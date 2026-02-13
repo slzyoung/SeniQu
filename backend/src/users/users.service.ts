@@ -16,7 +16,7 @@ export interface User {
     privyId?: string
     googleId?: string
     // REMOVED LEGACY COLUMNS: walletAddress, embeddedWalletAddress
-    wallets?: { chainType: string; address: string; verifiedAt: Date }[]
+    wallets?: { chainType: string; address: string; verifiedAt: Date; isEmbedded: boolean }[]
     createdAt: Date
     updatedAt: Date
 }
@@ -88,7 +88,8 @@ export class UsersService {
                 user.wallets.push({
                     chainType: w.chain_type,
                     address: w.wallet_address,
-                    verifiedAt: new Date(w.updated_at || w.created_at || Date.now())
+                    verifiedAt: new Date(w.updated_at || w.created_at || Date.now()),
+                    isEmbedded: true
                 });
             }
         }
@@ -106,7 +107,8 @@ export class UsersService {
                     user.wallets.push({
                         chainType: lw.chain_type,
                         address: lw.wallet_address,
-                        verifiedAt: new Date(lw.last_login_at || Date.now())
+                        verifiedAt: new Date(lw.last_login_at || Date.now()),
+                        isEmbedded: false
                     });
                 }
             }

@@ -22,6 +22,7 @@ export interface User {
         chainType: 'solana' | 'ethereum' | 'polygon';
         address: string;
         verifiedAt: string;
+        isEmbedded?: boolean;
     }[];
 }
 
