@@ -224,6 +224,76 @@ export class WalletService {
     // ============================================
 
     /**
+     * Save an external wallet login to wallet_logins table.
+     * Called during authenticateWithWallet() for Phantom, MetaMask, Solflare, WalletConnect.
+     * Also creates a wallet_connections record for UI display.
+     * 
+     * IMPORTANT: This does NOT write to privy_wallets — that table is reserved
+     * for Privy-managed embedded wallets only.
+     */
+    async saveWalletLogin(
+        userId: string,
+        walletAddress: string,
+        chain: string,
+        providerName: string,
+    ): Promise<void> {
+        // Validate address format
+        this.validateWalletAddress(walletAddress, chain)
+
+        const client = this.db.getAdminClient()
+
+        // 1. Upsert into wallet_logins (source of truth for external wallet auth)
+        const { error: loginError } = await client
+            .from("wallet_logins")
+            .upsert({
+                user_id: userId,
+                wallet_address: walletAddress,
+                chain_type: chain,
+                provider_name: providerName,
+                last_login_at: new Date().toISOString(),
+            }, { onConflict: 'user_id, wallet_address, chain_type' })
+
+        if (loginError) {
+            this.logger.error(`Failed to upsert wallet_logins: ${loginError.message}`)
+            // Don't throw — we still want to proceed with auth even if logging fails
+        } else {
+            this.logger.log(
+                `Wallet login saved: ${walletAddress.slice(0, 8)}... (${chain}/${providerName}) for user ${userId.slice(0, 8)}...`
+            )
+        }
+
+        // 2. Also create wallet_connections record for UI display (if not exists)
+        const { data: existing } = await client
+            .from("wallet_connections")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("wallet_address", walletAddress)
+            .eq("chain", chain)
+            .single()
+
+        if (!existing) {
+            const isPrimary = !(await this.hasExistingWallet(userId))
+
+            const { error: connError } = await client
+                .from("wallet_connections")
+                .insert({
+                    user_id: userId,
+                    wallet_address: walletAddress,
+                    chain,
+                    provider: providerName,
+                    is_embedded: false,
+                    is_primary: isPrimary,
+                    status: "active",
+                    verified_at: new Date().toISOString(),
+                })
+
+            if (connError) {
+                this.logger.warn(`Failed to create wallet_connection: ${connError.message}`)
+            }
+        }
+    }
+
+    /**
      * Link a verified wallet to a user account
      */
     async linkWallet(
@@ -723,6 +793,23 @@ export class WalletService {
             .eq("status", "active")
 
         return (count || 0) > 0
+    }
+
+    /**
+     * Get the first external wallet login for a user
+     * Used by AuthService to provide wallet context when creating Privy users
+     * for wallet-login users who have no email
+     */
+    async getFirstWalletLogin(userId: string): Promise<{ wallet_address: string; chain_type: string } | null> {
+        const client = this.db.getAdminClient()
+        const { data } = await client
+            .from('wallet_logins')
+            .select('wallet_address, chain_type')
+            .eq('user_id', userId)
+            .limit(1)
+            .single()
+
+        return data || null
     }
 
     // ============================================

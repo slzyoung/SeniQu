@@ -60,7 +60,6 @@ export class UsersService {
     async findById(id: string): Promise<User | null> {
         // Use admin client to bypass RLS for internal user lookups
         const client = this.db.getAdminClient()
-        // this.logger.debug(`Finding user by ID (Admin Client): ${id}`);
 
         const { data, error } = await client
             .from("users")
@@ -74,20 +73,43 @@ export class UsersService {
         }
 
         const user = this.mapToUser(data);
+        user.wallets = [];
+        const seenAddresses = new Set<string>();
 
-        // Fetch Canonical Privy Wallets (Secure Source of Truth)
+        // 1. Fetch embedded wallets from privy_wallets
         const { data: privyWallets } = await client
             .from("privy_wallets")
             .select("wallet_address, chain_type, created_at, updated_at")
             .eq("user_id", id);
 
         if (privyWallets && privyWallets.length > 0) {
-            // Map canonical wallets to user object
-            user.wallets = privyWallets.map(w => ({
-                chainType: w.chain_type,
-                address: w.wallet_address,
-                verifiedAt: new Date(w.updated_at || w.created_at || Date.now())
-            }));
+            for (const w of privyWallets) {
+                seenAddresses.add(w.wallet_address);
+                user.wallets.push({
+                    chainType: w.chain_type,
+                    address: w.wallet_address,
+                    verifiedAt: new Date(w.updated_at || w.created_at || Date.now())
+                });
+            }
+        }
+
+        // 2. Fetch external login wallets from wallet_logins (deduplicate)
+        const { data: loginWallets } = await client
+            .from("wallet_logins")
+            .select("wallet_address, chain_type, last_login_at")
+            .eq("user_id", id);
+
+        if (loginWallets && loginWallets.length > 0) {
+            for (const lw of loginWallets) {
+                if (!seenAddresses.has(lw.wallet_address)) {
+                    seenAddresses.add(lw.wallet_address);
+                    user.wallets.push({
+                        chainType: lw.chain_type,
+                        address: lw.wallet_address,
+                        verifiedAt: new Date(lw.last_login_at || Date.now())
+                    });
+                }
+            }
         }
 
         return user;
@@ -130,19 +152,30 @@ export class UsersService {
     async findByWallet(walletAddress: string): Promise<User | null> {
         const client = this.db.getAdminClient()
 
-        // 1. Find user_id from privy_wallets
-        const { data: wallet, error: walletError } = await client
+        // 1. Check wallet_logins first (external wallets — Phantom, MetaMask, etc.)
+        const { data: loginWallet } = await client
+            .from("wallet_logins")
+            .select("user_id")
+            .eq("wallet_address", walletAddress)
+            .limit(1)
+            .single()
+
+        if (loginWallet) {
+            return this.findById(loginWallet.user_id)
+        }
+
+        // 2. Fallback: Check privy_wallets (embedded wallets)
+        const { data: privyWallet } = await client
             .from("privy_wallets")
             .select("user_id")
             .eq("wallet_address", walletAddress)
             .single()
 
-        if (walletError || !wallet) {
-            return null
+        if (privyWallet) {
+            return this.findById(privyWallet.user_id)
         }
 
-        // 2. Fetch User
-        return this.findById(wallet.user_id)
+        return null
     }
 
     async update(id: string, dto: UpdateUserDto): Promise<User> {
@@ -458,10 +491,36 @@ export class UsersService {
             return { success: false, reason: "Privy user not found" }
         }
 
-        // 3. Extract Wallets (Solana & Ethereum)
-        const wallets = privyUser.linkedAccounts.filter(
+        // 3. Extract ONLY embedded wallets (Solana & Ethereum)
+        // Defense-in-depth: Exclude external wallet addresses that may have
+        // been accidentally imported into Privy. Cross-reference wallet_logins
+        // to detect external wallets.
+        const { data: externalLogins } = await client
+            .from("wallet_logins")
+            .select("wallet_address")
+            .eq("user_id", userId);
+
+        const externalAddresses = new Set(
+            (externalLogins || []).map((wl: any) => wl.wallet_address.toLowerCase())
+        );
+
+        const allWallets = privyUser.linkedAccounts.filter(
             (acc: any) => acc.type === "wallet"
-        )
+        );
+
+        // Filter: only keep wallets that are NOT in wallet_logins (i.e., embedded wallets)
+        // Also accept wallets explicitly marked as embedded (walletClientType = 'privy')
+        const wallets = allWallets.filter((w: any) => {
+            const addr = (w.address || '').toLowerCase();
+            const isEmbedded = w.walletClientType === 'privy' || w.connectorType === 'embedded';
+            const isExternal = externalAddresses.has(addr);
+
+            if (isExternal && !isEmbedded) {
+                this.logger.warn(`[syncWallets] Skipping external wallet ${addr.slice(0, 10)}... (found in wallet_logins)`);
+                return false;
+            }
+            return true;
+        });
 
         let solanaWallet = wallets.find((w: any) => (w.chainType === "solana" || w.chain_type === "solana"))
         let ethereumWallet = wallets.find((w: any) => (w.chainType === "ethereum" || w.chain_type === "ethereum"))
@@ -500,7 +559,11 @@ export class UsersService {
         if (userUpdated) {
             const newWallets = privyUser.linkedAccounts.filter(
                 (acc: any) => acc.type === "wallet"
-            )
+            ).filter((w: any) => {
+                const addr = (w.address || '').toLowerCase();
+                const isEmbedded = w.walletClientType === 'privy' || w.connectorType === 'embedded';
+                return !externalAddresses.has(addr) || isEmbedded;
+            });
             solanaWallet = newWallets.find((w: any) => (w.chainType === "solana" || w.chain_type === "solana"))
             ethereumWallet = newWallets.find((w: any) => (w.chainType === "ethereum" || w.chain_type === "ethereum"))
         }

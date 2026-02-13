@@ -101,8 +101,11 @@ class UserService {
             username: user.username || '',
             displayName: user.displayName || user.display_name || '',
             role: role as any,
-            walletAddress: user.walletAddress || user.wallet_address,
-            embeddedWalletAddress: user.embeddedWalletAddress || user.embedded_wallet_address,
+            wallets: (user.wallets || []).map((w: any) => ({
+                chainType: w.chainType || w.chain_type,
+                address: w.address || w.wallet_address,
+                verifiedAt: w.verifiedAt || w.verified_at || new Date().toISOString(),
+            })),
         };
     }
 

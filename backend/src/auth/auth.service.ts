@@ -106,10 +106,9 @@ export class AuthService {
             this.logger.debug(`User ${user.id} authenticated via Privy`)
         }
 
-        // Link the wallet used for login (if any) or the embedded wallet reported by frontend
-        const targetWalletAddress = embeddedWalletAddress || privyUser.wallet?.address;
-
-        // Link ALL wallets (Solana & Ethereum) to Ensure Persistence
+        // Separate embedded wallets from external wallets in linked accounts
+        // IMPORTANT: External wallets (MetaMask, Phantom, etc.) go to wallet_logins ONLY
+        //            Embedded wallets (Privy-managed) go to privy_wallets via linkEmbeddedWallet
         if (privyUser.linkedAccounts) {
             const walletAccounts = privyUser.linkedAccounts.filter((a: any) => a.type === 'wallet');
 
@@ -119,49 +118,30 @@ export class AuthService {
                 const walletClientType = (account as any).walletClientType;
                 const connectorType = (account as any).connectorType;
 
-                if (address) {
-                    try {
-                        let provider = this.mapPrivyProvider(walletClientType, connectorType);
-                        let chain = chainType === 'ethereum' ? 'ethereum' : 'solana';
+                if (!address) continue;
 
-                        // Check if this is the primary wallet for the user (matches user.walletAddress)
-                        // If user.walletAddress is null, the first one becomes primary via linkEmbeddedWallet logic
-                        // But we should try to align with what Privy thinks is primary if possible,
-                        // or just let the first one win if it's a new user.
+                const provider = this.mapPrivyProvider(walletClientType, connectorType);
+                const chain = chainType === 'ethereum' ? 'ethereum' : 'solana';
+                const isEmbedded = provider === 'embedded' || walletClientType === 'privy';
 
+                try {
+                    if (isEmbedded) {
+                        // Privy-managed embedded wallet → privy_wallets table
                         await this.walletService.linkEmbeddedWallet(
-                            user.id,
-                            address,
-                            chain,
-                            provider,
+                            user.id, address, chain, provider,
                         );
-                        this.logger.log(`Linked wallet ${address} (${chain}) for user ${user.id}`);
-                    } catch (error) {
-                        // Log but don't fail login if linking fails (might be already linked)
-                        // this.logger.warn(`Failed to link wallet ${address}: ${error.message}`);
+                        this.logger.log(`Linked embedded wallet ${address} (${chain}) for user ${user.id}`);
+                    } else {
+                        // External wallet (MetaMask, Phantom, etc.) → wallet_logins table ONLY
+                        await this.walletService.saveWalletLogin(
+                            user.id, address, chain, provider,
+                        );
+                        this.logger.log(`Saved external wallet login ${address} (${chain}) for user ${user.id}`);
                     }
+                } catch (error) {
+                    // Don't fail login if linking fails (might be already linked)
+                    this.logger.warn(`Failed to link wallet ${address}: ${(error as any).message}`);
                 }
-            }
-        } else if (targetWalletAddress) {
-            // Fallback for cases with no linkedAccounts (should be rare/impossible for Privy)
-            try {
-                let provider = "embedded";
-                let chain = "solana";
-                if (privyUser.wallet?.address === targetWalletAddress) {
-                    provider = this.mapPrivyProvider(
-                        privyUser.wallet?.walletClientType,
-                        privyUser.wallet?.connectorType
-                    );
-                    chain = privyUser.wallet?.chainType === "ethereum" ? "ethereum" : "solana";
-                }
-                await this.walletService.linkEmbeddedWallet(
-                    user.id,
-                    targetWalletAddress,
-                    chain,
-                    provider,
-                )
-            } catch (e) {
-                this.logger.warn(`Fallback linking failed: ${e.message}`);
             }
         }
 
@@ -236,31 +216,30 @@ export class AuthService {
             })
             isNewUser = true
             this.logger.log(`Created new user ${user.id} for wallet ${walletAddress}`)
-
-            // Auto-create Privy Embedded Wallet (Deposit Wallet)
-            // This ensures all users have a non-custodial wallet for deposits
-            await this.privyService.createWithEmbeddedWallet({
-                walletAddress,
-                chainType: chain === 'ethereum' ? 'ethereum' : 'solana'
-            })
         }
 
-        // Step 3: Auto-link external wallet
+        // Step 3: Save external wallet login to wallet_logins table
         try {
-            await this.walletService.linkEmbeddedWallet(
+            await this.walletService.saveWalletLogin(
                 user.id,
                 walletAddress,
                 chain,
-                "other", // External wallet provider (resolved from frontend)
+                "external", // Provider resolved from frontend
             )
         } catch (error) {
             // Ignore "already linked" errors — this is expected for returning users
             if (!error.message?.includes("already")) {
-                this.logger.warn(`Failed to auto-link wallet for user ${user.id}: ${error.message}`)
+                this.logger.warn(`Failed to save wallet login for user ${user.id}: ${error.message}`)
             }
         }
 
-        // Step 4: Generate JWT tokens
+        // Step 4: Provision Privy embedded wallets (Solana + Ethereum)
+        // Same as email/Google login: every user gets embedded deposit wallets.
+        // The external wallet address stays in wallet_logins only — ensureEmbeddedWallet
+        // creates SEPARATE Privy-managed wallets for deposits/withdrawals.
+        await this.ensureEmbeddedWallet(user)
+
+        // Step 5: Generate JWT tokens
         const tokens = await this.generateTokens(user)
         const privyToken = await this.privyService.getCustomAuthToken(user.id)
 
@@ -515,37 +494,31 @@ export class AuthService {
      * Verify Solana wallet signature — delegates to WalletService
      */
     /**
-     * Helper to ensure user has an embedded wallet
-     * If not, create one via Privy and link it
-     */
-    /**
-     * Helper to ensure user has an embedded wallet
-     * If not, create one via Privy and link it
+     * Helper to ensure user has embedded wallets (both Solana + Ethereum)
+     * If not, create a Privy user and provision wallets.
+     * Works for users WITH or WITHOUT email (wallet-login users).
      */
     private async ensureEmbeddedWallet(user: any): Promise<void> {
-        // If user already has a privyId, we assume they are synced or will be synced.
-        if (user.privyId) {
-            // We still want to ensure wallets are synced purely, so we proceed to check privyUser
-            // But if we want to skip optimization:
-            // return; 
-            // Let's allow it to proceed to syncWallets logic below.
-        }
-
         this.logger.log(`Provisioning/Syncing embedded wallet for user ${user.id}`);
 
         try {
             let privyUser;
 
-            // Scenario A: User has privyId but no wallet in DB -> Sync from Privy
+            // Scenario A: User already has privyId → fetch from Privy to sync
             if (user.privyId) {
                 privyUser = await this.privyService.getUserById(user.privyId);
             }
 
-            // Scenario B: User has no privyId -> Create/Import into Privy
+            // Scenario B: User has no privyId → Create/Import into Privy
             if (!privyUser) {
+                // IMPORTANT: Do NOT pass external wallet address to importUser().
+                // That would import the login wallet as a Privy-managed wallet,
+                // causing it to appear in privy_wallets instead of a fresh embedded one.
+                // Just use createEmbeddedWallet: true to create fresh Privy wallets.
+                // syncWallets() will then provision any missing chains (Solana + Ethereum).
                 privyUser = await this.privyService.createWithEmbeddedWallet({
-                    email: user.email,
-                    chainType: "solana", // Explicitly request Solana for the initial wallet
+                    email: user.email || undefined,
+                    // No walletAddress — external wallets stay in wallet_logins only
                 });
             }
 
@@ -556,24 +529,35 @@ export class AuthService {
                         await this.usersService.updatePrivyId(user.id, privyUser.id);
                         user.privyId = privyUser.id;
                     } catch (e) {
-                        this.logger.warn(`Failed to update privyId: ${e.message}`);
+                        this.logger.warn(`Failed to update privyId: ${(e as any).message}`);
                     }
                 }
 
-                // 2. Sync Wallet Address if missing
-                // Note: We no longer update users.wallet_address.
-                // We ensure the wallet is synced to privy_wallets via syncWallets (implied or called explicitly).
-
-                // For safety, force a sync of wallets to privy_wallets table
+                // 2. Force sync of wallets to privy_wallets table
+                // syncWallets() auto-provisions missing chains (Solana + Ethereum)
                 await this.usersService.syncWallets(user.id);
 
                 this.logger.log(`Synced Privy user ${privyUser.id} for local user ${user.id}`);
+            } else {
+                this.logger.error(`Failed to create/find Privy user for ${user.id}. Embedded wallets not provisioned.`);
             }
         } catch (error: any) {
             this.logger.error(
                 `Failed to ensure embedded wallet for user ${user.id}: ${error.message}`,
             );
             // We don't throw here to avoid blocking login
+        }
+    }
+
+    /**
+     * Helper: Fetch the first external wallet login for a user
+     * Used to provide context when creating a Privy user for wallet-login users
+     */
+    private async getFirstWalletLogin(userId: string): Promise<{ wallet_address: string; chain_type: string } | null> {
+        try {
+            return await this.walletService.getFirstWalletLogin(userId);
+        } catch {
+            return null;
         }
     }
 

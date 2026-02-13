@@ -261,12 +261,15 @@ class AuthService {
             username: user.username || '',
             displayName: user.displayName || user.display_name || '',
             role: role as any,
-            walletAddress: user.walletAddress || user.wallet_address,
             createdAt: user.createdAt || new Date().toISOString(),
             updatedAt: user.updatedAt || user.createdAt || new Date().toISOString(),
             isVerified: user.isVerified || false,
             isPremium: user.isPremium || false,
-            embeddedWalletAddress: user.embeddedWalletAddress || user.embedded_wallet_address,
+            wallets: (user.wallets || []).map((w: any) => ({
+                chainType: w.chainType || w.chain_type,
+                address: w.address || w.wallet_address,
+                verifiedAt: w.verifiedAt || w.verified_at || new Date().toISOString(),
+            })),
         };
     }
 
@@ -623,7 +626,6 @@ class AuthService {
             // Reset rate limit on success
             resetRateLimit(`auth:oauth:${walletAddress}`);
 
-            return authResponse;
             return authResponse;
         } catch (error) {
             throw sanitizeError(error);

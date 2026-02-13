@@ -246,6 +246,22 @@ const STORAGE_KEYS = {
     CONNECTING_TIME: 'seniqu_connecting_time',
 };
 
+// Connection timeout (desktop: 15s, mobile: 30s)
+const CONNECTION_TIMEOUT_MS = isMobile() ? 30000 : 15000;
+
+// Debounce cooldown between connect attempts
+const CONNECT_DEBOUNCE_MS = 2000;
+
+/** Race a promise against a timeout */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    return Promise.race([
+        promise,
+        new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s. Please try again.`)), ms)
+        ),
+    ]);
+}
+
 // ============================================================
 // HOOK
 // ============================================================
@@ -254,6 +270,7 @@ export function useManualWallet() {
     const [state, setState] = useState<WalletConnectionState>('idle');
     const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
     const [activeWalletType, setActiveWalletType] = useState<ManualWalletType | null>(null);
+    const [availableAccounts, setAvailableAccounts] = useState<string[]>([]);
     const [error, setError] = useState<string | null>(null);
 
     const storeLogin = useAuthStore((s) => s.login);
@@ -264,6 +281,15 @@ export function useManualWallet() {
     // Guards against concurrent operations
     const isProcessingRef = useRef(false);
     const abortControllerRef = useRef<AbortController | null>(null);
+
+    // Store signer function after connect — avoids re-connecting during loginWithWallet
+    const signerRef = useRef<{
+        signMessage: (msg: Uint8Array, specificAddress?: string) => Promise<Uint8Array>;
+        walletType: ManualWalletType;
+    } | null>(null);
+
+    // Debounce guard — prevent rapid-fire connect attempts
+    const lastAttemptRef = useRef<number>(0);
 
     // Auto-Resume Connection on Mount (Mobile Redirect Handling)
     useState(() => {
@@ -289,8 +315,10 @@ export function useManualWallet() {
         setState('idle');
         setConnectedAddress(null);
         setActiveWalletType(null);
+        setAvailableAccounts([]);
         setError(null);
         isProcessingRef.current = false;
+        signerRef.current = null;
 
         // Clear session storage
         sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_WALLET);
@@ -307,7 +335,7 @@ export function useManualWallet() {
      */
     const connectSolanaWallet = useCallback(async (
         walletType: 'phantom' | 'solflare'
-    ): Promise<{ address: string; signMessage: (msg: Uint8Array) => Promise<Uint8Array> }> => {
+    ): Promise<{ address: string; accounts: string[]; signMessage: (msg: Uint8Array) => Promise<Uint8Array> }> => {
         const provider = getWalletProvider(walletType);
 
         if (!provider) {
@@ -321,20 +349,37 @@ export function useManualWallet() {
             const result = await provider.connect();
 
             // Handle different response structures
+            // Standard Solana Wallet Adapter returns { publicKey }
+            // Some newer standards might return { accounts: PublicKey[] }
             const publicKey = provider.publicKey || (result as any)?.publicKey;
 
-            if (!publicKey) {
+            // Check for multiple accounts support (if wallet exposes it)
+            // Note: Most current adapters only expose the active account, but we prepare for it.
+            const accounts: string[] = [];
+
+            if ((result as any)?.accounts && Array.isArray((result as any).accounts)) {
+                (result as any).accounts.forEach((acc: any) => {
+                    // Handle if account is PublicKey object or string
+                    if (typeof acc === 'string') accounts.push(acc);
+                    else if (acc.toString) accounts.push(acc.toString());
+                });
+            } else if (publicKey) {
+                accounts.push(publicKey.toString());
+            }
+
+            if (accounts.length === 0) {
                 // If deep linking on mobile, it might not return immediately?
                 // But for in-app browser, it should.
                 throw new Error(`Failed to get public key from ${walletType}`);
             }
 
-            const address = publicKey.toString();
+            const address = accounts[0];
             console.log(`[ManualWallet] Connected address: ${address}`);
 
             // Return address and a sign function
             return {
                 address,
+                accounts,
                 signMessage: async (message: Uint8Array): Promise<Uint8Array> => {
                     try {
                         console.log(`[ManualWallet] Asking ${walletType} to sign message (${message.length} bytes)`);
@@ -390,7 +435,8 @@ export function useManualWallet() {
      */
     const connectMetaMask = useCallback(async (): Promise<{
         address: string;
-        signMessage: (msg: Uint8Array) => Promise<Uint8Array>;
+        accounts: string[];
+        signMessage: (msg: Uint8Array, specificAddress?: string) => Promise<Uint8Array>;
     }> => {
         // Try EIP-6963 discovery first, then fallback to standard injection
         let ethereum = await getMetaMaskProviderViaEIP6963();
@@ -418,15 +464,18 @@ export function useManualWallet() {
 
             return {
                 address,
-                signMessage: async (message: Uint8Array): Promise<Uint8Array> => {
+                accounts,
+                signMessage: async (message: Uint8Array, specificAddress?: string): Promise<Uint8Array> => {
                     const msgHex = '0x' + Array.from(message)
                         .map((b: number) => b.toString(16).padStart(2, '0'))
                         .join('');
 
+                    const fromAddress = specificAddress || address;
+
                     try {
                         const signature = await ethereum.request({
                             method: 'personal_sign',
-                            params: [msgHex, address],
+                            params: [msgHex, fromAddress],
                         });
 
                         // Convert hex signature to Uint8Array
@@ -448,206 +497,7 @@ export function useManualWallet() {
         }
     }, []);
 
-    /**
-     * Full wallet login flow:
-     * connect → request nonce → sign → verify → authenticate
-     */
-    const connectAndLogin = useCallback(async (walletType: ManualWalletType) => {
-        // Anti-throttling: prevent concurrent operations
-        if (isProcessingRef.current) return;
-
-        // Rate limit check
-        const rl = checkRateLimit(WALLET_RATE_LIMITS.connect.key, WALLET_RATE_LIMITS.connect.max, WALLET_RATE_LIMITS.connect.window);
-        if (!rl.allowed) {
-            const seconds = Math.ceil((rl.retryAfter || 60000) / 1000);
-            setError(`Too many attempts. Please wait ${seconds} seconds.`);
-            toast.error('Rate Limited', `Please wait ${seconds} seconds before trying again.`);
-            return;
-        }
-
-        isProcessingRef.current = true;
-        setError(null);
-        setActiveWalletType(walletType);
-
-        // Persist attempt for mobile redirect fallback
-        sessionStorage.setItem(STORAGE_KEYS.CONNECTING_WALLET, walletType);
-        sessionStorage.setItem(STORAGE_KEYS.CONNECTING_TIME, Date.now().toString());
-
-        const isMobileDevice = isMobile();
-        const inAppBrowser = isWalletInAppBrowser();
-
-        // --- MOBILE DEEP LINKING ---
-        // If on mobile and NOT inside a wallet browser, redirect to the wallet app
-        // EXCEPTION: WalletConnect uses its own modal/link
-        if (isMobileDevice && !inAppBrowser && walletType !== 'walletconnect') {
-            const deepLink = getMobileDeepLink(walletType);
-            if (deepLink) {
-                setState('connecting');
-                // Small delay to allow UI to update before redirect
-                setTimeout(() => {
-                    window.location.href = deepLink;
-                }, 500);
-                isProcessingRef.current = false;
-                return;
-            }
-        }
-
-        try {
-            // === STEP 1: Connect to wallet ===
-            setState('connecting');
-
-            let address: string;
-            let signMessage: (msg: Uint8Array) => Promise<Uint8Array>;
-
-            if (walletType === 'walletconnect') {
-                // WalletConnect is handled via AuthModal directly calling Privy or Reown
-                // We return a special error or status so UI knows to trigger that flow?
-                // Or better: we throw a specific error that isn't really an error.
-                // For now, let's keep the existing error but make it clearer
-                isProcessingRef.current = false;
-                setState('idle');
-                return null; // Return null to indicate "handled elsewhere" or "no-op"
-            } else if (walletType === 'metamask') {
-                // MetaMask Check is now inside connectMetaMask via EIP-6963
-                // We don't pre-check strictly here because EIP-6963 is async
-
-                try {
-                    const result = await connectMetaMask();
-                    address = result.address;
-                    signMessage = result.signMessage;
-                } catch (err: any) {
-                    // If specifically "MetaMask not found"
-                    if (err.message.includes('MetaMask not found')) {
-                        if (!isMobileDevice) {
-                            const installUrl = getWalletInstallUrl('metamask');
-                            setError('MetaMask not installed.');
-                            toast.error('MetaMask Not Found', 'Please install MetaMask extension.');
-                            window.open(installUrl, '_blank');
-                            setState('error');
-                            isProcessingRef.current = false;
-                            return;
-                        }
-                    }
-                    throw err;
-                }
-            } else {
-                // Phantom / Solflare
-                if (!isWalletInstalled(walletType) && !isMobileDevice) {
-                    const walletName = walletType === 'phantom' ? 'Phantom' : 'Solflare';
-                    const installUrl = getWalletInstallUrl(walletType);
-                    setError(`${walletName} not installed.`);
-                    toast.error(`${walletName} Not Found`, `Please install ${walletName} wallet.`);
-                    window.open(installUrl, '_blank');
-                    setState('error');
-                    isProcessingRef.current = false;
-                    return;
-                }
-                const result = await connectSolanaWallet(walletType);
-                address = result.address;
-                signMessage = result.signMessage;
-            }
-
-            setState('connected');
-            setConnectedAddress(address);
-
-            // === STEP 2: Request nonce from backend ===
-            setState('requesting-nonce');
-
-            const chain = walletType === 'metamask' ? 'ethereum' : 'solana';
-            const nonceResponse = await walletService.requestNonce(address, chain);
-
-            // === STEP 3: Sign the nonce message ===
-            setState('awaiting-signature');
-
-            // Helpful toast for user
-            toast.info('Sign Message', 'Please check your wallet to sign the verification message.');
-
-            // Rate limit signing
-            const signRl = checkRateLimit(WALLET_RATE_LIMITS.sign.key, WALLET_RATE_LIMITS.sign.max, WALLET_RATE_LIMITS.sign.window);
-            if (!signRl.allowed) {
-                throw new Error('Too many signing attempts. Please wait.');
-            }
-
-            const messageBytes = new TextEncoder().encode(nonceResponse.message);
-            const signatureBytes = await signMessage(messageBytes);
-
-            // Encode signature based on chain/wallet type
-            let signatureEncoded: string;
-
-            if (walletType === 'metamask') {
-                // Ethereum expects 0x-prefixed hex string
-                signatureEncoded = '0x' + Array.from(signatureBytes)
-                    .map(b => b.toString(16).padStart(2, '0'))
-                    .join('');
-            } else {
-                // Solana expects Base64 (or Base58, but backend handles Base64)
-                signatureEncoded = uint8ArrayToBase64(signatureBytes);
-            }
-
-            // === STEP 4: Verify and authenticate ===
-            setState('verifying');
-
-            const authResponse = await authService.authenticateWithWallet(
-                address,
-                signatureEncoded,
-                nonceResponse.nonce,
-                chain,
-            );
-
-            // === STEP 5: Handle Authentication ===
-            setState('authenticated');
-
-            // Clear session storage on success
-            sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_WALLET);
-            sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_TIME);
-
-            // If new user, return without storing login state (must complete profile first)
-            if (authResponse.isNewUser) {
-                return authResponse;
-            }
-
-            // Existing user - store state and redirect
-            storeLogin(authResponse.user, authResponse.accessToken, authResponse.refreshToken);
-            walletStore.setConnected(address, chain, walletType);
-
-            toast.success('Welcome!', `Connected with ${walletType === 'phantom' ? 'Phantom' : walletType === 'solflare' ? 'Solflare' : walletType === 'metamask' ? 'MetaMask' : 'WalletConnect'}`);
-
-            const redirectPath = getDashboardRoute(authResponse.user.role);
-            navigate(redirectPath);
-
-            return authResponse;
-
-        } catch (err: any) {
-            console.error('[useManualWallet] Error:', err);
-
-            // Detect user rejection
-            const isUserRejection =
-                err?.message?.toLowerCase().includes('rejected') ||
-                err?.message?.toLowerCase().includes('user rejected') ||
-                err?.message?.toLowerCase().includes('user denied') ||
-                err?.message?.toLowerCase().includes('cancelled') ||
-                err?.message?.toLowerCase().includes('user closed') ||
-                err?.code === 4001 ||
-                err?.code === 'ACTION_REJECTED';
-
-            if (isUserRejection) {
-                toast.info('Cancelled', 'You cancelled the wallet connection.');
-                setError(null);
-            } else {
-                const sanitizedMessage = err?.message || 'Connection failed. Please try again.';
-                // Don't leak internal error details
-                const userMessage = sanitizedMessage.length > 100
-                    ? 'Connection failed. Please try again.'
-                    : sanitizedMessage;
-                setError(userMessage);
-                toast.error('Connection Failed', userMessage);
-            }
-
-            setState('error');
-        } finally {
-            isProcessingRef.current = false;
-        }
-    }, [connectSolanaWallet, connectMetaMask, storeLogin, walletStore, toast, navigate]);
+    // connectAndLogin removed — dead code, replaced by connectWallet + loginWithWallet two-step flow
 
     /**
      * Login using an existing provider (e.g. from Reown AppKit)
@@ -777,17 +627,266 @@ export function useManualWallet() {
 
     }, [storeLogin, walletStore, toast, navigate]);
 
+    /**
+     * Step 1: Connect Wallet Only (Returns accounts for selection)
+     */
+    /**
+     * Step 1: Connect Wallet Only (Returns accounts for selection)
+     * Stores signer in signerRef to avoid re-connecting in loginWithWallet.
+     * Includes debounce guard and connection timeout.
+     */
+    const connectWallet = useCallback(async (walletType: ManualWalletType) => {
+        if (isProcessingRef.current) return null;
+
+        // Debounce: reject if < 2s since last attempt
+        const now = Date.now();
+        if (now - lastAttemptRef.current < CONNECT_DEBOUNCE_MS) {
+            console.log('[ManualWallet] Debounced — too soon since last attempt');
+            return null;
+        }
+        lastAttemptRef.current = now;
+
+        // Rate limit check
+        const rl = checkRateLimit(WALLET_RATE_LIMITS.connect.key, WALLET_RATE_LIMITS.connect.max, WALLET_RATE_LIMITS.connect.window);
+        if (!rl.allowed) {
+            const seconds = Math.ceil((rl.retryAfter || 60000) / 1000);
+            setError(`Too many attempts. Please wait ${seconds} seconds.`);
+            toast.error('Rate Limited', `Please wait ${seconds} seconds before trying again.`);
+            return null;
+        }
+
+        isProcessingRef.current = true;
+        setError(null);
+        setActiveWalletType(walletType);
+        setAvailableAccounts([]);
+        signerRef.current = null;
+        setState('connecting');
+
+        const isMobileDevice = isMobile();
+        const inAppBrowser = isWalletInAppBrowser();
+
+        // --- MOBILE DEEP LINKING ---
+        if (isMobileDevice && !inAppBrowser && walletType !== 'walletconnect') {
+            const deepLink = getMobileDeepLink(walletType);
+            if (deepLink) {
+                sessionStorage.setItem(STORAGE_KEYS.CONNECTING_WALLET, walletType);
+                sessionStorage.setItem(STORAGE_KEYS.CONNECTING_TIME, Date.now().toString());
+                setTimeout(() => { window.location.href = deepLink; }, 500);
+                isProcessingRef.current = false;
+                return null;
+            }
+        }
+
+        try {
+            if (walletType === 'walletconnect') {
+                // WalletConnect handled externally via Reown/Privy hooks in AuthModal
+                isProcessingRef.current = false;
+                setState('idle');
+                return []; // Signal "handled elsewhere"
+            } else if (walletType === 'metamask') {
+                try {
+                    const result = await withTimeout(
+                        connectMetaMask(),
+                        CONNECTION_TIMEOUT_MS,
+                        'MetaMask connection'
+                    );
+                    const accounts = result.accounts || [result.address];
+                    setAvailableAccounts(accounts);
+                    signerRef.current = { signMessage: result.signMessage, walletType };
+                    setState('connected');
+                    return accounts;
+                } catch (err: any) {
+                    if (err.message.includes('MetaMask not found')) {
+                        const installUrl = getWalletInstallUrl('metamask');
+                        setError('MetaMask not installed.');
+                        toast.error('MetaMask Not Found', 'Please install MetaMask extension.');
+                        if (!isMobileDevice) window.open(installUrl, '_blank');
+                        setState('error');
+                        return null;
+                    }
+                    throw err;
+                }
+            } else {
+                // Phantom / Solflare
+                if (!isWalletInstalled(walletType) && !isMobileDevice) {
+                    const walletName = walletType === 'phantom' ? 'Phantom' : 'Solflare';
+                    const installUrl = getWalletInstallUrl(walletType);
+                    setError(`${walletName} not installed.`);
+                    toast.error(`${walletName} Not Found`, `Please install ${walletName} wallet.`);
+                    window.open(installUrl, '_blank');
+                    setState('error');
+                    return null;
+                }
+                const result = await withTimeout(
+                    connectSolanaWallet(walletType),
+                    CONNECTION_TIMEOUT_MS,
+                    `${walletType} connection`
+                );
+                setAvailableAccounts(result.accounts || [result.address]);
+                signerRef.current = { signMessage: result.signMessage, walletType };
+                setState('connected');
+                return result.accounts || [result.address];
+            }
+        } catch (err: any) {
+            console.error(`[ManualWallet] ${walletType} connect error:`, err);
+
+            // Detect user rejection vs real error
+            const isUserRejection =
+                err?.message?.toLowerCase().includes('rejected') ||
+                err?.message?.toLowerCase().includes('user denied') ||
+                err?.message?.toLowerCase().includes('cancelled') ||
+                err?.message?.toLowerCase().includes('user closed') ||
+                err?.code === 4001;
+
+            if (isUserRejection) {
+                toast.info('Cancelled', 'You cancelled the wallet connection.');
+                setError(null);
+            } else {
+                const userMessage = (err?.message?.length > 120)
+                    ? 'Connection failed. Please try again.'
+                    : err?.message || 'Connection failed. Please try again.';
+                setError(userMessage);
+                toast.error('Connection Failed', userMessage);
+            }
+            setState('error');
+            return null;
+        } finally {
+            isProcessingRef.current = false;
+        }
+    }, [connectSolanaWallet, connectMetaMask, toast]);
+
+    /**
+     * Step 2: Login with specific account (after selection)
+     */
+    /**
+     * Step 2: Login with specific account (after selection)
+     * Uses stored signerRef to avoid re-connecting and triggering a second popup.
+     */
+    const loginWithWallet = useCallback(async (address: string, walletType: ManualWalletType) => {
+        if (isProcessingRef.current) return;
+        isProcessingRef.current = true;
+        setError(null);
+
+        const chain = walletType === 'metamask' ? 'ethereum' : 'solana';
+
+        try {
+            // Use stored signer from connectWallet (no second popup)
+            let signMessage: (msg: Uint8Array, specificAddress?: string) => Promise<Uint8Array>;
+
+            if (signerRef.current && signerRef.current.walletType === walletType) {
+                signMessage = signerRef.current.signMessage;
+            } else {
+                // Fallback: re-acquire signer (rare — only if signerRef was cleared)
+                console.warn('[ManualWallet] signerRef missing, re-connecting as fallback');
+                if (walletType === 'metamask') {
+                    const res = await connectMetaMask();
+                    signMessage = res.signMessage;
+                } else {
+                    const res = await connectSolanaWallet(walletType as any);
+                    signMessage = res.signMessage;
+                }
+            }
+
+            // Rate limit signing
+            const signRl = checkRateLimit(WALLET_RATE_LIMITS.sign.key, WALLET_RATE_LIMITS.sign.max, WALLET_RATE_LIMITS.sign.window);
+            if (!signRl.allowed) {
+                throw new Error('Too many signing attempts. Please wait.');
+            }
+
+            // 1. Request Nonce
+            setState('requesting-nonce');
+            const nonceResponse = await walletService.requestNonce(address, chain);
+
+            // 2. Sign
+            setState('awaiting-signature');
+            toast.info('Sign Message', 'Please check your wallet to sign the verification message.');
+
+            const messageBytes = new TextEncoder().encode(nonceResponse.message);
+            const signatureBytes = await signMessage(messageBytes, address);
+
+            let signatureEncoded: string;
+            if (walletType === 'metamask') {
+                signatureEncoded = '0x' + Array.from(signatureBytes)
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join('');
+            } else {
+                signatureEncoded = uint8ArrayToBase64(signatureBytes);
+            }
+
+            // 3. Authenticate
+            setState('verifying');
+            const authResponse = await authService.authenticateWithWallet(
+                address,
+                signatureEncoded,
+                nonceResponse.nonce,
+                chain
+            );
+
+            setState('authenticated');
+
+            // Clear session storage on success
+            sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_WALLET);
+            sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_TIME);
+
+            if (authResponse.isNewUser) {
+                return authResponse;
+            }
+
+            storeLogin(authResponse.user, authResponse.accessToken, authResponse.refreshToken);
+            walletStore.setConnected(address, chain, walletType);
+
+            const walletLabel = walletType === 'phantom' ? 'Phantom'
+                : walletType === 'solflare' ? 'Solflare'
+                    : walletType === 'metamask' ? 'MetaMask'
+                        : 'WalletConnect';
+            toast.success('Welcome!', `Connected with ${walletLabel}`);
+            const redirectPath = getDashboardRoute(authResponse.user.role);
+            navigate(redirectPath);
+
+            return authResponse;
+
+        } catch (err: any) {
+            console.error('[ManualWallet] Login error:', err);
+            const isUserRejection =
+                err?.message?.toLowerCase().includes('rejected') ||
+                err?.message?.toLowerCase().includes('user rejected') ||
+                err?.message?.toLowerCase().includes('user denied') ||
+                err?.message?.toLowerCase().includes('cancelled') ||
+                err?.message?.toLowerCase().includes('user closed') ||
+                err?.code === 4001 ||
+                err?.code === 'ACTION_REJECTED';
+
+            if (isUserRejection) {
+                toast.info('Cancelled', 'Signature request rejected');
+                setError(null);
+                setState('connected'); // Go back to connected state (selection)
+            } else {
+                const msg = (err?.message?.length > 120)
+                    ? 'Authentication failed. Please try again.'
+                    : err?.message || 'Authentication failed';
+                setError(msg);
+                toast.error('Login Failed', msg);
+                setState('error');
+            }
+        } finally {
+            isProcessingRef.current = false;
+        }
+    }, [connectSolanaWallet, connectMetaMask, storeLogin, walletStore, toast, navigate]);
+
     return {
         // State
         state,
         connectedAddress,
+        availableAccounts,
         activeWalletType,
         error,
 
-        // Actions
-        connectAndLogin,
         reset,
-        loginWithProvider, // Export new function
+        loginWithProvider,
+        connectWallet,
+        loginWithWallet,
+        setAvailableAccounts,
+        setActiveWalletType,
 
         isProcessing: isProcessingRef.current,
         isWalletInstalled,

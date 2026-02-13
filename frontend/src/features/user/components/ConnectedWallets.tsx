@@ -64,12 +64,31 @@ export function ConnectedWallets() {
     // OR display all but add a verification badge.
 
     // For now, let's map the backend verification status to the privy wallets.
-    const mergedWallets = wallets?.map((w: any) => {
-        const isVerifiedInBackend = backendUser?.wallets?.some(
-            (bw: any) => bw.address === w.walletAddress
-        );
-        return { ...w, isVerified: isVerifiedInBackend };
-    }) || [];
+    const mergedWallets = (() => {
+        const connectionWallets = (wallets || []).map((w: any) => {
+            const isVerifiedInBackend = backendUser?.wallets?.some(
+                (bw: any) => bw.address === w.walletAddress
+            );
+            return { ...w, isVerified: isVerifiedInBackend };
+        });
+
+        // Also include wallets from auth store (wallet_logins) not already in connections
+        const seenAddresses = new Set(connectionWallets.map((w: any) => w.walletAddress?.toLowerCase()));
+        const extraWallets = (backendUser?.wallets || [])
+            .filter((bw: any) => bw.address && !seenAddresses.has(bw.address.toLowerCase()))
+            .map((bw: any, idx: number) => ({
+                id: `login-wallet-${idx}`,
+                walletAddress: bw.address,
+                chain: bw.chainType || 'solana',
+                provider: 'external',
+                isEmbedded: false,
+                isPrimary: false,
+                isVerified: true,
+                label: null,
+            }));
+
+        return [...connectionWallets, ...extraWallets];
+    })();
 
     const [transferModalOpen, setTransferModalOpen] = useState(false);
     const [selectedSourceWallet, setSelectedSourceWallet] = useState<any>(null);

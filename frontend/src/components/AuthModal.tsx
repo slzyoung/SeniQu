@@ -28,7 +28,7 @@ interface AuthModalProps {
   initialView?: AuthView;
 }
 
-type AuthView = 'main' | 'email-login' | 'email-register' | 'wallet-select';
+type AuthView = 'main' | 'email-login' | 'email-register' | 'wallet-select' | 'wallet-select-account';
 
 type WalletType = 'metamask' | 'phantom' | 'solflare' | 'walletconnect';
 
@@ -129,6 +129,12 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   const { login: storeLogin } = useAuthStore();
   const manualWallet = useManualWallet();
 
+  // Guard against re-processing same Reown address (prevents mobile loops)
+  const hasProcessedReownRef = React.useRef<string | null>(null);
+
+  // Auto-timeout for stuck wallet connections
+  const connectionTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Privy Hooks - MOVED UP
   const { logout: privyLogout, user: privyUser, authenticated: privyAuthenticated, getAccessToken } = usePrivy();
 
@@ -184,18 +190,52 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     // Immediate close for UX
     onClose();
 
+    // Clear auto-timeout
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
+
     // Reset state after animation
     setTimeout(() => {
       resetState();
       manualWallet.reset();
+      hasProcessedReownRef.current = null;
     }, 300);
   }, [onClose, resetState, manualWallet]);
 
+  // Reset form when switching views
   // Reset form when switching views
   const switchView = useCallback((newView: AuthView) => {
     setErrors({});
     setView(newView);
   }, []);
+
+  // Helper: Handle successful login result
+  const onLoginSuccess = useCallback((result: any) => {
+    if (result.isNewUser) {
+      // New user — switch to profile completion page
+      storeLogin(result.user, result.accessToken, result.refreshToken);
+      handleClose();
+      navigate('/complete-profile');
+    } else {
+      // Existing user — check if profile is complete
+      const needsCompletion = needsProfileCompletion(result.user);
+
+      if (needsCompletion) {
+        // Incomplete profile -> redirect
+        storeLogin(result.user, result.accessToken, result.refreshToken);
+        handleClose();
+        navigate('/complete-profile');
+      } else {
+        // Fully complete — success & close
+        setTimeout(() => {
+          handleClose();
+          // manualWallet.reset(); // Already called in handleClose
+        }, 800);
+      }
+    }
+  }, [storeLogin, handleClose, navigate]);
 
   // Handle Google login
   const handleGoogleLogin = useCallback(async () => {
@@ -239,61 +279,68 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   }, [privyAuthenticated, privyLogout]);
 
   // Effect: Handle Reown (WalletConnect) Connection -> Manual Login Flow
+  // GUARD: hasProcessedReownRef prevents re-processing same address (mobile loop fix)
   useEffect(() => {
     const handleReownLogin = async () => {
-      if (isReownConnected && reownAddress && reownProvider) {
-        // If we're already processing, skip
-        if (manualWallet.state === 'authenticated' || manualWallet.state === 'verifying' || manualWallet.state === 'requesting-nonce') return;
+      if (!isReownConnected || !reownAddress || !reownProvider) return;
 
-        // If user is already logged in to our app with this address, skip
-        const authState = useAuthStore.getState();
-        if (authState.isAuthenticated && authState.user?.wallets?.some((w: any) => w.address === reownAddress)) {
-          return;
+      // Skip if already processed this exact address
+      if (hasProcessedReownRef.current === reownAddress) return;
+
+      // Skip if already processing or authenticated
+      if (manualWallet.state === 'authenticated' || manualWallet.state === 'verifying' || manualWallet.state === 'requesting-nonce') return;
+
+      // Skip if user is already logged in with this address
+      const authState = useAuthStore.getState();
+      if (authState.isAuthenticated && authState.user?.wallets?.some((w: any) => w.address === reownAddress)) {
+        return;
+      }
+
+      // Mark as processed BEFORE async work to prevent re-entry
+      hasProcessedReownRef.current = reownAddress;
+      console.log('[AuthModal] Detected Reown connection', reownAddress);
+
+      // Check for multiple accounts
+      let allAccounts: string[] = [reownAddress];
+      try {
+        if ((reownProvider as any)?.accounts && Array.isArray((reownProvider as any).accounts)) {
+          const extras = (reownProvider as any).accounts.map((acc: any) => acc.toString());
+          allAccounts = Array.from(new Set([...allAccounts, ...extras]));
         }
+      } catch (e) {
+        console.warn('[AuthModal] Failed to extract extra accounts from Reown provider', e);
+      }
 
-        console.log('[AuthModal] Detected Reown connection', reownAddress);
+      // Show account selection for multiple accounts
+      if (allAccounts.length > 1) {
+        manualWallet.setActiveWalletType('walletconnect');
+        manualWallet.setAvailableAccounts(allAccounts);
+        setView('wallet-select-account');
+        return;
+      }
 
-        // Trigger manual login flow using the provider from Reown
-        const result = await manualWallet.loginWithProvider(reownAddress, reownProvider, 'solana');
+      // Single account — proceed to login
+      const result = await manualWallet.loginWithProvider(reownAddress, reownProvider, 'solana');
 
-        if (result) {
-          // AUTOMATIC: Sync Privy Session handled by PrivySyncManager
-
-          if (result.isNewUser) {
-            // Log in the user (even if incomplete) so CompleteProfilePage can see them
-            storeLogin(result.user, result.accessToken, result.refreshToken);
-            handleClose();
-            navigate('/complete-profile');
-          } else {
-            const needsCompletion = needsProfileCompletion(result.user);
-            if (needsCompletion) {
-              storeLogin(result.user, result.accessToken, result.refreshToken);
-              handleClose();
-              navigate('/complete-profile');
-            } else {
-              setTimeout(() => {
-                handleClose();
-                manualWallet.reset();
-              }, 800);
-            }
-          }
-        }
+      if (result) {
+        onLoginSuccess(result);
       }
     };
 
     if (isOpen) {
       handleReownLogin();
     }
-  }, [isOpen, isReownConnected, reownAddress, reownProvider, manualWallet, handleClose]);
+  }, [isOpen, isReownConnected, reownAddress, reownProvider, manualWallet, handleClose, onLoginSuccess]);
 
-  // Handle wallet connect — manual direct connection or Reown (WalletConnect)
+  // Handle wallet connect — always show account selection first
   const handleWalletConnect = useCallback(async (walletType: ManualWalletType) => {
-    // WalletConnect via Reown AppKit
+    // WalletConnect via Reown AppKit — opens its own modal
     if (walletType === 'walletconnect') {
       try {
+        hasProcessedReownRef.current = null; // Reset so new connection can be processed
         await openAppKit();
       } catch (err) {
-        console.error('Reown open error:', err);
+        console.error('[AuthModal] Reown open error:', err);
         toast.error('Connection Failed', 'Could not open WalletConnect modal');
       }
       return;
@@ -304,42 +351,48 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
     setErrors({});
 
-    // Trigger manual wallet connection + auth directly
-    const result = await manualWallet.connectAndLogin(walletType);
+    // Immediately switch to account selection view (shows loading while connecting)
+    manualWallet.setActiveWalletType(walletType);
+    setView('wallet-select-account');
 
-    // CRITICAL: Check if modal is still open before processing result
+    // Set auto-timeout: if connection hangs, reset after 30s
+    if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+    connectionTimeoutRef.current = setTimeout(() => {
+      if (manualWallet.state === 'connecting') {
+        manualWallet.reset();
+        setErrors({ general: 'Connection timed out. Please try again.' });
+        toast.error('Timeout', 'Wallet connection timed out.');
+        setView('main');
+      }
+    }, 30000);
+
+    // Connect in background — will update availableAccounts and state
+    const accounts = await manualWallet.connectWallet(walletType);
+
+    // Clear timeout on completion
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
+
+    // CRITICAL: Check if modal is still open
     if (!isOpenRef.current) {
       console.log('[AuthModal] Modal closed during wallet connection - ignoring result');
       return;
     }
 
-    if (result) {
-      // AUTOMATIC: Sync Privy Session handled by PrivySyncManager
-
-      if (result.isNewUser) {
-        // New user — switch to profile completion page
-        storeLogin(result.user, result.accessToken, result.refreshToken);
-        handleClose();
-        navigate('/complete-profile');
-      } else {
-        // Existing user — check if profile is complete
-        const needsCompletion = needsProfileCompletion(result.user);
-
-        if (needsCompletion) {
-          // Incomplete profile -> redirect
-          storeLogin(result.user, result.accessToken, result.refreshToken);
-          handleClose();
-          navigate('/complete-profile');
-        } else {
-          // Fully complete — success & close
-          setTimeout(() => {
-            handleClose();
-            // manualWallet.reset(); // Already called in handleClose
-          }, 800);
-        }
+    if (!accounts || accounts.length === 0) {
+      // Error already handled by hook + toast, go back to main
+      if (manualWallet.state === 'error') {
+        setView('main');
       }
+      return;
     }
-  }, [isLoading, manualWallet, handleClose, openAppKit, toast, navigate, storeLogin]);
+
+    // Accounts are now visible in the wallet-select-account view.
+    // If only 1 account, we STILL show it so user confirms which address to use.
+    // This is a security best practice: user always explicitly picks their address.
+  }, [isLoading, manualWallet, openAppKit, toast, onLoginSuccess]);
 
   // Effect: Handle Privy authentication success (for WalletConnect)
   useEffect(() => {
@@ -1063,6 +1116,173 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     );
   };
 
+  // Render account selection view — with loading + chain badges + security notice
+  const renderWalletAccountSelectView = () => {
+    const isConnecting = manualWallet.state === 'connecting';
+    const isProcessing = manualWallet.state === 'requesting-nonce' || manualWallet.state === 'awaiting-signature' || manualWallet.state === 'verifying';
+    const hasAccounts = manualWallet.availableAccounts.length > 0;
+    const activeWallet = WALLET_OPTIONS.find(w => w.id === manualWallet.activeWalletType);
+    const chainLabel = manualWallet.activeWalletType === 'metamask' ? 'Ethereum' : 'Solana';
+    const chainColor = manualWallet.activeWalletType === 'metamask' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+
+    return (
+      <>
+        {/* Header */}
+        <div className="px-8 pt-10 pb-4">
+          <button
+            onClick={() => {
+              manualWallet.reset();
+              if (connectionTimeoutRef.current) {
+                clearTimeout(connectionTimeoutRef.current);
+                connectionTimeoutRef.current = null;
+              }
+              switchView('main');
+            }}
+            className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-4"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="text-sm">Back</span>
+          </button>
+
+          <div className="flex items-center gap-3 mb-3">
+            {activeWallet && (
+              <div className="w-10 h-10 rounded-xl bg-theme-surface flex items-center justify-center border border-theme-border/50">
+                <img src={activeWallet.logo} alt={activeWallet.name} className="w-6 h-6" loading="eager" />
+              </div>
+            )}
+            <div>
+              <h2 className="text-2xl font-serif font-bold text-theme-text">
+                {isConnecting ? 'Connecting...' : 'Select'} <span className="text-gold italic">{isConnecting ? '' : 'Account'}</span>
+              </h2>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${chainColor}`}>
+                  {chainLabel}
+                </span>
+                <span className="text-xs text-theme-muted">{activeWallet?.name || 'Wallet'}</span>
+              </div>
+            </div>
+          </div>
+
+          {!isConnecting && hasAccounts && (
+            <p className="text-theme-muted text-sm">
+              {manualWallet.availableAccounts.length === 1
+                ? 'Confirm the account below to sign in.'
+                : 'Multiple accounts detected. Choose one to continue.'}
+            </p>
+          )}
+        </div>
+
+        <div className="px-8 pb-8 space-y-3">
+          {/* Connection / Auth Status */}
+          <AnimatePresence mode="wait">
+            {(manualWallet.state !== 'idle' && manualWallet.state !== 'connected' && manualWallet.state !== 'error') && (
+              <WalletConnectionStatus
+                state={manualWallet.state}
+                walletName={activeWallet?.name || 'Wallet'}
+              />
+            )}
+          </AnimatePresence>
+
+          {/* Error state with retry */}
+          {manualWallet.state === 'error' && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{manualWallet.error || 'Connection failed'}</span>
+              </div>
+              <button
+                onClick={() => {
+                  manualWallet.reset();
+                  if (manualWallet.activeWalletType) {
+                    handleWalletConnect(manualWallet.activeWalletType);
+                  } else {
+                    switchView('main');
+                  }
+                }}
+                className="w-full py-2.5 text-sm font-medium text-gold border border-gold/30 rounded-xl hover:bg-gold/5 transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
+
+          {/* Loading spinner while connecting */}
+          {isConnecting && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-col items-center justify-center py-8 gap-4"
+            >
+              <div className="w-16 h-16 rounded-2xl bg-gold/5 border border-gold/20 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-gold animate-spin" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-theme-text font-medium">Connecting to {activeWallet?.name}...</p>
+                <p className="text-xs text-theme-muted mt-1">Please approve the connection in your wallet</p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Account list */}
+          {hasAccounts && !isConnecting && manualWallet.state !== 'error' && (
+            <div className="max-h-[300px] overflow-y-auto custom-scrollbar space-y-2">
+              {manualWallet.availableAccounts.map((account, index) => (
+                <button
+                  key={account}
+                  onClick={async () => {
+                    if (manualWallet.activeWalletType) {
+                      const result = await manualWallet.loginWithWallet(account, manualWallet.activeWalletType);
+                      if (result && isOpenRef.current) {
+                        onLoginSuccess(result);
+                      }
+                    }
+                  }}
+                  disabled={isProcessing}
+                  className="w-full flex items-center gap-4 p-4 border rounded-xl transition-all duration-200 bg-theme-elevated/30 border-theme-border hover:border-gold/40 hover:bg-gold/5 text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-theme-surface flex items-center justify-center flex-shrink-0 border border-theme-border/50">
+                    {activeWallet ? (
+                      <img src={activeWallet.logo} alt="" className="w-6 h-6" />
+                    ) : (
+                      <span className="text-gold font-bold">{index + 1}</span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-theme-text font-mono text-sm">
+                      {account.slice(0, 6)}...{account.slice(-4)}
+                    </p>
+                    <p className="text-xs text-theme-muted mt-0.5 flex items-center gap-1.5">
+                      <span className={`inline-block w-1.5 h-1.5 rounded-full ${manualWallet.activeWalletType === 'metamask' ? 'bg-blue-400' : 'bg-purple-400'
+                        }`} />
+                      {chainLabel} • Account {index + 1}
+                    </p>
+                  </div>
+                  {isProcessing ? (
+                    <Loader2 className="w-4 h-4 text-gold animate-spin flex-shrink-0" />
+                  ) : (
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <CheckCircle className="w-5 h-5 text-gold" />
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Security notice */}
+          {hasAccounts && !isConnecting && manualWallet.state !== 'error' && (
+            <div className="flex items-center gap-2 pt-2">
+              <ShieldCheck className="w-3.5 h-3.5 text-green-500/70" />
+              <p className="text-[11px] text-theme-muted">
+                You'll sign a verification message only. <span className="text-green-400/80 font-medium">No funds will be moved.</span>
+              </p>
+            </div>
+          )}
+        </div>
+      </>
+    );
+  };
+
 
 
   return (
@@ -1110,7 +1330,9 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                   {view === 'main' && renderMainView()}
                   {view === 'email-login' && renderEmailLoginView()}
                   {view === 'email-register' && renderEmailRegisterView()}
+
                   {view === 'wallet-select' && renderWalletSelectView()}
+                  {view === 'wallet-select-account' && renderWalletAccountSelectView()}
                 </motion.div>
               </AnimatePresence>
 
