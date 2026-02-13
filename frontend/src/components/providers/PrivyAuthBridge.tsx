@@ -108,11 +108,17 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
             wasPrivyLoginRef.current = true;
 
             // CRITICAL: Don't overwrite local user data if response is missing wallet but we have one
-            // If the response user has no wallet, but we found one locally, we should assume the backend is just catching up
+            // If the response user has no wallets, but we found one locally, we should assume the backend is just catching up
             // and we should keep the local knowledge or force a patch.
-            if (!response.user.walletAddress && embeddedWalletAddress) {
-                console.warn('[PrivyAuthBridge] Backend returned user without wallet, but local wallet exists. Patching local state.');
-                response.user.walletAddress = embeddedWalletAddress;
+            if ((!response.user.wallets || response.user.wallets.length === 0) && embeddedWalletAddress) {
+                console.warn('[PrivyAuthBridge] Backend returned user without wallets, but local wallet exists. Patching local state.');
+                // We construct a temporary wallet object for the UI
+                if (!response.user.wallets) response.user.wallets = [];
+                response.user.wallets.push({
+                    chainType: 'solana', // Assumption, but safe for UI display fallback
+                    address: embeddedWalletAddress,
+                    verifiedAt: new Date().toISOString()
+                });
                 // Ideally we'd trigger a backend update here too, but authenticateWithPrivy should have done it.
             }
 

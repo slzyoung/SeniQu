@@ -90,3 +90,29 @@ COMMENT ON TABLE privy_wallets IS
 
 COMMENT ON COLUMN privy_wallets.wallet_address IS 
     'The public address of the embedded wallet. Validated by backend regex.';
+
+
+-- ============================================================
+-- 5. DATA MIGRATION (AUTO-FIX)
+-- ============================================================
+-- This block automatically moves existing mixed addresses from 'users' 
+-- into the new 'privy_wallets' table, sorting them by chain.
+
+DO $$
+BEGIN
+    -- 1. Migrate Ethereum Addresses
+    INSERT INTO privy_wallets (user_id, wallet_address, chain_type)
+    SELECT id, wallet_address, 'ethereum'
+    FROM users
+    WHERE wallet_address ~ '^0x[a-fA-F0-9]{40}$'
+    ON CONFLICT (user_id, chain_type) DO NOTHING;
+
+    -- 2. Migrate Solana Addresses
+    INSERT INTO privy_wallets (user_id, wallet_address, chain_type)
+    SELECT id, wallet_address, 'solana'
+    FROM users
+    WHERE wallet_address ~ '^[1-9A-HJ-NP-Za-km-z]{32,44}$'
+    ON CONFLICT (user_id, chain_type) DO NOTHING;
+
+    RAISE NOTICE 'Data migration completed: Existing wallets have been sorted into privy_wallets.';
+END $$;

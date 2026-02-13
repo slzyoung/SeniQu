@@ -11,13 +11,18 @@ export interface User {
     avatar?: string;
     bio?: string;
     role: typeof ROLES[keyof typeof ROLES];
-    walletAddress?: string;
+    // walletAddress removed
     createdAt: string;
     updatedAt: string;
     isVerified: boolean;
     isPremium: boolean;
     socialLinks?: SocialLinks;
-    embeddedWalletAddress?: string;
+    // embeddedWalletAddress removed
+    wallets?: {
+        chainType: 'solana' | 'ethereum' | 'polygon';
+        address: string;
+        verifiedAt: string;
+    }[];
 }
 
 export interface SocialLinks {

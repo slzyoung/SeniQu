@@ -108,7 +108,17 @@ export function WalletPage() {
 
     // ... (keep existing derived helpers) ...
     // 3. Derived Helpers
+    // 3. Derived Helpers
+    // Active Wallet is now derived primarily from Backend Data for security
+    // We try to find a matching wallet in backendUser.wallets
+    const activeBackendWallet = backendUser?.wallets?.find((w: any) => w.chainType === activeChain);
+
+    // We still keep the "embedded" one for signing/provider capability usage (client-side)
+    // But for "existence" checks, we verify against backend.
     const activeWallet = activeChain === 'solana' ? embeddedSolanaWallet : embeddedEthereumWallet;
+
+    // Derived state: Is the active wallet verified by backend?
+    const isWalletVerified = !!activeBackendWallet;
 
     // 4. Fetch Logic
     const fetchBalances = useCallback(async () => {
@@ -170,29 +180,45 @@ export function WalletPage() {
     // 4.5 Sync Wallets with Backend
     // This ensures that the backend 'privy_wallets' table is up-to-date with Privy's authoritative data.
     // We trigger this when Privy is ready and authenticated.
+    // 4.5 Sync Wallets with Backend
+    // This ensures that the backend 'privy_wallets' table is up-to-date with Privy's authoritative data.
+    // We trigger this when Privy is ready and authenticated.
     useEffect(() => {
-        if (ready && authenticated && user?.id) {
-            const syncWallets = async () => {
+        if (!ready || !authenticated || !user?.id) return;
+
+        const syncWallets = async () => {
+            // Anti-Throttling: Check if backend already has the wallets we expect
+            // If the backend user object already has wallets for both chains (or the relevant ones), skipping might be safe?
+            // Actually, we should sync occasionally to catch updates, but not on every render.
+            // We'll use a session storage flag to avoid spamming on every page navigation, OR just a simple check.
+
+            const lastSync = sessionStorage.getItem(`last_wallet_sync_${user.id}`);
+            const now = Date.now();
+            // Sync only if > 60 seconds since last sync, OR if backend wallets are empty
+            const shouldSync = !backendUser?.wallets?.length || (now - parseInt(lastSync || '0') > 60000);
+
+            if (shouldSync) {
                 try {
-                    // We don't need to pass data, the backend pulls from Privy using the user's ID
+                    // console.debug("[WalletPage] Syncing wallets with backend...");
                     await api.post('/users/me/sync-wallets');
 
                     // Refresh user profile to get the updated wallet addresses
-                    // This ensures the UI reflects the synced wallets immediately
                     const updatedUser = await api.get('/users/me');
                     useAuthStore.getState().setUser(updatedUser as any);
 
-                    // console.log("[WalletPage] Wallets synced & profile updated");
+                    sessionStorage.setItem(`last_wallet_sync_${user.id}`, now.toString());
                 } catch (err) {
                     console.error("[WalletPage] Failed to sync wallets:", err);
                 }
-            };
+            } else {
+                // console.debug("[WalletPage] Skipping wallet sync (throttled/cached)");
+            }
+        };
 
-            // Debounce slightly to avoid spamming on mount
-            const timer = setTimeout(syncWallets, 1000);
-            return () => clearTimeout(timer);
-        }
-    }, [ready, authenticated, user?.id]);
+        // Debounce slightly to avoid spamming on mount
+        const timer = setTimeout(syncWallets, 1500);
+        return () => clearTimeout(timer);
+    }, [ready, authenticated, user?.id, backendUser?.wallets?.length]);
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
@@ -228,28 +254,19 @@ export function WalletPage() {
         // C. Check if Backend User already has a wallet (but Privy not auth'd)
         // Only trigger if Privy is READY but not authenticated.
         // Also, we might want to check if the bridge is currently working...
-        if (backendUser?.walletAddress && ready && !authenticated && !isCreating) {
-            // console.log("[WalletPage] Backend auth active but Privy not authenticated. Waiting for silent sync...");
-
-            // DEBOUNCE/DELAY: Give PrivyAuthBridge time to hydrate (silent login)
-            const syncTimer = setTimeout(() => {
-                // Check status again inside timeout
-                if (backendUser?.walletAddress && !authenticated) {
-                    console.log("[WalletPage] Silent sync continuing... (User authenticated in backend, waiting for Privy)");
-                    // WE DO NOT FORCE LOGIN ANYMORE.
-                    // This creates a bad UX ("disappearing wallet" or "random modal").
-                    // Instead, we show a "Syncing" state in the UI.
-
-                    /*
-                    if (ready) {
-                        setPendingDeposit(true);
-                        // login(); // Manual override REMOVED
-                    }
-                    */
-                }
-            }, 5000);
-
-            return () => clearTimeout(syncTimer);
+        // C. Check if Backend User already has a wallet (but Privy not auth'd)
+        // IMMEDIATE DISPLAY FIX: We no longer block the UI for "Silent Sync".
+        // If the backend has the wallet, we allow the modal to open immediately.
+        // The modal's internal logic (render) already prioritizes backendUser.wallets.
+        if (backendUser?.wallets?.length) {
+            // Check if we have the specific wallet for the active chain
+            const hasChainWallet = backendUser.wallets.find((w: any) => w.chainType === activeChain);
+            if (hasChainWallet) {
+                // Console log for debugging, but proceed to show modal
+                // console.log("[WalletPage] Backend Verified Wallet found. Opening modal immediately.");
+                setShowReceiveModal(true);
+                return;
+            }
         }
 
         // D. No wallet at all -> Create one.
@@ -274,7 +291,7 @@ export function WalletPage() {
                 authenticated,
                 hasActiveWallet: !!activeWallet,
                 activeChain,
-                backendAddress: backendUser?.walletAddress,
+                backendAddress: "REMOVED",
                 embeddedAddress: embeddedWallet?.address,
                 userObjectWallet: user?.wallet?.address
             });
@@ -386,7 +403,7 @@ export function WalletPage() {
         } finally {
             setIsCreating(false);
         }
-    }, [activeWallet, embeddedWallet, isCreating, authenticated, login, createWallet, toast, fetchBalances, backendUser?.walletAddress, ready, user?.id]);
+    }, [activeWallet, embeddedWallet, isCreating, authenticated, login, createWallet, toast, fetchBalances, backendUser?.wallets, ready, user?.id]);
 
     // Effect: Handle Auto-Deposit after Login
     useEffect(() => {
@@ -414,9 +431,25 @@ export function WalletPage() {
 
     // 6. Send Handler (Solana Only for now as requested, but structure supports both)
     const handleSend = async () => {
-        if (!sendAddress || !sendAmount || !activeWallet) return;
+        if (!sendAddress || !sendAmount) return;
+
+        // Anti-Drain / Safety Checks
         if (activeChain === 'ethereum') {
             toast.info("Coming Soon", "ETH sending is coming soon.");
+            return;
+        }
+
+        // Strict Address Validation (Solana)
+        try {
+            new PublicKey(sendAddress);
+        } catch (e) {
+            toast.error("Invalid Address", "Please enter a valid Solana address.");
+            return;
+        }
+
+        // Prevent self-send (UX)
+        if (activeWallet?.address === sendAddress) {
+            toast.error("Self-Send", "You cannot send to yourself.");
             return;
         }
 
@@ -429,18 +462,38 @@ export function WalletPage() {
                 return;
             }
 
-            const provider = await (activeWallet as any).getProvider();
-            const connection = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
+            // ROBUST PROVIDER RETRIEVAL
+            // If 'activeWallet' is a verified backend object, it might not have the provider method.
+            // We need the ACTUAL embedded wallet object from Privy hooks to sign.
+            // If user is not authenticated in Privy (Silent Sync state), we cannot sign.
+            if (!embeddedWallet && !embeddedSolanaWallet) {
+                toast.error("Security Check", "Please refresh to secure the connection before sending.");
+                return;
+            }
+
+            // Use the specific wallet provider if available, otherwise generic
+            const signingWallet = activeChain === 'solana' ? embeddedSolanaWallet : embeddedEthereumWallet;
+            const walletToUse = signingWallet || embeddedWallet;
+
+            if (!walletToUse) {
+                toast.error("Wallet Not Ready", "Signing capability unavailable.");
+                return;
+            }
+
+            const provider = await (walletToUse as any).getProvider();
+
+            // Standardized RPC (Mainnet)
+            const connection = new Connection(import.meta.env.VITE_SOLANA_RPC_URL || clusterApiUrl('mainnet-beta'), 'confirmed');
 
             const transaction = new Transaction().add(
                 SystemProgram.transfer({
-                    fromPubkey: new PublicKey(activeWallet.address),
+                    fromPubkey: new PublicKey(walletToUse.address),
                     toPubkey: new PublicKey(sendAddress),
                     lamports: amount * LAMPORTS_PER_SOL,
                 })
             );
 
-            transaction.feePayer = new PublicKey(activeWallet.address);
+            transaction.feePayer = new PublicKey(walletToUse.address);
             const { blockhash } = await connection.getLatestBlockhash();
             transaction.recentBlockhash = blockhash;
 
@@ -456,7 +509,12 @@ export function WalletPage() {
 
         } catch (error: any) {
             console.error("Send failed", error);
-            toast.error("Failed", "Transaction failed to send.");
+            // Friendly error messages
+            if (error?.message?.includes('Simulation failed') || error?.toString().includes('0x1')) {
+                toast.error("Transaction Failed", "Insufficient funds or invalid state.");
+            } else {
+                toast.error("Failed", "Transaction failed. Please try again.");
+            }
         } finally {
             setIsSending(false);
         }
@@ -597,9 +655,9 @@ export function WalletPage() {
                                         <Badge variant="default" className="text-[10px] text-theme-muted border-theme-border/50 bg-black/20">
                                             {activeChain} Network
                                         </Badge>
-                                        <Badge variant={activeWallet ? "success" : "warning"} className="text-[10px] flex items-center gap-1">
-                                            {activeWallet ? <Shield className="w-3 h-3" /> : <Loader2 className="w-3 h-3 animate-spin" />}
-                                            {activeWallet ? "Secured" : "Syncing..."}
+                                        <Badge variant={isWalletVerified ? "success" : "warning"} className="text-[10px] flex items-center gap-1">
+                                            {isWalletVerified ? <Shield className="w-3 h-3" /> : <Loader2 className="w-3 h-3 animate-spin" />}
+                                            {isWalletVerified ? "Secured & Verified" : "Syncing..."}
                                         </Badge>
                                     </div>
                                 </div>
@@ -622,66 +680,53 @@ export function WalletPage() {
                                     Your {activeChain === 'solana' ? 'Solana' : 'Ethereum'} Address
                                 </span>
                                 {(() => {
-                                    // SECURITY: SOURCE OF TRUTH = BACKEND DB
-                                    // 1. Primary DB Source (Persistent)
-                                    // 2. Local Pivot (Optimistic/Fallback)
-
-                                    const primaryAddr = backendUser?.walletAddress;
-                                    const secondaryAddr = backendUser?.embeddedWalletAddress;
+                                    // SECURITY: SOURCE OF TRUTH = BACKEND DB (privy_wallets)
+                                    // We strictly prioritize the backend data to prevent client-side spoofing.
                                     let displayAddress: string | undefined;
+                                    let isVerified = false;
 
-                                    // Validations
-                                    const isSolanaAddr = (addr?: string) => addr && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr);
-                                    const isEthAddr = (addr?: string) => addr && /^0x[a-fA-F0-9]{40}$/.test(addr);
-                                    const isMockup = (addr?: string) => addr?.startsWith('0xBd3f9ebEdA34720F0');
-
-                                    // Logic: Prioritize the address that matches the active chain
-                                    // logic should be:
-                                    // If Active=SOL: Check Primary(SOL) -> Check Secondary(SOL) -> Check Local(SOL)
-                                    // NEW: Check `backendUser.wallets` array for exact match
-
-                                    if (backendUser && (backendUser as any).wallets && Array.isArray((backendUser as any).wallets)) {
-                                        const exactMatch = (backendUser as any).wallets.find((w: any) => w.chainType === activeChain);
+                                    if (backendUser && backendUser.wallets && Array.isArray(backendUser.wallets)) {
+                                        const exactMatch = backendUser.wallets.find((w: any) => w.chainType === activeChain);
                                         if (exactMatch) {
                                             displayAddress = exactMatch.address;
+                                            isVerified = true;
                                         }
                                     }
 
-                                    // Fallbacks if not found in array (e.g. migration / legacy)
-                                    if (!displayAddress) {
-                                        if (activeChain === 'solana') {
-                                            if (isSolanaAddr(primaryAddr) && !isMockup(primaryAddr)) displayAddress = primaryAddr;
-                                            else if (isSolanaAddr(secondaryAddr) && !isMockup(secondaryAddr)) displayAddress = secondaryAddr;
-                                            else if (embeddedSolanaWallet?.address) displayAddress = embeddedSolanaWallet.address;
-                                        } else { // Ethereum
-                                            if (isEthAddr(primaryAddr) && !isMockup(primaryAddr)) displayAddress = primaryAddr;
-                                            else if (isEthAddr(secondaryAddr) && !isMockup(secondaryAddr)) displayAddress = secondaryAddr;
-                                            else if (embeddedEthereumWallet?.address) displayAddress = embeddedEthereumWallet.address;
-                                        }
-                                    }
+                                    // Fallback: If backend is not synced yet but we have a client wallet, hide it or show "Syncing..."
+                                    // We do NOT show the raw client address to avoid "flickering" or spoofing.
+                                    // However, for UX, if we are sure it's the same user, we might show it with a warning.
+                                    // For "Anti-Hacking" mode => Strict Backend Only.
 
                                     return displayAddress ? (
-                                        <div className="flex items-center gap-2">
-                                            <code className={`text-xs md:text-sm font-mono truncate max-w-[150px] md:max-w-xs text-theme-text`}>
-                                                {displayAddress}
-                                            </code>
-                                            <button
-                                                onClick={() => {
-                                                    if (displayAddress) {
-                                                        navigator.clipboard.writeText(displayAddress);
-                                                        toast.success('Copied', 'Address copied');
-                                                    }
-                                                }}
-                                                className="text-theme-muted hover:text-gold transition-colors"
-                                            >
-                                                <Copy className="w-3 h-3" />
-                                            </button>
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-2">
+                                                <code className={`text-xs md:text-sm font-mono truncate max-w-[150px] md:max-w-xs text-theme-text`}>
+                                                    {displayAddress}
+                                                </code>
+                                                <button
+                                                    onClick={() => {
+                                                        if (displayAddress) {
+                                                            navigator.clipboard.writeText(displayAddress);
+                                                            toast.success('Copied', 'Address copied');
+                                                        }
+                                                    }}
+                                                    className="text-theme-muted hover:text-gold transition-colors"
+                                                >
+                                                    <Copy className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                            {isVerified && (
+                                                <div className="flex items-center gap-1 text-[10px] text-green-400 font-medium">
+                                                    <Shield className="w-3 h-3" />
+                                                    <span>Verified by Seniqu</span>
+                                                </div>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="flex items-center gap-2 text-xs text-theme-muted italic">
                                             <Loader2 className="w-3 h-3 animate-spin" />
-                                            <span>Syncing Address...</span>
-                                            {/* Auto-trigger creation is handled in useEffect, but visual feedback helps */}
+                                            <span>Syncing secured address...</span>
                                         </div>
                                     );
                                 })()}
@@ -723,7 +768,7 @@ export function WalletPage() {
                                 variant="secondary"
                                 className="w-full justify-center lg:justify-start h-12 text-sm font-bold border-theme-border hover:border-gold/30 bg-theme-bg"
                                 onClick={() => setShowSendModal(true)}
-                                disabled={!activeWallet}
+                                disabled={!activeWallet && !isWalletVerified}
                                 leftIcon={<Send className="w-4 h-4" />}
                             >
                                 Withdraw
@@ -883,38 +928,61 @@ export function WalletPage() {
                     // SECURE DISPLAY LOGIC (Same as main view)
                     // We prioritize the address stored in our backend DB over the raw Privy wallet.
                     // This ensures what the user sees is what our system recognizes.
-                    const primaryAddr = backendUser?.walletAddress;
-                    const secondaryAddr = backendUser?.embeddedWalletAddress;
-                    let displayAddress = activeWallet?.address;
+                    let displayAddress: string | undefined;
 
-                    const isSolanaAddr = (addr?: string) => addr && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr);
-                    const isEthAddr = (addr?: string) => addr && /^0x[a-fA-F0-9]{40}$/.test(addr);
-                    const isMockup = (addr?: string) => addr?.startsWith('0xBd3f9ebEdA34720F0');
+                    if (backendUser && backendUser.wallets && Array.isArray(backendUser.wallets)) {
+                        const exactMatch = backendUser.wallets.find((w: any) => w.chainType === activeChain);
+                        if (exactMatch) {
+                            displayAddress = exactMatch.address;
+                        }
+                    }
 
-                    if (activeChain === 'solana') {
-                        if (isSolanaAddr(primaryAddr) && !isMockup(primaryAddr)) displayAddress = primaryAddr;
-                        else if (isSolanaAddr(secondaryAddr) && !isMockup(secondaryAddr)) displayAddress = secondaryAddr;
-                    } else if (activeChain === 'ethereum') {
-                        if (isEthAddr(primaryAddr) && !isMockup(primaryAddr)) displayAddress = primaryAddr;
-                        else if (isEthAddr(secondaryAddr) && !isMockup(secondaryAddr)) displayAddress = secondaryAddr;
+                    // Fallback to local state if not found in backend
+                    if (!displayAddress) {
+                        if (activeChain === 'solana') {
+                            if (embeddedSolanaWallet?.address) displayAddress = embeddedSolanaWallet.address;
+                        } else if (activeChain === 'ethereum') {
+                            if (embeddedEthereumWallet?.address) displayAddress = embeddedEthereumWallet.address;
+                        }
                     }
 
                     return (
                         <div className="flex flex-col items-center">
-                            <div className="p-4 bg-white rounded-2xl mb-6 shadow-xl shadow-gold/5 border-2 border-gold/10">
-                                <QRCode
-                                    value={displayAddress || 'Loading...'}
-                                    size={200}
-                                    level="M"
-                                    viewBox={`0 0 256 256`}
-                                />
-                            </div>
+                            {displayAddress ? (
+                                <div className="p-4 bg-white rounded-2xl mb-6 shadow-xl shadow-gold/5 border-2 border-gold/10 relative group">
+                                    <QRCode
+                                        value={displayAddress}
+                                        size={200}
+                                        level="M"
+                                        viewBox={`0 0 256 256`}
+                                    />
+                                    {/* Logo Overlay */}
+                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                        <div className="bg-white p-1 rounded-full shadow-lg">
+                                            <img
+                                                src={activeChain === 'solana' ? ICONS.solana : ICONS.ethereum}
+                                                alt="Chain"
+                                                className="w-8 h-8"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="w-[200px] h-[200px] flex flex-col items-center justify-center bg-theme-elevated rounded-2xl mb-6 border border-theme-border/50 animate-pulse">
+                                    <Loader2 className="w-8 h-8 text-gold animate-spin mb-2" />
+                                    <span className="text-xs text-theme-muted">Generating Address...</span>
+                                </div>
+                            )}
 
-                            <div className="w-full bg-theme-elevated p-4 rounded-xl mb-6 text-center border border-theme-border">
+                            <div className="w-full bg-theme-elevated p-4 rounded-xl mb-6 text-center border border-theme-border group hover:border-gold/30 transition-colors">
                                 <p className="text-xs text-theme-muted mb-2 uppercase tracking-wide">Your {activeChain} Address</p>
-                                <p className="text-sm font-mono text-theme-text break-all select-all">
-                                    {displayAddress || 'Generating...'}
-                                </p>
+                                {displayAddress ? (
+                                    <p className="text-sm font-mono text-theme-text break-all select-all">
+                                        {displayAddress}
+                                    </p>
+                                ) : (
+                                    <div className="h-5 w-3/4 mx-auto bg-theme-bg/50 rounded animate-pulse" />
+                                )}
                             </div>
 
                             <div className="flex justify-center gap-2 mb-6">

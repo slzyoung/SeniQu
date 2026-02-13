@@ -297,16 +297,9 @@ export class WalletService {
             )
         }
 
-        // Also update the user's primary wallet_address in the users table
-        if (options.isPrimary || !(await this.hasExistingWallet(userId))) {
-            await client
-                .from("users")
-                .update({
-                    wallet_address: walletAddress,
-                    updated_at: new Date().toISOString(),
-                })
-                .eq("id", userId)
-        }
+        // REMOVED: Legacy users.wallet_address update
+        // The authoritative source is now privy_wallets (via syncWallets or linkEmbeddedWallet)
+        // wallet_connections table remains for history/analytics if needed.
 
         this.logger.log(
             `Wallet ${walletAddress.slice(0, 8)}... linked to user ${userId.slice(0, 8)}... on ${chain}`,
@@ -388,16 +381,8 @@ export class WalletService {
             )
         }
 
-        // Update user's wallet address if primary
-        if (isPrimary) {
-            await client
-                .from("users")
-                .update({
-                    wallet_address: walletAddress,
-                    updated_at: new Date().toISOString(),
-                })
-                .eq("id", userId)
-        }
+        // REMOVED: Legacy users.wallet_address update.
+        // We rely on privy_wallets (upserted above) as the source of truth.
 
         this.logger.log(
             `Embedded wallet ${walletAddress.slice(0, 8)}... linked to user ${userId.slice(0, 8)}...`,
@@ -450,25 +435,8 @@ export class WalletService {
             .eq("wallet_connection_id", walletId)
 
         // If this was the primary wallet, clear the user's wallet_address
-        if (wallet.is_primary) {
-            // Try to find another active wallet to set as primary
-            const { data: nextWallet } = await client
-                .from("wallet_connections")
-                .select("wallet_address")
-                .eq("user_id", userId)
-                .eq("status", "active")
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .single()
-
-            await client
-                .from("users")
-                .update({
-                    wallet_address: nextWallet?.wallet_address || null,
-                    updated_at: new Date().toISOString(),
-                })
-                .eq("id", userId)
-        }
+        // REMOVED: Legacy users.wallet_address update.
+        // Unlinking logic should only affect wallet_connections and privy_wallets if necessary.
 
         this.logger.log(
             `Wallet ${walletId.slice(0, 8)}... unlinked from user ${userId.slice(0, 8)}...`,

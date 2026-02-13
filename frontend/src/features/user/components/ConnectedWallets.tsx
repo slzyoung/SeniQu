@@ -23,6 +23,7 @@ import { useToast } from '../../../stores/useNotificationStore';
 import { usePrivyWallet } from '../../../hooks/usePrivyWallet';
 import { usePrivy } from '@privy-io/react-auth';
 import { Connection, PublicKey, LAMPORTS_PER_SOL, clusterApiUrl, Transaction, SystemProgram } from '@solana/web3.js';
+import { useAuthStore } from '../../../stores/useAuthStore';
 
 // ============================================
 // WALLET PROVIDER LOGOS & INFO
@@ -54,6 +55,21 @@ export function ConnectedWallets() {
     const toast = useToast();
     const { embeddedWallet, externalWallets } = usePrivyWallet();
     const { connectWallet } = usePrivy();
+    const { user: backendUser } = useAuthStore();
+
+    // FILTER: Only show wallets that are known to the backend (Anti-Hacking)
+    // We trust 'wallets' from 'useConnectedWallets' (Privy SDK) but we mark them as verified/unverified
+    // or strictly filter them.
+    // Let's filter to ensure we only display what the backend knows about, 
+    // OR display all but add a verification badge.
+
+    // For now, let's map the backend verification status to the privy wallets.
+    const mergedWallets = wallets?.map((w: any) => {
+        const isVerifiedInBackend = backendUser?.wallets?.some(
+            (bw: any) => bw.address === w.walletAddress
+        );
+        return { ...w, isVerified: isVerifiedInBackend };
+    }) || [];
 
     const [transferModalOpen, setTransferModalOpen] = useState(false);
     const [selectedSourceWallet, setSelectedSourceWallet] = useState<any>(null);
@@ -70,7 +86,7 @@ export function ConnectedWallets() {
     // Fetch SOL balance for a single address
     const fetchBalance = useCallback(async (address: string): Promise<number | null> => {
         try {
-            const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
+            const connection = new Connection(import.meta.env.VITE_SOLANA_RPC_URL || clusterApiUrl('mainnet-beta'), 'confirmed');
             const publicKey = new PublicKey(address);
             const balanceInLamports = await connection.getBalance(publicKey);
             return balanceInLamports / LAMPORTS_PER_SOL;
@@ -154,7 +170,7 @@ export function ConnectedWallets() {
             }
 
             const provider = await selectedSourceWallet.getProvider();
-            const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
+            const connection = new Connection(import.meta.env.VITE_SOLANA_RPC_URL || clusterApiUrl('mainnet-beta'), 'confirmed');
 
             const transaction = new Transaction().add(
                 SystemProgram.transfer({
@@ -227,18 +243,31 @@ export function ConnectedWallets() {
             }
 
             // Withdraw from Embedded Wallet -> External Wallet
-            const provider = await (embeddedWallet as any).getProvider();
-            const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
+            // ROBUST PROVIDER: Get the actual signer wallet from the list
+            // 'embeddedWallet' from usePrivyWallet might be the fallback object without getProvider
+            const signerWallet = wallets.find((w: any) =>
+                w.walletClientType === 'privy' &&
+                (w.chainType === 'solana')
+            );
+
+            if (!signerWallet || typeof (signerWallet as any).getProvider !== 'function') {
+                toast.error("Wallet Error", "Signer not available. Please refresh.");
+                setIsTransferring(false);
+                return;
+            }
+
+            const provider = await (signerWallet as any).getProvider();
+            const connection = new Connection(import.meta.env.VITE_SOLANA_RPC_URL || clusterApiUrl('mainnet-beta'), 'confirmed');
 
             const transaction = new Transaction().add(
                 SystemProgram.transfer({
-                    fromPubkey: new PublicKey(embeddedWallet.address),
+                    fromPubkey: new PublicKey(signerWallet.address),
                     toPubkey: new PublicKey(selectedWithdrawDestination.walletAddress),
                     lamports: amount * LAMPORTS_PER_SOL,
                 })
             );
 
-            transaction.feePayer = new PublicKey(embeddedWallet.address);
+            transaction.feePayer = new PublicKey(signerWallet.address);
             const { blockhash } = await connection.getLatestBlockhash();
             transaction.recentBlockhash = blockhash;
 
@@ -322,7 +351,7 @@ export function ConnectedWallets() {
                 )}
 
                 {/* Wallet List */}
-                {wallets?.map((wallet: any) => {
+                {mergedWallets?.map((wallet: any) => {
                     const info = getWalletInfo(wallet.provider);
                     const walletBalance = balances[wallet.walletAddress];
                     return (
@@ -361,6 +390,12 @@ export function ConnectedWallets() {
                                         </p>
                                         <span className="text-theme-border">|</span>
                                         <p className="text-xs text-theme-muted capitalize">{wallet.chain}</p>
+                                        {wallet.isVerified && (
+                                            <>
+                                                <span className="text-theme-border">|</span>
+                                                <Badge variant="success" className="text-[8px] h-3 px-1 py-0">Verified</Badge>
+                                            </>
+                                        )}
                                         {wallet.chain === 'solana' && walletBalance !== undefined && walletBalance !== null && (
                                             <>
                                                 <span className="text-theme-border">|</span>
@@ -415,7 +450,7 @@ export function ConnectedWallets() {
                     );
                 })}
 
-                {(!wallets || wallets.length === 0) && (
+                {(!mergedWallets || mergedWallets.length === 0) && (
                     <div className="text-center py-6">
                         <p className="text-theme-muted text-sm">No wallets connected</p>
                     </div>

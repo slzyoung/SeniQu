@@ -46,7 +46,23 @@ useSyncJwtBasedAuthState({
 When a user visits the **Wallet Page** (`/dashboard/wallet`):
 1.  Checks if an embedded wallet exists.
 2.  If not, calls `createWallet()` (Privy SDK).
-3.  **Backend Sync**: The app automatically links this new wallet address to the user's profile in Supabase via `/auth/link-wallet`.
+3.  **Backend Sync**: Calls `POST /users/me/sync-wallets` to actively pull the new wallet data from Privy into our `privy_wallets` table.
+4.  **Verification**: The UI updates to show the address only after it's confirmed in the DB.
+
+### 2.4 Deposit & Withdraw Flows
+We have standardized all operations to use the **Mainnet** (or Environment RPC) to ensure consistency.
+
+#### Deposit (Receive) - **Instant Access**
+- **UX Improvement**: The wallet address is displayed **immediately** if it exists in the backend (`privy_wallets`), eliminating the "Silent Sync" delay.
+- **QR Code**: Generated from the *verified* backend address.
+- **Scanner**: Integrated `QrReader` with improved stability for scanning sender addresses.
+
+#### Withdraw (Send) - **Robust Execution**
+- **Mechanism**: The system dynamically locates the correct **Privy Signer Object** (`getProvider`) from the raw wallet list at the moment of transaction, ensuring reliability even if the UI was initialized with backend-only data.
+- **RPC**: Uses `import.meta.env.VITE_SOLANA_RPC_URL` (Mainnet).
+- **Validation**:
+  - Strict Solana address validation (`PublicKey` check).
+  - "Anti-Drain" checks (e.g. self-send prevention).
 
 ---
 
@@ -94,7 +110,7 @@ The `useManualWallet` hook includes robust logic to parse and normalize these in
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/v1/wallet/nonce` | Generate a single-use login nonce. |
-| `POST` | `/api/v1/wallet/link/embedded` | Link a Privy wallet to the user profile. |
+| `POST` | `/api/v1/users/me/sync-wallets` | Force sync of Privy wallets to DB. |
 | `GET` | `/api/v1/wallet/assets` | Fetch portfolio balance (Helius/RPC). |
 
 ### 4.2 Database Schema

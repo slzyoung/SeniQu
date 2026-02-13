@@ -163,31 +163,44 @@ sequenceDiagram
 | **Cookie** | Signed httpOnly, Secure, SameSite=Lax — client JS cannot read or tamper |
 | **Cleanup** | Cookie cleared after every callback, regardless of success or failure |
 
-### 1.7 Privy Embedded Wallet (Auto-Sync)
+### 1.7 Privy Embedded Wallet (Auto-Sync & Verification)
 
 Users who sign in via Web2 methods (Email, Google) automatically get a non-custodial embedded wallet powered by Privy.
 
-- **Mechanism**: `PrivySyncManager` uses `useSyncJwtBasedAuthState` to keep the Privy session in sync with the app's auth state.
-- **Benefits**: No popups, no manual wallet creation steps for users.
-- **Reference**: See `09-Wallet-Integration.md` for full implementation details.
+- **Mechanism**: `PrivySyncManager` uses `useSyncJwtBasedAuthState` to keep the Privy session in sync.
+- **Backend Verification**: The backend treats the `privy_wallets` table as the **Single Source of Truth**.
+  - Client-side wallet addresses are *never* blindly trusted for display or critical operations.
+  - The frontend pulls the wallet address from `GET /users/me` (populated from DB) to prevent UI spoofing.
+- **Anti-Throttling**: The `POST /users/me/sync-wallets` endpoint is used to explicitly sync Privy's state to our DB. This call is:
+  - **Debounced**: 1.5s delay to prevent spamming on mount.
+  - **Cached**: Session storage prevents redundant calls within 60 seconds.
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant Frontend (PrivySyncManager)
-    participant Privy SDK
-    participant Backend
+    participant Frontend
+    participant Privy
+    participant Backend (DB)
 
-    User->>Frontend: Login (Email/Google)
-    Frontend->>Backend: Request Auth + Privy Token
-    Backend-->>Frontend: { accessToken, privyToken }
-    Frontend->>Privy SDK: useSyncJwtBasedAuthState(privyToken)
-    Privy SDK-->>Frontend: Authenticated (User has wallet)
-    Frontend->>Backend: Link Wallet (Background)
+    Frontend->>Privy: Create/Unlock Wallet
+    Privy-->>Frontend: Wallet Ready
+    Frontend->>Backend: POST /users/me/sync-wallets (Trigger Sync)
+    Backend->>Privy: Verify User & Fetch Wallet List (Server-to-Server)
+    Backend->>Backend: Update 'privy_wallets' table
+    Frontend->>Backend: GET /users/me
+    Backend-->>Frontend: Return Verified Wallet Address
+    Frontend->>Frontend: Display Address with "Verified" Badge
 ```
 
 > [!IMPORTANT]
 > The embedded wallet is non-custodial — only the user controls the private key via Privy's MPC infrastructure. Seniqu never has access to the private key.
+
+### 1.8 Wallet Anti-Hacking Measures
+
+| Feature | Implementation |
+|---------|----------------|
+| **Source of Truth** | UI displays strictly what is in the DB, not what is in the browser local state. |
+| **Verification Badges** | Green "Verified by Seniqu" badge only appears if address matches DB record. |
+| **RPC Standardization** | All wallet operations forced to Mainnet (or Env RPC) to prevent "Devnet Scams" where users are tricked into sending real funds to devnet addresses. |
 
 ### 1.8 Token Configuration
 

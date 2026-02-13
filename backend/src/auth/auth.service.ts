@@ -97,7 +97,7 @@ export class AuthService {
                 email,
                 privyId: privyUser.id,
                 displayName: `User ${privyUser.id.substring(0, 8)}`,
-                walletAddress,
+                // walletAddress removed from schema
                 userType: "ART_LOVER", // Default role
             })
             isNewUser = true
@@ -178,19 +178,13 @@ export class AuthService {
                 (a: any) => a.type === 'wallet' && (a.chainType === 'ethereum' || a.chain_type === 'ethereum')
             );
 
-            // 1. Ensure walletAddress is populated (if missing) with Solana preferred
-            if (!user.walletAddress && solanaWallet) {
-                user.walletAddress = (solanaWallet as any).address;
-            } else if (!user.walletAddress && embeddedWalletAddress) {
-                user.walletAddress = embeddedWalletAddress;
-            }
-
-            // 2. Inject embeddedWalletAddress for the secondary chain
-            // If primary is SOL, embedded is ETH. If primary is ETH, embedded is SOL.
-            if (ethereumWallet && (ethereumWallet as any).address !== user.walletAddress) {
-                (user as any).embeddedWalletAddress = (ethereumWallet as any).address;
-            } else if (solanaWallet && (solanaWallet as any).address !== user.walletAddress) {
-                (user as any).embeddedWalletAddress = (solanaWallet as any).address;
+            // 1. Ensure wallets are populated (Note: updated syncWallets handles DB persistence)
+            // Frontend should use user.wallets or fetch from Privy directly.
+            // We don't need to manually inject legacy fields here anymore.
+            // But we should ensure the user object has the latest wallet data if we fetched it.
+            if (!user.wallets || user.wallets.length === 0) {
+                // We could manually construct it here for immediate return, 
+                // but simpler to rely on the frontend fetching valid data or the next request.
             }
         }
 
@@ -237,7 +231,7 @@ export class AuthService {
         if (!user) {
             // Create a new user account for this wallet
             user = await this.usersService.create({
-                walletAddress,
+                // walletAddress removed
                 userType: "ART_LOVER",
             })
             isNewUser = true
@@ -529,8 +523,13 @@ export class AuthService {
      * If not, create one via Privy and link it
      */
     private async ensureEmbeddedWallet(user: any): Promise<void> {
-        // If user already has a wallet, we might still want to sync privyId if missing
-        if (user.walletAddress && user.privyId) return;
+        // If user already has a privyId, we assume they are synced or will be synced.
+        if (user.privyId) {
+            // We still want to ensure wallets are synced purely, so we proceed to check privyUser
+            // But if we want to skip optimization:
+            // return; 
+            // Let's allow it to proceed to syncWallets logic below.
+        }
 
         this.logger.log(`Provisioning/Syncing embedded wallet for user ${user.id}`);
 
@@ -546,8 +545,7 @@ export class AuthService {
             if (!privyUser) {
                 privyUser = await this.privyService.createWithEmbeddedWallet({
                     email: user.email,
-                    // We don't pass walletAddress here because we want Privy to generate one if it doesn't exist
-                    // If user was imported from Google, they might not have a wallet yet.
+                    chainType: "solana", // Explicitly request Solana for the initial wallet
                 });
             }
 
@@ -563,17 +561,11 @@ export class AuthService {
                 }
 
                 // 2. Sync Wallet Address if missing
-                // Note: Privy User has 'wallet' (primary) and 'wallets' (array).
-                // We typically store the primary wallet address.
-                // For "One Wallet Per Chain", the frontend derives the specific chain address from the Privy User.
-                // The backend just needs to ensure the Privy User exists and is linked.
-                if (!user.walletAddress && privyUser.wallet) {
-                    await this.usersService.updateWallet(user.id, privyUser.wallet.address);
-                    user.walletAddress = privyUser.wallet.address;
-                    if (user.wallet_address !== undefined) {
-                        user.wallet_address = privyUser.wallet.address;
-                    }
-                }
+                // Note: We no longer update users.wallet_address.
+                // We ensure the wallet is synced to privy_wallets via syncWallets (implied or called explicitly).
+
+                // For safety, force a sync of wallets to privy_wallets table
+                await this.usersService.syncWallets(user.id);
 
                 this.logger.log(`Synced Privy user ${privyUser.id} for local user ${user.id}`);
             }

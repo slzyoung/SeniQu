@@ -247,7 +247,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
         // If user is already logged in to our app with this address, skip
         const authState = useAuthStore.getState();
-        if (authState.isAuthenticated && authState.user?.walletAddress === reownAddress) {
+        if (authState.isAuthenticated && authState.user?.wallets?.some((w: any) => w.address === reownAddress)) {
           return;
         }
 
@@ -351,7 +351,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
       if (privyAuthenticated && privyUser && privyUser.wallet) {
         // Check if we already have this user in our auth store to avoid loops
         const currentAuth = useAuthStore.getState();
-        if (currentAuth.isAuthenticated && currentAuth.user?.walletAddress === privyUser.wallet.address) {
+        if (currentAuth.isAuthenticated && currentAuth.user?.wallets?.some((w: any) => w.address === privyUser.wallet?.address)) {
           return;
         }
 

@@ -29,10 +29,6 @@ export class CreateUserDto {
     @IsOptional()
     googleId?: string
 
-    @IsString()
-    @IsOptional()
-    walletAddress?: string
-
     @IsOptional()
     isVerified?: boolean
 }

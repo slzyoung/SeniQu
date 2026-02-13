@@ -92,8 +92,8 @@ cd backend && npm run start:dev
 | **Virtual Museums** | Immersive digital galleries for institutions |
 | **NFT Marketplace** | Secure minting and trading of digital art |
 | **Manual Wallet Auth** | Direct login via Phantom, Solflare, MetaMask signature |
-| **Privy Embedded Wallet** | Auto-created non-custodial wallet for all users |
-| **Deposit & Withdraw** | Transfer tokens to/from embedded wallet |
+| **Privy Embedded Wallet** | Auto-created, backend-verified non-custodial wallet |
+| **Deposit & Withdraw** | Instant access & robust mainnet transaction signing |
 | **Geolocation Search** | Find nearby museums and galleries |
 | **Community Forum** | Discussions for art enthusiasts |
 | **AI Art Analysis** | Genre detection and curation tools |
@@ -138,6 +138,7 @@ cd backend && npm run start:dev
 - ✅ Security headers (Helmet)
 - ✅ Single-use nonce anti-replay protection
 - ✅ Device fingerprinting for wallet sessions
+- ✅ Backend Source of Truth for (Anti-Spoofing)
 - ✅ Comprehensive audit logging
 
 ---
