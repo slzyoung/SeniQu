@@ -49,13 +49,17 @@ function getWalletInfo(provider: string) {
 // MAIN COMPONENT
 // ============================================
 
-export function ConnectedWallets() {
+// 52: export function ConnectedWallets({ user }: { user?: any }) {
+export function ConnectedWallets({ user }: { user?: any }) {
     const { data: wallets, isLoading } = useConnectedWallets();
     const unlinkWallet = useUnlinkWallet();
     const toast = useToast();
     const { embeddedWallet, externalWallets } = usePrivyWallet();
     const { connectWallet } = usePrivy();
-    const { user: backendUser } = useAuthStore();
+    const { user: authUser } = useAuthStore();
+
+    // Use passed user (fresh) or store user (fallback)
+    const backendUser = user || authUser;
 
     // FILTER: Only show wallets that are known to the backend (Anti-Hacking)
     // We trust 'wallets' from 'useConnectedWallets' (Privy SDK) but we mark them as verified/unverified
@@ -64,31 +68,40 @@ export function ConnectedWallets() {
     // OR display all but add a verification badge.
 
     // For now, let's map the backend verification status to the privy wallets.
-    // STICT REQUIREMENT: Only show the ONE wallet used for login (from wallet_logins)
+    // STRICT REQUIREMENT: Only show the ONE wallet used for login (from wallet_logins) if it's external.
+    // If user logged in with Email/Google, this list should be EMPTY.
+    // STRICT REQUIREMENT: Only show wallets from 'wallet_logins' (external wallets)
+    // We filter backendUser.wallets for !isEmbedded
     const displayWallets = (() => {
-        // 1. Find the external login wallet from backend source of truth
-        const loginWallet = backendUser?.wallets?.find((w: any) => !w.isEmbedded);
+        if (!backendUser?.wallets || !Array.isArray(backendUser.wallets)) return [];
 
-        if (!loginWallet) return [];
+        // 1. Filter for external wallets (from wallet_logins)
+        const externalWallets = backendUser.wallets.filter((w: any) => {
+            const isEmbedded = w.isEmbedded || w.is_embedded || w.privy_wallet_id || w.walletClientType === 'privy';
+            return !isEmbedded;
+        });
 
-        // 2. Check if this wallet is effectively connected in Privy (for actions)
-        const privyConnection = (wallets || []).find((w: any) =>
-            w.walletAddress?.toLowerCase() === loginWallet.address?.toLowerCase()
-        );
+        // 2. Map to display format
+        return externalWallets.map((w: any) => {
+            const address = w.address || w.wallet_address;
 
-        // 3. Construct the single display object
-        return [{
-            id: privyConnection?.id || `login-wallet-${loginWallet.address}`,
-            walletAddress: loginWallet.address,
-            chain: loginWallet.chainType || 'solana',
-            provider: loginWallet.provider || 'external', // fallback
-            isEmbedded: false,
-            isPrimary: true, // Login wallet is always primary in this context
-            isVerified: true, // It's from DB, so it's verified
-            label: null,
-            // Attach Privy object properties if available to enable actions
-            ...privyConnection
-        }];
+            // Check connection status loosely
+            const privyConnection = (wallets || []).find((pw: any) =>
+                pw.walletAddress?.toLowerCase() === address?.toLowerCase()
+            );
+
+            return {
+                id: w.id || `login-wallet-${address}`,
+                walletAddress: address,
+                chain: w.chainType || w.chain_type || 'solana',
+                provider: w.provider || 'external',
+                isEmbedded: false,
+                isPrimary: true, // All login wallets are considered verified/primary in this view
+                isVerified: true,
+                label: null,
+                ...privyConnection // Merge connection status if available
+            };
+        });
     })();
 
     const [transferModalOpen, setTransferModalOpen] = useState(false);

@@ -294,7 +294,7 @@ export function Profile() {
 
 
                     <WalletSummaryCard />
-                    <ConnectedWallets />
+                    <ConnectedWallets user={displayUser} />
 
                     <Card variant="elevated">
                         <CardHeader title="Account Information" />
@@ -324,8 +324,19 @@ export function Profile() {
 
                             {/* Connected Login Wallet (External Only) */}
                             {displayUser?.wallets && (() => {
-                                const loginWallet = displayUser.wallets.find(w => !w.isEmbedded);
+                                // Robust check for external wallets (exclude embedded/privy)
+                                const loginWallet = displayUser.wallets.find((w: any) => {
+                                    const isEmbedded = w.isEmbedded || w.is_embedded || w.privy_wallet_id || w.walletClientType === 'privy';
+                                    return !isEmbedded;
+                                });
+
                                 if (!loginWallet) return null;
+
+                                const walletAny = loginWallet as any;
+                                const chainType = walletAny.chainType || walletAny.chain_type || 'solana';
+                                const address = walletAny.address || walletAny.wallet_address;
+
+                                if (!address) return null;
 
                                 return (
                                     <div className="py-3 border-t border-theme-border">
@@ -333,18 +344,18 @@ export function Profile() {
                                         <div className="flex items-center justify-between p-2 rounded-lg bg-theme-bg">
                                             <div className="flex items-center gap-2">
                                                 <Badge
-                                                    variant={loginWallet.chainType === 'solana' ? 'primary' : 'default'}
+                                                    variant={chainType === 'solana' ? 'primary' : 'default'}
                                                     className="text-[10px] px-1.5 py-0 h-4 uppercase"
                                                 >
-                                                    {loginWallet.chainType}
+                                                    {chainType}
                                                 </Badge>
                                                 <p className="text-xs text-theme-muted font-mono">
-                                                    {loginWallet.address.slice(0, 6)}...{loginWallet.address.slice(-4)}
+                                                    {address.slice(0, 6)}...{address.slice(-4)}
                                                 </p>
                                                 <Badge variant="gold" className="text-[9px] px-1 py-0 h-3">Login</Badge>
                                             </div>
                                             <button
-                                                onClick={() => navigator.clipboard.writeText(loginWallet.address)}
+                                                onClick={() => navigator.clipboard.writeText(address)}
                                                 className="text-xs text-gold hover:text-gold-light transition-colors"
                                                 title="Copy address"
                                             >

@@ -44,33 +44,42 @@ useSyncJwtBasedAuthState({
 
 ### 2.3 Wallet Creation & Linking
 When a user visits the **Wallet Page** (`/dashboard/wallet`):
-1.  Checks if an embedded wallet exists.
-2.  If not, calls `createWallet()` (Privy SDK).
-3.  **Backend Sync**: Calls `POST /users/me/sync-wallets` to actively pull the new wallet data from Privy into our `privy_wallets` table.
-4.  **Verification**: The UI updates to show the address only after it's confirmed in the DB.
+1.  **Backend vs Frontend Truth**: The system prioritizes the **Backend Database (`privy_wallets`)** as the single source of truth for wallet addresses.
+    -   If the backend return a wallet address, it is displayed **immediately**, even if the client-side Privy SDK is still initializing or syncing.
+    -   This eliminates "flickering" or "Not Found" states for users with existing wallets.
+2.  **Auto-Creation**: If no wallet exists in the DB, the frontend triggers `createWallet()` (Privy SDK).
+3.  **Sync**: Immediately calls `POST /users/me/sync-wallets` to persist the new wallet to the `privy_wallets` table.
 
 ### 2.4 Deposit & Withdraw Flows
 We have standardized all operations to use the **Mainnet** (or Environment RPC) to ensure consistency.
 
 #### Deposit (Receive) - **Instant Access**
-- **UX Improvement**: The wallet address is displayed **immediately** if it exists in the backend (`privy_wallets`), eliminating the "Silent Sync" delay.
-- **QR Code**: Generated from the *verified* backend address.
-- **Scanner**: Integrated `QrReader` with improved stability for scanning sender addresses.
+-   **Display Logic**: The UI forces the display of the address found in `activeBackendWallet` (derived from `privy_wallets`).
+-   **QR Code**: Generated from the verified backend address.
 
 #### Withdraw (Send) - **Robust Execution**
-- **Mechanism**: The system dynamically locates the correct **Privy Signer Object** (`getProvider`) from the raw wallet list at the moment of transaction, ensuring reliability even if the UI was initialized with backend-only data.
-- **RPC**: Uses `import.meta.env.VITE_SOLANA_RPC_URL` (Mainnet).
-- **Validation**:
-  - Strict Solana address validation (`PublicKey` check).
-  - "Anti-Drain" checks (e.g. self-send prevention).
+-   **Button State**: The "Withdraw" button is **always enabled** as long as a wallet address is known (from Backend or Frontend).
+-   **Styling**: When active, the button features a **White Gradient** text and border effect (`bg-gradient-to-r from-white to-gray-300`) to distinguish it as a premium feature.
+-   **Execution**: The system dynamically locates the correct **Privy Signer Object** (`getProvider`) at the moment of transaction.
 
 ---
 
-## 3. External Wallets (Manual)
+## 3. Connected Wallets & Profile
+Strict filtering logic is applied to the "Connected Wallets" section in the User Profile (`ConnectedWallets.tsx`).
+
+### 3.1 Display Logic (Strict Filtering)
+To prevent confusion between "Embedded" and "External" wallets:
+1.  **Source**: We iterate strictly through `backendUser.wallets` (which aggregates `wallet_logins` and `privy_wallets`).
+2.  **Filter**: We applied a **Strict Filter** to exclude any wallet flagged as `isEmbedded`.
+    -   **Allowed**: External wallets (Phantom, MetaMask) from `wallet_logins`.
+    -   **Hidden**: Auto-generated Privy wallets from `privy_wallets`.
+3.  **Result**: The "Connected Wallets" list *only* shows the external wallets the user explicitly connected or logged in with.
+
+### 3.2 External Wallets (Manual)
 
 For users who prefer their own keys (Phantom, MetaMask).
 
-### 3.1 Direct Connection (Desktop)
+#### Direct Connection (Desktop)
 We bypass Privy's connectors for desktop extensions to avoid conflicts and provide a faster, native feel.
 
 **Flow:**
@@ -81,13 +90,13 @@ We bypass Privy's connectors for desktop extensions to avoid conflicts and provi
 
 **File:** `frontend/src/hooks/useManualWallet.ts`
 
-### 3.2 Mobile Connection (Reown / WalletConnect)
+#### Mobile Connection (Reown / WalletConnect)
 We use **Reown AppKit** (formerly WalletConnect Web3Modal) for mobile support.
 - **Project ID**: Configured in `.env` (`VITE_WALLETCONNECT_PROJECT_ID`).
 - **Flow**: Opens native mobile apps via deep links.
 
 #### Mobile Optimization & Session Persistence
-Mobile wallets often require switching apps, which can cause the browser (and the app state) to reload. To handle this:
+Mobile wallets often require switching apps, which can cause the browser release. To handle this:
 1.  **Session Persistence**: The `useManualWallet` hook persists the "connecting" state in `sessionStorage` before the deep link redirect.
 2.  **Auto-Resume**: Upon reloading, the hook checks `sessionStorage` and automatically resumes the connection process if a pending attempt is found (valid for 5 minutes).
 3.  **Relaxed Rate Limits**: Rate limits for mobile are higher (10 requests/min) to account for retries and app swithcing delays.
@@ -110,14 +119,13 @@ The `useManualWallet` hook includes robust logic to parse and normalize these in
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/v1/wallet/nonce` | Generate a single-use login nonce. |
-| `POST` | `/api/v1/users/me/sync-wallets` | Force sync of Privy wallets to DB. |
+| `POST` | `/api/v1/users/me/sync-wallets` | **Authoritative Sync**: Forces `privy_wallets` table update from Privy. |
 | `GET` | `/api/v1/wallet/assets` | Fetch portfolio balance (Helius/RPC). |
 
 ### 4.2 Database Schema
 - **`wallet_nonces`**: Stores login challenges (expires in 5m).
-- **`wallet_connections`**: Maps multiple wallets to a single user.
-  - `chain`: 'solana' | 'ethereum'
-  - `wallet_provider`: 'privy' | 'phantom' | 'metamask'
+- **`privy_wallets`**: Stores embedded wallet data (Source of Truth for Wallet Page).
+- **`wallet_logins`**: Stores external wallet connections (Source of Truth for Profile Page).
 
 ---
 
