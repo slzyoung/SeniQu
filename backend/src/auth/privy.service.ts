@@ -15,6 +15,9 @@ export interface PrivyUser {
         email?: string
         verifiedAt?: string
         chainType?: string
+        id?: string // Add wallet ID
+        walletClientType?: string
+        connectorType?: string
     }>
     email?: { address: string }
     wallet?: {
@@ -404,7 +407,8 @@ export class PrivyService implements OnModuleInit {
                     chainType: createdWallet.chainType || chainType,
                     verifiedAt: new Date().toISOString(),
                     walletClientType: 'privy_server',
-                    connectorType: 'server'
+                    connectorType: 'server',
+                    id: createdWallet.id // Include the Critical ID
                 };
 
                 finalUser.linkedAccounts.push(newWalletAccount);

@@ -64,32 +64,31 @@ export function ConnectedWallets() {
     // OR display all but add a verification badge.
 
     // For now, let's map the backend verification status to the privy wallets.
-    const mergedWallets = (() => {
-        const connectionWallets = (wallets || []).map((w: any) => {
-            const isVerifiedInBackend = backendUser?.wallets?.some(
-                (bw: any) => bw.address === w.walletAddress
-            );
-            const isEmbedded = w.walletClientType === 'privy' || w.connectorType === 'embedded';
-            return { ...w, isVerified: isVerifiedInBackend, isEmbedded };
-        });
+    // STICT REQUIREMENT: Only show the ONE wallet used for login (from wallet_logins)
+    const displayWallets = (() => {
+        // 1. Find the external login wallet from backend source of truth
+        const loginWallet = backendUser?.wallets?.find((w: any) => !w.isEmbedded);
 
-        // Also include wallets from auth store (wallet_logins) not already in connections
-        const seenAddresses = new Set(connectionWallets.map((w: any) => w.walletAddress?.toLowerCase()));
-        const extraWallets = (backendUser?.wallets || [])
-            .filter((bw: any) => bw.address && !seenAddresses.has(bw.address.toLowerCase()))
-            .map((bw: any, idx: number) => ({
-                id: `login-wallet-${idx}`,
-                walletAddress: bw.address,
-                chain: bw.chainType || 'solana',
-                provider: bw.isEmbedded ? 'embedded' : 'external',
-                isEmbedded: !!bw.isEmbedded,
-                isPrimary: false,
-                isVerified: true,
-                label: null,
-            }));
+        if (!loginWallet) return [];
 
-        // Filter out embedded wallets to show only external login wallets
-        return [...connectionWallets, ...extraWallets].filter(w => !w.isEmbedded);
+        // 2. Check if this wallet is effectively connected in Privy (for actions)
+        const privyConnection = (wallets || []).find((w: any) =>
+            w.walletAddress?.toLowerCase() === loginWallet.address?.toLowerCase()
+        );
+
+        // 3. Construct the single display object
+        return [{
+            id: privyConnection?.id || `login-wallet-${loginWallet.address}`,
+            walletAddress: loginWallet.address,
+            chain: loginWallet.chainType || 'solana',
+            provider: loginWallet.provider || 'external', // fallback
+            isEmbedded: false,
+            isPrimary: true, // Login wallet is always primary in this context
+            isVerified: true, // It's from DB, so it's verified
+            label: null,
+            // Attach Privy object properties if available to enable actions
+            ...privyConnection
+        }];
     })();
 
     const [transferModalOpen, setTransferModalOpen] = useState(false);
@@ -372,8 +371,8 @@ export function ConnectedWallets() {
                 )}
 
                 {/* Wallet List */}
-                {mergedWallets?.map((wallet: any) => {
-                    const info = getWalletInfo(wallet.provider);
+                {displayWallets.map((wallet: any) => {
+                    const info = getWalletInfo(wallet.provider || 'external');
                     const walletBalance = balances[wallet.walletAddress];
                     return (
                         <div
@@ -471,7 +470,7 @@ export function ConnectedWallets() {
                     );
                 })}
 
-                {(!mergedWallets || mergedWallets.length === 0) && (
+                {(!displayWallets || displayWallets.length === 0) && (
                     <div className="text-center py-6">
                         <p className="text-theme-muted text-sm">No wallets connected</p>
                     </div>

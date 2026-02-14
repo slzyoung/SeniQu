@@ -518,7 +518,8 @@ export class AuthService {
                 // syncWallets() will then provision any missing chains (Solana + Ethereum).
                 privyUser = await this.privyService.createWithEmbeddedWallet({
                     email: user.email || undefined,
-                    // No walletAddress — external wallets stay in wallet_logins only
+                    // EXPLICITLY OMITTING walletAddress property everywhere to prevent implicit import of external wallet
+                    // walletAddress: undefined 
                 });
             }
 

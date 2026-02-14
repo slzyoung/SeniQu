@@ -83,22 +83,26 @@ export class UsersService {
             .eq("user_id", id);
 
         if (privyWallets && privyWallets.length > 0) {
+            // this.logger.log(`[findById] Found ${privyWallets.length} privy wallets for user ${id}`);
             for (const w of privyWallets) {
                 seenAddresses.add(w.wallet_address);
                 user.wallets.push({
-                    chainType: w.chain_type,
+                    chainType: w.chain_type?.toLowerCase(),
                     address: w.wallet_address,
                     verifiedAt: new Date(w.updated_at || w.created_at || Date.now()),
                     isEmbedded: true
                 });
             }
+        } else {
+            this.logger.warn(`[findById] No privy wallets found for user ${id}`);
         }
 
         // 2. Fetch external login wallets from wallet_logins (deduplicate)
         const { data: loginWallets } = await client
             .from("wallet_logins")
             .select("wallet_address, chain_type, last_login_at")
-            .eq("user_id", id);
+            .eq("user_id", id)
+            .order("last_login_at", { ascending: false });
 
         if (loginWallets && loginWallets.length > 0) {
             for (const lw of loginWallets) {
@@ -517,8 +521,10 @@ export class UsersService {
             const isEmbedded = w.walletClientType === 'privy' || w.connectorType === 'embedded';
             const isExternal = externalAddresses.has(addr);
 
+            // Strict check: if it's external, skip it UNLESS it's explicitly marked as privy embedded
+            // (which shouldn't happen normally for external wallets)
             if (isExternal && !isEmbedded) {
-                this.logger.warn(`[syncWallets] Skipping external wallet ${addr.slice(0, 10)}... (found in wallet_logins)`);
+                // this.logger.warn(`[syncWallets] Skipping external wallet ${addr.slice(0, 10)}... (found in wallet_logins)`);
                 return false;
             }
             return true;
@@ -533,28 +539,53 @@ export class UsersService {
         let userUpdated = false;
 
         if (!solanaWallet) {
-            this.logger.warn(`[syncWallets] User ${userId} missing Solana wallet. Provisioning...`);
-            try {
-                const updatedUser = await this.privyService.provisionWallet(privyUser.id, 'solana');
-                if (updatedUser) {
-                    privyUser = updatedUser;
-                    userUpdated = true;
+            // Check if we ALREADY have a wallet in DB. If so, TRUST IT and DO NOT PROVISION A NEW ONE.
+            const { data: existingSol } = await client
+                .from("privy_wallets")
+                .select("wallet_address")
+                .eq("user_id", userId)
+                .eq("chain_type", "solana")
+                .single();
+
+            if (existingSol) {
+                this.logger.log(`[syncWallets] User ${userId} has Solana wallet in DB (${existingSol.wallet_address}) but missing in Privy links. Skipping provision to prevent loop.`);
+                // We could optionally try to "heal" the link here if Privy supported it, but for now we just avoid overwriting.
+            } else {
+                this.logger.warn(`[syncWallets] User ${userId} missing Solana embedded wallet. Provisioning...`);
+                try {
+                    const updatedUser = await this.privyService.provisionWallet(privyUser.id, 'solana');
+                    if (updatedUser) {
+                        privyUser = updatedUser;
+                        userUpdated = true;
+                    }
+                } catch (err) {
+                    this.logger.error(`[syncWallets] Failed to provision Solana wallet: ${err.message}`);
                 }
-            } catch (err) {
-                this.logger.error(`[syncWallets] Failed to provision Solana wallet: ${err.message}`);
             }
         }
 
         if (!ethereumWallet) {
-            this.logger.warn(`[syncWallets] User ${userId} missing Ethereum wallet. Provisioning...`);
-            try {
-                const updatedUser = await this.privyService.provisionWallet(privyUser.id, 'ethereum');
-                if (updatedUser) {
-                    privyUser = updatedUser;
-                    userUpdated = true;
+            // Check if we ALREADY have a wallet in DB. If so, TRUST IT and DO NOT PROVISION A NEW ONE.
+            const { data: existingEth } = await client
+                .from("privy_wallets")
+                .select("wallet_address")
+                .eq("user_id", userId)
+                .eq("chain_type", "ethereum")
+                .single();
+
+            if (existingEth) {
+                this.logger.log(`[syncWallets] User ${userId} has Ethereum wallet in DB (${existingEth.wallet_address}) but missing in Privy links. Skipping provision to prevent loop.`);
+            } else {
+                this.logger.warn(`[syncWallets] User ${userId} missing Ethereum embedded wallet. Provisioning...`);
+                try {
+                    const updatedUser = await this.privyService.provisionWallet(privyUser.id, 'ethereum');
+                    if (updatedUser) {
+                        privyUser = updatedUser;
+                        userUpdated = true;
+                    }
+                } catch (err) {
+                    this.logger.error(`[syncWallets] Failed to provision Ethereum wallet: ${err.message}`);
                 }
-            } catch (err) {
-                this.logger.error(`[syncWallets] Failed to provision Ethereum wallet: ${err.message}`);
             }
         }
 
@@ -573,9 +604,9 @@ export class UsersService {
         if (!solanaWallet) this.logger.warn(`[syncWallets] User ${userId} missing Solana wallet (even after provision attempt).`);
         if (!ethereumWallet) this.logger.warn(`[syncWallets] User ${userId} missing Ethereum wallet (even after provision attempt).`);
 
-        // 4. Sync Solana Wallet
+        // 4. Sync Solana Wallet - STRICT UPSERT
         if (solanaWallet) {
-            // this.logger.log(`[syncWallets] Found Solana wallet: ${solanaWallet.address}`);
+            // this.logger.log(`[syncWallets] syncing Solana wallet: ${solanaWallet.address}`);
             const { error } = await client
                 .from("privy_wallets")
                 .upsert(
@@ -583,19 +614,21 @@ export class UsersService {
                         user_id: userId,
                         chain_type: "solana",
                         wallet_address: solanaWallet.address,
+                        // Save the Privy Wallet ID if available (critical for signing)
+                        ...((solanaWallet as any).id ? { privy_wallet_id: (solanaWallet as any).id } : {}),
                         last_verified_at: new Date().toISOString(),
                         updated_at: new Date().toISOString(),
                     },
-                    { onConflict: "user_id, chain_type" }
+                    { onConflict: "user_id, chain_type" } // This creates/updates the single allowed entry
                 )
 
             if (error) this.logger.error(`Failed to sync Solana wallet: ${error.message}`)
             else updates.push("solana")
         }
 
-        // 5. Sync Ethereum Wallet
+        // 5. Sync Ethereum Wallet - STRICT UPSERT
         if (ethereumWallet) {
-            // this.logger.log(`[syncWallets] Found Ethereum wallet: ${ethereumWallet.address}`);
+            // this.logger.log(`[syncWallets] syncing Ethereum wallet: ${ethereumWallet.address}`);
             const { error } = await client
                 .from("privy_wallets")
                 .upsert(
@@ -603,18 +636,17 @@ export class UsersService {
                         user_id: userId,
                         chain_type: "ethereum",
                         wallet_address: ethereumWallet.address,
+                        // Save the Privy Wallet ID if available
+                        ...((ethereumWallet as any).id ? { privy_wallet_id: (ethereumWallet as any).id } : {}),
                         last_verified_at: new Date().toISOString(),
                         updated_at: new Date().toISOString(),
                     },
-                    { onConflict: "user_id, chain_type" }
+                    { onConflict: "user_id, chain_type" } // This creates/updates the single allowed entry
                 )
 
             if (error) this.logger.error(`Failed to sync Ethereum wallet: ${error.message}`)
             else updates.push("ethereum")
         }
-
-        // 6. NO LONGER UPDATE MAIN USER CACHE
-        // The single wallet columns are deleted.
 
         return { success: true, synced: updates }
     }

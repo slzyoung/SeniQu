@@ -223,8 +223,17 @@ export function WalletPage() {
     const handleRefresh = async () => {
         setIsRefreshing(true);
         try {
+            // 1. Force Backend Sync
+            await api.post('/users/me/sync-wallets');
+            const updatedUser = await api.get('/users/me');
+            useAuthStore.getState().setUser(updatedUser as any);
+
+            // 2. Refresh Client Data
             await Promise.all([fetchBalances(), refetchTransactions()]);
-            toast.success('Updated', 'Portfolio refreshed');
+            toast.success('Updated', 'Wallet synced and verified.');
+        } catch (err) {
+            console.error("Manual refresh failed:", err);
+            toast.error("Sync Failed", "Could not verify wallet status.");
         } finally {
             setIsRefreshing(false);
         }
@@ -428,6 +437,24 @@ export function WalletPage() {
         }
     }, [authenticated, pendingDeposit, activeWallet, embeddedWallet, isCreating, handleCreateOrDeposit]);
 
+    // 5.5 Withdraw Button Handler (Smart)
+    const handleWithdrawClick = () => {
+        // 1. Identify valid external wallets from backend data
+        const externalWallets = backendUser?.wallets?.filter((w: any) => !w.isEmbedded && w.chainType === activeChain) || [];
+
+        // 2. Sort by most recently verified (though backend sends sorted, we double check or take first)
+        const primaryExternal = externalWallets[0];
+
+        if (primaryExternal) {
+            setSendAddress(primaryExternal.address);
+            toast.info("Withdraw", `Sending to your connected ${activeChain} wallet.`);
+        } else {
+            toast.info("Manual Withdraw", "Enter the destination address manually or connect a wallet first.");
+            setSendAddress('');
+        }
+
+        setShowSendModal(true);
+    };
 
     // 6. Send Handler (Solana Only for now as requested, but structure supports both)
     const handleSend = async () => {
@@ -685,26 +712,33 @@ export function WalletPage() {
                                     let displayAddress: string | undefined;
                                     let isVerified = false;
 
-                                    if (backendUser && backendUser.wallets && Array.isArray(backendUser.wallets)) {
-                                        // Prioritize EMBEDDED wallet for this chain
-                                        const exactMatch = backendUser.wallets.find((w: any) => w.chainType === activeChain && w.isEmbedded);
+                                    // 1. Backend Source of Truth (Best Case)
+                                    if (backendUser?.wallets?.length) {
+                                        // console.log("[WalletPage Debug] Backend User Wallets:", backendUser.wallets);
+                                        const exactMatch = backendUser.wallets.find((w: any) =>
+                                            w.chainType?.toLowerCase() === activeChain.toLowerCase() && w.isEmbedded
+                                        );
+
                                         if (exactMatch) {
                                             displayAddress = exactMatch.address;
                                             isVerified = true;
                                         }
                                     }
 
-                                    // Fallback: If backend is not synced yet but we have a client wallet, show it with "Syncing..." status
+                                    // 2. Fallback / Client-Side Source (If backend sync is pending/failed)
+                                    // This matches the "Deposit" modal logic to ensure consistency
                                     if (!displayAddress) {
                                         if (activeChain === 'solana' && embeddedSolanaWallet?.address) {
                                             displayAddress = embeddedSolanaWallet.address;
-                                            isVerified = false;
+                                            // We don't mark as Verified yet because it's not in DB, but we SHOW it.
                                         } else if (activeChain === 'ethereum' && embeddedEthereumWallet?.address) {
                                             displayAddress = embeddedEthereumWallet.address;
-                                            isVerified = false;
-                                        } else if (embeddedWallet?.address && (embeddedWallet.chainType === activeChain || !embeddedWallet.chainType)) {
-                                            displayAddress = embeddedWallet.address;
-                                            isVerified = false;
+                                        } else if (embeddedWallet?.address) {
+                                            // Generic fallback (e.g. if chain type is not strictly set in object)
+                                            const wChain = embeddedWallet.chainType?.toLowerCase();
+                                            if (!wChain || wChain === activeChain.toLowerCase()) {
+                                                displayAddress = embeddedWallet.address;
+                                            }
                                         }
                                     }
 
@@ -729,19 +763,25 @@ export function WalletPage() {
                                             {isVerified ? (
                                                 <div className="flex items-center gap-1 text-[10px] text-green-400 font-medium">
                                                     <Shield className="w-3 h-3" />
-                                                    <span>Verified by Seniqu</span>
+                                                    <span>Secured by Seniqu</span>
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center gap-1 text-[10px] text-yellow-500 font-medium">
                                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                                    <span>Syncing Profile...</span>
+                                                    <span>Syncing to backend...</span>
                                                 </div>
                                             )}
                                         </div>
                                     ) : (
                                         <div className="flex items-center gap-2 text-xs text-theme-muted italic">
-                                            <Loader2 className="w-3 h-3 animate-spin" />
-                                            <span>Syncing secured address...</span>
+                                            {!ready ? (
+                                                <>
+                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                    <span>Syncing secured address...</span>
+                                                </>
+                                            ) : (
+                                                <span className="text-theme-muted/50">No wallet found. Try refreshing or click Deposit.</span>
+                                            )}
                                         </div>
                                     );
                                 })()}
@@ -782,8 +822,8 @@ export function WalletPage() {
                             <Button
                                 variant="secondary"
                                 className="w-full justify-center lg:justify-start h-12 text-sm font-bold border-theme-border hover:border-gold/30 bg-theme-bg"
-                                onClick={() => setShowSendModal(true)}
-                                disabled={!activeWallet && !isWalletVerified}
+                                onClick={handleWithdrawClick}
+                                disabled={!activeBackendWallet && !activeWallet && !isWalletVerified}
                                 leftIcon={<Send className="w-4 h-4" />}
                             >
                                 Withdraw
