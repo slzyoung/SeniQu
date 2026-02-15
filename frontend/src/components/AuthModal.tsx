@@ -284,6 +284,10 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     const handleReownLogin = async () => {
       if (!isReownConnected || !reownAddress || !reownProvider) return;
 
+      // STRICT GUARD: Only process if user EXPLICITLY selected WalletConnect
+      // This prevents "Preparing signature request" loops when modal opens
+      if (manualWallet.activeWalletType !== 'walletconnect') return;
+
       // Skip if already processed this exact address
       if (hasProcessedReownRef.current === reownAddress) return;
 
@@ -342,6 +346,10 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     if (isOpen) {
       handleReownLogin();
     }
+
+    return () => {
+      hasProcessedReownRef.current = null;
+    };
   }, [isOpen, isReownConnected, reownAddress, reownProvider, manualWallet, handleClose, onLoginSuccess]);
 
   // Handle wallet connect — always show account selection first

@@ -1124,7 +1124,13 @@ export function WalletPage() {
             {/* WITHDRAW MODAL */}
             <Modal
                 isOpen={showSendModal}
-                onClose={() => setShowSendModal(false)}
+                onClose={() => {
+                    setShowSendModal(false);
+                    // Full Reset on Close
+                    setShowScanModal(false);
+                    setSendAddress('');
+                    setSendAmount('');
+                }}
                 title={`Withdraw ${activeChain === 'solana' ? 'SOL' : 'ETH'}`}
                 description="Send funds to another wallet"
                 size="sm"

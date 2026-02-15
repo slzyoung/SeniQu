@@ -301,10 +301,28 @@ export function useManualWallet() {
             // Resume if within 5 minutes
             if (timeDiff < 5 * 60 * 1000) {
                 console.log(`[ManualWallet] Resuming connection to ${storedWallet}`);
+                // Restore active wallet type immediately so UI shows "Connecting..."
+                setActiveWalletType(storedWallet);
+                setState('connecting');
+
+                // Set a safety timeout to reset if nothing happens (e.g. deep link failed)
+                setTimeout(() => {
+                    setState((curr) => {
+                        if (curr === 'connecting') {
+                            console.log('[ManualWallet] Resume timeout - resetting state');
+                            // Clean reset without triggering errors
+                            sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_WALLET);
+                            sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_TIME);
+                            return 'idle';
+                        }
+                        return curr;
+                    });
+                }, 5000); // 5s grace period for wallet adapter to pick up
+            } else {
+                // Expired - clear it
+                sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_WALLET);
+                sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_TIME);
             }
-            // Always clear on init to prevent stuck loops
-            sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_WALLET);
-            sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_TIME);
         }
     });
 
@@ -529,7 +547,14 @@ export function useManualWallet() {
             // Handle Reown Provider / Standard Provider
             if (provider.signMessage) {
                 console.log('[ManualWallet] Helper: Calling provider.signMessage...');
-                const result = await provider.signMessage(messageBytes);
+
+                // Add 60s timeout for signing to prevent infinite hanging
+                const result = await withTimeout(
+                    Promise.resolve(provider.signMessage(messageBytes)),
+                    60000,
+                    'Signature request'
+                );
+
                 console.log('[ManualWallet] Helper: Sign Message Result:', result); // DEBUG
 
                 // Robust handling of different signature return formats
