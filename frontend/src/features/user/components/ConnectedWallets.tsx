@@ -75,14 +75,12 @@ export function ConnectedWallets({ user }: { user?: any }) {
     const displayWallets = (() => {
         if (!backendUser?.wallets || !Array.isArray(backendUser.wallets)) return [];
 
-        // 1. Filter for external wallets (from wallet_logins)
-        const externalWallets = backendUser.wallets.filter((w: any) => {
-            const isEmbedded = w.isEmbedded || w.is_embedded || w.privy_wallet_id || w.walletClientType === 'privy';
-            return !isEmbedded;
-        });
+        // 1. Filter for ALL wallets (External + Embedded)
+        // We want to show the login wallet AND the embedded wallets in the profile
+        const targetWallets = backendUser.wallets;
 
         // 2. Map to display format
-        return externalWallets.map((w: any) => {
+        return targetWallets.map((w: any) => {
             const address = w.address || w.wallet_address;
 
             // Check connection status loosely
@@ -95,8 +93,8 @@ export function ConnectedWallets({ user }: { user?: any }) {
                 walletAddress: address,
                 chain: w.chainType || w.chain_type || 'solana',
                 provider: w.provider || 'external',
-                isEmbedded: false,
-                isPrimary: true, // All login wallets are considered verified/primary in this view
+                isEmbedded: !!(w.isEmbedded || w.is_embedded || w.privy_wallet_id || w.walletClientType === 'privy'),
+                isPrimary: !w.isEmbedded, // External wallets are considered "Primary" login methods for now
                 isVerified: true,
                 label: null,
                 ...privyConnection // Merge connection status if available

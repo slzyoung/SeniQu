@@ -319,7 +319,19 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
         return;
       }
 
-      // Single account — proceed to login
+      // Single account — proceed to login.
+      // For mobile: we might need to delay slightly to ensure the modal doesn't close too fast if they just returned?
+      // But actually we want to trigger the signature request immediately.
+
+      // CRITICAL: Check if we recently requested a signature to avoid loops
+      const lastSignRequest = sessionStorage.getItem('seniqu_last_signature_request');
+      const now = Date.now();
+      if (lastSignRequest && (now - parseInt(lastSignRequest) < 2000)) {
+        console.log('[AuthModal] Debouncing signature request');
+        return;
+      }
+      sessionStorage.setItem('seniqu_last_signature_request', now.toString());
+
       const result = await manualWallet.loginWithProvider(reownAddress, reownProvider, 'solana');
 
       if (result) {

@@ -14,10 +14,10 @@ interface NotificationState {
     clearToasts: () => void;
 
     // Convenience methods
-    success: (title: string, message?: string) => string;
-    error: (title: string, message?: string) => string;
-    warning: (title: string, message?: string) => string;
-    info: (title: string, message?: string) => string;
+    success: (title: string, message?: string, duration?: number) => string;
+    error: (title: string, message?: string, duration?: number) => string;
+    warning: (title: string, message?: string, duration?: number) => string;
+    info: (title: string, message?: string, duration?: number) => string;
 }
 
 let toastId = 0;
@@ -50,10 +50,10 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
     clearToasts: () => set({ toasts: [] }),
 
-    success: (title, message) => get().addToast({ type: 'success', title, message }),
-    error: (title, message) => get().addToast({ type: 'error', title, message }),
-    warning: (title, message) => get().addToast({ type: 'warning', title, message }),
-    info: (title, message) => get().addToast({ type: 'info', title, message }),
+    success: (title, message, duration) => get().addToast({ type: 'success', title, message, duration }),
+    error: (title, message, duration) => get().addToast({ type: 'error', title, message, duration }),
+    warning: (title, message, duration) => get().addToast({ type: 'warning', title, message, duration }),
+    info: (title, message, duration) => get().addToast({ type: 'info', title, message, duration }),
 }));
 
 // Hook for easy access

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Wallet,
     Copy,
@@ -117,25 +117,28 @@ export function WalletPage() {
     // 3. Derived Helpers
     // Active Wallet is now derived primarily from Backend Data for security
     // We try to find a matching wallet in backendUser.wallets
-    const activeBackendWallet = backendUser?.wallets?.find((w: any) => {
-        // Robust check for chain type (handle both camelCase and snake_case)
-        const wChain = (w.chainType || w.chain_type || '').toLowerCase();
-        const targetChain = activeChain.toLowerCase();
+    const activeBackendWallet = useMemo(() => {
+        if (!backendUser?.wallets?.length) return undefined;
 
-        // Loose matching for chain
-        const chainMatch = wChain === targetChain || wChain.includes(targetChain);
+        // 1. Filter by Active Chain
+        const chainWallets = backendUser.wallets.filter((w: any) => {
+            const wChain = (w.chainType || w.chain_type || '').toLowerCase();
+            return wChain === activeChain.toLowerCase() || wChain.includes(activeChain.toLowerCase());
+        });
 
-        // Robust check for embedded status
-        // It is embedded if:
-        // 1. isEmbedded is true
-        // 2. is_embedded is true (DB raw)
-        // 3. privy_wallet_id exists (implies it's a privy wallet)
-        // 4. OR if it's just in the wallets list and NOT invalid
-        // We really want to find ANY wallet that matches the chain for the current user from the backend
-        const isEmbedded = w.isEmbedded || w.is_embedded || w.privy_wallet_id || w.walletClientType === 'privy' || true; // Force true for now effectively, as we trust users.service to filter
+        // 2. Try strict Embedded match first (Best for security)
+        const embeddedMatch = chainWallets.find((w: any) =>
+            w.isEmbedded || w.is_embedded || w.privy_wallet_id || w.walletClientType === 'privy'
+        );
 
-        return chainMatch && isEmbedded;
-    });
+        if (embeddedMatch) return embeddedMatch;
+
+        // 3. Fallback: Take the first wallet matching the chain
+        // UsersService puts Privy wallets FIRST in the list, so this effectively defaults to Embedded
+        // even if the explicit flag is missing or false locally.
+        // This mimics the 'Deposit Modal' logic which the user liked.
+        return chainWallets[0];
+    }, [backendUser, activeChain]);
 
     // Debugging to help trace issues
     // useEffect(() => {
@@ -164,7 +167,8 @@ export function WalletPage() {
             };
         }
 
-        // 2. Client-Side Fallback (Active Chain)
+        // 2. Client-Side Fallback (Active Chain) with strict checking
+        // Check specific chain wallet first
         if (activeChain === 'solana' && embeddedSolanaWallet?.address) {
             return { address: embeddedSolanaWallet.address, verified: false };
         }
@@ -172,13 +176,15 @@ export function WalletPage() {
             return { address: embeddedEthereumWallet.address, verified: false };
         }
 
-        // 3. Generic Fallback
+        // 3. Generic Fallback - if we have a generic embedded wallet and it matches the chain (or we are desperate)
         if (embeddedWallet?.address) {
-            const wChain = embeddedWallet.chainType?.toLowerCase();
+            const wChain = (embeddedWallet as any).chainType?.toLowerCase();
+            // If chain matches OR if we have no specific chain info but it's an embedded wallet
             if (!wChain || wChain === activeChain.toLowerCase()) {
                 return { address: embeddedWallet.address, verified: false };
             }
         }
+
         return { address: undefined, verified: false };
     }, [activeBackendWallet, activeChain, embeddedSolanaWallet, embeddedEthereumWallet, embeddedWallet]);
 
@@ -511,24 +517,10 @@ export function WalletPage() {
 
     // 5.5 Withdraw Button Handler (Smart)
     const handleWithdrawClick = () => {
-        // 1. Identify valid external wallets from backend data
-        const externalWallets = backendUser?.wallets?.filter((w: any) => {
-            const wChain = (w.chainType || w.chain_type || '').toLowerCase();
-            const isEmbedded = w.isEmbedded || w.is_embedded || w.privy_wallet_id || w.walletClientType === 'privy';
-            return !isEmbedded && wChain === activeChain.toLowerCase();
-        }) || [];
+        // User requested: Do NOT auto-paste address. Input should be empty.
+        // User requested: Do NOT show "Sending to your connected wallet" toast.
 
-        // 2. Sort by most recently verified (though backend sends sorted, we double check or take first)
-        const primaryExternal = externalWallets[0];
-
-        if (primaryExternal) {
-            setSendAddress(primaryExternal.address);
-            toast.info("Withdraw", `Sending to your connected ${activeChain} wallet.`);
-        } else {
-            toast.info("Manual Withdraw", "Enter the destination address manually or connect a wallet first.");
-            setSendAddress('');
-        }
-
+        setSendAddress('');
         setShowSendModal(true);
     };
 
@@ -830,7 +822,12 @@ export function WalletPage() {
                                                 <span>Syncing secured address...</span>
                                             </>
                                         ) : (
-                                            <span className="text-theme-muted/50">No wallet found. Try refreshing or click Deposit.</span>
+                                            <span className="text-theme-muted/50">
+                                                {(activeChain === 'solana' && (embeddedSolanaWallet || embeddedWallet)) ||
+                                                    (activeChain === 'ethereum' && (embeddedEthereumWallet || embeddedWallet))
+                                                    ? "Verifying secure address..."
+                                                    : "Syncing wallet..."}
+                                            </span>
                                         )}
                                     </div>
                                 )}
@@ -872,12 +869,12 @@ export function WalletPage() {
                                 variant="secondary"
                                 className={`w-full justify-center lg:justify-start h-12 text-sm font-bold border-theme-border bg-theme-bg transition-all
                                     ${currentAddress
-                                        ? 'bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent hover:border-gold/50 border-white/20'
+                                        ? 'bg-gradient-to-r from-white to-gray-200 !text-black hover:from-gray-100 hover:to-gray-300 border-white/20 shadow-lg shadow-white/5'
                                         : 'text-theme-muted opacity-50 cursor-not-allowed'}
                                 `}
                                 onClick={handleWithdrawClick}
                                 disabled={!currentAddress}
-                                leftIcon={<Send className={`w-4 h-4 ${currentAddress ? 'text-white' : 'text-theme-muted'}`} />}
+                                leftIcon={<Send className={`w-4 h-4 ${currentAddress ? 'text-black' : 'text-theme-muted'}`} />}
                             >
                                 Withdraw
                             </Button>

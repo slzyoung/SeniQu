@@ -49,6 +49,12 @@ export const getAppKit = () => {
             ],
             networks: networks as any,
             projectId: projectId || 'c4f79cc821948d9e1718f2776358ba', // Fallback
+            metadata: {
+                name: 'Seniqu',
+                description: 'Preserve and collect digital heritage.',
+                url: 'https://seniqu.com', // Replace with your production URL
+                icons: ['https://seniqu.com/logo.png'], // Replace with your logo URL
+            },
             features: {
                 analytics: true,
                 email: false, // Disable email, we use custom auth

@@ -235,9 +235,8 @@ export class AuthService {
 
         // Step 4: Provision Privy embedded wallets (Solana + Ethereum)
         // Same as email/Google login: every user gets embedded deposit wallets.
-        // The external wallet address stays in wallet_logins only — ensureEmbeddedWallet
-        // creates SEPARATE Privy-managed wallets for deposits/withdrawals.
-        await this.ensureEmbeddedWallet(user)
+        // We pass the login wallet details so Privy can link it to the user identity.
+        await this.ensureEmbeddedWallet(user, walletAddress, chain)
 
         // Step 5: Generate JWT tokens
         const tokens = await this.generateTokens(user)
@@ -498,7 +497,7 @@ export class AuthService {
      * If not, create a Privy user and provision wallets.
      * Works for users WITH or WITHOUT email (wallet-login users).
      */
-    private async ensureEmbeddedWallet(user: any): Promise<void> {
+    private async ensureEmbeddedWallet(user: any, walletAddress?: string, chainType?: string): Promise<void> {
         this.logger.log(`Provisioning/Syncing embedded wallet for user ${user.id}`);
 
         try {
@@ -511,15 +510,14 @@ export class AuthService {
 
             // Scenario B: User has no privyId → Create/Import into Privy
             if (!privyUser) {
-                // IMPORTANT: Do NOT pass external wallet address to importUser().
-                // That would import the login wallet as a Privy-managed wallet,
-                // causing it to appear in privy_wallets instead of a fresh embedded one.
-                // Just use createEmbeddedWallet: true to create fresh Privy wallets.
-                // syncWallets() will then provision any missing chains (Solana + Ethereum).
+                // Pass external wallet address if provided.
+                // This links the external wallet to the Privy user, and `createEmbeddedWallet: true`
+                // ensures a SEPARATE embedded wallet is also created.
+                // Our syncWallets logic correctly distinguishes them via wallet_logins check.
                 privyUser = await this.privyService.createWithEmbeddedWallet({
                     email: user.email || undefined,
-                    // EXPLICITLY OMITTING walletAddress property everywhere to prevent implicit import of external wallet
-                    // walletAddress: undefined 
+                    walletAddress: walletAddress || undefined,
+                    chainType: (chainType as "ethereum" | "solana") || "solana"
                 });
             }
 

@@ -520,7 +520,7 @@ export function useManualWallet() {
 
             // Helpful toast specifically for mobile users who might need to check app
             if (isMobile()) {
-                toast.info('Check Wallet', 'Please switch to your wallet app to sign.');
+                toast.info('Check Wallet', 'Please switch to your wallet app to sign the message.', 10000); // 10s duration
             }
 
             const messageBytes = new TextEncoder().encode(nonceResponse.message);
@@ -614,8 +614,13 @@ export function useManualWallet() {
         } catch (err: any) {
             console.error('LoginWithProvider Error:', err);
             // Detect user rejection
-            if (err?.message?.includes('rejected')) {
+            if (err?.message?.includes('rejected') || err?.message?.includes('User denied')) {
                 toast.info('Cancelled', 'Signature request rejected');
+            } else if (isMobile() && (err?.message?.includes('closed') || err?.message?.includes('ignoring'))) {
+                // Mobile specific: sometimes "closed" just means they switched apps back too fast?
+                // or maybe the wallet app closed the session?
+                console.warn('[ManualWallet] Mobile session interruption:', err);
+                // Don't show error toast for these widespread mobile "flukes" unless critical
             } else {
                 toast.error('Login Failed', err?.message || 'Failed to authenticate');
                 setError(err?.message);

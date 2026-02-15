@@ -44,9 +44,11 @@ useSyncJwtBasedAuthState({
 
 ### 2.3 Wallet Creation & Linking
 When a user visits the **Wallet Page** (`/dashboard/wallet`):
-1.  **Backend vs Frontend Truth**: The system prioritizes the **Backend Database (`privy_wallets`)** as the single source of truth for wallet addresses.
-    -   If the backend return a wallet address, it is displayed **immediately**, even if the client-side Privy SDK is still initializing or syncing.
-    -   This eliminates "flickering" or "Not Found" states for users with existing wallets.
+1.  **Adaptive Wallet Resolution**: The system uses a robust strategy to find the correct embedded wallet:
+    -   **Strict Check**: First, looks for a wallet explicitly flagged as `isEmbedded`.
+    -   **Backend Fallback**: If flags are missing, it defaults to the **First Wallet** matching the active chain (relying on backend sorting which prioritizes Privy wallets).
+    -   **Client Fallback**: If backend data is syncing, it falls back to the local `usePrivyWallet` hook to show "Verifying..." status.
+    -   **Result**: The address is displayed **immediately** and consistently, eliminating "Not Found" states.
 2.  **Auto-Creation**: If no wallet exists in the DB, the frontend triggers `createWallet()` (Privy SDK).
 3.  **Sync**: Immediately calls `POST /users/me/sync-wallets` to persist the new wallet to the `privy_wallets` table.
 
@@ -59,21 +61,21 @@ We have standardized all operations to use the **Mainnet** (or Environment RPC) 
 
 #### Withdraw (Send) - **Robust Execution**
 -   **Button State**: The "Withdraw" button is **always enabled** as long as a wallet address is known (from Backend or Frontend).
--   **Styling**: When active, the button features a **White Gradient** text and border effect (`bg-gradient-to-r from-white to-gray-300`) to distinguish it as a premium feature.
+-   **Styling**: When active, the button features a high-contrast **White Gradient** (`bg-gradient-to-r from-white to-gray-200`) with **Black Text** (`!text-black`) and a **Black Icon** to ensure visibility and a premium feel.
 -   **Execution**: The system dynamically locates the correct **Privy Signer Object** (`getProvider`) at the moment of transaction.
 
 ---
 
 ## 3. Connected Wallets & Profile
-Strict filtering logic is applied to the "Connected Wallets" section in the User Profile (`ConnectedWallets.tsx`).
+The "Connected Wallets" section in the User Profile (`ConnectedWallets.tsx`) provides a unified view of all user wallets.
 
-### 3.1 Display Logic (Strict Filtering)
-To prevent confusion between "Embedded" and "External" wallets:
-1.  **Source**: We iterate strictly through `backendUser.wallets` (which aggregates `wallet_logins` and `privy_wallets`).
-2.  **Filter**: We applied a **Strict Filter** to exclude any wallet flagged as `isEmbedded`.
-    -   **Allowed**: External wallets (Phantom, MetaMask) from `wallet_logins`.
-    -   **Hidden**: Auto-generated Privy wallets from `privy_wallets`.
-3.  **Result**: The "Connected Wallets" list *only* shows the external wallets the user explicitly connected or logged in with.
+### 3.1 Display Logic (Merged Display)
+To provide full visibility and control:
+1.  **Source**: We iterate through `backendUser.wallets` (which aggregates `wallet_logins` and `privy_wallets`).
+2.  **Merged List**: We display **ALL** connected wallets in the "Connected Wallets" section.
+    -   **Embedded Wallets**: Clearly marked with an "Embedded" badge.
+    -   **External Wallets**: Marked as "Primary" if they were used for login.
+3.  **Result**: Users can see their Embedded Wallet (for App usage) and their External Wallets (for deposits/withdrawals) in one unified list.
 
 ### 3.2 External Wallets (Manual)
 
