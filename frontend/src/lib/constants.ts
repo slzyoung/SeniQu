@@ -26,6 +26,7 @@ export const ROUTES = {
     // Public Routes
     HOME: '/',
     GALLERY: '/gallery',
+    COLLECTIONS: '/collections',
     GALLERY_MUSEUM: '/gallery/museum/:id',
     GALLERY_ARTWORK: '/gallery/artwork/:id',
     NEARBY: '/gallery/nearby',

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Upload, ShieldCheck, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
@@ -6,27 +5,27 @@ import { GlowCard } from './GlowCard';
 export function HowItWorks() {
   const { ref, isVisible } = useScrollAnimation();
   const steps = [
-  {
-    icon: Upload,
-    title: 'Upload Your Artwork',
-    description:
-    'Capture high-resolution images of traditional artworks with our guided digitization tools.',
-    delay: 0
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Verify Authenticity',
-    description:
-    'Our network of cultural experts and AI verification ensures provenance and authenticity.',
-    delay: 0.2
-  },
-  {
-    icon: Lock,
-    title: 'Preserve Forever',
-    description:
-    'Artworks are permanently preserved on-chain, ensuring cultural heritage endures for generations.',
-    delay: 0.4
-  }];
+    {
+      icon: Upload,
+      title: 'Upload Your Artwork',
+      description:
+        'Capture high-resolution images of traditional artworks with our guided digitization tools.',
+      delay: 0
+    },
+    {
+      icon: ShieldCheck,
+      title: 'Verify Authenticity',
+      description:
+        'Our network of cultural experts and AI verification ensures provenance and authenticity.',
+      delay: 0.2
+    },
+    {
+      icon: Lock,
+      title: 'Preserve Forever',
+      description:
+        'Artworks are permanently preserved on-chain, ensuring cultural heritage endures for generations.',
+      delay: 0.4
+    }];
 
   return (
     <section
@@ -97,24 +96,24 @@ export function HowItWorks() {
           </div>
 
           {steps.map((step, index) =>
-          <motion.div
-            key={index}
-            initial={{
-              opacity: 0,
-              y: 30
-            }}
-            whileInView={{
-              opacity: 1,
-              y: 0
-            }}
-            viewport={{
-              once: true
-            }}
-            transition={{
-              duration: 0.6,
-              delay: step.delay
-            }}
-            className="relative z-10">
+            <motion.div
+              key={index}
+              initial={{
+                opacity: 0,
+                y: 30
+              }}
+              whileInView={{
+                opacity: 1,
+                y: 0
+              }}
+              viewport={{
+                once: true
+              }}
+              transition={{
+                duration: 0.6,
+                delay: step.delay
+              }}
+              className="relative z-10">
 
               {/* Mobile: horizontal card layout */}
               <div className="md:hidden flex gap-4 items-start pl-14">
@@ -142,8 +141,8 @@ export function HowItWorks() {
               {/* Desktop: vertical card layout */}
               <div className="hidden md:block">
                 <GlowCard
-                className="h-full rounded-2xl p-8 text-center"
-                hover={true}>
+                  className="h-full rounded-2xl p-8 text-center"
+                  hover={true}>
 
                   <div className="relative flex flex-col items-center">
                     <span className="absolute -top-4 -right-4 text-8xl font-serif font-bold text-theme-text opacity-[0.03] select-none">

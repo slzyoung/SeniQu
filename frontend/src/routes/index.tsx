@@ -132,7 +132,7 @@ const router = createBrowserRouter(
 
                 {/* Gallery Routes */}
                 <Route path={ROUTES.GALLERY} element={<PublicGallery />} />
-                <Route path='/collections' element={<CollectionsPage />} />
+                <Route path={ROUTES.COLLECTIONS} element={<CollectionsPage />} />
                 <Route path={ROUTES.GALLERY_MUSEUM} element={<MuseumDetail />} />
                 <Route path={ROUTES.GALLERY_ARTWORK} element={<ArtworkView />} />
                 <Route path={ROUTES.NEARBY} element={<NearbyMuseums />} />

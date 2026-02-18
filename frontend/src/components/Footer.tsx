@@ -35,10 +35,10 @@ export function Footer() {
           {/* Brand Column - Full width on mobile */}
           <div className="col-span-2 md:col-span-1 text-center md:text-left">
             <span className="font-serif text-2xl md:text-3xl font-bold text-gold italic mb-4 md:mb-6 block">
-              Seniqu
+              SeniQu
             </span>
             <p className="text-theme-muted text-xs md:text-sm leading-relaxed mb-4 md:mb-6 max-w-xs mx-auto md:mx-0">
-              The premier Web 2.5 platform for preserving the rich cultural
+              The premier Web3 platform for preserving the rich cultural
               heritage of the Indonesian archipelago.
             </p>
             <div className="flex gap-3 justify-center md:justify-start">
@@ -115,7 +115,7 @@ export function Footer() {
 
         {/* Bottom Bar */}
         <div className="pt-6 md:pt-8 border-t border-theme-border flex flex-col md:flex-row justify-between items-center gap-3 md:gap-4 text-[10px] md:text-xs text-theme-muted/60">
-          <p>© 2026 Seniqu. Built with ♥ for Nusantara.</p>
+          <p>© 2026 SeniQu. Built with ♥ for Nusantara.</p>
           <div className="flex items-center gap-4 md:gap-6">
             <button
               onClick={scrollToTop}

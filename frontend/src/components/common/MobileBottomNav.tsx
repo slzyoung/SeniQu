@@ -19,7 +19,6 @@ import {
     Bell,
     Grid,
     MapPin,
-    Compass,
     Wallet,
     type LucideIcon,
 } from 'lucide-react';
@@ -40,7 +39,6 @@ const guestNavItems: NavItem[] = [
     { path: ROUTES.HOME, icon: Home, label: 'Home' },
     { path: '/collections', icon: Grid, label: 'Collections' },
     { path: ROUTES.NEARBY, icon: MapPin, label: 'Nearby' },
-    { path: ROUTES.GALLERY, icon: Compass, label: 'Explore', requiresAuth: true },
 ];
 
 const userNavItems: NavItem[] = [
@@ -112,11 +110,20 @@ export function MobileBottomNav() {
                 style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}
             >
                 {navItems.map((item) => {
-                    // Active check logic: Exact match or starts with path (except for root dashboard paths to avoid false positives)
-                    const isRoot = item.path === ROUTES.USER_DASHBOARD || item.path === ROUTES.ARTIST_DASHBOARD || item.path === ROUTES.ADMIN_DASHBOARD;
-                    const isActive = isRoot
+                    // Active check logic
+                    const isRoot = item.path === ROUTES.USER_DASHBOARD ||
+                        item.path === ROUTES.ARTIST_DASHBOARD ||
+                        item.path === ROUTES.ADMIN_DASHBOARD ||
+                        item.path === ROUTES.HOME;
+
+                    let isActive = isRoot
                         ? currentPath === item.path
                         : currentPath.startsWith(item.path);
+
+                    // Special case: Keep Home active when viewing Gallery
+                    if (item.label === 'Home' && currentPath === ROUTES.GALLERY) {
+                        isActive = true;
+                    }
 
                     const Icon = item.icon;
                     const isProfile = item.label === 'Profile' && isAuthenticated;

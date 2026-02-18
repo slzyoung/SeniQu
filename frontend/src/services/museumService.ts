@@ -53,24 +53,56 @@ class MuseumService {
     }
 
     /**
+     * Helper to map DB response to Museum interface
+     */
+    private mapDatabaseToMuseum(data: any): Museum {
+        return {
+            id: data.id,
+            name: data.name,
+            description: data.description,
+            address: data.address || {
+                street: '',
+                city: data.city,
+                province: data.province,
+                postalCode: data.postal_code,
+                country: data.country
+            },
+            coordinates: data.coordinates || { lat: 0, lng: 0 },
+            images: data.images || [data.cover_image_url].filter(Boolean) || [],
+            artworksCount: data.total_artworks || 0,
+            rating: data.rating,
+            openingHours: data.opening_hours,
+            contactInfo: data.contact_info,
+            isVerified: data.is_verified,
+            // Add other fields if necessary
+        };
+    }
+
+    /**
      * Get all verified museums/galleries
      */
     async getMuseums(filters: MuseumSearchFilters = {}): Promise<PaginatedResponse<Museum>> {
-        return apiGet<PaginatedResponse<Museum>>('/museums', { params: filters });
+        const response = await apiGet<any>('/museums', { params: filters });
+        return {
+            data: (response.data || []).map(this.mapDatabaseToMuseum),
+            meta: response.meta
+        };
     }
 
     /**
      * Get nearby museums
      */
     async getNearbyMuseums(filters: NearbyFilters): Promise<Museum[]> {
-        return apiGet<Museum[]>('/museums/nearby', { params: filters });
+        const response = await apiGet<{ data: any[] }>('/museums/nearby', { params: filters });
+        return (response.data || []).map(this.mapDatabaseToMuseum);
     }
 
     /**
      * Get museum by slug
      */
     async getMuseumBySlug(slug: string): Promise<Museum> {
-        return apiGet<Museum>(`/museums/${slug}`);
+        const response = await apiGet<{ data: any }>(`/museums/${slug}`);
+        return this.mapDatabaseToMuseum(response.data);
     }
 
     /**
@@ -87,21 +119,24 @@ class MuseumService {
      * Create new museum (Institution/Admin)
      */
     async createMuseum(data: CreateMuseumData): Promise<Museum> {
-        return apiPost<Museum>('/museums', data);
+        const response = await apiPost<{ data: any }>('/museums', data);
+        return this.mapDatabaseToMuseum(response.data);
     }
 
     /**
      * Update museum
      */
     async updateMuseum(id: string, data: Partial<CreateMuseumData>): Promise<Museum> {
-        return apiPut<Museum>(`/museums/${id}`, data);
+        const response = await apiPut<{ data: any }>(`/museums/${id}`, data);
+        return this.mapDatabaseToMuseum(response.data);
     }
 
     /**
      * Verify museum (Admin)
      */
     async verifyMuseum(id: string): Promise<Museum> {
-        return apiPut<Museum>(`/museums/${id}/verify`);
+        const response = await apiPut<{ data: any }>(`/museums/${id}/verify`);
+        return this.mapDatabaseToMuseum(response.data);
     }
 
     /**

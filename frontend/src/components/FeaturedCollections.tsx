@@ -335,7 +335,7 @@ export function FeaturedCollections() {
         {/* View All CTA */}
         <div className="text-center mt-10 md:mt-16">
           <button
-            onClick={() => navigate(ROUTES.GALLERY)}
+            onClick={() => navigate(ROUTES.COLLECTIONS)}
             className="group relative inline-flex items-center gap-2 md:gap-3 px-6 md:px-8 py-3 md:py-4 rounded-full border border-gold text-gold font-medium overflow-hidden transition-all hover:text-charcoal text-sm md:text-base"
           >
             <div className="absolute inset-0 bg-gold translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />

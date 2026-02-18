@@ -1,4 +1,3 @@
-import React from 'react';
 import { Wallet, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ParticleField } from './ParticleField';

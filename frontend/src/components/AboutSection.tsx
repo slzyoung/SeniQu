@@ -55,7 +55,7 @@ export function AboutSection() {
                         </h2>
 
                         <p className="text-theme-muted text-lg leading-relaxed mb-8">
-                            Seniqu is the premier Arts Marketplace dedicated to bridging the gap between traditional heritage and the digital future.
+                            SeniQu is the premier Arts Marketplace dedicated to bridging the gap between traditional heritage and the digital future.
                             We introduce the concept of <strong className="text-theme-text font-medium">Proof of Art (PoA)</strong>,
                             creating a secure and transparent ecosystem for verified cultural assets.
                         </p>
