@@ -1,9 +1,12 @@
-import { Twitter, Instagram, Disc, Mail, Send } from 'lucide-react';
+import { Twitter, Instagram, Disc, Mail, Send, ArrowUp } from 'lucide-react';
+
 export function Footer() {
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <footer className="bg-theme-bg border-t border-theme-border pt-12 md:pt-20 pb-28 md:pb-10 relative overflow-hidden transition-colors duration-300">
-      <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-gold/50 to-transparent" />
-
       <div className="max-w-7xl mx-auto px-4 md:px-6 relative z-10">
         {/* Newsletter Row */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 md:gap-8 mb-12 md:mb-16 pb-10 md:pb-16 border-b border-theme-border">
@@ -113,19 +116,21 @@ export function Footer() {
         {/* Bottom Bar */}
         <div className="pt-6 md:pt-8 border-t border-theme-border flex flex-col md:flex-row justify-between items-center gap-3 md:gap-4 text-[10px] md:text-xs text-theme-muted/60">
           <p>© 2026 Seniqu. Built with ♥ for Nusantara.</p>
-          <div className="flex gap-4 md:gap-6">
-            <a href="#" className="hover:text-theme-text">
+          <div className="flex items-center gap-4 md:gap-6">
+            <button
+              onClick={scrollToTop}
+              className="group flex items-center gap-2 text-theme-text hover:text-gold transition-colors"
+            >
+              Back to Top <ArrowUp className="w-3 h-3 group-hover:-translate-y-0.5 transition-transform" />
+            </button>
+            <a href="#" className="hover:text-theme-text hidden md:block">
               Privacy
             </a>
-            <a href="#" className="hover:text-theme-text">
+            <a href="#" className="hover:text-theme-text hidden md:block">
               Terms
-            </a>
-            <a href="#" className="hover:text-theme-text">
-              Sitemap
             </a>
           </div>
         </div>
       </div>
     </footer>);
-
 }

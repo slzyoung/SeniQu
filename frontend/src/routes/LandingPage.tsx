@@ -44,9 +44,7 @@ export function LandingPage({ openAuthModal: shouldOpenModal }: LandingPageProps
                 <HowItWorks />
                 <CTASection />
             </main>
-            <div className="hidden md:block">
-                <Footer />
-            </div>
+            <Footer />
             <MobileNav />
         </div>
     );

@@ -7,27 +7,53 @@ import { ParticleField } from './ParticleField';
 const artworks = [
   {
     id: 1,
-    image:
-      'https://images.unsplash.com/photo-1555400038-63f5ba517a47?q=80&w=1200&auto=format&fit=crop',
-    alt: 'Balinese Temple Gate'
+    image: '/images/museum/museumnasionalindonesia.png',
+    alt: 'Museum Nasional Indonesia'
   },
   {
     id: 2,
-    image:
-      'https://images.unsplash.com/photo-1628413993904-94ecb60f6153?q=80&w=1200&auto=format&fit=crop',
-    alt: 'Traditional Batik Pattern'
+    image: '/images/museum/museumpasifikabali.jpg',
+    alt: 'Museum Pasifika Bali'
   },
   {
     id: 3,
-    image:
-      'https://images.unsplash.com/photo-1599576838609-84d1c4e00b39?q=80&w=1200&auto=format&fit=crop',
-    alt: 'Wayang Kulit Shadow Puppet'
+    image: '/images/museum/Museumullensentalu.jpg',
+    alt: 'Ullen Sentalu Museum'
   },
   {
     id: 4,
-    image:
-      'https://images.unsplash.com/photo-1604917621956-10dfa7cce2e7?q=80&w=1200&auto=format&fit=crop',
-    alt: 'Borobudur Relief'
+    image: '/images/gallery/galerinasionalindonesia.jpg',
+    alt: 'Galeri Nasional Indonesia'
+  },
+  {
+    id: 5,
+    image: '/images/gallery/galerigajahjogja.jpg',
+    alt: 'Galeri Gajah Jogja'
+  },
+  {
+    id: 6,
+    image: '/images/gallery/galerijogja.jpg',
+    alt: 'Galeri Jogja'
+  },
+  {
+    id: 7,
+    image: '/images/museum/museumaffandi.jpg',
+    alt: 'Museum Affandi'
+  },
+  {
+    id: 8,
+    image: '/images/museum/museumbasoekiabdullah.png',
+    alt: 'Museum Basoeki Abdullah'
+  },
+  {
+    id: 9,
+    image: '/images/museum/museummacan.jpg',
+    alt: 'Museum MACAN'
+  },
+  {
+    id: 10,
+    image: '/images/museum/pekalonganbatikmuseum.jpeg',
+    alt: 'Pekalongan Batik Museum'
   }
 ];
 
@@ -95,7 +121,7 @@ export function HeroSection() {
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
               </span>
               <span className="text-gold-dim dark:text-gold text-[10px] md:text-xs tracking-[0.15em] uppercase font-medium">
-                Web 2.5 Digital Museum
+                Digital Museum & Gallery
               </span>
             </div>
 
@@ -226,11 +252,11 @@ export function HeroSection() {
       <motion.div
         animate={{ y: [0, 10, 0], opacity: [0.5, 1, 0.5] }}
         transition={{ duration: 2, repeat: Infinity }}
-        className="absolute bottom-14 lg:bottom-20 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 cursor-pointer z-20"
+        className="absolute bottom-14 lg:bottom-20 left-0 right-0 mx-auto w-fit flex flex-col items-center gap-2 cursor-pointer z-20"
         onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
       >
-        <span className="text-[10px] uppercase tracking-[0.2em] text-charcoal/60 dark:text-gold/60 transition-colors duration-500">Scroll</span>
-        <div className="w-5 h-5 border-b-2 border-r-2 border-charcoal/50 dark:border-gold/50 transform rotate-45 transition-colors duration-500" />
+        <span className="text-[10px] uppercase tracking-[0.2em] text-theme-text/60 transition-colors duration-500">Scroll</span>
+        <div className="w-5 h-5 border-b-2 border-r-2 border-theme-text/50 transform rotate-45 transition-colors duration-500" />
       </motion.div>
     </section>
   );

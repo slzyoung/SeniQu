@@ -53,7 +53,7 @@ export function Navbar() {
           {/* Logo */}
           <div className="flex items-center relative group cursor-pointer" onClick={() => navigate(ROUTES.HOME)}>
             <span className="font-serif text-2xl md:text-3xl font-bold text-gold italic tracking-wide relative z-10">
-              Seniqu
+              SeniQu
             </span>
             <motion.div
               className="absolute -bottom-1 left-0 right-0 h-[2px] bg-gold opacity-0 group-hover:opacity-100 transition-opacity duration-300"

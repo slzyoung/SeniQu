@@ -546,7 +546,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
       // AUTOMATIC: Sync Privy Session handled by PrivySyncManager
 
-      toast.success('Welcome to Seniqu!', 'Your account has been created successfully.');
+      toast.success('Welcome to SeniQu!', 'Your account has been created successfully.');
 
       // Redirect to dashboard FIRST (before modal closes)
       const redirectPath = getDashboardRoute(response.user.role);
@@ -604,7 +604,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
         {/* Header */}
         <div className="px-8 pt-10 pb-6 text-center">
           <h2 className="text-3xl font-serif font-bold text-theme-text mb-2">
-            Welcome to <span className="text-gold italic">Seniqu</span>
+            Welcome to <span className="text-gold italic">SeniQu</span>
           </h2>
           <p className="text-theme-muted text-sm">
             Sign in to preserve and collect digital heritage.
@@ -862,7 +862,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
           Create Account
         </h2>
         <p className="text-theme-muted text-sm">
-          Join Seniqu to start your art collection journey.
+          Join SeniQu to start your art collection journey.
         </p>
       </div>
 
