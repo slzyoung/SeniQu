@@ -121,10 +121,10 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
                 aria-hidden={!mobileMenuOpen}
                 className={`
                     fixed inset-y-0 left-0 z-[65] w-[88px]
-                    bg-theme-surface/95 backdrop-blur-xl
-                    shadow-2xl shadow-black/50
+                    bg-white/80 dark:bg-theme-surface/95 backdrop-blur-xl
+                    shadow-2xl
                     flex flex-col items-center
-                    border-r border-theme-border/50
+                    border-r border-theme-border
                     transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]
                     will-change-transform
                     ${mobileMenuOpen
@@ -132,6 +132,7 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
                         : '-translate-x-full'
                     }
                 `}
+                style={{ boxShadow: 'var(--shadow-color) 0px 25px 50px -12px' }}
             >
                 {/* ── Close Button (ChevronLeft arrow) ── */}
                 <div className="flex flex-col items-center justify-center pt-6 pb-4 w-full shrink-0">
@@ -144,7 +145,7 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
                         type="button"
                         className="
                             flex items-center justify-center w-12 h-12 rounded-2xl
-                            bg-theme-elevated/50 border border-theme-border/50
+                            bg-theme-elevated border border-theme-border
                             text-theme-muted hover:text-theme-text
                             active:scale-95 active:bg-theme-elevated
                             transition-all duration-200
@@ -198,7 +199,7 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
                     <div className="
                         w-full flex justify-center shrink-0 
                         p-4 pb-8 
-                        bg-gradient-to-t from-theme-surface via-theme-surface/90 to-transparent
+                        bg-gradient-to-t from-white via-white/90 to-transparent dark:from-theme-surface dark:via-theme-surface/90
                         z-10
                     ">
                         {footer}
@@ -227,7 +228,7 @@ function MobileNavItem({
                  transition-all duration-300 ease-out
                  group
                  ${isActive
-                    ? 'bg-gold/10 text-gold shadow-[0_0_20px_-5px_var(--gold)]/30'
+                    ? 'bg-gold/15 dark:bg-gold/10 text-gold shadow-[0_0_20px_-5px_var(--gold)]/30'
                     : 'text-theme-muted hover:text-theme-text hover:bg-theme-elevated/80 active:scale-95'
                 }`
             }
