@@ -64,21 +64,22 @@ export default defineConfig({
             return 'vendor-libs';
           }
 
-          // Web3 & Auth (Unified Buffer to avoid circular deps)
-          if (id.includes('node_modules/@privy-io') ||
-            id.includes('node_modules/@solana') ||
-            id.includes('node_modules/@reown') ||
+          // Web3 & Auth - Let Vite handle these or split very carefully
+          // aggressive grouping caused ReferenceError: Cannot access 'Nt' before initialization
+          if (id.includes('node_modules/@privy-io')) {
+            return 'vendor-privy';
+          }
+          if (id.includes('node_modules/@reown') ||
             id.includes('node_modules/@walletconnect') ||
-            id.includes('node_modules/@web3modal') ||
-            id.includes('node_modules/viem') ||
-            id.includes('node_modules/ethers') ||
-            id.includes('node_modules/@ethersproject') ||
-            id.includes('node_modules/bs58') ||
-            id.includes('node_modules/buffer') ||
-            id.includes('node_modules/elliptic') ||
-            id.includes('node_modules/bn.js') ||
-            id.includes('node_modules/ox')) {
-            return 'vendor-web3';
+            id.includes('node_modules/@web3modal')) {
+            return 'vendor-reown';
+          }
+          // Solana & Ethers - kept separate to avoid massive single chunk
+          if (id.includes('node_modules/@solana') || id.includes('node_modules/bs58')) {
+            return 'vendor-solana';
+          }
+          if (id.includes('node_modules/ethers') || id.includes('node_modules/@ethersproject')) {
+            return 'vendor-ethers';
           }
         },
       },
