@@ -1,95 +1,57 @@
 import { createAppKit } from '@reown/appkit/react'
 import { SolanaAdapter } from '@reown/appkit-adapter-solana'
 import { mainnet, solana, solanaDevnet } from '@reown/appkit/networks'
-import { SolflareWalletAdapter, PhantomWalletAdapter } from '@solana/wallet-adapter-wallets'
+
 import { EthersAdapter } from '@reown/appkit-adapter-ethers'
 
 // 1. Get Project ID from .env
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
 
 // Debug logging
-console.log('[Reown] Initializing with Project ID:', projectId ? 'Beep Boop Hidden' : 'MISSING');
-console.log('[Reown] Environment:', import.meta.env.MODE);
+if (import.meta.env.DEV) {
+    console.log('[Reown] Project ID:', projectId ? 'present' : 'MISSING');
+}
 
 if (!projectId) {
     console.error('VITE_WALLETCONNECT_PROJECT_ID is not set in .env');
-    // throw new Error('VITE_WALLETCONNECT_PROJECT_ID is not set') // Don't crash, just let Reown complain or use fallback
 }
 
 // 2. Set up adapters
 export const networks = [solana, solanaDevnet, mainnet]
 
-// 3. Create modal (Lazy Lazy Singleton pattern)
-const globalAny: any = globalThis;
-
-// Initialize function rather than immediate execution
-export const getAppKit = () => {
-    // STRICT SINGLETON: Check if it already exists on window/global
-    if (globalAny._reownAppKit) {
-        return globalAny._reownAppKit;
+// 3. Create modal (Eager Initialization)
+// We initialize immediately to ensure hooks like useAppKit work in GlobalLayout/AuthModal.
+// We DO NOT pass Phantom/Solflare adapters here to avoid them "probing" the window
+// and causing auto-connect popups. We handle those wallets manually in useManualWallet.t
+// s.
+export const appKit = createAppKit({
+    adapters: [
+        new SolanaAdapter({
+            wallets: [] // No injected wallets managed by Reown, only WalletConnect (QR)
+        }),
+        new EthersAdapter()
+    ],
+    networks: networks as any,
+    projectId: projectId || 'c4f79cc821948d9e1718f2776358ba', // Fallback
+    metadata: {
+        name: 'Seniqu',
+        description: 'Preserve and collect digital heritage.',
+        url: 'https://seniqu.com',
+        icons: ['https://seniqu.com/logo.png'],
+    },
+    features: {
+        analytics: true,
+        email: false,
+        socials: [],
+    },
+    themeMode: 'dark',
+    themeVariables: {
+        '--w3m-accent': '#D4AF37', // Gold
+        '--w3m-border-radius-master': '1px',
+        '--w3m-font-family': 'Inter, sans-serif'
     }
+});
 
-    // Double check: if the modal DOM element exists, we might have lost the reference but it's running.
-    // Reown attaches <w3m-modal> to the DOM.
-    if (typeof document !== 'undefined' && document.querySelector('w3m-modal')) {
-        console.warn('[Reown] w3m-modal detected in DOM. Skipping re-initialization to avoid conflict.');
-        // We can't recover the instance easily if we lost the reference, but we can avoid crashing.
-        // Best effort: try to find it on window if Reown exposes it elsewhere, otherwise just return null/mock
-        // For now, let's try to proceed carefully.
-    }
-
-    try {
-        console.log('[Reown] Initializing AppKit...');
-        globalAny._reownAppKit = createAppKit({
-            adapters: [
-                new SolanaAdapter({
-                    wallets: [new PhantomWalletAdapter(), new SolflareWalletAdapter()]
-                }),
-                new EthersAdapter()
-            ],
-            networks: networks as any,
-            projectId: projectId || 'c4f79cc821948d9e1718f2776358ba', // Fallback
-            metadata: {
-                name: 'Seniqu',
-                description: 'Preserve and collect digital heritage.',
-                url: 'https://seniqu.com', // Replace with your production URL
-                icons: ['https://seniqu.com/logo.png'], // Replace with your logo URL
-            },
-            features: {
-                analytics: true,
-                email: false, // Disable email, we use custom auth
-                socials: [],
-            },
-            themeMode: 'dark',
-            themeVariables: {
-                '--w3m-accent': '#D4AF37', // Gold
-                '--w3m-border-radius-master': '1px',
-                '--w3m-font-family': 'Inter, sans-serif' // Match app font to prevent unused preload warning
-            }
-        });
-    } catch (e: any) {
-        // If it failed because it was already initialized (race condition), try to retrieve it
-        if (e?.message?.includes('already initialized') || e?.message?.includes('Duplicate')) {
-            console.warn("[Reown] AppKit already initialized (caught error), reusing instance.");
-            // We can't easily "get" the instance if createAppKit threw, 
-            // but usually it attaches to the DOM or global state. 
-            // We'll just suppress the error to avoid crashing.
-        } else {
-            console.warn("[Reown] Failed to initialize AppKit:", e);
-        }
-    }
-
-    return globalAny._reownAppKit;
-};
-
-// Execute immediately if not exists
-if (!globalAny._reownAppKit) {
-    getAppKit();
-}
-
-
-export const appKit = globalAny._reownAppKit;
-
-// Export hook for usage in components
+// Export hooks
 export { useAppKit, useAppKitAccount, useAppKitProvider } from '@reown/appkit/react'
 

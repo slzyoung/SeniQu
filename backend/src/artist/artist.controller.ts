@@ -18,6 +18,11 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from "@nestjs/swagger"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { ArtistService } from "./artist.service"
+import {
+    CreateArtworkDto,
+    UpdateArtworkDto,
+    UpdateArtistProfileDto,
+} from "./artist.dto"
 
 @ApiTags("Artist")
 @Controller("artist")
@@ -71,13 +76,13 @@ export class ArtistController {
 
     @Post("artworks")
     @ApiOperation({ summary: "Create new artwork" })
-    async createArtwork(@Req() req: any, @Body() dto: any) {
+    async createArtwork(@Req() req: any, @Body() dto: CreateArtworkDto) {
         return this.artistService.createArtwork(req.user.id, dto)
     }
 
     @Put("artworks/:id")
     @ApiOperation({ summary: "Update artwork" })
-    async updateArtwork(@Req() req: any, @Param("id") id: string, @Body() dto: any) {
+    async updateArtwork(@Req() req: any, @Param("id") id: string, @Body() dto: UpdateArtworkDto) {
         return this.artistService.updateArtwork(id, req.user.id, dto)
     }
 
@@ -106,7 +111,7 @@ export class ArtistController {
 
     @Put("profile")
     @ApiOperation({ summary: "Update artist profile" })
-    async updateProfile(@Req() req: any, @Body() dto: any) {
+    async updateProfile(@Req() req: any, @Body() dto: UpdateArtistProfileDto) {
         return this.artistService.updateArtistProfile(req.user.id, dto)
     }
 

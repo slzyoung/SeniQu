@@ -13,12 +13,14 @@ interface AuthState {
     user: User | null;
     isAuthenticated: boolean;
     isLoading: boolean;
+    isLoggingOut: boolean;
     error: string | null;
 
     // Actions
     setUser: (user: User | null) => void;
     setLoading: (loading: boolean) => void;
     setError: (error: string | null) => void;
+    setLoggingOut: (loggingOut: boolean) => void;
     login: (user: User, accessToken: string, refreshToken: string) => void;
     logout: () => void;
     updateUser: (updates: Partial<User>) => void;
@@ -40,6 +42,7 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             isAuthenticated: false,
             isLoading: true, // Start loading to check stored auth
+            isLoggingOut: false,
             error: null,
             isCustomAuthDisabled: false,
 
@@ -50,6 +53,8 @@ export const useAuthStore = create<AuthState>()(
             setError: (error) => set({ error }),
 
             disableCustomAuth: () => set({ isCustomAuthDisabled: true }),
+
+            setLoggingOut: (isLoggingOut) => set({ isLoggingOut }),
 
             login: (user, accessToken, refreshToken) => {
                 // Store access token in memory and secure storage

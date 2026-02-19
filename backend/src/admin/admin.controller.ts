@@ -16,6 +16,13 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { PermissionsGuard } from "../auth/guards/permissions.guard"
 import { Permissions, Permission } from "../auth/decorators/permissions.decorator"
 import { AdminService } from "./admin.service"
+import {
+    CreateSystemAlertDto,
+    UpdateSystemAlertDto,
+    CreatePartnershipDto,
+    SuspendUserDto,
+    UpdateReportStatusDto,
+} from "./admin.dto"
 
 @ApiTags("Admin")
 @Controller("admin")
@@ -42,6 +49,14 @@ export class AdminController {
         return this.adminService.getDashboardStats()
     }
 
+    @Get("stats")
+    @Permissions(Permission.ADMIN_DASHBOARD)
+    @ApiOperation({ summary: "Get system stats with period filter" })
+    @ApiQuery({ name: "period", required: false })
+    async getStats(@Query("period") period = "30d") {
+        return this.adminService.getDashboardStats()
+    }
+
     // ============================================
     // USER MANAGEMENT
     // ============================================
@@ -65,8 +80,8 @@ export class AdminController {
     @Post("users/:id/suspend")
     @Permissions(Permission.ADMIN_DASHBOARD)
     @ApiOperation({ summary: "Suspend a user" })
-    async suspendUser(@Param("id") id: string, @Body("reason") reason: string) {
-        await this.adminService.suspendUser(id, reason)
+    async suspendUser(@Param("id") id: string, @Body() dto: SuspendUserDto) {
+        await this.adminService.suspendUser(id, dto.reason)
         return { success: true, message: "User suspended" }
     }
 
@@ -165,15 +180,15 @@ export class AdminController {
     @Post("alerts")
     @Permissions(Permission.ADMIN_DASHBOARD)
     @ApiOperation({ summary: "Create system alert" })
-    async createSystemAlert(@Body() body: any, @Req() req: any) {
-        return this.adminService.createSystemAlert(body, req.user.id)
+    async createSystemAlert(@Body() dto: CreateSystemAlertDto, @Req() req: any) {
+        return this.adminService.createSystemAlert(dto, req.user.id)
     }
 
     @Put("alerts/:id")
     @Permissions(Permission.ADMIN_DASHBOARD)
     @ApiOperation({ summary: "Update system alert" })
-    async updateSystemAlert(@Param("id") id: string, @Body() body: any) {
-        return this.adminService.updateSystemAlert(id, body)
+    async updateSystemAlert(@Param("id") id: string, @Body() dto: UpdateSystemAlertDto) {
+        return this.adminService.updateSystemAlert(id, dto)
     }
 
     @Delete("alerts/:id")
@@ -204,11 +219,10 @@ export class AdminController {
     @ApiOperation({ summary: "Update report status" })
     async updateReportStatus(
         @Param("id") id: string,
-        @Body("status") status: string,
-        @Body("resolutionNotes") notes: string,
+        @Body() dto: UpdateReportStatusDto,
         @Req() req: any
     ) {
-        return this.adminService.updateReportStatus(id, status, req.user.id, notes)
+        return this.adminService.updateReportStatus(id, dto.status, req.user.id, dto.resolutionNotes)
     }
 
     // ============================================
@@ -225,8 +239,8 @@ export class AdminController {
     @Post("partnerships")
     @Permissions(Permission.ADMIN_DASHBOARD)
     @ApiOperation({ summary: "Create partnership" })
-    async createPartnership(@Body() body: any) {
-        return this.adminService.createPartnership(body)
+    async createPartnership(@Body() dto: CreatePartnershipDto) {
+        return this.adminService.createPartnership(dto)
     }
 
     // ============================================

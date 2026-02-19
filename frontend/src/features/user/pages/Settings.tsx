@@ -19,14 +19,11 @@ import {
     ChevronRight,
     LogOut
 } from 'lucide-react';
-import { usePrivy } from '@privy-io/react-auth';
 import { PageContainer } from '../../../components/common/DashboardLayout';
 import { Card, CardHeader, CardContent, Button, Tabs, TabPanel, Badge } from '../../../components/ui';
 import { useTheme } from '../../../hooks/useTheme';
 import { useToast } from '../../../stores/useNotificationStore';
-import { authService } from '../../../services/authService';
-import { useNavigate } from 'react-router-dom';
-import { ROUTES } from '../../../lib/constants';
+import { useLogout } from '../../../hooks/useLogout';
 
 // Toggle switch component with enhanced mobile sizing and animation
 function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (value: boolean) => void }) {
@@ -87,8 +84,7 @@ function SettingRow({
 export function Settings() {
     const { toggleTheme, isDark } = useTheme();
     const toast = useToast();
-    const navigate = useNavigate();
-    const { logout: privyLogout } = usePrivy();
+    const handleLogout = useLogout({ onComplete: () => toast.success('Logged Out', 'See you next time!') });
     const [activeTab, setActiveTab] = useState('general');
 
     // Notification settings state
@@ -128,13 +124,6 @@ export function Settings() {
             toast.error('Account Deletion Initiated', 'Your request has been queued for processing.');
             // In reality, we would call an API endpoint here
         }
-    };
-
-    const handleLogout = async () => {
-        await privyLogout();
-        authService.logout();
-        navigate(ROUTES.HOME);
-        toast.success('Logged Out', 'See you next time!');
     };
 
     const tabs = [

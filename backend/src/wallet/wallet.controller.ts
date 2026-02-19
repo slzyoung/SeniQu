@@ -79,6 +79,7 @@ export class WalletController {
             dto.chain,
             ip,
             userAgent,
+            dto.domain,
         )
 
         return {

@@ -79,23 +79,40 @@ interface EIP6963AnnounceProviderEvent extends CustomEvent {
 function getWalletProvider(walletType: ManualWalletType): WalletProvider | null {
     if (typeof window === 'undefined') return null;
 
+    // Mobile In-App Browser Detection
+    // Many wallets inject a generic 'window.solana' or 'window.ethereum' regardless of who they are.
+    const isMobileInApp = isWalletInAppBrowser();
+
     switch (walletType) {
         case 'phantom': {
+            // Phantom checks
             const solana = (window as any).solana;
             if (solana?.isPhantom) return solana;
-            // Also check window.phantom.solana
+
+            // Phantom also injects window.phantom.solana
             const phantom = (window as any).phantom?.solana;
             if (phantom?.isPhantom) return phantom;
+
+            // In generic mobile browsers, they might just be 'window.solana'
+            if (isMobileInApp && solana) return solana;
+
             return null;
         }
         case 'solflare': {
             const solflare = (window as any).solflare;
             if (solflare?.isSolflare) return solflare;
+
+            // If strictly mobile in-app and we see a solana object but it's not Phantom...
+            // It might be Solflare masquerading or just generic. 
+            // Better to only return if we are sure or if user explicitly clicked 'Solflare'.
+            const solana = (window as any).solana;
+            if (isMobileInApp && solana && solana.isSolflare) return solana;
+
             return null;
         }
         case 'metamask': {
             const ethereum = (window as any).ethereum;
-            if (ethereum?.isMetaMask) return null; // MetaMask is EVM, handled differently
+            if (ethereum?.isMetaMask) return null; // MetaMask is EVM, handled by getMetaMaskProvider
             return null;
         }
         default:
@@ -122,6 +139,14 @@ function getMetaMaskProvider(): any {
     // 2. Check standard injection
     // Explicitly check it is NOT Phantom, Coinbase, or WalletLink
     if (ethereum.isMetaMask && !ethereum.isPhantom && !ethereum.isCoinbaseWallet && !ethereum.isWalletLink) {
+        return ethereum;
+    }
+
+    // 3. Mobile Fallback
+    // In strict mobile environments (like MetaMask Mobile Browser), window.ethereum IS MetaMask.
+    // They might not set isMetaMask=true in all versions, or might have flags we don't know.
+    // simpler check for mobile.
+    if (isWalletInAppBrowser() && ethereum) {
         return ethereum;
     }
 
@@ -188,7 +213,14 @@ function getMetaMaskProviderViaEIP6963(): Promise<any> {
 export function isWalletInstalled(walletType: ManualWalletType): boolean {
     if (walletType === 'walletconnect') return true; // Always available
     if (walletType === 'metamask') return true; // We'll double check in try/catch via EIP-6963
-    return !!getWalletProvider(walletType);
+
+    const provider = getWalletProvider(walletType);
+    if (provider) return true;
+
+    // Mobile fallback: if we are on mobile, we can "try" to deep link even if not installed detection works
+    if (isMobile()) return true;
+
+    return false;
 }
 
 /** Convert Uint8Array to base64 */
@@ -200,18 +232,42 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
     return btoa(binary);
 }
 
-/** Get wallet deep link for mobile */
+/** 
+ * Get wallet deep link for mobile 
+ * Uses Universal Links where available for best UX (no browser prompt)
+ * Falls back to custom schemes.
+ */
 function getMobileDeepLink(walletType: ManualWalletType): string | null {
-    const currentUrl = encodeURIComponent(window.location.href);
+    // Current page URL (where we want the user to return)
+    // We strip any hash/search params to keep it clean, or keep them if needed?
+    // Usually standardizing the return URL is safer.
+    const returnUrl = encodeURIComponent(window.location.origin + window.location.pathname);
     const host = window.location.host;
+
+    // "ref" is often used by wallets to display the dApp name
+    const ref = encodeURIComponent("https://" + host);
 
     switch (walletType) {
         case 'phantom':
-            return `https://phantom.app/ul/browse/${currentUrl}?ref=${encodeURIComponent(host)}`;
+            // Phantom Universal Link (Best practice)
+            // ref: https://docs.phantom.app/solana/deep-linking
+            return `https://phantom.app/ul/browse/${returnUrl}?ref=${ref}`;
+
         case 'solflare':
-            return `https://solflare.com/ul/v1/browse/${currentUrl}?ref=${encodeURIComponent(host)}`;
+            // Solflare Universal Link
+            // ref: https://docs.solflare.com/developer/mobile-deeplinks
+            return `https://solflare.com/ul/v1/browse/${returnUrl}?ref=${ref}`;
+
         case 'metamask':
-            return `https://metamask.app.link/dapp/${host}${window.location.pathname}`;
+            // MetaMask Mobile
+            // ref: https://docs.metamask.io/wallet/how-to/mobile-best-practices/#deeplinking
+            const cleanHost = host.replace('www.', '');
+            return `https://metamask.app.link/dapp/${cleanHost}${window.location.pathname}`;
+
+        case 'walletconnect':
+            // WalletConnect handles its own deep linking via the modal/qr code
+            return null;
+
         default:
             return null;
     }
@@ -317,7 +373,7 @@ export function useManualWallet() {
                         }
                         return curr;
                     });
-                }, 5000); // 5s grace period for wallet adapter to pick up
+                }, 3000); // Reduced to 3s grace period for wallet adapter to pick up
             } else {
                 // Expired - clear it
                 sessionStorage.removeItem(STORAGE_KEYS.CONNECTING_WALLET);
@@ -392,7 +448,7 @@ export function useManualWallet() {
             }
 
             const address = accounts[0];
-            console.log(`[ManualWallet] Connected address: ${address}`);
+            console.log(`[ManualWallet] Connected address: ${address.slice(0, 8)}...${address.slice(-4)}`);
 
             // Return address and a sign function
             return {
@@ -531,7 +587,9 @@ export function useManualWallet() {
 
         try {
             // === STEP 1: Request nonce ===
-            const nonceResponse = await walletService.requestNonce(address, chain);
+            // Pass current domain for SIWS/SIWE domain binding
+            const domain = window.location.host;
+            const nonceResponse = await walletService.requestNonce(address, chain, domain);
 
             // === STEP 2: Sign Message ===
             setState('awaiting-signature');
@@ -911,6 +969,7 @@ export function useManualWallet() {
         activeWalletType,
         error,
 
+        // Actions (rate-limited & debounced)
         reset,
         loginWithProvider,
         connectWallet,
@@ -918,11 +977,12 @@ export function useManualWallet() {
         setAvailableAccounts,
         setActiveWalletType,
 
+        // Utilities
         isProcessing: isProcessingRef.current,
         isWalletInstalled,
         getWalletInstallUrl,
-        connectSolanaWallet,
-        connectMetaMask,
+        // NOTE: connectSolanaWallet & connectMetaMask intentionally NOT exported
+        // — they bypass rate limits and debounce guards. Use connectWallet() instead.
     };
 }
 

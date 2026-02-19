@@ -80,7 +80,7 @@ class WalletService {
     /**
      * Request a nonce for wallet signature verification
      */
-    async requestNonce(walletAddress: string, chain: string = 'solana'): Promise<NonceResponse> {
+    async requestNonce(walletAddress: string, chain: string = 'solana', domain?: string): Promise<NonceResponse> {
         // Client-side rate limiting
         const canProceed = checkRateLimit(RATE_LIMIT_KEYS.NONCE);
         if (!canProceed) {
@@ -93,6 +93,7 @@ class WalletService {
         const response = await api.post('/wallet/nonce', {
             walletAddress,
             chain,
+            domain: domain || window.location.host, // Pass domain for SIWS binding
         }, {
             headers: {
                 'X-CSRF-Token': csrfToken,

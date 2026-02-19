@@ -18,7 +18,7 @@ import { Card, CardHeader, CardContent, Button, Avatar } from '../../../componen
 import { useSystemStats, usePendingInstitutions } from '../../../hooks/useAdmin';
 import { useCurrentUser } from '../../../hooks/useUser';
 import { adminService } from '../../../services/adminService';
-import { formatDate, formatCurrency } from '../../../lib/utils';
+import { formatDate } from '../../../lib/utils';
 import { SystemAlert } from '../../../lib/types';
 
 function StatCard({
@@ -107,7 +107,7 @@ export function AdminDashboard() {
             title={`Welcome back, ${user?.displayName || 'Admin'}`}
             description="System overview and management"
             actions={
-                <Button variant="gold" leftIcon={<Shield className="w-full sm:w-auto w-4 h-4" />} className="shadow-lg shadow-gold/20">
+                <Button variant="gold" leftIcon={<Shield className="w-4 h-4" />} className="w-full sm:w-auto shadow-lg shadow-gold/20">
                     <span>Security Check</span>
                 </Button>
             }
@@ -141,7 +141,7 @@ export function AdminDashboard() {
                     />
                     <StatCard
                         title="Revenue (MTD)"
-                        value={formatCurrency(stats?.totalRevenue || 0)}
+                        value={new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(stats?.totalRevenue || 0)}
                         change="+8.5%"
                         trend="up"
                         icon={DollarSign}

@@ -4,8 +4,9 @@
 
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Sidebar, SidebarSection, Header } from '../ui';
+import { motion } from 'framer-motion';
+import { Sidebar, Header } from '../ui';
+import { MobileSidebar } from '../ui/MobileSidebar';
 import { MobileBottomNav } from './MobileBottomNav';
 import { useUIStore } from '../../stores/useUIStore';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -18,6 +19,9 @@ interface DashboardLayoutProps {
     footer?: React.ReactNode;
 }
 
+// Re-export for convenience
+import type { SidebarSection } from '../ui/Sidebar';
+
 export function DashboardLayout({
     sections,
     title,
@@ -25,62 +29,28 @@ export function DashboardLayout({
     headerActions,
     footer,
 }: DashboardLayoutProps) {
-    const { sidebarCollapsed, mobileMenuOpen, setMobileMenuOpen } = useUIStore();
+    const { sidebarCollapsed } = useUIStore();
     const [isMobile, setIsMobile] = React.useState(window.innerWidth < 768);
 
     React.useEffect(() => {
         const handleResize = () => {
-            const mobile = window.innerWidth < 768;
-            setIsMobile(mobile);
-            if (!mobile) {
-                setMobileMenuOpen(false);
-            }
+            setIsMobile(window.innerWidth < 768);
         };
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
-    }, [setMobileMenuOpen]);
+    }, []);
 
     return (
         <div className="min-h-screen bg-theme-bg">
-            {/* Sidebar - Desktop */}
+            {/* Sidebar - Desktop only */}
             <div className="hidden md:block">
                 <Sidebar sections={sections} footer={footer} />
             </div>
 
-            {/* Mobile Sidebar Drawer */}
-            <AnimatePresence>
-                {mobileMenuOpen && (
-                    <>
-                        {/* Backdrop */}
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setMobileMenuOpen(false)}
-                            className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm md:hidden"
-                        />
+            {/* Mobile Sidebar - Completely separate component */}
+            <MobileSidebar sections={sections} footer={footer} />
 
-                        {/* Drawer */}
-                        <motion.div
-                            initial={{ x: '-100%' }}
-                            animate={{ x: 0 }}
-                            exit={{ x: '-100%' }}
-                            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                            className="fixed inset-y-0 left-0 z-[65] w-[88px] bg-theme-surface shadow-2xl md:hidden border-r border-theme-border flex flex-col items-center pointer-events-auto"
-                        >
-                            <Sidebar
-                                sections={sections}
-                                footer={footer}
-                                variant="mobile"
-                                onClose={() => setMobileMenuOpen(false)}
-                                className="w-full"
-                            />
-                        </motion.div>
-                    </>
-                )}
-            </AnimatePresence>
-
-            {/* Mobile Bottom Navigation - Configurable: can comment out if not desired, but kept per user "besides" */}
+            {/* Mobile Bottom Navigation */}
             <MobileBottomNav />
 
             {/* Main Content */}
@@ -113,6 +83,8 @@ interface PageContainerProps {
     children: React.ReactNode;
     title?: string;
     subtitle?: string;
+    /** Alias for subtitle — many pages use this prop name */
+    description?: string;
     actions?: React.ReactNode;
     className?: string;
 }
@@ -121,9 +93,12 @@ export function PageContainer({
     children,
     title,
     subtitle,
+    description,
     actions,
     className = '',
 }: PageContainerProps) {
+    // Support both 'subtitle' and 'description' as the same prop
+    const displaySubtitle = subtitle || description;
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -137,8 +112,8 @@ export function PageContainer({
                         {title && (
                             <h1 className="text-2xl font-bold text-theme-text">{title}</h1>
                         )}
-                        {subtitle && (
-                            <p className="text-theme-muted mt-1">{subtitle}</p>
+                        {displaySubtitle && (
+                            <p className="text-theme-muted mt-1">{displaySubtitle}</p>
                         )}
                     </div>
                     {actions && <div className="flex items-center gap-3">{actions}</div>}

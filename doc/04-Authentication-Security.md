@@ -47,7 +47,8 @@ Seniqu employs a **Hybrid Wallet Strategy** to optimize user experience across d
 1.  **Desktop (Browser Extensions)**:
     *   **Direct Connection**: Uses `window.ethereum` (MetaMask) or `window.solana` (Phantom) directly.
     *   **Reason**: Bypasses Privy's UI for a faster, native feel. Avoids "Coinbase Wallet" interference by strictly filtering providers.
-    *   **Flow**: Connect → Request Nonce → Sign → Verify.
+    *   **Auto-Connect**: Strictly disabled (`shouldAutoConnect: false`) to prevent unsolicited wallet popups on page load.
+    *   **Flow**: Connect → Request Nonce (with Domain) → Sign → Verify.
 
 2.  **Mobile (Reown / WalletConnect)**:
     *   **AppKit Modal**: Uses Reown AppKit for a unified mobile wallet picker.
@@ -73,7 +74,8 @@ sequenceDiagram
     Frontend->>WalletExt: Connect to extension / App Switch
     WalletExt-->>Frontend: Public address
 
-    Frontend->>Backend: POST /wallet/nonce { walletAddress, chain }
+    Frontend->>Backend: POST /wallet/nonce { walletAddress, chain, domain }
+    Backend->>Backend: Validate Domain (SIWS Binding)
     Backend->>Supabase: Store nonce (wallet_nonces table)
     Backend-->>Frontend: { nonce, message }
 
@@ -362,12 +364,14 @@ app.enableCors({
 | **Expiry** | 5 minutes from creation |
 | **Usage** | Single-use (marked `is_used` after verification) |
 | **Storage** | `wallet_nonces` table with RLS |
+| **Domain Binding** | Nonce request validated against allowed origins (SIWS) |
 | **Cleanup** | `cleanup_expired_nonces()` function runs periodically |
 
 ### 4.2 Signature Verification
 
 ```typescript
 // Solana: Ed25519 signature verification
+// Message includes verified domain (e.g. "seniquapp.netlify.app") for SIWS compliance
 import nacl from 'tweetnacl';
 
 const isValid = nacl.sign.detached.verify(

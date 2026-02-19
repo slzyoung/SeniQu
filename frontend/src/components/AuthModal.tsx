@@ -88,7 +88,11 @@ function WalletConnectionStatus({ state, walletName }: { state: WalletConnection
       case 'requesting-nonce':
         return { label: 'Preparing signature request...', color: 'text-blue-400', icon: <Loader2 className="w-4 h-4 animate-spin" /> };
       case 'awaiting-signature':
-        return { label: 'Please sign the message in your wallet', color: 'text-yellow-400', icon: <ShieldCheck className="w-4 h-4" /> };
+        return {
+          label: 'Verify domain is seniquapp.netlify.app',
+          color: 'text-yellow-400',
+          icon: <ShieldCheck className="w-4 h-4" />
+        };
       case 'verifying':
         return { label: 'Verifying signature...', color: 'text-blue-400', icon: <Loader2 className="w-4 h-4 animate-spin" /> };
       case 'authenticated':

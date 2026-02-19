@@ -5,26 +5,17 @@
 import {
     LogOut,
 } from 'lucide-react';
-import { usePrivy } from '@privy-io/react-auth';
 import { DashboardLayout } from '../../components/common/DashboardLayout';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { Avatar } from '../../components/ui';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { ROUTES } from '../../lib/constants';
 import { userSidebarSections } from '../../config/sidebar';
+import { useLogout } from '../../hooks/useLogout';
 
 function SidebarFooter() {
-    const { user, logout } = useAuthStore();
-    const { logout: privyLogout } = usePrivy();
-    const navigate = useNavigate();
-
-    const handleLogout = async () => {
-        // Implement async logout as requested
-        await privyLogout(); // Logout from Privy first
-        await new Promise(resolve => setTimeout(resolve, 100)); // Simulate network/process delay for better UX
-        logout(); // Clear local state
-        navigate(ROUTES.LOGIN);
-    };
+    const { user } = useAuthStore();
+    const handleLogout = useLogout();
 
     return (
         <div className="flex flex-col md:flex-row items-center justify-center md:justify-start gap-4 md:gap-3 p-2 rounded-xl md:hover:bg-theme-elevated transition-colors w-full">

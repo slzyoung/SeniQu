@@ -84,6 +84,9 @@ For users who prefer their own keys (Phantom, MetaMask).
 #### Direct Connection (Desktop)
 We bypass Privy's connectors for desktop extensions to avoid conflicts and provide a faster, native feel.
 
+> [!NOTE]
+> **Auto-Connect Disabled**: We strictly set `shouldAutoConnect: false` in the Reown configuration to prevent Solflare or Phantom from automatically popping up when the user visits the site. Connections must be explicitly initiated by the user.
+
 **Flow:**
 1.  **Connect**: `window.solana.connect()`
 2.  **Sign**: User signs a simplified message with a **nonce**.
@@ -120,7 +123,7 @@ The `useManualWallet` hook includes robust logic to parse and normalize these in
 ### 4.1 Key Endpoints
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/v1/wallet/nonce` | Generate a single-use login nonce. |
+| `POST` | `/api/v1/wallet/nonce` | Generate a single-use login nonce. Accepts `domain` for SIWS binding. |
 | `POST` | `/api/v1/users/me/sync-wallets` | **Authoritative Sync**: Forces `privy_wallets` table update from Privy. |
 | `GET` | `/api/v1/wallet/assets` | Fetch portfolio balance (Helius/RPC). |
 

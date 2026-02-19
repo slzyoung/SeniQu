@@ -5,10 +5,26 @@ import { Card, CardHeader, CardContent, Button, Avatar } from '../../../componen
 import { formatDate } from '../../../lib/utils';
 import { Loader2, Search, MoreVertical } from 'lucide-react';
 
+/** Normalize snake_case backend response to camelCase */
+function mapUser(raw: any) {
+    return {
+        id: raw.id,
+        displayName: raw.displayName || raw.display_name || '',
+        username: raw.username || '',
+        email: raw.email || '',
+        avatarUrl: raw.avatarUrl || raw.avatar_url || '',
+        role: raw.role || 'user',
+        isVerified: raw.isVerified ?? raw.is_verified ?? false,
+        isActive: raw.isActive ?? raw.is_active ?? true,
+        isPremium: raw.isPremium ?? raw.is_premium ?? false,
+        createdAt: raw.createdAt || raw.created_at || '',
+    };
+}
+
 export function AdminManagement() {
     const [page, setPage] = useState(1);
     const { data: response, isLoading } = useUsers(page);
-    const users = response?.data || [];
+    const users = (response?.data || []).map(mapUser);
     const meta = response?.meta;
 
     return (

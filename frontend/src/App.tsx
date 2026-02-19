@@ -5,6 +5,7 @@
  */
 
 
+import './lib/reownConfig';
 import { ThemeProvider } from './hooks/useTheme';
 import { AppRouter } from './routes';
 import { ErrorBoundary } from './components/common/ErrorBoundary';

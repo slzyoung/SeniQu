@@ -16,7 +16,7 @@ if (!globalAny._seniquSolanaConnectors) {
     try {
         console.log('[WalletConnectors] Initializing Solana connectors...');
         globalAny._seniquSolanaConnectors = toSolanaWalletConnectors({
-            shouldAutoConnect: true, // Auto-connect specifically for Solana
+            shouldAutoConnect: false, // EXPLICITLY FALSE to prevent Solflare/Phantom popups
         });
         console.log('[WalletConnectors] Solana connectors initialized successfully.');
     } catch (error: any) {

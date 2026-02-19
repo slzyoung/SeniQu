@@ -32,7 +32,8 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
         logout: storeLogout,
         isCustomAuthDisabled,
         disableCustomAuth,
-        isLoading // FIX: Need to know if store is still rehydrating
+        isLoading, // FIX: Need to know if store is still rehydrating
+        isLoggingOut, // Prevents re-login during active logout
     } = useAuthStore();
     const navigate = useNavigate();
     const location = useLocation();
@@ -157,6 +158,9 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
     useEffect(() => {
         if (!ready) return;
 
+        // CRITICAL: Don't re-initiate login while user is actively logging out
+        if (isLoggingOut) return;
+
         // Reset tracking when user changes or logs out
         if (!authenticated) {
             lastExchangedPrivyIdRef.current = null;
@@ -167,7 +171,7 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
         if (authenticated && !backendAuthenticated) {
             exchangeToken();
         }
-    }, [ready, authenticated, backendAuthenticated, exchangeToken, user?.id]);
+    }, [ready, authenticated, backendAuthenticated, exchangeToken, user?.id, isLoggingOut]);
 
     /**
      * Effect: When Privy logs out, also log out backend —

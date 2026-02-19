@@ -9,14 +9,16 @@ import { useUIStore } from '../stores/useUIStore';
 import { getDashboardRoute } from '../lib/utils';
 import { ROUTES } from '../lib/constants';
 import { useNavigate } from 'react-router-dom';
+import { useLogout } from '../hooks/useLogout';
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   // Use global UI store for mobile menu state
   const { mobileMenuOpen, toggleMobileMenu, setMobileMenuOpen } = useUIStore();
   const { openAuthModal } = useAuthModalStore();
-  const { isAuthenticated, user, logout } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const navigate = useNavigate();
+  const handleLogout = useLogout();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -25,12 +27,6 @@ export function Navbar() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  const handleLogout = () => {
-    logout();
-    setMobileMenuOpen(false);
-    navigate(ROUTES.HOME);
-  };
 
   const menuItems = isAuthenticated ? [
     { label: 'Dashboard', icon: LayoutDashboard, path: getDashboardRoute(user?.role || 'user') },

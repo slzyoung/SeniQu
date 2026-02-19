@@ -5,27 +5,19 @@
 import {
     LogOut,
 } from 'lucide-react';
-import { usePrivy } from '@privy-io/react-auth';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { DashboardLayout } from '../../components/common/DashboardLayout';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { Avatar, Badge } from '../../components/ui';
 import { ROUTES } from '../../lib/constants';
 import { getArtistSidebarSections } from '../../config/sidebar';
+import { useLogout } from '../../hooks/useLogout';
 
 export function ArtistLayout() {
-    const { user, logout, isInstitution } = useAuthStore();
+    const { user, isInstitution } = useAuthStore();
 
     const SidebarFooter = () => {
-        const navigate = useNavigate();
-        const { logout: privyLogout } = usePrivy();
-
-        const handleLogout = async () => {
-            await privyLogout();
-            await new Promise(resolve => setTimeout(resolve, 100));
-            logout();
-            navigate(ROUTES.LOGIN);
-        };
+        const handleLogout = useLogout();
 
         return (
             <div className="flex flex-col md:flex-row items-center justify-center md:justify-start gap-4 md:gap-3 p-2 rounded-xl md:hover:bg-theme-elevated transition-colors w-full">
