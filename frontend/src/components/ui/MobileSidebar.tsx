@@ -62,10 +62,16 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
     useEffect(() => {
         if (mobileMenuOpen) {
             document.body.style.overflow = 'hidden';
+            // Prevent bounce scroll on iOS body
+            document.body.style.overscrollBehaviorY = 'none';
         } else {
             document.body.style.overflow = '';
+            document.body.style.overscrollBehaviorY = '';
         }
-        return () => { document.body.style.overflow = ''; };
+        return () => {
+            document.body.style.overflow = '';
+            document.body.style.overscrollBehaviorY = '';
+        };
     }, [mobileMenuOpen]);
 
     // ─── Escape key ───
@@ -99,34 +105,36 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
                 aria-hidden={!mobileMenuOpen}
                 className={`
                     fixed inset-0 z-[60]
-                    bg-black/40 backdrop-blur-sm
+                    bg-black/60 backdrop-blur-sm
                     transition-all duration-300 ease-out
                     ${mobileMenuOpen
                         ? 'opacity-100 pointer-events-auto'
                         : 'opacity-0 pointer-events-none'
                     }
                 `}
+                // Prevent touch scroll on backdrop
+                style={{ touchAction: 'none' }}
             />
 
             {/* ──── Drawer ──── */}
             <aside
                 aria-hidden={!mobileMenuOpen}
                 className={`
-                    fixed inset-y-0 left-0 z-[65] w-[76px]
-                    bg-theme-surface
-                    shadow-xl
+                    fixed inset-y-0 left-0 z-[65] w-[88px]
+                    bg-theme-surface/95 backdrop-blur-xl
+                    shadow-2xl shadow-black/50
                     flex flex-col items-center
-                    border-r border-theme-border
-                    transition-transform duration-300 ease-out
+                    border-r border-theme-border/50
+                    transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]
+                    will-change-transform
                     ${mobileMenuOpen
                         ? 'translate-x-0'
                         : '-translate-x-full'
                     }
                 `}
-                style={{ willChange: 'transform' }}
             >
                 {/* ── Close Button (ChevronLeft arrow) ── */}
-                <div className="flex items-center justify-center pt-4 pb-2 w-full">
+                <div className="flex flex-col items-center justify-center pt-6 pb-4 w-full shrink-0">
                     <button
                         onClick={close}
                         onTouchEnd={(e) => {
@@ -135,51 +143,64 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
                         }}
                         type="button"
                         className="
-                            flex items-center justify-center w-10 h-10 rounded-xl
-                            bg-theme-elevated border border-theme-border
+                            flex items-center justify-center w-12 h-12 rounded-2xl
+                            bg-theme-elevated/50 border border-theme-border/50
                             text-theme-muted hover:text-theme-text
-                            active:scale-90
-                            transition-all duration-150
+                            active:scale-95 active:bg-theme-elevated
+                            transition-all duration-200
                             touch-manipulation select-none
+                            shadow-sm
                         "
                         aria-label="Close sidebar"
                         style={{ WebkitTapHighlightColor: 'transparent' }}
                     >
-                        <ChevronLeft className="w-5 h-5 pointer-events-none" />
+                        <ChevronLeft className="w-6 h-6 pointer-events-none" />
                     </button>
+
+                    {/* Optional: Small label or brand mark could go here */}
                 </div>
 
                 {/* ── Separator ── */}
-                <div className="w-8 h-px bg-gradient-to-r from-transparent via-theme-border to-transparent mb-1" />
+                <div className="w-10 h-px bg-gradient-to-r from-transparent via-theme-border to-transparent mb-2 shrink-0" />
 
                 {/* ── Nav Items ── */}
-                <nav className="flex-1 overflow-y-auto w-full flex flex-col items-center gap-0.5 px-2 py-2 scrollbar-none">
-                    {sections.map((section, si) => (
-                        <React.Fragment key={si}>
-                            {section.items.map((item) => (
-                                <MobileNavItem
-                                    key={item.id}
-                                    item={item}
-                                    onNavigate={close}
-                                />
-                            ))}
-                            {/* Section divider */}
-                            {si < sections.length - 1 && (
-                                <div className="w-6 h-px bg-gradient-to-r from-transparent via-theme-border to-transparent my-1.5" />
-                            )}
-                        </React.Fragment>
+                <nav
+                    className="
+                        flex-1 w-full flex flex-col items-center gap-10
+                        px-3 py-10
+                        overflow-y-auto overflow-x-hidden
+                        overscroll-contain
+                        scrollbar-none
+                        pb-safe
+                    "
+                    // Better scroll physics for iOS
+                    style={{ WebkitOverflowScrolling: 'touch' }}
+                >
+                    {sections.flatMap(s => s.items).map((item) => (
+                        <MobileNavItem
+                            key={item.id}
+                            item={item}
+                            onNavigate={close}
+                        />
                     ))}
+
+                    {/* Extra padding at bottom to ensure content isn't cut off */}
+                    <div className="h-4 shrink-0" />
                 </nav>
 
-                {/* ── Separator ── */}
-                <div className="w-8 h-px bg-gradient-to-r from-transparent via-theme-border to-transparent mt-1" />
-
-                {/* ── Footer ── */}
+                {/* ── FooterContainer (Fixed at bottom if needed, or adjust as part of scroll) ── */}
+                {/* 
+                    Note: If you want the footer to be fixed at the bottom, keep it outside nav.
+                    If you want it to scroll with content, move it inside nav.
+                    Here we keep it fixed but with a blur background if content scrolls under.
+                */}
                 {footer && (
-                    <div
-                        onClick={close}
-                        className="p-3 w-full flex justify-center"
-                    >
+                    <div className="
+                        w-full flex justify-center shrink-0 
+                        p-4 pb-8 
+                        bg-gradient-to-t from-theme-surface via-theme-surface/90 to-transparent
+                        z-10
+                    ">
                         {footer}
                     </div>
                 )}
@@ -202,24 +223,45 @@ function MobileNavItem({
             to={item.path}
             onClick={onNavigate}
             className={({ isActive }) =>
-                `relative flex items-center justify-center w-12 h-12 rounded-2xl
-                 transition-all duration-200
+                `relative flex items-center justify-center w-14 h-14 rounded-[20px]
+                 transition-all duration-300 ease-out
+                 group
                  ${isActive
-                    ? 'bg-gold/15 text-gold'
-                    : 'text-theme-muted hover:text-theme-text hover:bg-theme-elevated active:scale-90'
+                    ? 'bg-gold/10 text-gold shadow-[0_0_20px_-5px_var(--gold)]/30'
+                    : 'text-theme-muted hover:text-theme-text hover:bg-theme-elevated/80 active:scale-95'
                 }`
             }
+            style={{ WebkitTapHighlightColor: 'transparent' }}
         >
             {({ isActive }) => (
                 <>
-                    {/* Active indicator pill */}
+                    {/* Active indicator pill - improved visibility */}
                     {isActive && (
-                        <div className="absolute -left-[6px] top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-full bg-gold" />
+                        <div className="
+                            absolute -left-[2px] top-1/2 -translate-y-1/2 
+                            w-[4px] h-8 rounded-full bg-gold 
+                            shadow-[0_0_10px_var(--gold)]
+                        " />
                     )}
 
-                    <span className="w-5 h-5 relative z-10">
-                        {item.icon}
+                    <span className={`
+                        relative z-10 transition-transform duration-300
+                        ${isActive ? 'scale-110' : 'group-hover:scale-105'}
+                    `}>
+                        {/* Clone icon to increase size slightly if needed */}
+                        {React.cloneElement(item.icon as React.ReactElement, {
+                            size: 24,
+                            strokeWidth: isActive ? 2.5 : 2
+                        })}
                     </span>
+
+                    {/* Optional: subtle specific badging if item has badge */}
+                    {item.badge && item.badge > 0 && (
+                        <span className="
+                            absolute top-2 right-2 
+                            w-2.5 h-2.5 rounded-full bg-red-500 border border-theme-surface
+                        " />
+                    )}
                 </>
             )}
         </NavLink>
