@@ -5,6 +5,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
+import QRCode from 'react-qr-code';
 import {
     Search,
     Bell,
@@ -16,6 +17,10 @@ import {
     LogIn,
     Menu,
     ChevronRight,
+    Wallet,
+    ChevronLeft,
+    Copy,
+    CheckCircle,
 } from 'lucide-react';
 
 import { useUIStore } from '../../stores/useUIStore';
@@ -31,13 +36,22 @@ interface HeaderProps {
     className?: string;
 }
 
+type MenuView = 'main' | 'chain-select' | 'qr';
+type ChainType = 'solana' | 'ethereum';
+
 export function Header({ title, subtitle, actions, className = '' }: HeaderProps) {
     const navigate = useNavigate();
     const location = useLocation();
     const { setSearchOpen, setMobileMenuOpen, mobileMenuOpen } = useUIStore();
     const { user, isAuthenticated, logout } = useAuthStore();
     const { toggleTheme, isDark } = useTheme();
+
+    // Dropdown State
     const [showUserMenu, setShowUserMenu] = React.useState(false);
+    const [menuView, setMenuView] = React.useState<MenuView>('main');
+    const [selectedChain, setSelectedChain] = React.useState<ChainType>('solana');
+    const [copied, setCopied] = React.useState(false);
+
     const [showNotifications, setShowNotifications] = React.useState(false);
     const menuRef = React.useRef<HTMLDivElement>(null);
     const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
@@ -47,6 +61,7 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
         const handleClickOutside = (e: MouseEvent) => {
             if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
                 setShowUserMenu(false);
+                setMenuView('main');
                 setShowNotifications(false);
             }
         };
@@ -230,43 +245,190 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
 
                             {showUserMenu && (
                                 <motion.div
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="absolute right-0 mt-2 w-56 bg-theme-surface border border-theme-border rounded-xl shadow-2xl overflow-hidden"
+                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    className="absolute right-0 mt-2 w-72 md:w-80 max-w-[calc(100vw-2rem)] bg-theme-surface border border-theme-border rounded-2xl shadow-2xl overflow-hidden ring-1 ring-black/5 z-50 origin-top-right"
                                 >
-                                    <div className="p-4 border-b border-theme-border">
-                                        <p className="font-medium text-theme-text truncate">
-                                            {user?.displayName || user?.username}
-                                        </p>
-                                        <p className="text-sm text-theme-muted truncate">{user?.email}</p>
-                                    </div>
+                                    {/* VIEW: MAIN MENU */}
+                                    {menuView === 'main' && (
+                                        <>
+                                            <div className="p-4 border-b border-theme-border mb-1">
+                                                <p className="font-semibold text-theme-text truncate text-sm">
+                                                    {user?.displayName || user?.username}
+                                                </p>
+                                                <p className="text-xs text-theme-muted truncate">{user?.email}</p>
+                                            </div>
 
-                                    <div className="py-2">
-                                        <button
-                                            onClick={() => {
-                                                setShowUserMenu(false);
-                                                const role = user?.role;
-                                                if (role === 'admin' || role === 'super_admin') {
-                                                    navigate('/admin/settings');
-                                                } else if (role === 'artist' || role === 'institution') {
-                                                    navigate('/artist/settings');
-                                                } else {
-                                                    navigate('/dashboard/settings');
-                                                }
-                                            }}
-                                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-theme-text hover:bg-theme-elevated transition-colors"
-                                        >
-                                            <Settings className="w-4 h-4" />
-                                            Settings
-                                        </button>
-                                        <button
-                                            onClick={logout}
-                                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-theme-elevated transition-colors"
-                                        >
-                                            <LogOut className="w-4 h-4" />
-                                            Sign out
-                                        </button>
-                                    </div>
+                                            <div className="p-2 space-y-1">
+                                                <button
+                                                    onClick={() => setMenuView('chain-select')}
+                                                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-theme-text hover:bg-theme-elevated rounded-xl transition-all group"
+                                                >
+                                                    <div className="p-1.5 rounded-lg bg-gold/10 text-gold group-hover:bg-gold/20 transition-colors">
+                                                        <Wallet className="w-4 h-4" />
+                                                    </div>
+                                                    Deposit Funds
+                                                </button>
+
+                                                <button
+                                                    onClick={() => {
+                                                        setShowUserMenu(false);
+                                                        const role = user?.role;
+                                                        if (role === 'admin' || role === 'super_admin') {
+                                                            navigate('/admin/settings');
+                                                        } else if (role === 'artist' || role === 'institution') {
+                                                            navigate('/artist/settings');
+                                                        } else {
+                                                            navigate('/dashboard/settings');
+                                                        }
+                                                    }}
+                                                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-theme-text hover:bg-theme-elevated rounded-xl transition-all"
+                                                >
+                                                    <div className="p-1.5 rounded-lg bg-theme-border/50 text-theme-muted">
+                                                        <Settings className="w-4 h-4" />
+                                                    </div>
+                                                    Settings
+                                                </button>
+                                            </div>
+
+                                            <div className="p-2 border-t border-theme-border mt-1">
+                                                <button
+                                                    onClick={logout}
+                                                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+                                                >
+                                                    <div className="p-1.5 rounded-lg bg-red-500/10">
+                                                        <LogOut className="w-4 h-4" />
+                                                    </div>
+                                                    Sign out
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {/* VIEW: CHAIN SELECT */}
+                                    {menuView === 'chain-select' && (
+                                        <>
+                                            <div className="flex items-center gap-2 p-3 border-b border-theme-border">
+                                                <button
+                                                    onClick={() => setMenuView('main')}
+                                                    className="p-1 rounded-lg hover:bg-theme-elevated text-theme-muted hover:text-theme-text transition-colors"
+                                                >
+                                                    <ChevronLeft className="w-5 h-5" />
+                                                </button>
+                                                <span className="text-sm font-semibold text-theme-text">Deposit Crypto</span>
+                                            </div>
+                                            <div className="p-2 space-y-2">
+                                                {[
+                                                    { id: 'solana', label: 'Solana', icon: '/images/crypto/solana.svg' },
+                                                    { id: 'ethereum', label: 'Ethereum', icon: '/images/crypto/ethereum.svg' }
+                                                ].map((chain) => (
+                                                    <button
+                                                        key={chain.id}
+                                                        onClick={() => {
+                                                            setSelectedChain(chain.id as ChainType);
+                                                            setMenuView('qr');
+                                                        }}
+                                                        className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-theme-elevated border border-transparent hover:border-theme-border transition-all group"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-full bg-theme-bg flex items-center justify-center p-1.5 border border-theme-border">
+                                                                <img src={chain.icon} alt={chain.label} className="w-full h-full object-contain" />
+                                                            </div>
+                                                            <span className="text-sm font-medium text-theme-text">{chain.label}</span>
+                                                        </div>
+                                                        <ChevronRight className="w-4 h-4 text-theme-muted group-hover:translate-x-0.5 transition-transform" />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {/* VIEW: QR CODE */}
+                                    {menuView === 'qr' && (
+                                        <>
+                                            <div className="flex items-center gap-2 p-3 border-b border-theme-border">
+                                                <button
+                                                    onClick={() => setMenuView('chain-select')}
+                                                    className="p-1 rounded-lg hover:bg-theme-elevated text-theme-muted hover:text-theme-text transition-colors"
+                                                >
+                                                    <ChevronLeft className="w-5 h-5" />
+                                                </button>
+                                                <span className="text-sm font-semibold text-theme-text">
+                                                    Deposit {selectedChain === 'solana' ? 'SOL' : 'ETH'}
+                                                </span>
+                                            </div>
+
+                                            <div className="p-6 flex flex-col items-center">
+                                                {(() => {
+                                                    // Resolve Address Logic
+                                                    let displayAddress: string | undefined;
+                                                    // 1. Backend check
+                                                    if (user && (user as any).wallets && Array.isArray((user as any).wallets)) {
+                                                        const exactMatch = (user as any).wallets.find((w: any) => {
+                                                            const wChain = (w.chainType || w.chain_type || '').toLowerCase();
+                                                            return wChain === selectedChain.toLowerCase();
+                                                        });
+                                                        if (exactMatch) displayAddress = exactMatch.address || (exactMatch as any).wallet_address;
+                                                    }
+                                                    // 2. Generic fallback
+                                                    if (!displayAddress && (user as any).wallet_address) {
+                                                        // Only use generic if we really have to, but usually wallet_address is Solana main
+                                                        displayAddress = (user as any).wallet_address;
+                                                    }
+
+                                                    if (!displayAddress) {
+                                                        return (
+                                                            <div className="text-center py-6 text-theme-muted text-sm">
+                                                                No wallet found.<br />Please connect wallet in Settings.
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    return (
+                                                        <>
+                                                            <div className="p-3 bg-white rounded-xl mb-4 border-2 border-theme-border shadow-sm">
+                                                                <QRCode
+                                                                    value={displayAddress}
+                                                                    size={140}
+                                                                    level="M"
+                                                                    viewBox={`0 0 256 256`}
+                                                                />
+                                                            </div>
+
+                                                            <div className="w-full text-center space-y-3">
+                                                                <p className="text-xs text-theme-muted uppercase tracking-wider font-medium">
+                                                                    Your Address
+                                                                </p>
+                                                                <code className="block w-full p-2 bg-theme-elevated rounded-lg text-xs font-mono text-theme-text break-all border border-theme-border/50">
+                                                                    {displayAddress}
+                                                                </code>
+
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (displayAddress) {
+                                                                            navigator.clipboard.writeText(displayAddress);
+                                                                            setCopied(true);
+                                                                            setTimeout(() => setCopied(false), 2000);
+                                                                        }
+                                                                    }}
+                                                                    className={`
+                                                                        w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all
+                                                                        ${copied
+                                                                            ? 'bg-green-500/10 text-green-500'
+                                                                            : 'bg-gold text-black hover:bg-gold/90 shadow-lg shadow-gold/20'
+                                                                        }
+                                                                    `}
+                                                                >
+                                                                    {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                                                    {copied ? 'Copied!' : 'Copy Address'}
+                                                                </button>
+                                                            </div>
+                                                        </>
+                                                    );
+                                                })()}
+                                            </div>
+                                        </>
+                                    )}
                                 </motion.div>
                             )}
                         </div>
