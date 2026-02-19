@@ -98,6 +98,7 @@ cd backend && npm run start:dev
 | **Community Forum** | Discussions for art enthusiasts |
 | **AI Art Analysis** | Genre detection and curation tools |
 | **Artist Dashboard** | Analytics, artwork management, sales |
+| **Mobile Notifications** | Real-time alerts with read/unread status |
 | **Admin Panel** | Content moderation, user management |
 
 ---

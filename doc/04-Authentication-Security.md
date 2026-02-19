@@ -47,7 +47,7 @@ Seniqu employs a **Hybrid Wallet Strategy** to optimize user experience across d
 1.  **Desktop (Browser Extensions)**:
     *   **Direct Connection**: Uses `window.ethereum` (MetaMask) or `window.solana` (Phantom) directly.
     *   **Reason**: Bypasses Privy's UI for a faster, native feel. Avoids "Coinbase Wallet" interference by strictly filtering providers.
-    *   **Auto-Connect**: Strictly disabled (`shouldAutoConnect: false`) to prevent unsolicited wallet popups on page load.
+    *   **Auto-Connect**: Strictly disabled (`shouldAutoConnect: false`) and removed from Privy's `walletList` configuration to prevent *any* unsolicited wallet popups on page load.
     *   **Flow**: Connect → Request Nonce (with Domain) → Sign → Verify.
 
 2.  **Mobile (Reown / WalletConnect)**:
@@ -322,10 +322,26 @@ ThrottlerModule.forRoot({
 // Per-endpoint stricter limits
 @Throttle({ short: { limit: 3, ttl: 1000 } })
 @Post('login')
+@Post('login')
 login() { }
+
+// Profile Update Rate Limit
+@Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 updates per minute
+@Patch('me')
+updateProfile() { }
 ```
 
-### 3.5 Security Headers (Helmet)
+### 3.5 User Settings Security
+
+New security-focused settings have been added to the user profile:
+
+| Setting | Type | Description |
+|---------|------|-------------|
+| **Two-Factor Authentication** | `is_two_factor_enabled` (Boolean) | Enforces 2FA for sensitive actions (planned enforcement) |
+| **Login Alerts** | `login_alerts_enabled` (Boolean) | Sends email notifications on new device logins |
+| **Notification Preferences** | `notification_prefs` (JSONB) | Granular control over Email, Push, and In-App notifications |
+
+### 3.6 Security Headers (Helmet)
 
 ```typescript
 app.use(helmet({

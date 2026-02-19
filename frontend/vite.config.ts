@@ -38,13 +38,20 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          // Vendor Layout & UI
-          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router-dom')) {
-            return 'vendor-react';
+          // Core React Ecosystem (React + Router + State + Query + UI Libs)
+          // Grouping these prevents issues where a lib tries to use React before it's initialized
+          if (id.includes('node_modules/react') ||
+            id.includes('node_modules/react-dom') ||
+            id.includes('node_modules/react-router-dom') ||
+            id.includes('node_modules/zustand') ||
+            id.includes('node_modules/@tanstack') ||
+            id.includes('node_modules/framer-motion') ||
+            id.includes('node_modules/lucide-react') ||
+            id.includes('node_modules/clsx') ||
+            id.includes('node_modules/tailwind-merge')) {
+            return 'vendor-core';
           }
-          if (id.includes('node_modules/framer-motion') || id.includes('node_modules/lucide-react') || id.includes('node_modules/@emotion')) {
-            return 'vendor-ui';
-          }
+
           if (id.includes('node_modules/recharts')) {
             return 'vendor-charts';
           }
@@ -52,12 +59,9 @@ export default defineConfig({
             return 'vendor-maps';
           }
 
-          // Data & Utils
-          if (id.includes('node_modules/@tanstack') || id.includes('node_modules/axios') || id.includes('node_modules/zod') || id.includes('node_modules/zustand')) {
-            return 'vendor-data';
-          }
-          if (id.includes('node_modules/clsx') || id.includes('node_modules/tailwind-merge')) {
-            return 'vendor-utils';
+          // Other heavy data libs
+          if (id.includes('node_modules/axios') || id.includes('node_modules/zod')) {
+            return 'vendor-libs';
           }
 
           // Web3 & Auth (Unified Buffer to avoid circular deps)

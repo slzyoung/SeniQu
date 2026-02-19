@@ -84,8 +84,7 @@ For users who prefer their own keys (Phantom, MetaMask).
 #### Direct Connection (Desktop)
 We bypass Privy's connectors for desktop extensions to avoid conflicts and provide a faster, native feel.
 
-> [!NOTE]
-> **Auto-Connect Disabled**: We strictly set `shouldAutoConnect: false` in the Reown configuration to prevent Solflare or Phantom from automatically popping up when the user visits the site. Connections must be explicitly initiated by the user.
+> **Auto-Connect Disabled**: We strictly set `shouldAutoConnect: false` and **removed** `phantom`, `solflare`, and `metamask` from the `PrivyProvider` configuration. This ensures that these extensions **never** auto-open on page load. Connections must be explicitly initiated via `useManualWallet`.
 
 **Flow:**
 1.  **Connect**: `window.solana.connect()`
@@ -150,3 +149,9 @@ The `useManualWallet` hook includes robust logic to parse and normalize these in
 1.  Ensure `VITE_WALLETCONNECT_PROJECT_ID` is set.
 2.  The `useManualWallet` hook now handles session persistence to recover state after app switches.
 3.  Signature parsing logic in `loginWithProvider` handles various return formats from Reown.
+
+### "Blank Page" or `TypeError: ... (reading 'object')`
+**Cause**: Missing Node.js polyfills (specifically `global` or `Buffer`) in the Vite build, often triggered by WalletConnect or Web3 libraries.
+**Fix**:
+1.  Use `vite-plugin-node-polyfills` in `vite.config.ts`.
+2.  **Remove** any manual `define: { global: 'globalThis' }` in `vite.config.ts` as it conflicts with the plugin and causes `global` to be undefined in production.

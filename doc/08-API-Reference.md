@@ -114,7 +114,8 @@ curl -X POST http://localhost:3001/api/v1/auth/wallet \
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
 | GET | `/users/me` | Get current user profile | Yes |
-| PUT | `/users/me` | Update current user | Yes |
+| PUT | `/users/me` | Update current user (Deprecated) | Yes |
+| PATCH | `/users/me` | Update settings & profile (Partial) | Yes |
 | GET | `/users/:id` | Get user by ID | No |
 | GET | `/users/:id/artworks` | Get user's artworks | No |
 | POST | `/users/:id/follow` | Follow user | Yes |

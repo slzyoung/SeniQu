@@ -121,6 +121,11 @@ CREATE TABLE users (
     is_active BOOLEAN DEFAULT TRUE,
     is_verified BOOLEAN DEFAULT FALSE,
 
+    -- Settings & Preferences
+    notification_prefs JSONB DEFAULT '{"email": true, "push": true, "weeklyDigest": true}'::jsonb,
+    is_two_factor_enabled BOOLEAN DEFAULT FALSE,
+    login_alerts_enabled BOOLEAN DEFAULT TRUE,
+
     -- Authentication
     password_hash VARCHAR(255),          -- NULL for OAuth / wallet users
     google_id VARCHAR(255) UNIQUE,       -- Google OAuth subject ID

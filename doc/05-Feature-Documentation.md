@@ -10,6 +10,7 @@ Accessible to all visitors.
 - **Featured Collections**: Curated grid of artworks.
 - **Stats Bar**: Social proof metrics.
 - **Search**: Global search overlay.
+- **Mobile Notifications**: Real-time alerts with read/unread status and push notification support.
 
 ### 1.2 Gallery Module
 - **Public Gallery**: Browsable grid of all public artworks with filtering (Genre, Medium, Price).
@@ -34,6 +35,12 @@ For `USER` and `COLLECTOR` roles.
 - **Overview**: Stats on viewed/collected items.
 - **My Collections**: Group bookmarks into custom lists.
 - **Bookmarks**: Saved artworks.
+- **Bookmarks**: Saved artworks.
+- **Settings Page**:
+  - **Profile Management**: Update avatar, bio, and personal details.
+  - **Security**: Toggle 2FA and Login Alerts.
+  - **Notifications**: Configure email and push preferences (JSONB persistence).
+  - **Theme**: Dark/Light mode toggle.
 - **Profile/Settings**: Account management.
 
 ## 3. Artist/Institution Dashboard
