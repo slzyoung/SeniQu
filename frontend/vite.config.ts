@@ -64,22 +64,15 @@ export default defineConfig({
             return 'vendor-libs';
           }
 
-          // Web3 & Auth - Let Vite handle these or split very carefully
-          // aggressive grouping caused ReferenceError: Cannot access 'Nt' before initialization
-          if (id.includes('node_modules/@privy-io')) {
-            return 'vendor-privy';
-          }
-          if (id.includes('node_modules/@reown') ||
+          // Web3 & Auth - Let Vite handle these completely
+          // Manual chunking caused circular dependency issues (Nt, $a initialization errors)
+          if (id.includes('node_modules/@privy-io') ||
+            id.includes('node_modules/@reown') ||
             id.includes('node_modules/@walletconnect') ||
-            id.includes('node_modules/@web3modal')) {
-            return 'vendor-reown';
-          }
-          // Solana & Ethers - kept separate to avoid massive single chunk
-          if (id.includes('node_modules/@solana') || id.includes('node_modules/bs58')) {
-            return 'vendor-solana';
-          }
-          if (id.includes('node_modules/ethers') || id.includes('node_modules/@ethersproject')) {
-            return 'vendor-ethers';
+            id.includes('node_modules/@web3modal') ||
+            id.includes('node_modules/@solana') ||
+            id.includes('node_modules/ethers')) {
+            return null; // Let Vite split or bundle as needed
           }
         },
       },
