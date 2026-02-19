@@ -105,7 +105,7 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
                 aria-hidden={!mobileMenuOpen}
                 className={`
                     fixed inset-0 z-[60]
-                    bg-black/60 backdrop-blur-sm
+                    bg-theme-overlay backdrop-blur-sm
                     transition-all duration-300 ease-out
                     ${mobileMenuOpen
                         ? 'opacity-100 pointer-events-auto'
@@ -121,10 +121,10 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
                 aria-hidden={!mobileMenuOpen}
                 className={`
                     fixed inset-y-0 left-0 z-[65] w-[88px]
-                    bg-white/80 dark:bg-theme-surface/95 backdrop-blur-xl
+                    bg-theme-surface/95 backdrop-blur-2xl
                     shadow-2xl
                     flex flex-col items-center
-                    border-r border-theme-border
+                    border-r border-theme-border/50
                     transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]
                     will-change-transform
                     ${mobileMenuOpen
@@ -172,7 +172,7 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
                         overflow-y-auto overflow-x-hidden
                         overscroll-contain
                         scrollbar-none
-                        pb-safe
+                        pb-[env(safe-area-inset-bottom)]
                     "
                     // Better scroll physics for iOS
                     style={{ WebkitOverflowScrolling: 'touch' }}

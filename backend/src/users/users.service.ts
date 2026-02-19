@@ -659,4 +659,26 @@ export class UsersService {
 
         return { success: true, synced: updates }
     }
+
+    // ============================================
+    // MARKETPLACE HISTORY
+    // ============================================
+
+    async getMarketplaceHistory(userId: string, limit = 5): Promise<any[]> {
+        const client = this.db.getClient()
+
+        const { data, error } = await client
+            .from("marketplace_transactions")
+            .select("*")
+            .or(`user_id.eq.${userId},seller_id.eq.${userId}`) // Get where user is buyer OR seller
+            .order("created_at", { ascending: false })
+            .limit(limit)
+
+        if (error) {
+            this.logger.error(`Failed to get marketplace history: ${error.message}`)
+            return [] // Return empty on error to prevent crashing UI
+        }
+
+        return data || []
+    }
 }
