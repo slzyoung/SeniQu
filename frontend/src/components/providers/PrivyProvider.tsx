@@ -140,9 +140,9 @@ const privyConfig = {
         logo: '/logo.svg',
         walletChainType: 'ethereum-and-solana' as 'ethereum-and-solana',
         walletList: [
-            'phantom',
-            'solflare',
-            'metamask',
+            // 'phantom', // Removed to prevents auto-open on refresh (Handled manually)
+            // 'solflare', // Removed to prevents auto-open on refresh (Handled manually)
+            // 'metamask', // Removed to prevents auto-open on refresh (Handled manually)
             'detected_solana_wallets',
             'detected_ethereum_wallets',
         ] as any[],

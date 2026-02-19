@@ -8,7 +8,9 @@ import {
     Body,
     Query,
     UseGuards,
+    Patch,
 } from "@nestjs/common"
+import { ThrottlerGuard, Throttle } from '@nestjs/throttler'
 import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger"
 import { UsersService } from "./users.service"
 import { UpdateUserDto } from "./dto/update-user.dto"
@@ -106,7 +108,9 @@ export class UsersController {
         return this.usersService.findById(id)
     }
 
-    @Put("me")
+    @Patch("me")
+    @UseGuards(ThrottlerGuard)
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
     @ApiOperation({ summary: "Update current user profile" })
     async updateProfile(@GetUser("id") userId: string, @Body() dto: UpdateUserDto) {
         return this.usersService.update(userId, dto)

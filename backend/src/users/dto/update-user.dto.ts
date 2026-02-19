@@ -25,5 +25,20 @@ export class UpdateUserDto {
     @ApiPropertyOptional()
     @IsString()
     @IsOptional()
+    @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
     avatarUrl?: string
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    notificationPrefs?: Record<string, boolean>
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    isTwoFactorEnabled?: boolean
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    loginAlertsEnabled?: boolean
 }

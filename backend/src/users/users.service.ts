@@ -17,6 +17,9 @@ export interface User {
     googleId?: string
     // REMOVED LEGACY COLUMNS: walletAddress, embeddedWalletAddress
     wallets?: { chainType: string; address: string; verifiedAt: Date; isEmbedded: boolean }[]
+    notificationPrefs?: Record<string, boolean>
+    isTwoFactorEnabled: boolean
+    loginAlertsEnabled: boolean
     createdAt: Date
     updatedAt: Date
 }
@@ -195,6 +198,9 @@ export class UsersService {
                 ...(dto.userType && { role: this.mapUserTypeToRole(dto.userType) }),
                 ...(dto.bio !== undefined && { bio: dto.bio }),
                 ...(dto.avatarUrl !== undefined && { avatar_url: dto.avatarUrl }),
+                ...(dto.notificationPrefs && { notification_prefs: dto.notificationPrefs }),
+                ...(dto.isTwoFactorEnabled !== undefined && { is_two_factor_enabled: dto.isTwoFactorEnabled }),
+                ...(dto.loginAlertsEnabled !== undefined && { login_alerts_enabled: dto.loginAlertsEnabled }),
                 updated_at: new Date().toISOString(),
             })
             .eq("id", id)
@@ -280,6 +286,9 @@ export class UsersService {
             privyId: data.privy_id,
             googleId: data.google_id,
             // walletAddress: REMOVED
+            notificationPrefs: data.notification_prefs,
+            isTwoFactorEnabled: data.is_two_factor_enabled || false,
+            loginAlertsEnabled: data.login_alerts_enabled !== false, // Default true
             createdAt: new Date(data.created_at),
             updatedAt: new Date(data.updated_at),
         }

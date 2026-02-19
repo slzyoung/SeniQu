@@ -1,9 +1,10 @@
 /**
  * User Settings Page
- * Fully responsive and functional settings management
+ * Fully responsive and functional settings management with real data
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import * as z from 'zod';
 import {
     Bell,
     Shield,
@@ -15,27 +16,50 @@ import {
     Smartphone,
     Key,
     Trash2,
-    Check,
-    ChevronRight,
-    LogOut
+    LogOut,
+    Save,
+    Loader2
 } from 'lucide-react';
 import { PageContainer } from '../../../components/common/DashboardLayout';
 import { Card, CardHeader, CardContent, Button, Tabs, TabPanel, Badge } from '../../../components/ui';
 import { useTheme } from '../../../hooks/useTheme';
 import { useToast } from '../../../stores/useNotificationStore';
 import { useLogout } from '../../../hooks/useLogout';
+import { useAuthStore } from '../../../stores/useAuthStore';
+import { userService } from '../../../services/userService';
 
-// Toggle switch component with enhanced mobile sizing and animation
-function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (value: boolean) => void }) {
+// Zod Schema for Settings
+const settingsSchema = z.object({
+    // General
+    isDark: z.boolean(),
+    language: z.string(),
+    // Notifications (JSONB in DB) - Flattened for form
+    emailNotifications: z.boolean(),
+    pushNotifications: z.boolean(),
+    newArtworkAlerts: z.boolean(),
+    priceAlerts: z.boolean(),
+    weeklyDigest: z.boolean(),
+    // Security
+    isTwoFactorEnabled: z.boolean(),
+    loginAlertsEnabled: z.boolean(),
+});
+
+type SettingsFormValues = z.infer<typeof settingsSchema>;
+
+// Toggle component
+function Toggle({ enabled, onChange, disabled }: { enabled: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
     return (
         <button
-            onClick={() => onChange(!enabled)}
+            type="button"
+            onClick={() => !disabled && onChange(!enabled)}
+            disabled={disabled}
             className={`
                 relative w-12 h-7 md:w-14 md:h-8 rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-gold/50
                 ${enabled ? 'bg-gold' : 'bg-theme-border'}
+                ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
             `}
-            aria-checked={enabled}
             role="switch"
+            aria-checked={enabled}
         >
             <span className="sr-only">Toggle setting</span>
             <div
@@ -49,7 +73,7 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (value: boo
     );
 }
 
-// Setting Row component with responsive layout
+// Row Component
 function SettingRow({
     icon: Icon,
     title,
@@ -85,44 +109,89 @@ export function Settings() {
     const { toggleTheme, isDark } = useTheme();
     const toast = useToast();
     const handleLogout = useLogout({ onComplete: () => toast.success('Logged Out', 'See you next time!') });
-    const [activeTab, setActiveTab] = useState('general');
+    const { user, updateUser } = useAuthStore();
 
-    // Notification settings state
-    const [notifications, setNotifications] = useState({
-        email: true,
-        push: true,
-        newArtwork: true,
+    const [activeTab, setActiveTab] = React.useState('general');
+    const [isSaving, setIsSaving] = React.useState(false);
+
+    // Form State
+    const [formState, setFormState] = useState<SettingsFormValues>({
+        isDark: isDark,
+        language: 'en',
+        emailNotifications: true,
+        pushNotifications: true,
+        newArtworkAlerts: true,
         priceAlerts: false,
         weeklyDigest: true,
+        isTwoFactorEnabled: false,
+        loginAlertsEnabled: true,
     });
 
-    // Security settings state
-    const [security, setSecurity] = useState({
-        twoFactor: false,
-        loginAlerts: true,
-    });
+    // Load initial values
+    useEffect(() => {
+        if (user) {
+            setFormState({
+                isDark: isDark,
+                language: 'en',
+                emailNotifications: user.notificationPrefs?.email ?? true,
+                pushNotifications: user.notificationPrefs?.push ?? true,
+                newArtworkAlerts: user.notificationPrefs?.newArtwork ?? true,
+                priceAlerts: user.notificationPrefs?.priceAlerts ?? false,
+                weeklyDigest: user.notificationPrefs?.weeklyDigest ?? true,
+                isTwoFactorEnabled: user.isTwoFactorEnabled ?? false,
+                loginAlertsEnabled: user.loginAlertsEnabled ?? true,
+            });
+        }
+    }, [user, isDark]);
 
-    const [language, setLanguage] = useState('en');
-
-    // Handlers
-    const handleNotificationChange = (key: keyof typeof notifications) => {
-        setNotifications(prev => {
-            const next = { ...prev, [key]: !prev[key] };
-            // Mock API call to save preferences
-            toast.success('Saved', 'Preference updated successfully');
-            return next;
-        });
+    const handleToggle = (key: keyof SettingsFormValues) => {
+        setFormState(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    const handleChangePassword = () => {
-        // In a real app, this would open a modal or redirect to a secure flow
-        toast.info('Check your email', 'We sent you a link to reset your password.');
+    const handleChange = (key: keyof SettingsFormValues, value: any) => {
+        setFormState(prev => ({ ...prev, [key]: value }));
     };
 
-    const handleDeleteAccount = () => {
-        if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-            toast.error('Account Deletion Initiated', 'Your request has been queued for processing.');
-            // In reality, we would call an API endpoint here
+    const onSubmit = async () => {
+        setIsSaving(true);
+        try {
+            // Validate with Zod
+            const data = settingsSchema.parse(formState);
+
+            // 1. Handle Theme
+            if (data.isDark !== isDark) {
+                toggleTheme();
+            }
+
+            // 2. Prepare API Payload
+            const updatePayload = {
+                notificationPrefs: {
+                    email: data.emailNotifications,
+                    push: data.pushNotifications,
+                    newArtwork: data.newArtworkAlerts,
+                    priceAlerts: data.priceAlerts,
+                    weeklyDigest: data.weeklyDigest,
+                },
+                isTwoFactorEnabled: data.isTwoFactorEnabled,
+                loginAlertsEnabled: data.loginAlertsEnabled,
+            };
+
+            // 3. Call API
+            const updatedUser = await userService.updateProfile(updatePayload);
+
+            // 4. Refresh User Store
+            updateUser(updatedUser);
+
+            toast.success('Settings Saved', 'Your preferences have been updated.');
+        } catch (error) {
+            console.error('Failed to save settings:', error);
+            if (error instanceof z.ZodError) {
+                toast.error('Validation Error', 'Please check your inputs.');
+            } else {
+                toast.error('Save Failed', 'Could not update settings. Please try again.');
+            }
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -137,9 +206,18 @@ export function Settings() {
         <PageContainer
             title="Account Settings"
             subtitle="Manage your preferences and security"
+            actions={
+                <Button
+                    onClick={onSubmit}
+                    disabled={isSaving}
+                    leftIcon={isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                >
+                    {isSaving ? 'Saving...' : 'Save Changes'}
+                </Button>
+            }
         >
             <div className="max-w-4xl mx-auto pb-20">
-                {/* Mobile Scrollable Tabs Container */}
+                {/* Mobile Tabs */}
                 <div className="sticky top-0 z-10 bg-theme-bg/95 backdrop-blur-sm -mx-4 px-4 md:mx-0 md:px-0 pt-2 pb-4 overflow-x-auto no-scrollbar">
                     <Tabs
                         tabs={tabs}
@@ -154,10 +232,7 @@ export function Settings() {
                     {/* General Settings */}
                     <TabPanel value="general" activeTab={activeTab}>
                         <Card variant="elevated" className="overflow-hidden">
-                            <CardHeader
-                                title="Appearance & Language"
-                                subtitle="Customize how Seniqu looks and feels"
-                            />
+                            <CardHeader title="Appearance & Language" subtitle="Customize how Seniqu looks and feels" />
                             <CardContent className="divide-y divide-theme-border/50">
                                 <SettingRow
                                     icon={isDark ? Moon : Sun}
@@ -165,13 +240,14 @@ export function Settings() {
                                     description={`Currently using ${isDark ? 'Dark' : 'Light'} Mode`}
                                     action={
                                         <Button
+                                            type="button"
                                             variant="secondary"
                                             size="sm"
-                                            onClick={toggleTheme}
+                                            onClick={() => handleToggle('isDark')}
                                             className="min-w-[100px]"
-                                            rightIcon={isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                                            rightIcon={formState.isDark ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
                                         >
-                                            {isDark ? 'Light Mode' : 'Dark Mode'}
+                                            {formState.isDark ? 'Dark Mode' : 'Light Mode'}
                                         </Button>
                                     }
                                 />
@@ -181,14 +257,12 @@ export function Settings() {
                                     description="Select your preferred language interface"
                                     action={
                                         <select
-                                            value={language}
-                                            onChange={(e) => setLanguage(e.target.value)}
+                                            value={formState.language}
+                                            onChange={(e) => handleChange('language', e.target.value)}
                                             className="px-4 py-2 bg-theme-surface border border-theme-border rounded-xl text-theme-text text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold appearance-none min-w-[140px]"
                                         >
                                             <option value="en">English (US)</option>
                                             <option value="id">Bahasa Indonesia</option>
-                                            <option value="es">Español</option>
-                                            <option value="fr">Français</option>
                                         </select>
                                     }
                                 />
@@ -197,6 +271,7 @@ export function Settings() {
 
                         <div className="mt-8 flex justify-center">
                             <Button
+                                type="button"
                                 variant="outline"
                                 className="text-red-500 border-red-500/30 hover:bg-red-500/10 hover:border-red-500"
                                 onClick={handleLogout}
@@ -217,27 +292,16 @@ export function Settings() {
                                         icon={Mail}
                                         title="Email Notifications"
                                         description="Receive updates, news, and alerts via email"
-                                        action={
-                                            <Toggle
-                                                enabled={notifications.email}
-                                                onChange={() => handleNotificationChange('email')}
-                                            />
-                                        }
+                                        action={<Toggle enabled={formState.emailNotifications} onChange={() => handleToggle('emailNotifications')} />}
                                     />
                                     <SettingRow
                                         icon={Smartphone}
                                         title="Push Notifications"
                                         description="Receive instant alerts on your mobile device"
-                                        action={
-                                            <Toggle
-                                                enabled={notifications.push}
-                                                onChange={() => handleNotificationChange('push')}
-                                            />
-                                        }
+                                        action={<Toggle enabled={formState.pushNotifications} onChange={() => handleToggle('pushNotifications')} />}
                                     />
                                 </CardContent>
                             </Card>
-
                             <Card variant="elevated">
                                 <CardHeader title="Preferences" subtitle="What you want to hear about" />
                                 <CardContent>
@@ -245,34 +309,13 @@ export function Settings() {
                                         icon={Bell}
                                         title="New Artwork Alerts"
                                         description="When artists you follow upload new work"
-                                        action={
-                                            <Toggle
-                                                enabled={notifications.newArtwork}
-                                                onChange={() => handleNotificationChange('newArtwork')}
-                                            />
-                                        }
-                                    />
-                                    <SettingRow
-                                        icon={CreditCard}
-                                        title="Price Alerts"
-                                        description="When bookmarked NFTs change price"
-                                        action={
-                                            <Toggle
-                                                enabled={notifications.priceAlerts}
-                                                onChange={() => handleNotificationChange('priceAlerts')}
-                                            />
-                                        }
+                                        action={<Toggle enabled={formState.newArtworkAlerts} onChange={() => handleToggle('newArtworkAlerts')} />}
                                     />
                                     <SettingRow
                                         icon={Mail}
                                         title="Weekly Digest"
                                         description="A summary of top art and community news"
-                                        action={
-                                            <Toggle
-                                                enabled={notifications.weeklyDigest}
-                                                onChange={() => handleNotificationChange('weeklyDigest')}
-                                            />
-                                        }
+                                        action={<Toggle enabled={formState.weeklyDigest} onChange={() => handleToggle('weeklyDigest')} />}
                                     />
                                 </CardContent>
                             </Card>
@@ -290,7 +333,7 @@ export function Settings() {
                                         title="Password"
                                         description="Last changed 3 months ago"
                                         action={
-                                            <Button variant="secondary" size="sm" onClick={handleChangePassword}>
+                                            <Button type="button" variant="secondary" size="sm" onClick={() => toast.info('Info', 'Password change flow not implemented yet.')}>
                                                 Change Password
                                             </Button>
                                         }
@@ -301,15 +344,16 @@ export function Settings() {
                                         description="Add an extra layer of security"
                                         action={
                                             <div className="flex items-center gap-3">
-                                                {security.twoFactor ? (
+                                                {formState.isTwoFactorEnabled ? (
                                                     <Badge variant="success" dot>Enabled</Badge>
                                                 ) : (
-                                                    <Button
-                                                        variant="primary"
-                                                        size="sm"
-                                                        onClick={() => setSecurity({ ...security, twoFactor: true })}
-                                                    >
+                                                    <Button type="button" variant="primary" size="sm" onClick={() => handleChange('isTwoFactorEnabled', true)}>
                                                         Enable 2FA
+                                                    </Button>
+                                                )}
+                                                {formState.isTwoFactorEnabled && (
+                                                    <Button type="button" variant="ghost" size="sm" className="text-red-500 hover:text-red-600" onClick={() => handleChange('isTwoFactorEnabled', false)}>
+                                                        Disable
                                                     </Button>
                                                 )}
                                             </div>
@@ -319,12 +363,7 @@ export function Settings() {
                                         icon={Bell}
                                         title="Login Alerts"
                                         description="Get notified of new sign-ins from unknown devices"
-                                        action={
-                                            <Toggle
-                                                enabled={security.loginAlerts}
-                                                onChange={(v) => setSecurity({ ...security, loginAlerts: v })}
-                                            />
-                                        }
+                                        action={<Toggle enabled={formState.loginAlertsEnabled} onChange={() => handleToggle('loginAlertsEnabled')} />}
                                     />
                                 </CardContent>
                             </Card>
@@ -344,7 +383,11 @@ export function Settings() {
                                             <Button
                                                 variant="danger"
                                                 size="sm"
-                                                onClick={handleDeleteAccount}
+                                                onClick={() => {
+                                                    if (confirm('Are you certain?')) {
+                                                        toast.error('Deletion', 'Account deletion request queued.');
+                                                    }
+                                                }}
                                             >
                                                 Delete Account
                                             </Button>
@@ -355,74 +398,10 @@ export function Settings() {
                         </div>
                     </TabPanel>
 
-                    {/* Billing Settings */}
+                    {/* Billing - Static for now */}
                     <TabPanel value="billing" activeTab={activeTab}>
-                        <div className="space-y-6">
-                            <Card variant="elevated" className="border-gold/30 bg-gold/5 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-4 opacity-10">
-                                    <Shield className="w-32 h-32 text-gold" />
-                                </div>
-                                <CardHeader title="Active Plan" />
-                                <CardContent className="relative z-10">
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <Badge variant="gold" className="text-sm px-3 py-1">PREMIUM PLAN</Badge>
-                                                <span className="text-xs text-gold font-medium uppercase tracking-wider">Active</span>
-                                            </div>
-                                            <p className="text-3xl font-bold text-theme-text">$9.99<span className="text-base font-normal text-theme-muted">/month</span></p>
-                                            <p className="text-sm text-theme-muted mt-2">Next billing date: March 1, 2026</p>
-                                        </div>
-                                        <div className="flex gap-3">
-                                            <Button variant="outline">Cancel</Button>
-                                            <Button variant="primary">Manage Subscription</Button>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card variant="elevated">
-                                <CardHeader title="Payment Method" />
-                                <CardContent>
-                                    <div className="flex items-center justify-between py-2">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-14 h-10 bg-theme-surface rounded-lg border border-theme-border flex items-center justify-center">
-                                                <CreditCard className="w-6 h-6 text-theme-muted" />
-                                            </div>
-                                            <div>
-                                                <p className="font-medium text-theme-text flex items-center gap-2">
-                                                    Visa ending in 4242
-                                                    <Check className="w-4 h-4 text-green-500" />
-                                                </p>
-                                                <p className="text-sm text-theme-muted">Expires 12/26</p>
-                                            </div>
-                                        </div>
-                                        <Button variant="ghost" size="sm" rightIcon={<ChevronRight className="w-4 h-4" />}>
-                                            Update
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card variant="elevated">
-                                <CardHeader title="Billing History" />
-                                <CardContent>
-                                    <div className="space-y-4">
-                                        {[1, 2, 3].map((i) => (
-                                            <div key={i} className="flex items-center justify-between py-2 border-b border-theme-border/50 last:border-0">
-                                                <div>
-                                                    <p className="font-medium text-theme-text">Premium Subscription</p>
-                                                    <p className="text-sm text-theme-muted">Feb {i}, 2026</p>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="font-medium text-theme-text">$9.99</p>
-                                                    <button className="text-xs text-gold hover:underline">Download Invocie</button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </CardContent>
-                            </Card>
+                        <div className="p-8 text-center text-theme-muted">
+                            Billing settings are managed by the App Store or Stripe portal.
                         </div>
                     </TabPanel>
                 </div>

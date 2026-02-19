@@ -17,9 +17,9 @@ export default defineConfig({
     }),
   ],
   base: '/', // Ensure absolute paths
+  // define: { 'global': 'globalThis' } -> Removed to avoid conflict with vite-plugin-node-polyfills
   define: {
-    'global': 'globalThis', // Polyfill for some Web3/older libs
-    'process.env': {}, // Polyfill for libs accessing process.env
+    // 'process.env': {} // Handled by plugin
   },
   optimizeDeps: {
     include: [

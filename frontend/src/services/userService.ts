@@ -45,6 +45,9 @@ export const updateProfileSchema = z.object({
         website: z.string().url().optional().or(z.literal('')),
         linkedin: z.string().url().optional().or(z.literal('')),
     }).optional(),
+    notificationPrefs: z.record(z.boolean()).optional(),
+    isTwoFactorEnabled: z.boolean().optional(),
+    loginAlertsEnabled: z.boolean().optional(),
 });
 
 export type UpdateProfileData = z.infer<typeof updateProfileSchema>;
@@ -106,6 +109,15 @@ class UserService {
                 address: w.address || w.wallet_address,
                 verifiedAt: w.verifiedAt || w.verified_at || new Date().toISOString(),
             })),
+            notificationPrefs: user.notificationPrefs || user.notification_prefs || {
+                email: true,
+                push: true,
+                newArtwork: true,
+                priceAlerts: false,
+                weeklyDigest: true
+            },
+            isTwoFactorEnabled: user.isTwoFactorEnabled || user.is_two_factor_enabled || false,
+            loginAlertsEnabled: user.loginAlertsEnabled !== undefined ? user.loginAlertsEnabled : (user.login_alerts_enabled !== undefined ? user.login_alerts_enabled : true),
         };
     }
 

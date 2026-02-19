@@ -17,6 +17,9 @@ export interface User {
     isVerified: boolean;
     isPremium: boolean;
     socialLinks?: SocialLinks;
+    notificationPrefs?: Record<string, boolean>;
+    isTwoFactorEnabled?: boolean;
+    loginAlertsEnabled?: boolean;
     // embeddedWalletAddress removed
     wallets?: {
         chainType: 'solana' | 'ethereum' | 'polygon';

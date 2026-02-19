@@ -22,6 +22,7 @@ import { useUIStore } from '../../stores/useUIStore';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useTheme } from '../../hooks/useTheme';
 import { Avatar } from './Avatar';
+import { useNotifications } from '../../hooks/useNotifications';
 
 interface HeaderProps {
     title?: string;
@@ -39,6 +40,7 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
     const [showUserMenu, setShowUserMenu] = React.useState(false);
     const [showNotifications, setShowNotifications] = React.useState(false);
     const menuRef = React.useRef<HTMLDivElement>(null);
+    const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
 
     // Close menus on outside click
     React.useEffect(() => {
@@ -145,28 +147,63 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
                                 className="relative p-2.5 rounded-xl text-theme-muted hover:text-theme-text hover:bg-theme-elevated transition-colors"
                             >
                                 <Bell className="w-5 h-5" />
-                                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+                                {unreadCount > 0 && (
+                                    <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                                    </span>
+                                )}
                             </button>
 
                             {showNotifications && (
                                 <motion.div
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="absolute right-0 mt-2 w-80 bg-theme-surface border border-theme-border rounded-xl shadow-2xl overflow-hidden"
+                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    className={`
+                                        fixed inset-x-4 top-[70px] z-50 
+                                        md:absolute md:inset-auto md:right-0 md:top-full md:mt-2 md:w-80 
+                                        bg-theme-surface border border-theme-border rounded-xl shadow-2xl overflow-hidden
+                                    `}
                                 >
-                                    <div className="p-4 border-b border-theme-border">
+                                    <div className="p-4 border-b border-theme-border flex justify-between items-center">
                                         <h3 className="font-semibold text-theme-text">Notifications</h3>
-                                    </div>
-                                    <div className="max-h-80 overflow-y-auto">
-                                        {[1, 2, 3].map((i) => (
-                                            <div
-                                                key={i}
-                                                className="p-4 border-b border-theme-border last:border-b-0 hover:bg-theme-elevated transition-colors cursor-pointer"
+                                        {unreadCount > 0 && (
+                                            <button
+                                                onClick={() => markAllAsRead()}
+                                                className="text-xs text-gold hover:underline"
                                             >
-                                                <p className="text-sm text-theme-text">New artwork added to your collection</p>
-                                                <p className="text-xs text-theme-muted mt-1">2 hours ago</p>
+                                                Mark all read
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="max-h-[60vh] md:max-h-80 overflow-y-auto">
+                                        {notifications.length === 0 ? (
+                                            <div className="p-8 text-center text-theme-muted text-sm">
+                                                No notifications yet
                                             </div>
-                                        ))}
+                                        ) : (
+                                            notifications.map((n) => (
+                                                <div
+                                                    key={n.id}
+                                                    onClick={() => !n.isRead && markAsRead(n.id)}
+                                                    className={`
+                                                        p-4 border-b border-theme-border last:border-b-0 
+                                                        hover:bg-theme-elevated transition-colors cursor-pointer
+                                                        ${!n.isRead ? 'bg-theme-elevated/50 border-l-2 border-l-gold' : ''}
+                                                    `}
+                                                >
+                                                    <p className={`text-sm ${!n.isRead ? 'text-theme-text font-medium' : 'text-theme-muted'}`}>
+                                                        {n.title}
+                                                    </p>
+                                                    {n.message && (
+                                                        <p className="text-xs text-theme-muted mt-1 line-clamp-2">{n.message}</p>
+                                                    )}
+                                                    <p className="text-[10px] text-theme-subtle mt-2">
+                                                        {new Date(n.createdAt).toLocaleDateString()} • {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </p>
+                                                </div>
+                                            ))
+                                        )}
                                     </div>
                                     <div className="p-3 border-t border-theme-border">
                                         <button className="w-full text-center text-sm text-gold hover:underline">
