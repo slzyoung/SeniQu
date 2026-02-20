@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
-import { ArrowRight, Play } from 'lucide-react';
+import { ArrowRight, Play, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ParticleField } from './ParticleField';
 
@@ -251,12 +251,13 @@ export function HeroSection() {
       {/* Scroll Indicator */}
       <motion.div
         animate={{ y: [0, 10, 0], opacity: [0.5, 1, 0.5] }}
-        transition={{ duration: 2, repeat: Infinity }}
-        className="absolute bottom-14 lg:bottom-20 left-0 right-0 mx-auto w-fit flex flex-col items-center gap-2 cursor-pointer z-20"
-        onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
+        className="absolute bottom-10 lg:bottom-14 left-0 right-0 mx-auto w-fit flex flex-col items-center gap-3 cursor-pointer z-20 group"
+        onClick={() => document.getElementById('artists')?.scrollIntoView({ behavior: 'smooth' })}
       >
-        <span className="text-[10px] uppercase tracking-[0.2em] text-theme-text/60 transition-colors duration-500">Scroll</span>
-        <div className="w-5 h-5 border-b-2 border-r-2 border-theme-text/50 transform rotate-45 transition-colors duration-500" />
+        <span className="text-[10px] sm:text-xs uppercase tracking-[0.35em] text-charcoal/60 dark:text-cream/60 group-hover:text-gold transition-all duration-500 font-medium drop-shadow-sm group-hover:drop-shadow-[0_0_8px_rgba(201,168,76,0.5)]">Scroll</span>
+        <div className="p-2 rounded-full group-hover:bg-gold/5 transition-all duration-500">
+          <ChevronDown className="w-6 h-6 text-charcoal/60 dark:text-cream/60 group-hover:text-gold transition-colors duration-500 group-hover:scale-110" strokeWidth={1.5} />
+        </div>
       </motion.div>
     </section>
   );
