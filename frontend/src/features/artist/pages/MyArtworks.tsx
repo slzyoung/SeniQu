@@ -3,7 +3,7 @@
  * Uses real API data with useMyArtworks hook
  */
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Plus,
@@ -25,6 +25,7 @@ import { PageContainer } from '../../../components/common/DashboardLayout';
 import { Card, Button, Badge, Tabs } from '../../../components/ui';
 import { useNavigate } from 'react-router-dom';
 import { useMyArtworks, useDeleteArtwork } from '../../../hooks/useArtist';
+import { debounce } from '../../../lib/sanitize';
 
 interface ArtworkType {
     id: string;
@@ -188,7 +189,20 @@ export function MyArtworks() {
     const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
     const [activeTab, setActiveTab] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
+    const [isDeletePending, setIsDeletePending] = useState(false);
+
+    // Debounce search input to prevent excessive re-renders/API calls
+    const debouncedSetSearch = useMemo(
+        () => debounce((val: string) => setDebouncedSearch(val), 300),
+        []
+    );
+
+    const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchQuery(e.target.value);
+        debouncedSetSearch(e.target.value);
+    }, [debouncedSetSearch]);
 
     // Fetch artworks with real API
     const { data: artworkData, isLoading, isError } = useMyArtworks(
@@ -201,8 +215,12 @@ export function MyArtworks() {
 
     const deleteMutation = useDeleteArtwork();
 
-    const artworks: ArtworkType[] = artworkData?.data || [];
-    const totalArtworks = artworkData?.meta?.total || 0;
+    // Safely extract artworks array regardless of API response structure
+    const artworks: ArtworkType[] = Array.isArray(artworkData) 
+        ? artworkData 
+        : (Array.isArray(artworkData?.data) ? artworkData.data : []);
+        
+    const totalArtworks = artworkData?.meta?.total || artworks.length;
     const totalPages = artworkData?.meta?.totalPages || 1;
 
     const tabs = [
@@ -213,12 +231,18 @@ export function MyArtworks() {
     ];
 
     const filteredArtworks = artworks.filter(artwork =>
-        artwork.title.toLowerCase().includes(searchQuery.toLowerCase())
+        artwork.title.toLowerCase().includes(debouncedSearch.toLowerCase())
     );
 
     const handleDelete = async (id: string) => {
+        if (isDeletePending) return; // Prevent double-delete
         if (window.confirm('Are you sure you want to delete this artwork?')) {
-            await deleteMutation.mutateAsync(id);
+            setIsDeletePending(true);
+            try {
+                await deleteMutation.mutateAsync(id);
+            } finally {
+                setIsDeletePending(false);
+            }
         }
     };
 
@@ -255,7 +279,7 @@ export function MyArtworks() {
                     <input
                         type="text"
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={handleSearchChange}
                         placeholder="Search artworks..."
                         className="w-full pl-10 pr-4 py-3 bg-theme-surface border border-theme-border rounded-xl text-theme-text placeholder:text-theme-muted focus:outline-none focus:border-gold"
                     />

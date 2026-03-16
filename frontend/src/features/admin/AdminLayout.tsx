@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { DashboardLayout } from '../../components/common/DashboardLayout';
+import { ErrorBoundary } from '../../components/common/ErrorBoundary';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { Avatar, Badge } from '../../components/ui';
 import { ROUTES } from '../../lib/constants';
@@ -51,10 +52,12 @@ function SidebarFooter() {
 
 export function AdminLayout() {
     return (
-        <DashboardLayout
-            sections={adminSidebarSections}
-            footer={<SidebarFooter />}
-        />
+        <ErrorBoundary>
+            <DashboardLayout
+                sections={adminSidebarSections}
+                footer={<SidebarFooter />}
+            />
+        </ErrorBoundary>
     );
 }
 

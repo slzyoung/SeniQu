@@ -337,9 +337,6 @@ export function NFTMarketplacePage() {
                     <Sparkles className="w-16 h-16 text-theme-muted mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-theme-text mb-2">No Artworks Listed</h3>
                     <p className="text-theme-muted mb-4">The marketplace is awaiting its first listings</p>
-                    <Button variant="gold" onClick={() => navigate('/artist/nft')}>
-                        Create Your First Artwork
-                    </Button>
                 </Card>
             ) : (
                 <div className={viewMode === 'grid'

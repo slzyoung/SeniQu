@@ -84,7 +84,8 @@ export class AdminService {
 
     async getUsers(page = 1, limit = 20, filters?: { role?: string; status?: string }) {
         const client = this.db.getClient()
-        const offset = (page - 1) * limit
+        const safeLimit = Math.min(Math.max(limit, 1), 100)
+        const offset = (page - 1) * safeLimit
 
         let query = client
             .from("users")
@@ -101,7 +102,7 @@ export class AdminService {
 
         const { data, error, count } = await query
             .order("created_at", { ascending: false })
-            .range(offset, offset + limit - 1)
+            .range(offset, offset + safeLimit - 1)
 
         if (error) {
             this.logger.error(`Failed to fetch users: ${error.message}`)
@@ -113,13 +114,13 @@ export class AdminService {
             meta: {
                 total: count || 0,
                 page,
-                pageSize: limit,
-                totalPages: Math.ceil((count || 0) / limit),
+                pageSize: safeLimit,
+                totalPages: Math.ceil((count || 0) / safeLimit),
             },
         }
     }
 
-    async suspendUser(userId: string, reason: string) {
+    async suspendUser(userId: string, reason: string, adminId?: string) {
         const client = this.db.getAdminClient()
 
         const { error } = await client
@@ -129,13 +130,13 @@ export class AdminService {
 
         if (error) throw error
 
-        // Log audit
-        await this.logAudit("SUSPEND_USER", "user", userId, { reason })
+        // Log audit with admin ID
+        await this.logAudit("SUSPEND_USER", "user", userId, { reason }, adminId)
 
-        this.logger.warn(`User suspended: ${userId}`)
+        this.logger.warn(`User suspended: ${userId} by admin: ${adminId}`)
     }
 
-    async activateUser(userId: string) {
+    async activateUser(userId: string, adminId?: string) {
         const client = this.db.getAdminClient()
 
         const { error } = await client
@@ -145,8 +146,8 @@ export class AdminService {
 
         if (error) throw error
 
-        await this.logAudit("ACTIVATE_USER", "user", userId)
-        this.logger.log(`User activated: ${userId}`)
+        await this.logAudit("ACTIVATE_USER", "user", userId, undefined, adminId)
+        this.logger.log(`User activated: ${userId} by admin: ${adminId}`)
     }
 
     // ============================================
@@ -507,7 +508,7 @@ export class AdminService {
     // AUDIT LOGGING
     // ============================================
 
-    private async logAudit(action: string, resourceType: string, resourceId: string, metadata?: any) {
+    private async logAudit(action: string, resourceType: string, resourceId: string, metadata?: any, userId?: string) {
         try {
             const client = this.db.getAdminClient()
             await client.from("audit_logs").insert({
@@ -515,6 +516,7 @@ export class AdminService {
                 resource_type: resourceType,
                 resource_id: resourceId,
                 metadata,
+                user_id: userId,
                 status: "success",
             })
         } catch (error) {

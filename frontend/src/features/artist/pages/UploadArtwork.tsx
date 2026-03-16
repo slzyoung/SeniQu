@@ -17,6 +17,7 @@ import { PageContainer } from '../../../components/common/DashboardLayout';
 import { Card, CardHeader, CardContent, Button, Input, Textarea, Select, Badge } from '../../../components/ui';
 import { useToast } from '../../../stores/useNotificationStore';
 import { useCreateArtwork } from '../../../hooks/useArtist';
+import { validateUploadFile, sanitizeString } from '../../../lib/sanitize';
 
 const genres = [
     { value: 'abstract', label: 'Abstract' },
@@ -63,20 +64,31 @@ export function UploadArtwork() {
         setIsDragging(false);
 
         const file = e.dataTransfer.files[0];
-        if (file && file.type.startsWith('image/')) {
-            setUploadedFile(file);
-            setPreviewUrl(URL.createObjectURL(file));
-        } else {
-            toast.error('Invalid file', 'Please upload an image file');
+        if (!file) return;
+
+        const validation = validateUploadFile(file, { maxSizeMB: 50 });
+        if (!validation.valid) {
+            toast.error('Invalid file', validation.error || 'Please upload a valid image file');
+            return;
         }
+
+        setUploadedFile(file);
+        setPreviewUrl(URL.createObjectURL(file));
     }, [toast]);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            setUploadedFile(file);
-            setPreviewUrl(URL.createObjectURL(file));
+        if (!file) return;
+
+        const validation = validateUploadFile(file, { maxSizeMB: 50 });
+        if (!validation.valid) {
+            toast.error('Invalid file', validation.error || 'Please upload a valid image file');
+            e.target.value = ''; // Reset input
+            return;
         }
+
+        setUploadedFile(file);
+        setPreviewUrl(URL.createObjectURL(file));
     };
 
     const handleSubmit = async (saveAsDraft = false) => {
@@ -93,8 +105,8 @@ export function UploadArtwork() {
             // For demo: use previewUrl as imageUrl (in production, upload to cloud storage first)
             // TODO: Implement proper file upload to cloud storage (S3, Cloudinary, etc.)
             const artworkData = {
-                title: formData.title,
-                description: formData.description,
+                title: sanitizeString(formData.title),
+                description: sanitizeString(formData.description),
                 category: formData.genre || 'contemporary',
                 medium: formData.medium,
                 dimensions: formData.dimensions,
@@ -218,7 +230,7 @@ export function UploadArtwork() {
                                                     {uploadedFile?.name}
                                                 </p>
                                                 <p className="text-xs text-theme-muted">
-                                                    {(uploadedFile?.size || 0 / 1024 / 1024).toFixed(2)} MB
+                                                    {((uploadedFile?.size || 0) / 1024 / 1024).toFixed(2)} MB
                                                 </p>
                                             </div>
                                         </div>

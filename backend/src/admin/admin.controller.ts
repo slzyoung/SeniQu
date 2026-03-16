@@ -10,11 +10,14 @@ import {
     Body,
     UseGuards,
     Req,
+    ParseUUIDPipe,
 } from "@nestjs/common"
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from "@nestjs/swagger"
+import { Throttle } from "@nestjs/throttler"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { PermissionsGuard } from "../auth/guards/permissions.guard"
 import { Permissions, Permission } from "../auth/decorators/permissions.decorator"
+import { SqlInjectionGuard } from "../common/guards/sql-injection.guard"
 import { AdminService } from "./admin.service"
 import {
     CreateSystemAlertDto,
@@ -26,7 +29,7 @@ import {
 
 @ApiTags("Admin")
 @Controller("admin")
-@UseGuards(JwtAuthGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard, SqlInjectionGuard)
 @ApiBearerAuth("JWT-auth")
 export class AdminController {
     constructor(private readonly adminService: AdminService) { }
@@ -74,22 +77,31 @@ export class AdminController {
         @Query("role") role?: string,
         @Query("status") status?: string
     ) {
-        return this.adminService.getUsers(+page, +limit, { role, status })
+        return this.adminService.getUsers(+page, Math.min(+limit, 100), { role, status })
     }
 
     @Post("users/:id/suspend")
     @Permissions(Permission.ADMIN_DASHBOARD)
+    @Throttle({ short: { ttl: 1000, limit: 3 } })
     @ApiOperation({ summary: "Suspend a user" })
-    async suspendUser(@Param("id") id: string, @Body() dto: SuspendUserDto) {
-        await this.adminService.suspendUser(id, dto.reason)
+    async suspendUser(
+        @Param("id", ParseUUIDPipe) id: string,
+        @Body() dto: SuspendUserDto,
+        @Req() req: any
+    ) {
+        await this.adminService.suspendUser(id, dto.reason, req.user?.id)
         return { success: true, message: "User suspended" }
     }
 
     @Post("users/:id/activate")
     @Permissions(Permission.ADMIN_DASHBOARD)
+    @Throttle({ short: { ttl: 1000, limit: 3 } })
     @ApiOperation({ summary: "Activate a user" })
-    async activateUser(@Param("id") id: string) {
-        await this.adminService.activateUser(id)
+    async activateUser(
+        @Param("id", ParseUUIDPipe) id: string,
+        @Req() req: any
+    ) {
+        await this.adminService.activateUser(id, req.user?.id)
         return { success: true, message: "User activated" }
     }
 
@@ -107,7 +119,7 @@ export class AdminController {
         @Query("type") type?: string,
         @Query("city") city?: string
     ) {
-        return this.adminService.getAllInstitutions(+page, +limit, {
+        return this.adminService.getAllInstitutions(+page, Math.min(+limit, 100), {
             verified: verified ? verified === "true" : undefined,
             type,
             city,
@@ -122,16 +134,23 @@ export class AdminController {
     }
 
     @Post("institutions/:id/verify")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.INSTITUTION_VERIFY)
+    @Throttle({ short: { ttl: 1000, limit: 5 } })
     @ApiOperation({ summary: "Verify/unverify institution" })
-    async verifyInstitution(@Param("id") id: string, @Body("verified") verified: boolean) {
+    async verifyInstitution(
+        @Param("id", ParseUUIDPipe) id: string,
+        @Body("verified") verified: boolean
+    ) {
         return this.adminService.verifyInstitution(id, verified)
     }
 
     @Patch("institutions/:id/feature")
     @Permissions(Permission.ADMIN_DASHBOARD)
     @ApiOperation({ summary: "Feature/unfeature institution" })
-    async featureInstitution(@Param("id") id: string, @Body("featured") featured: boolean) {
+    async featureInstitution(
+        @Param("id", ParseUUIDPipe) id: string,
+        @Body("featured") featured: boolean
+    ) {
         return this.adminService.featureInstitution(id, featured)
     }
 
@@ -150,7 +169,7 @@ export class AdminController {
         @Query("startDate") startDate?: string,
         @Query("endDate") endDate?: string
     ) {
-        return this.adminService.getSystemLogs(+page, +limit, { level, source, startDate, endDate })
+        return this.adminService.getSystemLogs(+page, Math.min(+limit, 100), { level, source, startDate, endDate })
     }
 
     @Get("audit-logs")
@@ -163,7 +182,7 @@ export class AdminController {
         @Query("action") action?: string,
         @Query("resourceType") resourceType?: string
     ) {
-        return this.adminService.getAuditLogs(+page, +limit, { userId, action, resourceType })
+        return this.adminService.getAuditLogs(+page, Math.min(+limit, 100), { userId, action, resourceType })
     }
 
     // ============================================
@@ -178,23 +197,29 @@ export class AdminController {
     }
 
     @Post("alerts")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.ADMIN_SETTINGS)
+    @Throttle({ short: { ttl: 1000, limit: 5 } })
     @ApiOperation({ summary: "Create system alert" })
     async createSystemAlert(@Body() dto: CreateSystemAlertDto, @Req() req: any) {
         return this.adminService.createSystemAlert(dto, req.user.id)
     }
 
     @Put("alerts/:id")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.ADMIN_SETTINGS)
+    @Throttle({ short: { ttl: 1000, limit: 5 } })
     @ApiOperation({ summary: "Update system alert" })
-    async updateSystemAlert(@Param("id") id: string, @Body() dto: UpdateSystemAlertDto) {
+    async updateSystemAlert(
+        @Param("id", ParseUUIDPipe) id: string,
+        @Body() dto: UpdateSystemAlertDto
+    ) {
         return this.adminService.updateSystemAlert(id, dto)
     }
 
     @Delete("alerts/:id")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.ADMIN_SETTINGS)
+    @Throttle({ short: { ttl: 1000, limit: 3 } })
     @ApiOperation({ summary: "Delete system alert" })
-    async deleteSystemAlert(@Param("id") id: string) {
+    async deleteSystemAlert(@Param("id", ParseUUIDPipe) id: string) {
         await this.adminService.deleteSystemAlert(id)
         return { success: true }
     }
@@ -211,14 +236,15 @@ export class AdminController {
         @Query("limit") limit = 20,
         @Query("status") status?: string
     ) {
-        return this.adminService.getReports(+page, +limit, status)
+        return this.adminService.getReports(+page, Math.min(+limit, 100), status)
     }
 
     @Patch("reports/:id")
     @Permissions(Permission.ADMIN_DASHBOARD)
+    @Throttle({ short: { ttl: 1000, limit: 5 } })
     @ApiOperation({ summary: "Update report status" })
     async updateReportStatus(
-        @Param("id") id: string,
+        @Param("id", ParseUUIDPipe) id: string,
         @Body() dto: UpdateReportStatusDto,
         @Req() req: any
     ) {
@@ -233,11 +259,12 @@ export class AdminController {
     @Permissions(Permission.ADMIN_DASHBOARD)
     @ApiOperation({ summary: "Get partnerships" })
     async getPartnerships(@Query("page") page = 1, @Query("limit") limit = 20) {
-        return this.adminService.getPartnerships(+page, +limit)
+        return this.adminService.getPartnerships(+page, Math.min(+limit, 100))
     }
 
     @Post("partnerships")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.ADMIN_SETTINGS)
+    @Throttle({ short: { ttl: 1000, limit: 5 } })
     @ApiOperation({ summary: "Create partnership" })
     async createPartnership(@Body() dto: CreatePartnershipDto) {
         return this.adminService.createPartnership(dto)

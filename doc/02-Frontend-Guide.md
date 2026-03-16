@@ -69,6 +69,12 @@ When creating a new feature:
 3. Create `components/` for feature-specific components.
 4. Create `index.ts` to export public pages/components.
 
+### 2.7 Error Handling & Security Details
+Our frontend utilizes specialized patterns for stability and security:
+- **Error Boundaries**: Core layouts (`AdminLayout`, `ArtistLayout`) are wrapped in an `ErrorBoundary` component to gracefully catch rendering errors and offer a "Retry" mechanism rather than a blank screen.
+- **Input Sanitization**: We use `src/lib/sanitize.ts` to strip XSS attack vectors from user forms (like `UploadArtwork`) before API transmission. 
+- **Anti-Chunking (Debounce)**: API-heavy inputs (like search bars in `MyArtworks`) use debounced state updates to prevent excessive requests. Mutation events use state locks to prevent double-submissions.
+
 ## 3. Key Libraries
 
 - **Lucide React**: Universal icon set.

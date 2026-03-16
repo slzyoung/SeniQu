@@ -286,14 +286,22 @@ export class WalletLoginDto {
 ```typescript
 // XssSanitizerInterceptor sanitizes all string inputs
 private sanitizeString(str: string): string {
+    // Preserves URL-safe characters while encoding attack vectors
     return str
-        .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#x27;");
+        .replace(/'/g, "&#x27;")
+        .replace(/`/g, "&#x60;");
 }
 ```
+
+### 3.2.1 Frontend XSS Prevention
+
+Input sanitization utility (`sanitize.ts`) runs on the client-side before sending data to the API:
+- Removes `<script>` tags, `javascript:` URIs, and `on*` event handlers.
+- Trims whitespace to prevent blank submissions.
+- Reclusively sanitizes nested objects.
 
 ### 3.3 SQL Injection Prevention
 
@@ -307,6 +315,8 @@ const sqlPatterns = [
 ];
 ```
 
+Controllers that handle dynamic parameters or search criteria use the `@UseGuards(SqlInjectionGuard)` at the class or method level.
+
 ### 3.4 Rate Limiting
 
 ```typescript
@@ -319,11 +329,33 @@ ThrottlerModule.forRoot({
     ],
 })
 
-// Per-endpoint stricter limits
-@Throttle({ short: { limit: 3, ttl: 1000 } })
-@Post('login')
-@Post('login')
-login() { }
+// Per-endpoint stricter limits for sensitive write operations
+@Throttle({ short: { limit: 5, ttl: 1000 } })
+@Post('artworks')
+createArtwork() { }
+
+@Throttle({ short: { limit: 3, ttl: 1000 } }) // Even stricter for destructive actions
+@Delete('artworks/:id')
+deleteArtwork() { }
+```
+
+### 3.4.1 Client-Side Anti-Chunking
+The frontend utilizes a `debounce` utility (300ms) on search inputs (e.g., `MyArtworks.tsx`) and blocks double-submissions using state locks (`isDeletePending`) to prevent network chunking and accidental duplicated requests.
+
+### 3.5 Parameter & Pagination Validation
+
+**1. Strict Resource ID Validation**
+All routes accepting resource IDs (`:id`) enforce UUID format using `ParseUUIDPipe` to prevent malformed or malicious queries from reaching the database layer:
+```typescript
+@Get("profile/:id")
+async getProfile(@Param("id", ParseUUIDPipe) id: string) { ... }
+```
+
+**2. Pagination Capping**
+All endpoints that return lists of data enforce a hard cap on the `limit` parameter to prevent denial-of-service (DoS) via massive database reads:
+```typescript
+const safeLimit = Math.min(Math.max(limit, 1), 100); // Caps query at 100 records max
+```
 
 // Profile Update Rate Limit
 @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 updates per minute

@@ -1,6 +1,7 @@
 /**
  * Artist Service - Backend
  * Business logic for artist-specific operations including stats, analytics, and profile
+ * Fixed: Column names aligned with actual database schema (migrations/001_initial_schema.sql)
  */
 
 import { Injectable, Logger, NotFoundException, ForbiddenException } from "@nestjs/common"
@@ -76,14 +77,14 @@ export class ArtistService {
             client.from("artworks").select("*", { count: "exact", head: true }).eq("artist_id", artistId).eq("status", "draft"),
         ])
 
-        // Get aggregated stats from artworks
+        // Get aggregated stats from artworks — schema uses 'views' and 'likes' columns
         const { data: artworkStats } = await client
             .from("artworks")
-            .select("views_count, likes_count")
+            .select("views, likes")
             .eq("artist_id", artistId)
 
-        const totalViews = artworkStats?.reduce((sum, a) => sum + (a.views_count || 0), 0) || 0
-        const totalLikes = artworkStats?.reduce((sum, a) => sum + (a.likes_count || 0), 0) || 0
+        const totalViews = artworkStats?.reduce((sum, a) => sum + (a.views || 0), 0) || 0
+        const totalLikes = artworkStats?.reduce((sum, a) => sum + (a.likes || 0), 0) || 0
 
         // Get followers count
         const { count: followersCount } = await client
@@ -91,15 +92,35 @@ export class ArtistService {
             .select("*", { count: "exact", head: true })
             .eq("following_id", artistId)
 
-        // Get NFT sales stats
-        const { data: nftSales } = await client
-            .from("nft_transactions")
-            .select("price")
-            .eq("seller_id", artistId)
-            .eq("type", "sale")
+        // Get NFT sales stats — schema uses transaction_type and from_address/to_address
+        const { data: artworkIds } = await client
+            .from("artworks")
+            .select("id")
+            .eq("artist_id", artistId)
+            .eq("is_nft", true)
 
-        const totalSales = nftSales?.length || 0
-        const totalRevenue = nftSales?.reduce((sum, t) => sum + (t.price || 0), 0) || 0
+        let totalSales = 0
+        let totalRevenue = 0
+
+        if (artworkIds && artworkIds.length > 0) {
+            const ids = artworkIds.map(a => a.id)
+            const { data: nftRecords } = await client
+                .from("nfts")
+                .select("id")
+                .in("artwork_id", ids)
+
+            if (nftRecords && nftRecords.length > 0) {
+                const nftIds = nftRecords.map(n => n.id)
+                const { data: nftSales } = await client
+                    .from("nft_transactions")
+                    .select("price")
+                    .in("nft_id", nftIds)
+                    .eq("transaction_type", "buy")
+
+                totalSales = nftSales?.length || 0
+                totalRevenue = nftSales?.reduce((sum, t) => sum + parseFloat(t.price || "0"), 0) || 0
+            }
+        }
 
         return {
             totalArtworks: total.count || 0,
@@ -110,49 +131,31 @@ export class ArtistService {
             totalSales,
             totalRevenue,
             totalFollowers: followersCount || 0,
-            averageRating: 4.5, // Placeholder - calculate from reviews
+            averageRating: 0, // No rating system in schema yet
         }
     }
 
     async getArtistAnalytics(artistId: string, period = "30d"): Promise<ArtistAnalytics> {
-        const client = this.db.getClient()
-        const days = parseInt(period) || 30
-        const startDate = new Date()
-        startDate.setDate(startDate.getDate() - days)
-
-        // For now, return simulated time series data
-        // In production, this would query artwork_analytics or similar table
-        const generateTimeSeries = (baseValue: number) => {
-            const data = []
-            for (let i = 0; i < days; i++) {
-                const date = new Date(startDate)
-                date.setDate(date.getDate() + i)
-                data.push({
-                    date: date.toISOString().split('T')[0],
-                    value: Math.floor(baseValue * (0.8 + Math.random() * 0.4)),
-                })
-            }
-            return data
-        }
-
+        // Return empty arrays — analytics_events table exists, but no artwork-level time series
+        // This is honest rather than returning fake random numbers
         return {
-            views: generateTimeSeries(50),
-            likes: generateTimeSeries(10),
-            sales: generateTimeSeries(2),
-            revenue: generateTimeSeries(100),
+            views: [],
+            likes: [],
+            sales: [],
+            revenue: [],
         }
     }
 
     async getArtistPerformance(artistId: string): Promise<ArtistPerformance> {
         const client = this.db.getClient()
 
-        // Get top artworks by views
+        // Get top artworks by views — schema column is 'views'
         const { data: topArtworks } = await client
             .from("artworks")
-            .select("id, title, views_count, likes_count")
+            .select("id, title, views, likes")
             .eq("artist_id", artistId)
             .eq("status", "published")
-            .order("views_count", { ascending: false })
+            .order("views", { ascending: false })
             .limit(5)
 
         const stats = await this.getArtistStats(artistId)
@@ -161,9 +164,9 @@ export class ArtistService {
             topArtworks: (topArtworks || []).map(a => ({
                 id: a.id,
                 title: a.title,
-                views: a.views_count || 0,
-                likes: a.likes_count || 0,
-                sales: 0, // Would need to join with NFT sales
+                views: a.views || 0,
+                likes: a.likes || 0,
+                sales: 0,
             })),
             engagementRate: stats.totalViews > 0 ? (stats.totalLikes / stats.totalViews) * 100 : 0,
             conversionRate: stats.totalViews > 0 ? (stats.totalSales / stats.totalViews) * 100 : 0,
@@ -182,7 +185,8 @@ export class ArtistService {
         filters?: { status?: string; category?: string }
     ) {
         const client = this.db.getClient()
-        const offset = (page - 1) * limit
+        const safeLimit = Math.min(Math.max(limit, 1), 100)
+        const offset = (page - 1) * safeLimit
 
         let query = client
             .from("artworks")
@@ -190,15 +194,16 @@ export class ArtistService {
             .eq("artist_id", artistId)
 
         if (filters?.status) {
-            query = query.eq("status", filters.status.toLowerCase()) // Convert to lowercase for consistency
+            query = query.eq("status", filters.status.toLowerCase())
         }
         if (filters?.category) {
-            query = query.eq("category", filters.category)
+            // Schema uses genres TEXT[] for categories
+            query = query.contains("genres", [filters.category])
         }
 
         const { data, error, count } = await query
             .order("created_at", { ascending: false })
-            .range(offset, offset + limit - 1)
+            .range(offset, offset + safeLimit - 1)
 
         if (error) throw error
 
@@ -207,8 +212,8 @@ export class ArtistService {
             meta: {
                 total: count || 0,
                 page,
-                pageSize: limit,
-                totalPages: Math.ceil((count || 0) / limit),
+                pageSize: safeLimit,
+                totalPages: Math.ceil((count || 0) / safeLimit),
             },
         }
     }
@@ -226,20 +231,23 @@ export class ArtistService {
     }) {
         const client = this.db.getAdminClient()
 
+        // Generate slug from title
+        const slug = this.generateSlug(dto.title)
+
+        // Map DTO fields to actual schema columns from 001_initial_schema.sql
         const { data, error } = await client
             .from("artworks")
             .insert({
                 title: dto.title,
+                slug,
                 description: dto.description,
                 artist_id: artistId,
-                category: dto.category,
-                region: dto.region,
-                era: dto.era,
-                medium: dto.medium,
-                dimensions: dto.dimensions,
-                image_url: dto.imageUrl,
-                status: dto.status ? dto.status.toLowerCase() : "draft", // Ensure status is lowercase
-                is_verified: false,
+                genres: dto.category ? [dto.category] : [],       // schema: genres TEXT[]
+                medium: dto.medium || null,                        // schema: medium VARCHAR(100)
+                style: dto.region || null,                         // map region to style
+                period: dto.era || null,                           // map era to period
+                primary_image_url: dto.imageUrl,                   // schema: primary_image_url TEXT NOT NULL
+                status: dto.status ? dto.status.toLowerCase() : "draft",
             })
             .select()
             .single()
@@ -266,20 +274,21 @@ export class ArtistService {
         if (!existing) throw new NotFoundException("Artwork not found")
         if (existing.artist_id !== artistId) throw new ForbiddenException("You can only edit your own artworks")
 
+        // Build update object — only include defined fields
+        const updateData: Record<string, any> = {}
+        if (dto.title !== undefined) updateData.title = dto.title
+        if (dto.description !== undefined) updateData.description = dto.description
+        if (dto.category !== undefined) updateData.genres = [dto.category]
+        if (dto.medium !== undefined) updateData.medium = dto.medium
+        if (dto.region !== undefined) updateData.style = dto.region
+        if (dto.era !== undefined) updateData.period = dto.era
+        if (dto.imageUrl !== undefined) updateData.primary_image_url = dto.imageUrl
+        if (dto.status !== undefined) updateData.status = dto.status.toLowerCase()
+        updateData.updated_at = new Date().toISOString()
+
         const { data, error } = await client
             .from("artworks")
-            .update({
-                title: dto.title,
-                description: dto.description,
-                category: dto.category,
-                region: dto.region,
-                era: dto.era,
-                medium: dto.medium,
-                dimensions: dto.dimensions,
-                image_url: dto.imageUrl,
-                status: dto.status ? dto.status.toLowerCase() : undefined, // Ensure status is lowercase
-                updated_at: new Date().toISOString(),
-            })
+            .update(updateData)
             .eq("id", artworkId)
             .select()
             .single()
@@ -365,19 +374,37 @@ export class ArtistService {
     }) {
         const client = this.db.getAdminClient()
 
+        const updateData: Record<string, any> = {
+            updated_at: new Date().toISOString(),
+        }
+        if (dto.displayName !== undefined) updateData.display_name = dto.displayName
+        if (dto.bio !== undefined) updateData.bio = dto.bio
+        if (dto.avatarUrl !== undefined) updateData.avatar_url = dto.avatarUrl
+
         const { data, error } = await client
             .from("users")
-            .update({
-                display_name: dto.displayName,
-                bio: dto.bio,
-                avatar_url: dto.avatarUrl,
-                updated_at: new Date().toISOString(),
-            })
+            .update(updateData)
             .eq("id", artistId)
             .select()
             .single()
 
         if (error) throw error
+
+        // Handle social links separately if provided
+        if (dto.socialLinks) {
+            const socialClient = this.db.getAdminClient()
+            for (const [platform, url] of Object.entries(dto.socialLinks)) {
+                if (url !== undefined) {
+                    await socialClient
+                        .from("user_social_links")
+                        .upsert(
+                            { user_id: artistId, platform, url },
+                            { onConflict: "user_id,platform" }
+                        )
+                }
+            }
+        }
+
         return data
     }
 
@@ -387,13 +414,14 @@ export class ArtistService {
 
     async getFollowers(artistId: string, page = 1, limit = 20) {
         const client = this.db.getClient()
-        const offset = (page - 1) * limit
+        const safeLimit = Math.min(Math.max(limit, 1), 100)
+        const offset = (page - 1) * safeLimit
 
         const { data, error, count } = await client
             .from("follows")
             .select("follower:users!follower_id(id, display_name, avatar_url)", { count: "exact" })
             .eq("following_id", artistId)
-            .range(offset, offset + limit - 1)
+            .range(offset, offset + safeLimit - 1)
 
         if (error) throw error
 
@@ -402,22 +430,22 @@ export class ArtistService {
             meta: {
                 total: count || 0,
                 page,
-                pageSize: limit,
-                totalPages: Math.ceil((count || 0) / limit),
+                pageSize: safeLimit,
+                totalPages: Math.ceil((count || 0) / safeLimit),
             },
         }
     }
 
     async getRecentActivity(artistId: string, limit = 10) {
         const client = this.db.getClient()
+        const safeLimit = Math.min(Math.max(limit, 1), 50)
 
-        // Combine notifications and recent interactions
         const { data: notifications } = await client
             .from("notifications")
             .select("*")
             .eq("user_id", artistId)
             .order("created_at", { ascending: false })
-            .limit(limit)
+            .limit(safeLimit)
 
         return notifications || []
     }
@@ -431,14 +459,27 @@ export class ArtistService {
             id: data.id,
             title: data.title,
             description: data.description,
-            imageUrl: data.image_url,
-            thumbnailUrl: data.thumbnail_url,
-            category: data.category,
+            imageUrl: data.primary_image_url,     // schema: primary_image_url
+            thumbnailUrl: data.primary_image_url, // no separate thumbnail in schema
+            category: data.genres?.[0] || "",      // schema: genres TEXT[]
             status: data.status,
-            views: data.views_count || 0,
-            likes: data.likes_count || 0,
+            views: data.views || 0,                // schema: views INTEGER
+            likes: data.likes || 0,                // schema: likes INTEGER
             createdAt: data.created_at,
-            isNFT: !!data.nft_token_id,
+            isNFT: data.is_nft || false,           // schema: is_nft BOOLEAN
         }
+    }
+
+    private generateSlug(title: string): string {
+        const base = title
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9\s-]/g, "")
+            .replace(/\s+/g, "-")
+            .replace(/-+/g, "-")
+            .substring(0, 250)
+
+        // Add timestamp to ensure uniqueness (slug is UNIQUE NOT NULL)
+        return `${base}-${Date.now()}`
     }
 }

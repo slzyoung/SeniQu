@@ -67,14 +67,15 @@ export class XssSanitizerInterceptor implements NestInterceptor {
     }
 
     private sanitizeString(str: string): string {
+        // Only encode actual XSS attack vectors
+        // Preserve URL-safe characters: / = : . @ ? & # 
         return str
-            .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#x27;")
-            .replace(/\//g, "&#x2F;")
             .replace(/`/g, "&#x60;")
-            .replace(/=/g, "&#x3D;")
+            .replace(/javascript:/gi, "")
+            .replace(/on\w+\s*=/gi, "")
     }
 }

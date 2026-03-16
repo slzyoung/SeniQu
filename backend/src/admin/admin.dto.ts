@@ -136,6 +136,13 @@ export class CreatePartnershipDto {
 // USER MANAGEMENT DTOs
 // ============================================
 
+export enum ReportStatusType {
+    PENDING = "pending",
+    INVESTIGATING = "investigating",
+    RESOLVED = "resolved",
+    DISMISSED = "dismissed",
+}
+
 export class SuspendUserDto {
     @ApiProperty({ description: "Reason for suspension", maxLength: 500 })
     @IsString()
@@ -145,10 +152,10 @@ export class SuspendUserDto {
 }
 
 export class UpdateReportStatusDto {
-    @ApiProperty({ description: "New status" })
-    @IsString()
+    @ApiProperty({ description: "New status", enum: ReportStatusType })
+    @IsEnum(ReportStatusType, { message: "Status must be: pending, investigating, resolved, or dismissed" })
     @IsNotEmpty()
-    status: string
+    status: ReportStatusType
 
     @ApiPropertyOptional({ description: "Resolution notes", maxLength: 1000 })
     @IsOptional()

@@ -373,14 +373,16 @@ export function MyNFTsPage() {
                     <p className="text-theme-muted mb-4 max-w-md mx-auto">
                         {activeTab === 'owned'
                             ? 'Start your collection by collecting artworks from the marketplace.'
-                            : 'Create your first artwork from an uploaded piece.'}
+                            : 'You have not created any artworks yet.'}
                     </p>
-                    <Button
-                        variant="gold"
-                        onClick={() => navigate(activeTab === 'owned' ? '/dashboard/marketplace' : '/artist/nft')}
-                    >
-                        {activeTab === 'owned' ? 'Browse Marketplace' : 'Create Artwork'}
-                    </Button>
+                    {activeTab === 'owned' && (
+                        <Button
+                            variant="gold"
+                            onClick={() => navigate('/dashboard/marketplace')}
+                        >
+                            Browse Marketplace
+                        </Button>
+                    )}
                 </Card>
             ) : (
                 <div className={viewMode === 'grid'

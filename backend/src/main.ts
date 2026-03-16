@@ -8,6 +8,8 @@ import { AppModule } from "./app.module"
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter"
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor"
 import { LoggingInterceptor } from "./common/interceptors/logging.interceptor"
+import { SecurityHeadersInterceptor } from "./common/interceptors/security-headers.interceptor"
+import { XssSanitizerInterceptor } from "./common/interceptors/xss-sanitizer.interceptor"
 
 async function bootstrap() {
     const logger = new Logger("Bootstrap")
@@ -96,6 +98,8 @@ async function bootstrap() {
 
     // Global interceptors
     app.useGlobalInterceptors(
+        new SecurityHeadersInterceptor(),
+        new XssSanitizerInterceptor(),
         new LoggingInterceptor(),
         new TransformInterceptor(),
     )
