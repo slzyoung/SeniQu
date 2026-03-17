@@ -21,7 +21,7 @@ import { PageContainer, StatsGrid } from '../../../components/common/DashboardLa
 import { Card, CardContent, Button, Input, Badge, Select } from '../../../components/ui';
 import type { SelectOption } from '../../../components/ui';
 import { useNavigate } from 'react-router-dom';
-import { useNFTMarketplace, useNFTStats, useOwnedNFTs, useBuyNFT } from '../../../hooks/useNFT';
+import { useArtMarketplace, useArtStats, useOwnedNFTs, useBuyArt } from '../../../hooks/useArt';
 
 // ============================================
 // TYPES
@@ -67,24 +67,24 @@ function StatCard({
 }
 
 function NFTCard({
-    nft,
+    art,
     viewMode,
     onBuy
 }: {
-    nft: any;
+    art: any;
     viewMode: ViewMode;
-    onBuy?: (nftId: string) => void;
+    onBuy?: (artId: string) => void;
 }) {
     const navigate = useNavigate();
 
     if (viewMode === 'list') {
         return (
-            <Card variant="default" hover className="cursor-pointer touch-manipulation active:bg-theme-elevated/50 transition-colors" onClick={() => navigate(`/marketplace/nft/${nft.id}`)}>
+            <Card variant="default" hover className="cursor-pointer touch-manipulation active:bg-theme-elevated/50 transition-colors" onClick={() => navigate(`/marketplace/art/${art.id}`)}>
                 <div className="flex flex-col xs:flex-row gap-3 sm:gap-4 p-3 sm:p-4">
                     <div className="w-full xs:w-20 xs:h-20 sm:w-28 sm:h-28 aspect-square rounded-xl overflow-hidden flex-shrink-0 bg-theme-elevated">
                         <img
-                            src={nft.artwork?.primaryImageUrl || '/placeholder-nft.jpg'}
-                            alt={nft.artwork?.title || 'Artwork'}
+                            src={art.artwork?.primaryImageUrl || '/placeholder-art.jpg'}
+                            alt={art.artwork?.title || 'Artwork'}
                             className="w-full h-full object-cover"
                             loading="lazy"
                         />
@@ -93,8 +93,8 @@ function NFTCard({
                         <div>
                             <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0">
-                                    <h3 className="font-medium text-theme-text truncate text-sm sm:text-base">{nft.artwork?.title || 'Untitled'}</h3>
-                                    <p className="text-xs sm:text-sm text-theme-muted truncate">by {nft.creator?.displayName || 'Unknown'}</p>
+                                    <h3 className="font-medium text-theme-text truncate text-sm sm:text-base">{art.artwork?.title || 'Untitled'}</h3>
+                                    <p className="text-xs sm:text-sm text-theme-muted truncate">by {art.creator?.displayName || 'Unknown'}</p>
                                 </div>
                                 <Badge variant="gold" className="flex-shrink-0 flex items-center gap-1 scale-90 sm:scale-100 origin-right">
                                     <Sparkles className="w-3 h-3" />
@@ -103,19 +103,19 @@ function NFTCard({
                             </div>
                             <div className="flex items-center gap-3 sm:gap-4 mt-2 text-xs text-theme-muted">
                                 <span className="flex items-center gap-1">
-                                    <Eye className="w-3 h-3" /> {nft.artwork?.views || 0}
+                                    <Eye className="w-3 h-3" /> {art.artwork?.views || 0}
                                 </span>
                                 <span className="flex items-center gap-1">
-                                    <Heart className="w-3 h-3" /> {nft.artwork?.likes || 0}
+                                    <Heart className="w-3 h-3" /> {art.artwork?.likes || 0}
                                 </span>
-                                <Badge variant="default" className="scale-90 origin-left">{nft.blockchain || 'Solana'}</Badge>
+                                <Badge variant="default" className="scale-90 origin-left">{art.blockchain || 'Solana'}</Badge>
                             </div>
                         </div>
                         <div className="flex items-center justify-between mt-3 gap-2">
                             <div className="min-w-0">
                                 <p className="text-[10px] sm:text-xs text-theme-muted truncate">Current Price</p>
                                 <p className="font-mono text-sm sm:text-lg font-bold text-gold truncate">
-                                    {nft.listingPrice || nft.price} {nft.currency || 'SOL'}
+                                    {art.listingPrice || art.price} {art.currency || 'SOL'}
                                 </p>
                             </div>
                             <Button
@@ -125,7 +125,7 @@ function NFTCard({
                                 className="flex-shrink-0"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    onBuy?.(nft.id);
+                                    onBuy?.(art.id);
                                 }}
                             >
                                 Buy
@@ -138,11 +138,11 @@ function NFTCard({
     }
 
     return (
-        <Card variant="default" hover padding="none" className="group cursor-pointer overflow-hidden touch-manipulation active:scale-[0.98] transition-all duration-200" onClick={() => navigate(`/marketplace/nft/${nft.id}`)}>
+        <Card variant="default" hover padding="none" className="group cursor-pointer overflow-hidden touch-manipulation active:scale-[0.98] transition-all duration-200" onClick={() => navigate(`/marketplace/art/${art.id}`)}>
             <div className="relative aspect-square overflow-hidden bg-theme-elevated">
                 <img
-                    src={nft.artwork?.primaryImageUrl || '/placeholder-nft.jpg'}
-                    alt={nft.artwork?.title || 'Artwork'}
+                    src={art.artwork?.primaryImageUrl || '/placeholder-art.jpg'}
+                    alt={art.artwork?.title || 'Artwork'}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                     loading="lazy"
                 />
@@ -160,7 +160,7 @@ function NFTCard({
                             leftIcon={<ShoppingCart className="w-4 h-4" />}
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onBuy?.(nft.id);
+                                onBuy?.(art.id);
                             }}
                         >
                             Collect Now
@@ -170,17 +170,17 @@ function NFTCard({
             </div>
             <div className="p-3 sm:p-4">
                 <h3 className="font-medium text-theme-text truncate group-hover:text-gold transition-colors text-sm sm:text-base">
-                    {nft.artwork?.title || 'Untitled'}
+                    {art.artwork?.title || 'Untitled'}
                 </h3>
-                <p className="text-xs sm:text-sm text-theme-muted truncate">by {nft.creator?.displayName || 'Unknown'}</p>
+                <p className="text-xs sm:text-sm text-theme-muted truncate">by {art.creator?.displayName || 'Unknown'}</p>
                 <div className="flex items-center justify-between mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-theme-border">
                     <div className="min-w-0">
                         <p className="text-[10px] sm:text-xs text-theme-muted truncate">Price</p>
                         <p className="font-mono font-bold text-gold text-sm sm:text-base truncate">
-                            {nft.listingPrice || nft.price} {nft.currency || 'SOL'}
+                            {art.listingPrice || art.price} {art.currency || 'SOL'}
                         </p>
                     </div>
-                    <Badge variant="default" className="text-[10px] sm:text-xs scale-90 sm:scale-100 origin-right">{nft.blockchain || 'SOL'}</Badge>
+                    <Badge variant="default" className="text-[10px] sm:text-xs scale-90 sm:scale-100 origin-right">{art.blockchain || 'SOL'}</Badge>
                 </div>
             </div>
         </Card>
@@ -204,25 +204,25 @@ export function NFTMarketplacePage() {
     });
 
     // Queries
-    const { data: marketplaceData, isLoading } = useNFTMarketplace({
+    const { data: marketplaceData, isLoading } = useArtMarketplace({
         page: filters.page,
         limit: filters.limit,
         sortBy: sortBy === 'price-low' || sortBy === 'price-high' ? 'price' : sortBy === 'newest' ? 'createdAt' : 'views',
         sortOrder: sortBy === 'price-low' ? 'asc' : 'desc',
     });
 
-    const { data: stats, isLoading: statsLoading } = useNFTStats();
+    const { data: stats, isLoading: statsLoading } = useArtStats();
     const { data: ownedData } = useOwnedNFTs({ limit: 5 });
 
     // Mutations
-    const buyNFT = useBuyNFT();
+    const buyArt = useBuyNFT();
 
-    const nfts = marketplaceData?.data || [];
+    const arts = marketplaceData?.data || [];
     const ownedNFTs = ownedData?.data || [];
 
-    const handleBuy = (nftId: string) => {
+    const handleBuy = (artId: string) => {
         // In real app, show confirmation modal
-        buyNFT.mutate(nftId);
+        buyNFT.mutate(artId);
     };
 
     // Sort options for Select component
@@ -241,7 +241,7 @@ export function NFTMarketplacePage() {
                 <Button
                     variant="gold"
                     leftIcon={<Wallet className="w-4 h-4" />}
-                    onClick={() => navigate('/dashboard/my-nfts')}
+                    onClick={() => navigate('/dashboard/my-arts')}
                 >
                     <span className="hidden sm:inline">My Arts</span>
                     <span className="sm:hidden">My Arts</span>
@@ -327,12 +327,12 @@ export function NFTMarketplacePage() {
                 </CardContent>
             </Card>
 
-            {/* NFT Grid */}
+            {/* Art Grid */}
             {isLoading ? (
                 <div className="flex items-center justify-center py-20">
                     <Loader2 className="w-8 h-8 text-gold animate-spin" />
                 </div>
-            ) : nfts.length === 0 ? (
+            ) : arts.length === 0 ? (
                 <Card variant="elevated" className="text-center py-16">
                     <Sparkles className="w-16 h-16 text-theme-muted mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-theme-text mb-2">No Artworks Listed</h3>
@@ -343,10 +343,10 @@ export function NFTMarketplacePage() {
                     ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6"
                     : "flex flex-col gap-4"
                 }>
-                    {nfts.map((nft: any) => (
+                    {arts.map((art: any) => (
                         <NFTCard
-                            key={nft.id}
-                            nft={nft}
+                            key={art.id}
+                            art={art}
                             viewMode={viewMode}
                             onBuy={handleBuy}
                         />

@@ -88,10 +88,10 @@ export const userSidebarSections: SidebarSection[] = [
                 path: ROUTES.USER_MARKETPLACE,
             },
             {
-                id: 'my-nfts',
+                id: 'my-arts',
                 label: 'My Arts',
                 icon: <Wallet className="w-5 h-5" />,
-                path: ROUTES.USER_MY_NFTS,
+                path: ROUTES.USER_MY_ARTS,
             },
         ],
     },
@@ -184,7 +184,7 @@ export const adminSidebarSections: SidebarSection[] = [
             },
             {
                 id: 'marketplace',
-                label: 'NFT Marketplace',
+                label: 'Arts Marketplace',
                 icon: <ShoppingBag className="w-5 h-5" />,
                 path: ROUTES.ADMIN_MARKETPLACE,
             },
@@ -298,7 +298,7 @@ export const getArtistSidebarSections = (isInstitution: boolean): SidebarSection
             },
             {
                 id: 'marketplace',
-                label: 'NFT Marketplace',
+                label: 'Arts Marketplace',
                 icon: <Wallet className="w-5 h-5" />,
                 path: ROUTES.MARKETPLACE,
             },
@@ -397,7 +397,7 @@ export const publicSidebarSections: SidebarSection[] = [
         items: [
             {
                 id: 'marketplace',
-                label: 'NFT Marketplace',
+                label: 'Arts Marketplace',
                 icon: <ShoppingCart className="w-5 h-5" />,
                 path: ROUTES.MARKETPLACE,
             },

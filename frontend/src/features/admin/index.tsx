@@ -15,7 +15,7 @@ export {
     SystemAnalytics,
     DatabaseManagement,
     SecurityCenter,
-    NFTOversight,
+    ArtsOversight,
     PremiumManagement,
     GlobalSettings,
     SystemHealth,

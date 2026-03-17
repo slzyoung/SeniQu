@@ -14,7 +14,7 @@ export interface DashboardStats {
     totalUsers: number;
     totalArtworks: number;
     totalInstitutions: number;
-    totalNFTs: number;
+    totalArts: number;
     totalRevenue: number;
     activeUsers: number;
     newUsersToday: number;
@@ -271,20 +271,20 @@ class AdminService {
     }
 
     // ============================================
-    // NFT OVERSIGHT
+    // ART OVERSIGHT
     // ============================================
 
-    async getNFTStats(): Promise<{
+    async getArtStats(): Promise<{
         totalMinted: number;
         totalListed: number;
         totalSold: number;
         totalVolume: number;
     }> {
-        return apiGet('/admin/nfts/stats');
+        return apiGet('/admin/arts/stats');
     }
 
-    async getNFTTransactions(page = 1, limit = 50): Promise<PaginatedResponse<any>> {
-        return apiGet('/admin/nfts/transactions', { params: { page, limit } });
+    async getArtTransactions(page = 1, limit = 50): Promise<PaginatedResponse<any>> {
+        return apiGet('/admin/arts/transactions', { params: { page, limit } });
     }
 
     // ============================================

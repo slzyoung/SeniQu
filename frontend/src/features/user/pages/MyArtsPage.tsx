@@ -19,7 +19,7 @@ import {
 import { PageContainer, StatsGrid } from '../../../components/common/DashboardLayout';
 import { Card, CardContent, Button, Badge, Tabs } from '../../../components/ui';
 import { useNavigate } from 'react-router-dom';
-import { useOwnedNFTs, useCreatedNFTs, useUnlistNFT } from '../../../hooks/useNFT';
+import { useOwnedNFTs, useCreatedNFTs, useUnlistArt } from '../../../hooks/useArt';
 
 // ============================================
 // TYPES
@@ -33,30 +33,30 @@ type TabValue = 'owned' | 'created';
 // ============================================
 
 function NFTCard({
-    nft,
+    art,
     viewMode,
     isOwned,
     onList,
     onUnlist,
     onTransfer
 }: {
-    nft: any;
+    art: any;
     viewMode: ViewMode;
     isOwned: boolean;
-    onList?: (nft: any) => void;
-    onUnlist?: (nftId: string) => void;
-    onTransfer?: (nft: any) => void;
+    onList?: (art: any) => void;
+    onUnlist?: (artId: string) => void;
+    onTransfer?: (art: any) => void;
 }) {
     const navigate = useNavigate();
 
     if (viewMode === 'list') {
         return (
-            <Card variant="default" hover className="cursor-pointer touch-manipulation active:bg-theme-elevated/50 transition-colors" onClick={() => navigate(`/marketplace/nft/${nft.id}`)}>
+            <Card variant="default" hover className="cursor-pointer touch-manipulation active:bg-theme-elevated/50 transition-colors" onClick={() => navigate(`/marketplace/art/${art.id}`)}>
                 <div className="flex flex-col xs:flex-row gap-3 sm:gap-4 p-3 sm:p-4">
                     <div className="w-full xs:w-20 xs:h-20 sm:w-28 sm:h-28 aspect-square rounded-xl overflow-hidden flex-shrink-0 bg-theme-elevated">
                         <img
-                            src={nft.artwork?.primaryImageUrl || '/placeholder-nft.jpg'}
-                            alt={nft.artwork?.title || 'Artwork'}
+                            src={art.artwork?.primaryImageUrl || '/placeholder-art.jpg'}
+                            alt={art.artwork?.title || 'Artwork'}
                             className="w-full h-full object-cover"
                             loading="lazy"
                         />
@@ -65,24 +65,24 @@ function NFTCard({
                         <div>
                             <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0">
-                                    <h3 className="font-medium text-theme-text truncate text-sm sm:text-base">{nft.artwork?.title || 'Untitled'}</h3>
+                                    <h3 className="font-medium text-theme-text truncate text-sm sm:text-base">{art.artwork?.title || 'Untitled'}</h3>
                                     <p className="text-xs sm:text-sm text-theme-muted truncate">
-                                        {isOwned ? `by ${nft.creator?.displayName || 'Unknown'}` : 'Created by you'}
+                                        {isOwned ? `by ${art.creator?.displayName || 'Unknown'}` : 'Created by you'}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0">
-                                    <Badge variant={nft.isListed ? 'success' : 'default'} className="scale-90 sm:scale-100 origin-right">
-                                        {nft.isListed ? 'Listed' : nft.status}
+                                    <Badge variant={art.isListed ? 'success' : 'default'} className="scale-90 sm:scale-100 origin-right">
+                                        {art.isListed ? 'Listed' : art.status}
                                     </Badge>
                                 </div>
                             </div>
                             <div className="flex items-center gap-3 sm:gap-4 mt-2 text-xs text-theme-muted">
-                                <Badge variant="default" className="scale-90 origin-left">{nft.blockchain || 'Solana'}</Badge>
-                                <span>Token #{nft.tokenId?.slice(-6) || '???'}</span>
+                                <Badge variant="default" className="scale-90 origin-left">{art.blockchain || 'Solana'}</Badge>
+                                <span>Token #{art.tokenId?.slice(-6) || '???'}</span>
                             </div>
-                            {nft.isListed && (
+                            {art.isListed && (
                                 <p className="font-mono text-sm sm:text-lg font-bold text-gold mt-2">
-                                    {nft.listingPrice} {nft.currency || 'SOL'}
+                                    {art.listingPrice} {art.currency || 'SOL'}
                                 </p>
                             )}
                         </div>
@@ -91,14 +91,14 @@ function NFTCard({
                     <div className="flex flex-row xs:flex-col gap-2 mt-2 xs:mt-0 pt-2 xs:pt-0 border-t xs:border-t-0 border-theme-border">
                         {isOwned && (
                             <>
-                                {nft.isListed ? (
+                                {art.isListed ? (
                                     <Button
                                         variant="outline"
                                         size="sm"
                                         className="flex-1 xs:flex-none"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            onUnlist?.(nft.id);
+                                            onUnlist?.(art.id);
                                         }}
                                     >
                                         Unlist
@@ -111,7 +111,7 @@ function NFTCard({
                                         leftIcon={<Tag className="w-4 h-4" />}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            onList?.(nft);
+                                            onList?.(art);
                                         }}
                                     >
                                         List
@@ -124,7 +124,7 @@ function NFTCard({
                                     leftIcon={<Send className="w-4 h-4" />}
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        onTransfer?.(nft);
+                                        onTransfer?.(art);
                                     }}
                                 >
                                     Transfer
@@ -138,19 +138,19 @@ function NFTCard({
     }
 
     return (
-        <Card variant="default" hover padding="none" className="group cursor-pointer overflow-hidden touch-manipulation active:scale-[0.98] transition-all duration-200" onClick={() => navigate(`/marketplace/nft/${nft.id}`)}>
+        <Card variant="default" hover padding="none" className="group cursor-pointer overflow-hidden touch-manipulation active:scale-[0.98] transition-all duration-200" onClick={() => navigate(`/marketplace/art/${art.id}`)}>
             <div className="relative aspect-square overflow-hidden bg-theme-elevated">
                 <img
-                    src={nft.artwork?.primaryImageUrl || '/placeholder-nft.jpg'}
-                    alt={nft.artwork?.title || 'Artwork'}
+                    src={art.artwork?.primaryImageUrl || '/placeholder-art.jpg'}
+                    alt={art.artwork?.title || 'Artwork'}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                     loading="lazy"
                 />
                 <Badge
-                    variant={nft.isListed ? 'success' : 'default'}
+                    variant={art.isListed ? 'success' : 'default'}
                     className="absolute top-3 left-3 shadow-md"
                 >
-                    {nft.isListed ? 'Listed' : nft.status}
+                    {art.isListed ? 'Listed' : art.status}
                 </Badge>
                 <Badge variant="gold" className="absolute top-3 right-3 flex items-center gap-1 shadow-md">
                     <Sparkles className="w-3 h-3" />
@@ -161,14 +161,14 @@ function NFTCard({
                     <div className="absolute bottom-4 left-4 right-4 flex gap-2">
                         {isOwned && (
                             <>
-                                {nft.isListed ? (
+                                {art.isListed ? (
                                     <Button
                                         variant="outline"
                                         size="sm"
                                         className="flex-1 text-white border-white/50"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            onUnlist?.(nft.id);
+                                            onUnlist?.(art.id);
                                         }}
                                     >
                                         Unlist
@@ -181,7 +181,7 @@ function NFTCard({
                                         leftIcon={<Tag className="w-4 h-4" />}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            onList?.(nft);
+                                            onList?.(art);
                                         }}
                                     >
                                         List
@@ -193,7 +193,7 @@ function NFTCard({
                                     className="text-white hover:bg-white/20"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        onTransfer?.(nft);
+                                        onTransfer?.(art);
                                     }}
                                 >
                                     <Send className="w-4 h-4" />
@@ -205,13 +205,13 @@ function NFTCard({
             </div>
             <div className="p-3 sm:p-4">
                 <h3 className="font-medium text-theme-text truncate group-hover:text-gold transition-colors text-sm sm:text-base">
-                    {nft.artwork?.title || 'Untitled'}
+                    {art.artwork?.title || 'Untitled'}
                 </h3>
                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-theme-border">
-                    <Badge variant="default" className="text-[10px] sm:text-xs scale-90 sm:scale-100 origin-left">{nft.blockchain || 'SOL'}</Badge>
-                    {nft.isListed && (
+                    <Badge variant="default" className="text-[10px] sm:text-xs scale-90 sm:scale-100 origin-left">{art.blockchain || 'SOL'}</Badge>
+                    {art.isListed && (
                         <p className="font-mono font-bold text-gold text-sm sm:text-base">
-                            {nft.listingPrice} {nft.currency || 'SOL'}
+                            {art.listingPrice} {art.currency || 'SOL'}
                         </p>
                     )}
                 </div>
@@ -243,7 +243,7 @@ export function MyNFTsPage() {
     const { data: createdData, isLoading: createdLoading } = useCreatedNFTs();
 
     // Mutations
-    const unlistNFT = useUnlistNFT();
+    const unlistArt = useUnlistNFT();
 
     const ownedNFTs = ownedData?.data || [];
     const createdNFTs = createdData?.data || [];
@@ -256,17 +256,17 @@ export function MyNFTsPage() {
     const totalListed = ownedNFTs.filter((n: any) => n.isListed).length;
     const totalValue = ownedNFTs.reduce((sum: number, n: any) => sum + (n.listingPrice || n.price || 0), 0);
 
-    const handleList = (nft: any) => {
-        setSelectedNFT(nft);
+    const handleList = (art: any) => {
+        setSelectedNFT(art);
         setShowListModal(true);
     };
 
-    const handleUnlist = (nftId: string) => {
-        unlistNFT.mutate(nftId);
+    const handleUnlist = (artId: string) => {
+        unlistNFT.mutate(artId);
     };
 
-    const handleTransfer = (nft: any) => {
-        setSelectedNFT(nft);
+    const handleTransfer = (art: any) => {
+        setSelectedNFT(art);
         setShowTransferModal(true);
     };
 
@@ -359,7 +359,7 @@ export function MyNFTsPage() {
                 </div>
             </div>
 
-            {/* NFT Grid */}
+            {/* Art Grid */}
             {isLoading ? (
                 <div className="flex items-center justify-center py-20">
                     <Loader2 className="w-8 h-8 text-gold animate-spin" />
@@ -389,10 +389,10 @@ export function MyNFTsPage() {
                     ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6"
                     : "flex flex-col gap-4"
                 }>
-                    {currentNFTs.map((nft: any) => (
+                    {currentNFTs.map((art: any) => (
                         <NFTCard
-                            key={nft.id}
-                            nft={nft}
+                            key={art.id}
+                            art={art}
                             viewMode={viewMode}
                             isOwned={activeTab === 'owned'}
                             onList={handleList}

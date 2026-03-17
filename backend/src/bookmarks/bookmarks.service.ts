@@ -27,7 +27,7 @@ export class BookmarksService {
                 id,
                 created_at,
                 artwork:artworks(
-                    id, title, slug, primary_image_url, price, is_nft,
+                    id, title, slug, primary_image_url, price, is_art,
                     artist:users(id, display_name, avatar_url)
                 )
             `, { count: "exact" })

@@ -10,7 +10,7 @@ export interface DashboardStats {
     totalUsers: number
     totalArtworks: number
     totalInstitutions: number
-    totalNFTs: number
+    totalArts: number
     totalRevenue: number
     activeUsers: number
     newUsersToday: number
@@ -54,7 +54,7 @@ export class AdminService {
             client.from("users").select("*", { count: "exact", head: true }),
             client.from("artworks").select("*", { count: "exact", head: true }),
             client.from("institutions").select("*", { count: "exact", head: true }),
-            client.from("nfts").select("*", { count: "exact", head: true }),
+            client.from("arts").select("*", { count: "exact", head: true }),
             client.from("institutions").select("*", { count: "exact", head: true }).eq("is_verified", false),
         ])
 
@@ -70,7 +70,7 @@ export class AdminService {
             totalUsers: users.count || 0,
             totalArtworks: artworks.count || 0,
             totalInstitutions: institutions.count || 0,
-            totalNFTs: nfts.count || 0,
+            totalArts: nfts.count || 0,
             totalRevenue: 0, // TODO: Calculate from subscriptions/transactions
             activeUsers: Math.floor((users.count || 0) * 0.3), // Placeholder
             newUsersToday: newUsersToday || 0,
@@ -489,7 +489,7 @@ export class AdminService {
     async getDatabaseStats() {
         const client = this.db.getClient()
 
-        const tables = ["users", "artworks", "institutions", "nfts", "forum_threads", "notifications"]
+        const tables = ["users", "artworks", "institutions", "arts", "forum_threads", "notifications"]
         const tableStats = await Promise.all(
             tables.map(async table => {
                 const { count } = await client.from(table).select("*", { count: "exact", head: true })

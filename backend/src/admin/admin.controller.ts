@@ -13,11 +13,12 @@ import {
     ParseUUIDPipe,
 } from "@nestjs/common"
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from "@nestjs/swagger"
-import { Throttle } from "@nestjs/throttler"
+import { Throttle, SkipThrottle } from "@nestjs/throttler"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { PermissionsGuard } from "../auth/guards/permissions.guard"
 import { Permissions, Permission } from "../auth/decorators/permissions.decorator"
 import { SqlInjectionGuard } from "../common/guards/sql-injection.guard"
+import { BypassSecurity } from "../common/decorators/bypass-security.decorator"
 import { AdminService } from "./admin.service"
 import {
     CreateSystemAlertDto,
@@ -198,7 +199,8 @@ export class AdminController {
 
     @Post("alerts")
     @Permissions(Permission.ADMIN_SETTINGS)
-    @Throttle({ short: { ttl: 1000, limit: 5 } })
+    @SkipThrottle()
+    @BypassSecurity()
     @ApiOperation({ summary: "Create system alert" })
     async createSystemAlert(@Body() dto: CreateSystemAlertDto, @Req() req: any) {
         return this.adminService.createSystemAlert(dto, req.user.id)
@@ -206,7 +208,8 @@ export class AdminController {
 
     @Put("alerts/:id")
     @Permissions(Permission.ADMIN_SETTINGS)
-    @Throttle({ short: { ttl: 1000, limit: 5 } })
+    @SkipThrottle()
+    @BypassSecurity()
     @ApiOperation({ summary: "Update system alert" })
     async updateSystemAlert(
         @Param("id", ParseUUIDPipe) id: string,
@@ -241,7 +244,8 @@ export class AdminController {
 
     @Patch("reports/:id")
     @Permissions(Permission.ADMIN_DASHBOARD)
-    @Throttle({ short: { ttl: 1000, limit: 5 } })
+    @SkipThrottle()
+    @BypassSecurity()
     @ApiOperation({ summary: "Update report status" })
     async updateReportStatus(
         @Param("id", ParseUUIDPipe) id: string,
@@ -264,7 +268,8 @@ export class AdminController {
 
     @Post("partnerships")
     @Permissions(Permission.ADMIN_SETTINGS)
-    @Throttle({ short: { ttl: 1000, limit: 5 } })
+    @SkipThrottle()
+    @BypassSecurity()
     @ApiOperation({ summary: "Create partnership" })
     async createPartnership(@Body() dto: CreatePartnershipDto) {
         return this.adminService.createPartnership(dto)

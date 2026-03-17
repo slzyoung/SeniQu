@@ -28,7 +28,7 @@ const UserNearby = lazy(() => import('../features/user/pages/NearbyMuseumsPage')
 const UserGenreIdentifier = lazy(() => import('../features/user/pages/GenreIdentifierPage'));
 const UserAICuration = lazy(() => import('../features/user/pages/AICurationPage'));
 const UserMarketplace = lazy(() => import('../features/user/pages/ArtsMarketplacePage'));
-const UserMyNFTs = lazy(() => import('../features/user/pages/MyArtsPage'));
+const UserMyArts = lazy(() => import('../features/user/pages/MyArtsPage'));
 const UserWallet = lazy(() => import('../features/user/pages/WalletPage'));
 const UserCommunity = lazy(() => import('../features/user/pages/CommunityPage'));
 
@@ -45,7 +45,7 @@ const NearbyMuseums = lazy(() => import('../features/gallery/pages/NearbyMuseums
 
 // Lazy load marketplace pages
 const Marketplace = lazy(() => import('../features/marketplace/pages/Marketplace'));
-const NFTDetail = lazy(() => import('../features/marketplace/pages/NFTDetail'));
+const ArtDetail = lazy(() => import('../features/marketplace/pages/NFTDetail'));
 
 // Lazy load community pages
 const CommunityForum = lazy(() => import('../features/community/pages/CommunityForum'));
@@ -73,7 +73,7 @@ const SystemAnalytics = lazy(() => import('../features/admin/pages/SystemAnalyti
 const DatabaseManagement = lazy(() => import('../features/admin/pages/DatabaseManagement'));
 const SystemLogs = lazy(() => import('../features/admin/pages/SystemLogs'));
 const SecurityCenter = lazy(() => import('../features/admin/pages/SecurityCenter'));
-const NFTOversight = lazy(() => import('../features/admin/pages/NFTOversight'));
+const ArtsOversight = lazy(() => import('../features/admin/pages/NFTOversight'));
 const PremiumManagement = lazy(() => import('../features/admin/pages/PremiumManagement'));
 const GlobalSettings = lazy(() => import('../features/admin/pages/GlobalSettings'));
 const SystemHealth = lazy(() => import('../features/admin/pages/SystemHealth'));
@@ -120,7 +120,7 @@ const router = createBrowserRouter(
             <Route element={<PublicLayout />}>
                 {/* Marketplace Routes */}
                 <Route path={ROUTES.MARKETPLACE} element={<Marketplace />} />
-                <Route path={ROUTES.MARKETPLACE_NFT} element={<NFTDetail />} />
+                <Route path={ROUTES.MARKETPLACE_ART} element={<ArtDetail />} />
 
                 {/* Community Routes */}
                 <Route path={ROUTES.COMMUNITY} element={<CommunityForum />} />
@@ -159,7 +159,7 @@ const router = createBrowserRouter(
                 <Route path={ROUTES.USER_GENRE_IDENTIFIER} element={<UserGenreIdentifier />} />
                 <Route path={ROUTES.USER_AI_CURATION} element={<UserAICuration />} />
                 <Route path={ROUTES.USER_MARKETPLACE} element={<UserMarketplace />} />
-                <Route path={ROUTES.USER_MY_NFTS} element={<UserMyNFTs />} />
+                <Route path={ROUTES.USER_MY_ARTS} element={<UserMyArts />} />
                 <Route path={ROUTES.USER_WALLET} element={<UserWallet />} />
                 <Route path={ROUTES.USER_COMMUNITY} element={<UserCommunity />} />
             </Route>
@@ -193,7 +193,7 @@ const router = createBrowserRouter(
                 <Route path={ROUTES.ADMIN_DATABASE} element={<DatabaseManagement />} />
                 <Route path={ROUTES.ADMIN_LOGS} element={<SystemLogs />} />
                 <Route path={ROUTES.ADMIN_SECURITY} element={<SecurityCenter />} />
-                <Route path={ROUTES.ADMIN_MARKETPLACE} element={<NFTOversight />} />
+                <Route path={ROUTES.ADMIN_MARKETPLACE} element={<ArtsOversight />} />
                 <Route path={ROUTES.ADMIN_PREMIUM} element={<PremiumManagement />} />
                 <Route path={ROUTES.ADMIN_SETTINGS} element={<GlobalSettings />} />
                 <Route path={ROUTES.ADMIN_HEALTH} element={<SystemHealth />} />

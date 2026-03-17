@@ -31,7 +31,7 @@ export const ROUTES = {
     GALLERY_ARTWORK: '/gallery/artwork/:id',
     NEARBY: '/gallery/nearby',
     MARKETPLACE: '/marketplace',
-    MARKETPLACE_NFT: '/marketplace/nft/:id',
+    MARKETPLACE_ART: '/marketplace/art/:id',
     COMMUNITY: '/community',
     COMMUNITY_THREAD: '/community/thread/:id',
 
@@ -52,7 +52,7 @@ export const ROUTES = {
     USER_GENRE_IDENTIFIER: '/dashboard/genre-identifier',
     USER_AI_CURATION: '/dashboard/ai-curation',
     USER_MARKETPLACE: '/dashboard/marketplace',
-    USER_MY_NFTS: '/dashboard/my-nfts',
+    USER_MY_ARTS: '/dashboard/my-arts',
     USER_WALLET: '/dashboard/wallet',
     USER_COMMUNITY: '/dashboard/community',
 
@@ -65,7 +65,7 @@ export const ROUTES = {
     ARTIST_ENGAGEMENT: '/artist/engagement',
     ARTIST_INSTITUTION: '/artist/institution',
     ARTIST_SETTINGS: '/artist/settings',
-    ARTIST_NFT: '/artist/nft',
+    ARTIST_ART: '/artist/art',
 
     // Admin Routes
     ADMIN_DASHBOARD: '/admin',
@@ -117,9 +117,9 @@ export const API_ENDPOINTS = {
     MUSEUMS_NEARBY: '/museums/nearby',
     GALLERIES: '/galleries',
 
-    // NFTs
-    NFTS: '/nfts',
-    NFTS_MARKETPLACE: '/nfts/marketplace',
+    // Arts
+    ARTS: '/arts',
+    ARTS_MARKETPLACE: '/arts/marketplace',
 
     // Community
     FORUM_THREADS: '/forum/threads',

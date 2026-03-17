@@ -157,8 +157,8 @@ export default function PublicGallery() {
                                                 />
                                                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
-                                                {artwork.isNFT && (
-                                                    <Badge variant="gold" className="absolute top-3 right-3 shadow-lg z-10">NFT</Badge>
+                                                {artwork.isArt && (
+                                                    <Badge variant="gold" className="absolute top-3 right-3 shadow-lg z-10">Art</Badge>
                                                 )}
 
                                                 {viewMode === 'grid' && (

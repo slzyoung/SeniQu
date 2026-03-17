@@ -40,7 +40,7 @@ export function useDashboardStats() {
             totalUsers: 0,
             totalArtworks: 0,
             totalInstitutions: 0,
-            totalNFTs: 0,
+            totalArts: 0,
             totalRevenue: 0,
             activeUsers: 0,
             newUsersToday: 0,

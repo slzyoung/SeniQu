@@ -12,7 +12,7 @@ interface ArtworkSearchParams {
     medium?: string
     priceMin?: number
     priceMax?: number
-    isNft?: boolean
+    isArt?: boolean
     page: number
     limit: number
 }
@@ -79,7 +79,7 @@ export class SearchService {
      * Advanced artwork search with filters
      */
     async searchArtworks(params: ArtworkSearchParams) {
-        const { query, genre, medium, priceMin, priceMax, isNft, page, limit } = params
+        const { query, genre, medium, priceMin, priceMax, isArt, page, limit } = params
         const offset = (page - 1) * limit
 
         let queryBuilder = this.supabase
@@ -114,9 +114,9 @@ export class SearchService {
             queryBuilder = queryBuilder.lte("price", priceMax)
         }
 
-        // NFT filter
-        if (isNft !== undefined) {
-            queryBuilder = queryBuilder.eq("is_nft", isNft)
+        // Art filter
+        if (isArt !== undefined) {
+            queryBuilder = queryBuilder.eq("is_art", isArt)
         }
 
         const { data, error, count } = await queryBuilder

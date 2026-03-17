@@ -24,7 +24,7 @@ export interface CreateArtworkData {
     year: number;
     price?: number;
     images: string[];
-    isNFT: boolean;
+    isArt: boolean;
 }
 
 class ArtworkService {

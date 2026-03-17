@@ -62,7 +62,7 @@ function RecommendationCard({
                                 <p className="text-sm text-theme-muted">by {artwork.artist?.displayName || 'Unknown'}</p>
                             </div>
                             <div className="flex items-center gap-1">
-                                {artwork.isNFT && <Badge variant="gold">NFT</Badge>}
+                                {artwork.isArt && <Badge variant="gold">Art</Badge>}
                                 <Badge variant="success" className="flex items-center gap-1">
                                     <Sparkles className="w-3 h-3" />
                                     {(recommendation.score * 100).toFixed(0)}%
@@ -79,7 +79,7 @@ function RecommendationCard({
                         </div>
                         {artwork.price && (
                             <p className="font-mono text-gold mt-2">
-                                {artwork.price.toLocaleString()} {artwork.isNFT ? 'ETH' : 'IDR'}
+                                {artwork.price.toLocaleString()} {artwork.isArt ? 'ETH' : 'IDR'}
                             </p>
                         )}
                     </div>
@@ -109,7 +109,7 @@ function RecommendationCard({
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                 />
                 <div className="absolute top-3 left-3 right-3 flex justify-between">
-                    {artwork.isNFT && <Badge variant="gold">NFT</Badge>}
+                    {artwork.isArt && <Badge variant="gold">Art</Badge>}
                     <Badge variant="success" className="flex items-center gap-1 ml-auto">
                         <Sparkles className="w-3 h-3" />
                         {(recommendation.score * 100).toFixed(0)}%

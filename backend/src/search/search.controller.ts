@@ -36,7 +36,7 @@ export class SearchController {
     @ApiQuery({ name: "medium", required: false })
     @ApiQuery({ name: "priceMin", required: false })
     @ApiQuery({ name: "priceMax", required: false })
-    @ApiQuery({ name: "isNft", required: false })
+    @ApiQuery({ name: "isArt", required: false })
     @ApiQuery({ name: "page", required: false })
     @ApiQuery({ name: "limit", required: false })
     async searchArtworks(
@@ -45,7 +45,7 @@ export class SearchController {
         @Query("medium") medium?: string,
         @Query("priceMin") priceMin?: number,
         @Query("priceMax") priceMax?: number,
-        @Query("isNft") isNft?: boolean,
+        @Query("isArt") isArt?: boolean,
         @Query("page") page: number = 1,
         @Query("limit") limit: number = 20,
     ) {
@@ -55,7 +55,7 @@ export class SearchController {
             medium,
             priceMin,
             priceMax,
-            isNft,
+            isArt,
             page,
             limit,
         })

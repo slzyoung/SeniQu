@@ -107,7 +107,7 @@ export function ArtworkView() {
                 <div className="space-y-6">
                     <div>
                         <div className="flex items-center gap-2 mb-2">
-                            {artwork.isNFT && <Badge variant="gold">NFT</Badge>}
+                            {artwork.isArt && <Badge variant="gold">Art</Badge>}
                             <Badge variant="default">{artwork.genre?.[0] || 'Art'}</Badge>
                         </div>
                         <h1 className="text-3xl font-bold text-theme-text">{artwork.title}</h1>
@@ -183,7 +183,7 @@ export function ArtworkView() {
                         )}
                     </div>
 
-                    {artwork.isNFT && artwork.price && (
+                    {artwork.isArt && artwork.price && (
                         <Card variant="elevated" className="bg-gold/5 border-gold/20">
                             <CardContent className="p-6">
                                 <div className="flex items-center justify-between">
@@ -191,7 +191,7 @@ export function ArtworkView() {
                                         <p className="text-sm text-theme-muted">Price</p>
                                         <p className="text-2xl font-bold text-gold">{artwork.price} ETH</p>
                                     </div>
-                                    <Button variant="gold">Purchase NFT</Button>
+                                    <Button variant="gold">Purchase Art</Button>
                                 </div>
                             </CardContent>
                         </Card>

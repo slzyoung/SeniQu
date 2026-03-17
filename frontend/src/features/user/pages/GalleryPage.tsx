@@ -69,8 +69,8 @@ function ArtworkCard({
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
-                    {artwork.isNFT && (
-                        <Badge variant="gold" className="absolute top-2 right-2 shadow-lg z-10 text-[10px] px-1.5 py-0.5">NFT</Badge>
+                    {artwork.isArt && (
+                        <Badge variant="gold" className="absolute top-2 right-2 shadow-lg z-10 text-[10px] px-1.5 py-0.5">Art</Badge>
                     )}
 
                     {viewMode === 'grid' && (

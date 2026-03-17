@@ -10,10 +10,14 @@ import {
     BadRequestException,
     Logger,
 } from "@nestjs/common"
+import { Reflector } from "@nestjs/core"
+import { BYPASS_SECURITY_KEY } from "../decorators/bypass-security.decorator"
 
 @Injectable()
 export class SqlInjectionGuard implements CanActivate {
     private readonly logger = new Logger(SqlInjectionGuard.name)
+
+    constructor(private reflector: Reflector) {}
 
     // Common SQL injection patterns
     private readonly sqlPatterns = [
@@ -30,6 +34,15 @@ export class SqlInjectionGuard implements CanActivate {
     ]
 
     canActivate(context: ExecutionContext): boolean {
+        const bypassSecurity = this.reflector.getAllAndOverride<boolean>(BYPASS_SECURITY_KEY, [
+            context.getHandler(),
+            context.getClass(),
+        ])
+
+        if (bypassSecurity) {
+            return true
+        }
+
         const request = context.switchToHttp().getRequest()
 
         // Check query parameters

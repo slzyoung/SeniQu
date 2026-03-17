@@ -107,13 +107,13 @@ function ArtworkCard({
     title,
     artist,
     image,
-    isNFT,
+    isArt,
     onClick
 }: {
     title: string;
     artist: string;
     image: string;
-    isNFT?: boolean;
+    isArt?: boolean;
     onClick?: () => void;
 }) {
     return (
@@ -131,7 +131,7 @@ function ArtworkCard({
                         <ImageIcon className="w-8 h-8 text-theme-muted/40" />
                     </div>
                 )}
-                {isNFT && (
+                {isArt && (
                     <Badge variant="gold" className="absolute top-3 right-3 shadow-lg">PoA</Badge>
                 )}
             </div>
@@ -258,7 +258,7 @@ export function UserDashboard() {
                                             title={bookmark.artwork?.title || 'Untitled'}
                                             artist={bookmark.artwork?.artist?.displayName || 'Unknown'}
                                             image={bookmark.artwork?.imageUrl || ''}
-                                            isNFT={bookmark.artwork?.isNFT}
+                                            isArt={bookmark.artwork?.isArt}
                                             onClick={() => navigate(`/artwork/${bookmark.artworkId}`)}
                                         />
                                     ))}

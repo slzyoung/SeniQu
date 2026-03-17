@@ -16,7 +16,7 @@ import { AuditModule } from "./audit/audit.module"
 import { AuthModule } from "./auth/auth.module"
 import { UsersModule } from "./users/users.module"
 import { ArtworksModule } from "./artworks/artworks.module"
-import { NftsModule } from "./nfts/nfts.module"
+import { ArtsModule } from "./arts/arts.module"
 import { CollectionsModule } from "./collections/collections.module"
 import { GovernanceModule } from "./governance/governance.module"
 import { AdminModule } from "./admin/admin.module"
@@ -81,7 +81,7 @@ import { WalletModule } from "./wallet/wallet.module"
         AuthModule,
         UsersModule,
         ArtworksModule,
-        NftsModule,
+        ArtsModule,
         CollectionsModule,
         GovernanceModule,
         AdminModule,

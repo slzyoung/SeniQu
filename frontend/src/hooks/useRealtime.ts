@@ -257,7 +257,7 @@ export function useSSE<T = unknown>(
 export type RealtimeChannel =
     | 'notifications'
     | 'artworks:updates'
-    | 'nft:transactions'
+    | 'art:transactions'
     | 'forum:updates'
     | 'system:alerts'
     | 'admin:stats';

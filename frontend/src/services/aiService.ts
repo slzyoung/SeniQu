@@ -42,7 +42,7 @@ export interface ArtworkRecommendation {
         genres: string[];
         medium?: string;
         price?: number;
-        isNFT: boolean;
+        isArt: boolean;
     };
 }
 

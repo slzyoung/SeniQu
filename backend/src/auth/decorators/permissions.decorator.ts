@@ -14,10 +14,10 @@ export enum Permission {
     ARTWORK_PUBLISH = "artwork:publish",
     ARTWORK_VERIFY = "artwork:verify",
 
-    // NFT
-    NFT_MINT = "nft:mint",
-    NFT_TRANSFER = "nft:transfer",
-    NFT_BURN = "nft:burn",
+    // Art
+    ART_MINT = "art:mint",
+    ART_TRANSFER = "art:transfer",
+    ART_BURN = "art:burn",
 
     // Collection
     COLLECTION_CREATE = "collection:create",
@@ -52,10 +52,10 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     ],
     artist: [
         Permission.ARTWORK_CREATE, Permission.ARTWORK_READ, Permission.ARTWORK_UPDATE,
-        Permission.NFT_MINT, Permission.COLLECTION_CREATE, Permission.GOVERNANCE_VOTE,
+        Permission.ART_MINT, Permission.COLLECTION_CREATE, Permission.GOVERNANCE_VOTE,
     ],
     collector: [
-        Permission.ARTWORK_READ, Permission.NFT_TRANSFER, Permission.COLLECTION_CREATE,
+        Permission.ARTWORK_READ, Permission.ART_TRANSFER, Permission.COLLECTION_CREATE,
         Permission.GOVERNANCE_VOTE,
     ],
     art_lover: [Permission.ARTWORK_READ, Permission.GOVERNANCE_VOTE],

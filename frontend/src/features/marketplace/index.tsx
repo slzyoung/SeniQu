@@ -29,7 +29,7 @@ interface NFTItem {
     artist?: { displayName: string };
     views?: number;
     likes?: number;
-    isNFT?: boolean;
+    isArt?: boolean;
 }
 
 function NFTCard({ item }: { item: NFTItem }) {
@@ -49,7 +49,7 @@ function NFTCard({ item }: { item: NFTItem }) {
                         <ImageIcon className="w-12 h-12 text-theme-muted/40" />
                     </div>
                 )}
-                {item.isNFT && (
+                {item.isArt && (
                     <Badge variant="gold" className="absolute top-3 right-3">PoA</Badge>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -94,7 +94,7 @@ export function Marketplace() {
 
     const artworks = artworkData?.data || [];
     const totalPages = artworkData?.meta?.totalPages || 1;
-    const nftArtworks = artworks.filter((a: any) => a.isNFT);
+    const nftArtworks = artworks.filter((a: any) => a.isArt);
 
     const filteredArtworks = nftArtworks.filter((artwork: NFTItem) =>
         artwork.title?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -203,7 +203,7 @@ export function Marketplace() {
     );
 }
 
-export function NFTDetail() {
+export function ArtDetail() {
     const { id } = useParams<{ id: string }>();
 
     // Use useArtwork hook to fetch single NFT
@@ -235,4 +235,4 @@ export function NFTDetail() {
     );
 }
 
-export default { Marketplace, NFTDetail };
+export default { Marketplace, ArtDetail };

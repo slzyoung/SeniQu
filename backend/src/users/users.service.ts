@@ -330,7 +330,7 @@ export class UsersService {
         viewsCount: number
         bookmarksCount: number
         collectionsCount: number
-        nftCount: number
+        artCount: number
         likesCount: number
     }> {
         const client = this.db.getAdminClient()
@@ -347,13 +347,13 @@ export class UsersService {
             .select("*", { count: "exact", head: true })
             .eq("user_id", userId)
 
-        // For now, return placeholder values for views, nfts, and likes
+        // For now, return placeholder values for views, arts, and likes
         // These can be implemented when the corresponding tables exist
         return {
             viewsCount: 0,
             bookmarksCount: bookmarksCount || 0,
             collectionsCount: collectionsCount || 0,
-            nftCount: 0,
+            artCount: 0,
             likesCount: 0,
         }
     }

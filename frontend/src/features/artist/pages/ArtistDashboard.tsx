@@ -143,7 +143,7 @@ export function ArtistDashboard() {
                 <Button
                     variant="gold"
                     leftIcon={<Plus className="w-4 h-4" />}
-                    onClick={() => navigate('/dashboard/artist/upload')}
+                    onClick={() => navigate('/artist/upload')}
                     className="w-full sm:w-auto shadow-lg shadow-gold/20"
                 >
                     <span>Upload Artwork</span>
@@ -280,7 +280,7 @@ export function ArtistDashboard() {
                                 variant="ghost"
                                 size="sm"
                                 rightIcon={<ArrowUpRight className="w-4 h-4" />}
-                                onClick={() => navigate('/dashboard/artist/artworks')}
+                                onClick={() => navigate('/artist/artworks')}
                             >
                                 View All
                             </Button>
@@ -295,7 +295,7 @@ export function ArtistDashboard() {
                                     title={art.title}
                                     views={art.views}
                                     likes={art.likes}
-                                    image=""
+                                    image={art.imageUrl || ''}
                                 />
                             ))
                         ) : artworksData?.data?.length ? (
@@ -315,7 +315,7 @@ export function ArtistDashboard() {
                                 <Button
                                     variant="ghost"
                                     className="mt-2 text-gold"
-                                    onClick={() => navigate('/dashboard/artist/upload')}
+                                    onClick={() => navigate('/artist/upload')}
                                 >
                                     Upload your first artwork
                                 </Button>
@@ -373,7 +373,7 @@ export function ArtistDashboard() {
                         <Button
                             variant="secondary"
                             className="h-16 sm:h-20 flex-col gap-2 touch-manipulation active:scale-95 transition-transform"
-                            onClick={() => navigate('/dashboard/artist/upload')}
+                            onClick={() => navigate('/artist/upload')}
                         >
                             <ImageIcon className="w-5 h-5" />
                             <span className="text-xs sm:text-sm">Upload Artwork</span>
@@ -381,7 +381,7 @@ export function ArtistDashboard() {
                         <Button
                             variant="secondary"
                             className="h-16 sm:h-20 flex-col gap-2 touch-manipulation active:scale-95 transition-transform"
-                            onClick={() => navigate('/dashboard/artist/artworks')}
+                            onClick={() => navigate('/artist/artworks')}
                         >
                             <Eye className="w-5 h-5" />
                             <span className="text-xs sm:text-sm">My Artworks</span>
@@ -389,7 +389,7 @@ export function ArtistDashboard() {
                         <Button
                             variant="secondary"
                             className="h-16 sm:h-20 flex-col gap-2 touch-manipulation active:scale-95 transition-transform"
-                            onClick={() => navigate('/dashboard/artist/analytics')}
+                            onClick={() => navigate('/artist/analytics')}
                         >
                             <TrendingUp className="w-5 h-5" />
                             <span className="text-xs sm:text-sm">Analytics</span>
@@ -397,7 +397,7 @@ export function ArtistDashboard() {
                         <Button
                             variant="secondary"
                             className="h-16 sm:h-20 flex-col gap-2 touch-manipulation active:scale-95 transition-transform"
-                            onClick={() => navigate('/dashboard/artist/profile')}
+                            onClick={() => navigate('/artist/settings')}
                         >
                             <Users className="w-5 h-5" />
                             <span className="text-xs sm:text-sm">Profile</span>

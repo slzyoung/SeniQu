@@ -75,16 +75,15 @@ export class CreateArtworkDto {
     @MaxLength(100)
     dimensions?: string
 
-    @ApiProperty({ description: "Image URL" })
+    @ApiProperty({ description: "Image URL or Base64 string" })
     @IsString()
     @IsNotEmpty()
-    @IsUrl({}, { message: "imageUrl must be a valid URL" })
     imageUrl: string
 
-    @ApiPropertyOptional({ enum: ArtworkStatus, description: "Status" })
+    @ApiPropertyOptional({ description: "Status" })
     @IsOptional()
-    @IsEnum(ArtworkStatus)
-    status?: ArtworkStatus
+    @IsString()
+    status?: string
 }
 
 export class UpdateArtworkDto {
@@ -135,13 +134,12 @@ export class UpdateArtworkDto {
     @ApiPropertyOptional()
     @IsOptional()
     @IsString()
-    @IsUrl({}, { message: "imageUrl must be a valid URL" })
     imageUrl?: string
 
-    @ApiPropertyOptional({ enum: ArtworkStatus })
+    @ApiPropertyOptional({ description: "Status" })
     @IsOptional()
-    @IsEnum(ArtworkStatus)
-    status?: ArtworkStatus
+    @IsString()
+    status?: string
 }
 
 // ============================================

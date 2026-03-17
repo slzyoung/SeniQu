@@ -1,1 +1,1 @@
-export { NFTOversight as default } from './placeholders';
+export { ArtsOversight as default } from './placeholders';

@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config"
 import { DatabaseService } from "../database/database.service"
 import { Connection, PublicKey } from "@solana/web3.js"
 
-export interface NftMetadata {
+export interface ArtMetadata {
     id: string
     artworkId: string
     mintAddress: string
@@ -15,8 +15,8 @@ export interface NftMetadata {
 }
 
 @Injectable()
-export class NftsService {
-    private readonly logger = new Logger(NftsService.name)
+export class ArtsService {
+    private readonly logger = new Logger(ArtsService.name)
     private readonly connection: Connection
 
     constructor(
@@ -27,14 +27,14 @@ export class NftsService {
         this.connection = new Connection(rpcUrl)
     }
 
-    async mintNft(artworkId: string, creatorAddress: string): Promise<NftMetadata> {
-        // TODO: Implement actual Solana NFT minting using Metaplex
+    async mintArt(artworkId: string, creatorAddress: string): Promise<ArtMetadata> {
+        // TODO: Implement actual Solana Art minting using Metaplex
         // This is a placeholder for the minting flow
 
         const client = this.db.getAdminClient()
 
         const { data, error } = await client
-            .from("nft_metadata")
+            .from("arts")
             .insert({
                 artwork_id: artworkId,
                 owner_address: creatorAddress,
@@ -49,14 +49,14 @@ export class NftsService {
             throw new Error(error.message)
         }
 
-        return this.mapToNftMetadata(data)
+        return this.mapToArtMetadata(data)
     }
 
-    async findByArtwork(artworkId: string): Promise<NftMetadata | null> {
+    async findByArtwork(artworkId: string): Promise<ArtMetadata | null> {
         const client = this.db.getClient()
 
         const { data, error } = await client
-            .from("nft_metadata")
+            .from("arts")
             .select("*")
             .eq("artwork_id", artworkId)
             .single()
@@ -65,14 +65,14 @@ export class NftsService {
             return null
         }
 
-        return this.mapToNftMetadata(data)
+        return this.mapToArtMetadata(data)
     }
 
-    async findByOwner(ownerAddress: string): Promise<NftMetadata[]> {
+    async findByOwner(ownerAddress: string): Promise<ArtMetadata[]> {
         const client = this.db.getClient()
 
         const { data, error } = await client
-            .from("nft_metadata")
+            .from("arts")
             .select("*")
             .eq("owner_address", ownerAddress)
 
@@ -80,11 +80,11 @@ export class NftsService {
             throw new Error(error.message)
         }
 
-        return (data || []).map(this.mapToNftMetadata)
+        return (data || []).map(this.mapToArtMetadata)
     }
 
     async transferOwnership(
-        nftId: string,
+        artId: string,
         fromAddress: string,
         toAddress: string,
     ): Promise<void> {
@@ -92,7 +92,7 @@ export class NftsService {
 
         // Record transfer in history
         await client.from("ownership_history").insert({
-            nft_id: nftId,
+            art_id: artId,
             from_address: fromAddress,
             to_address: toAddress,
             transferred_at: new Date().toISOString(),
@@ -100,18 +100,18 @@ export class NftsService {
 
         // Update current owner
         await client
-            .from("nft_metadata")
+            .from("arts")
             .update({ owner_address: toAddress })
-            .eq("id", nftId)
+            .eq("id", artId)
     }
 
-    async getOwnershipHistory(nftId: string): Promise<any[]> {
+    async getOwnershipHistory(artId: string): Promise<any[]> {
         const client = this.db.getClient()
 
         const { data, error } = await client
             .from("ownership_history")
             .select("*")
-            .eq("nft_id", nftId)
+            .eq("art_id", artId)
             .order("transferred_at", { ascending: false })
 
         if (error) {
@@ -121,7 +121,7 @@ export class NftsService {
         return data || []
     }
 
-    private mapToNftMetadata(data: any): NftMetadata {
+    private mapToArtMetadata(data: any): ArtMetadata {
         return {
             id: data.id,
             artworkId: data.artwork_id,

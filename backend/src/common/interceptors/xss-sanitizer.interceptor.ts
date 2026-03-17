@@ -11,10 +11,22 @@ import {
 } from "@nestjs/common"
 import { Observable } from "rxjs"
 import { map } from "rxjs/operators"
+import { Reflector } from "@nestjs/core"
+import { BYPASS_SECURITY_KEY } from "../decorators/bypass-security.decorator"
 
 @Injectable()
 export class XssSanitizerInterceptor implements NestInterceptor {
+    constructor(private reflector: Reflector) {}
     intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+        const bypassSecurity = this.reflector.getAllAndOverride<boolean>(BYPASS_SECURITY_KEY, [
+            context.getHandler(),
+            context.getClass(),
+        ])
+
+        if (bypassSecurity) {
+            return next.handle()
+        }
+
         const request = context.switchToHttp().getRequest()
 
         // Sanitize request body

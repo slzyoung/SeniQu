@@ -37,7 +37,7 @@ interface ArtworkType {
     medium?: string;
     views: number;
     likes: number;
-    isNFT: boolean;
+    isArt: boolean;
     createdAt: string;
 }
 
@@ -94,8 +94,8 @@ function ArtworkGridCard({
                         {statusLabels[artwork.status] || artwork.status}
                     </Badge>
 
-                    {artwork.isNFT && (
-                        <Badge variant="gold" className="absolute top-3 right-3">NFT</Badge>
+                    {artwork.isArt && (
+                        <Badge variant="gold" className="absolute top-3 right-3">Art</Badge>
                     )}
 
                     {/* Hover overlay */}
@@ -227,7 +227,7 @@ export function MyArtworks() {
         { id: 'all', label: 'All', badge: totalArtworks },
         { id: 'published', label: 'Published' },
         { id: 'draft', label: 'Drafts' },
-        { id: 'nft', label: 'NFTs' },
+        { id: 'art', label: 'Arts' },
     ];
 
     const filteredArtworks = artworks.filter(artwork =>

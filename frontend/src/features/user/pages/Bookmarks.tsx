@@ -21,7 +21,7 @@ interface BookmarkedArtwork {
     museum?: string;
     genre?: string;
     bookmarkedAt: string;
-    isNFT?: boolean;
+    isArt?: boolean;
 }
 
 function ArtworkGridCard({
@@ -73,7 +73,7 @@ function ArtworkGridCard({
                             </button>
                         </div>
                     </div>
-                    {artwork.isNFT && (
+                    {artwork.isArt && (
                         <Badge variant="gold" className="absolute top-3 right-3">NFT</Badge>
                     )}
                 </div>
@@ -130,7 +130,7 @@ function ArtworkListItem({
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                             <h3 className="font-medium text-theme-text truncate text-sm sm:text-base">{artwork.title}</h3>
-                            {artwork.isNFT && <Badge variant="gold" size="sm">NFT</Badge>}
+                            {artwork.isArt && <Badge variant="gold" size="sm">NFT</Badge>}
                         </div>
                         <p className="text-xs sm:text-sm text-theme-muted truncate">{artwork.artist}</p>
                         <div className="flex items-center gap-3 mt-1">
@@ -205,7 +205,7 @@ export function Bookmarks() {
         museum: b.artwork?.museum?.name || b.artwork?.institution?.name,
         genre: b.artwork?.category,
         bookmarkedAt: b.createdAt ? formatRelativeTime(b.createdAt) : 'Recently',
-        isNFT: b.artwork?.isNFT,
+        isArt: b.artwork?.isArt,
     }));
 
     const handleRemove = async (id: string) => {

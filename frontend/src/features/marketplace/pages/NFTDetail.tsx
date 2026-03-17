@@ -1,1 +1,1 @@
-export { NFTDetail as default } from '../index';
+export { ArtDetail as default } from '../index';

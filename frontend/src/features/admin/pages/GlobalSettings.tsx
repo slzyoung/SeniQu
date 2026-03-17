@@ -83,7 +83,7 @@ export default function GlobalSettings() {
         maintenanceMode: false,
         registrationEnabled: true,
         requireEmailVerification: true,
-        enableNFTMarketplace: true,
+        enableArtMarketplace: true,
         enableForums: true,
         debugMode: false,
     });
@@ -184,12 +184,12 @@ export default function GlobalSettings() {
                             <CardContent>
                                 <SettingRow
                                     icon={CreditCard}
-                                    title="NFT Marketplace"
-                                    description="Enable NFT trading and minting features"
+                                    title="Art Marketplace"
+                                    description="Enable Art trading and minting features"
                                     action={
                                         <Toggle
-                                            enabled={settings.enableNFTMarketplace}
-                                            onChange={() => handleToggle('enableNFTMarketplace')}
+                                            enabled={settings.enableArtMarketplace}
+                                            onChange={() => handleToggle('enableArtMarketplace')}
                                         />
                                     }
                                 />

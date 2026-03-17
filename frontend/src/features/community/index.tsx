@@ -44,9 +44,9 @@ const mockThreads = [
     },
     {
         id: '3',
-        title: 'How to start collecting digital art NFTs?',
+        title: 'How to start collecting digital art Arts?',
         author: { displayName: 'CryptoCollector', avatar: null },
-        category: 'NFT',
+        category: 'Art',
         replies: 56,
         views: 234,
         likes: 78,
@@ -59,7 +59,7 @@ const categories = [
     { id: 'all', label: 'All Topics', count: 156 },
     { id: 'discussion', label: 'Discussion', count: 82 },
     { id: 'recommendations', label: 'Recommendations', count: 34 },
-    { id: 'nft', label: 'NFT & Crypto', count: 28 },
+    { id: 'nft', label: 'Art & Crypto', count: 28 },
     { id: 'events', label: 'Events', count: 12 },
 ];
 

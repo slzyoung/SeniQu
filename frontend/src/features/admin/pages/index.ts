@@ -8,7 +8,7 @@ export { default as SystemAnalytics } from './SystemAnalytics';
 export { default as DatabaseManagement } from './DatabaseManagement';
 export { default as SystemLogs } from './SystemLogs';
 export { default as SecurityCenter } from './SecurityCenter';
-export { default as NFTOversight } from './NFTOversight';
+export { default as ArtsOversight } from './ArtsOversight';
 export { default as PremiumManagement } from './PremiumManagement';
 export { default as GlobalSettings } from './GlobalSettings';
 export { default as SystemHealth } from './SystemHealth';

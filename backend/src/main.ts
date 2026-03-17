@@ -10,6 +10,8 @@ import { TransformInterceptor } from "./common/interceptors/transform.intercepto
 import { LoggingInterceptor } from "./common/interceptors/logging.interceptor"
 import { SecurityHeadersInterceptor } from "./common/interceptors/security-headers.interceptor"
 import { XssSanitizerInterceptor } from "./common/interceptors/xss-sanitizer.interceptor"
+import { Reflector } from "@nestjs/core"
+import * as express from "express"
 
 async function bootstrap() {
     const logger = new Logger("Bootstrap")
@@ -81,6 +83,10 @@ async function bootstrap() {
     // GLOBAL PIPES, FILTERS, INTERCEPTORS
     // ===========================================
 
+    // Anti-chunking: Increase payload size limits
+    app.use(express.json({ limit: "50mb" }))
+    app.use(express.urlencoded({ limit: "50mb", extended: true }))
+
     // Global validation pipe
     app.useGlobalPipes(
         new ValidationPipe({
@@ -99,7 +105,7 @@ async function bootstrap() {
     // Global interceptors
     app.useGlobalInterceptors(
         new SecurityHeadersInterceptor(),
-        new XssSanitizerInterceptor(),
+        new XssSanitizerInterceptor(app.get(Reflector)),
         new LoggingInterceptor(),
         new TransformInterceptor(),
     )
@@ -144,7 +150,7 @@ async function bootstrap() {
         .addTag("Auth", "Authentication & Authorization")
         .addTag("Users", "User management")
         .addTag("Artworks", "Artwork management")
-        .addTag("NFTs", "NFT minting & management")
+        .addTag("Arts", "Digital art minting & management")
         .addTag("Collections", "Collection management")
         .addTag("Governance", "DAO & Governance")
         .addTag("Admin", "Admin dashboard")

@@ -39,9 +39,9 @@ export class AnalyticsService {
 
         // Get sales data
         const { data: sales, count: salesCount } = await this.supabase
-            .from("nft_transactions")
+            .from("art_transactions")
             .select("price", { count: "exact" })
-            .in("nft_id", (artworks?.map(a => a.id) || []))
+            .in("art_id", (artworks?.map(a => a.id) || []))
             .eq("transaction_type", "buy")
             .gte("created_at", startDate.toISOString())
 
@@ -91,11 +91,11 @@ export class AnalyticsService {
         const startDate = new Date()
         startDate.setDate(startDate.getDate() - days)
 
-        const [users, artworks, museums, nfts] = await Promise.all([
+        const [users, artworks, museums, arts] = await Promise.all([
             this.supabase.from("users").select("id", { count: "exact" }),
             this.supabase.from("artworks").select("id", { count: "exact" }).eq("status", "published"),
             this.supabase.from("institutions").select("id", { count: "exact" }).eq("is_verified", true),
-            this.supabase.from("nfts").select("id", { count: "exact" }),
+            this.supabase.from("arts").select("id", { count: "exact" }),
         ])
 
         // Recent signups
@@ -109,7 +109,7 @@ export class AnalyticsService {
                 totalUsers: users.count || 0,
                 totalArtworks: artworks.count || 0,
                 totalMuseums: museums.count || 0,
-                totalNfts: nfts.count || 0,
+                totalArts: arts.count || 0,
                 recentSignups: recentSignups || 0,
                 period,
             },

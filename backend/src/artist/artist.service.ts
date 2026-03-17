@@ -54,7 +54,7 @@ export interface ArtworkWithStats {
     views: number
     likes: number
     createdAt: string
-    isNFT: boolean
+    isArt: boolean
 }
 
 @Injectable()
@@ -68,7 +68,7 @@ export class ArtistService {
     // ============================================
 
     async getArtistStats(artistId: string): Promise<ArtistStats> {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
 
         // Get artwork counts
         const [total, published, drafts] = await Promise.all([
@@ -97,28 +97,28 @@ export class ArtistService {
             .from("artworks")
             .select("id")
             .eq("artist_id", artistId)
-            .eq("is_nft", true)
+            .eq("is_art", true)
 
         let totalSales = 0
         let totalRevenue = 0
 
         if (artworkIds && artworkIds.length > 0) {
             const ids = artworkIds.map(a => a.id)
-            const { data: nftRecords } = await client
-                .from("nfts")
+            const { data: artRecords } = await client
+                .from("arts")
                 .select("id")
                 .in("artwork_id", ids)
 
-            if (nftRecords && nftRecords.length > 0) {
-                const nftIds = nftRecords.map(n => n.id)
-                const { data: nftSales } = await client
-                    .from("nft_transactions")
+            if (artRecords && artRecords.length > 0) {
+                const artIds = artRecords.map(n => n.id)
+                const { data: artSales } = await client
+                    .from("art_transactions")
                     .select("price")
-                    .in("nft_id", nftIds)
+                    .in("art_id", artIds)
                     .eq("transaction_type", "buy")
 
-                totalSales = nftSales?.length || 0
-                totalRevenue = nftSales?.reduce((sum, t) => sum + parseFloat(t.price || "0"), 0) || 0
+                totalSales = artSales?.length || 0
+                totalRevenue = artSales?.reduce((sum, t) => sum + parseFloat(t.price || "0"), 0) || 0
             }
         }
 
@@ -147,7 +147,7 @@ export class ArtistService {
     }
 
     async getArtistPerformance(artistId: string): Promise<ArtistPerformance> {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
 
         // Get top artworks by views — schema column is 'views'
         const { data: topArtworks } = await client
@@ -184,7 +184,7 @@ export class ArtistService {
         limit = 20,
         filters?: { status?: string; category?: string }
     ) {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
         const safeLimit = Math.min(Math.max(limit, 1), 100)
         const offset = (page - 1) * safeLimit
 
@@ -348,7 +348,7 @@ export class ArtistService {
     // ============================================
 
     async getArtistProfile(artistId: string) {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
 
         const { data, error } = await client
             .from("users")
@@ -413,7 +413,7 @@ export class ArtistService {
     // ============================================
 
     async getFollowers(artistId: string, page = 1, limit = 20) {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
         const safeLimit = Math.min(Math.max(limit, 1), 100)
         const offset = (page - 1) * safeLimit
 
@@ -437,7 +437,7 @@ export class ArtistService {
     }
 
     async getRecentActivity(artistId: string, limit = 10) {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
         const safeLimit = Math.min(Math.max(limit, 1), 50)
 
         const { data: notifications } = await client
@@ -466,7 +466,7 @@ export class ArtistService {
             views: data.views || 0,                // schema: views INTEGER
             likes: data.likes || 0,                // schema: likes INTEGER
             createdAt: data.created_at,
-            isNFT: data.is_nft || false,           // schema: is_nft BOOLEAN
+            isArt: data.is_art || false,           // schema: is_art BOOLEAN
         }
     }
 

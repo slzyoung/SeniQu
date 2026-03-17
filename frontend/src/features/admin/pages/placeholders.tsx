@@ -58,7 +58,7 @@ export function SecurityCenter() {
     return <PlaceholderPage title="Security Center" description="Manage security settings and monitor threats" icon={Shield} />;
 }
 
-export function NFTOversight() {
+export function ArtsOversight() {
     return <PlaceholderPage title="NFT Marketplace Oversight" description="Monitor and manage NFT transactions" icon={ShoppingBag} />;
 }
 
@@ -97,7 +97,7 @@ export default {
     DatabaseManagement,
     SystemLogs,
     SecurityCenter,
-    NFTOversight,
+    ArtsOversight,
     PremiumManagement,
     GlobalSettings,
     SystemHealth,

@@ -55,7 +55,7 @@ export function UploadArtwork() {
         year: '',
         dimensions: '',
         tags: [] as string[],
-        isNFT: false,
+        isArt: false,
         price: '',
     });
 
@@ -91,6 +91,15 @@ export function UploadArtwork() {
         setPreviewUrl(URL.createObjectURL(file));
     };
 
+    const convertFileToBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = error => reject(error);
+        });
+    };
+
     const handleSubmit = async (saveAsDraft = false) => {
         if (!uploadedFile) {
             toast.error('No image', 'Please upload an artwork image');
@@ -102,15 +111,17 @@ export function UploadArtwork() {
         }
 
         try {
-            // For demo: use previewUrl as imageUrl (in production, upload to cloud storage first)
-            // TODO: Implement proper file upload to cloud storage (S3, Cloudinary, etc.)
+            // Convert file to base64 Data URI for backend
+            // In production, upload to cloud storage first and then send URL
+            const base64Image = await convertFileToBase64(uploadedFile);
+
             const artworkData = {
                 title: sanitizeString(formData.title),
                 description: sanitizeString(formData.description),
                 category: formData.genre || 'contemporary',
                 medium: formData.medium,
                 dimensions: formData.dimensions,
-                imageUrl: previewUrl || '',  // In production, this should be the uploaded URL
+                imageUrl: base64Image,  // Use base64 string instead of blob preview URL
                 status: saveAsDraft ? 'DRAFT' : 'PUBLISHED',
             };
 
@@ -356,7 +367,7 @@ export function UploadArtwork() {
                         <Card variant="elevated">
                             <CardHeader title="Publish Options" />
                             <CardContent className="space-y-6">
-                                {/* NFT Toggle */}
+                                {/* Art Toggle */}
                                 <div className="p-4 bg-theme-elevated rounded-xl">
                                     <div className="flex items-start justify-between">
                                         <div className="flex items-start gap-3">
@@ -365,26 +376,26 @@ export function UploadArtwork() {
                                             </div>
                                             <div>
                                                 <p className="font-medium text-theme-text">
-                                                    Mint as NFT
+                                                    Mint as Art
                                                 </p>
                                                 <p className="text-sm text-theme-muted">
-                                                    Create an NFT and list it on the marketplace
+                                                    Create an Art and list it on the marketplace
                                                 </p>
                                             </div>
                                         </div>
                                         <button
-                                            onClick={() => setFormData({ ...formData, isNFT: !formData.isNFT })}
-                                            className={`relative w-12 h-6 rounded-full transition-colors ${formData.isNFT ? 'bg-gold' : 'bg-theme-border'
+                                            onClick={() => setFormData({ ...formData, isArt: !formData.isArt })}
+                                            className={`relative w-12 h-6 rounded-full transition-colors ${formData.isArt ? 'bg-gold' : 'bg-theme-border'
                                                 }`}
                                         >
                                             <div
-                                                className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${formData.isNFT ? 'translate-x-7' : 'translate-x-1'
+                                                className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${formData.isArt ? 'translate-x-7' : 'translate-x-1'
                                                     }`}
                                             />
                                         </button>
                                     </div>
 
-                                    {formData.isNFT && (
+                                    {formData.isArt && (
                                         <motion.div
                                             initial={{ height: 0, opacity: 0 }}
                                             animate={{ height: 'auto', opacity: 1 }}
@@ -415,7 +426,7 @@ export function UploadArtwork() {
                                         <div>
                                             <p className="font-semibold text-theme-text">{formData.title || 'Untitled'}</p>
                                             <p className="text-sm text-theme-muted">{formData.genre || 'No genre'} • {formData.medium || 'No medium'}</p>
-                                            {formData.isNFT && (
+                                            {formData.isArt && (
                                                 <p className="text-sm text-gold mt-1">{formData.price || '0'} ETH</p>
                                             )}
                                         </div>

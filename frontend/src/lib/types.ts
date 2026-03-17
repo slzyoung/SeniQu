@@ -68,8 +68,8 @@ export interface Artwork {
     dimensions?: Dimensions;
     year?: number;
     price?: number;
-    isNFT: boolean;
-    nftTokenId?: string;
+    isArt: boolean;
+    artTokenId?: string;
     museum?: Museum;
     gallery?: Gallery;
     createdAt: string;
@@ -162,8 +162,8 @@ export interface ContactInfo {
     website?: string;
 }
 
-// NFT Types
-export interface NFT {
+// Art Types
+export interface Art {
     id: string;
     tokenId: string;
     contractAddress: string;
@@ -175,11 +175,11 @@ export interface NFT {
     isListed: boolean;
     listingPrice?: number;
     royaltyPercentage: number;
-    history: NFTTransaction[];
+    history: ArtTransaction[];
     createdAt: string;
 }
 
-export interface NFTTransaction {
+export interface ArtTransaction {
     id: string;
     type: 'mint' | 'transfer' | 'sale' | 'bid';
     from: string;
@@ -335,7 +335,7 @@ export interface SearchFilters {
     medium?: string[];
     priceRange?: [number, number];
     sortBy?: 'newest' | 'oldest' | 'popular' | 'price_asc' | 'price_desc';
-    isNFT?: boolean;
+    isArt?: boolean;
 }
 
 export interface LocationSearch {

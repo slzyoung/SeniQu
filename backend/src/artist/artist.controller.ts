@@ -18,11 +18,12 @@ import {
     ParseUUIDPipe,
 } from "@nestjs/common"
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from "@nestjs/swagger"
-import { Throttle } from "@nestjs/throttler"
+import { Throttle, SkipThrottle } from "@nestjs/throttler"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { PermissionsGuard } from "../auth/guards/permissions.guard"
 import { Permissions, Permission } from "../auth/decorators/permissions.decorator"
 import { SqlInjectionGuard } from "../common/guards/sql-injection.guard"
+import { BypassSecurity } from "../common/decorators/bypass-security.decorator"
 import { ArtistService } from "./artist.service"
 import {
     CreateArtworkDto,
@@ -86,7 +87,8 @@ export class ArtistController {
 
     @Post("artworks")
     @Permissions(Permission.ARTWORK_CREATE)
-    @Throttle({ short: { ttl: 1000, limit: 5 } })
+    @SkipThrottle()
+    @BypassSecurity()
     @ApiOperation({ summary: "Create new artwork" })
     async createArtwork(@Req() req: any, @Body() dto: CreateArtworkDto) {
         return this.artistService.createArtwork(req.user.id, dto)
@@ -94,7 +96,8 @@ export class ArtistController {
 
     @Put("artworks/:id")
     @Permissions(Permission.ARTWORK_UPDATE)
-    @Throttle({ short: { ttl: 1000, limit: 5 } })
+    @SkipThrottle()
+    @BypassSecurity()
     @ApiOperation({ summary: "Update artwork" })
     async updateArtwork(
         @Req() req: any,
@@ -140,7 +143,8 @@ export class ArtistController {
 
     @Put("profile")
     @Permissions(Permission.ARTWORK_UPDATE)
-    @Throttle({ short: { ttl: 1000, limit: 5 } })
+    @SkipThrottle()
+    @BypassSecurity()
     @ApiOperation({ summary: "Update artist profile" })
     async updateProfile(@Req() req: any, @Body() dto: UpdateArtistProfileDto) {
         return this.artistService.updateArtistProfile(req.user.id, dto)

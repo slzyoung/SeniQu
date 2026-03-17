@@ -36,6 +36,7 @@ export interface ArtistPerformance {
         views: number;
         likes: number;
         sales: number;
+        imageUrl?: string;
     }[];
     engagementRate: number;
     conversionRate: number;
@@ -53,7 +54,7 @@ export interface ArtworkWithStats {
     views: number;
     likes: number;
     createdAt: string;
-    isNFT: boolean;
+    isArt: boolean;
 }
 
 export interface CreateArtworkDto {

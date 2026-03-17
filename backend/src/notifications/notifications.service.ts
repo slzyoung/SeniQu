@@ -6,7 +6,7 @@ import { Injectable, Logger, ForbiddenException } from "@nestjs/common"
 import { createClient, SupabaseClient } from "@supabase/supabase-js"
 import { ConfigService } from "@nestjs/config"
 
-type NotificationType = "system" | "artwork" | "nft" | "forum" | "follow" | "sale" | "alert"
+type NotificationType = "system" | "artwork" | "art" | "forum" | "follow" | "sale" | "alert"
 
 interface CreateNotificationDto {
     userId: string
