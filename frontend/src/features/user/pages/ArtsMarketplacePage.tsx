@@ -21,7 +21,7 @@ import { PageContainer, StatsGrid } from '../../../components/common/DashboardLa
 import { Card, CardContent, Button, Input, Badge, Select } from '../../../components/ui';
 import type { SelectOption } from '../../../components/ui';
 import { useNavigate } from 'react-router-dom';
-import { useArtMarketplace, useArtStats, useOwnedNFTs, useBuyArt } from '../../../hooks/useArt';
+import { useArtMarketplace, useArtStats, useOwnedArts, useBuyArt } from '../../../hooks/useArt';
 
 // ============================================
 // TYPES
@@ -212,17 +212,17 @@ export function NFTMarketplacePage() {
     });
 
     const { data: stats, isLoading: statsLoading } = useArtStats();
-    const { data: ownedData } = useOwnedNFTs({ limit: 5 });
+    const { data: ownedData } = useOwnedArts({ limit: 5 });
 
     // Mutations
-    const buyArt = useBuyNFT();
+    const buyArt = useBuyArt();
 
     const arts = marketplaceData?.data || [];
     const ownedNFTs = ownedData?.data || [];
 
     const handleBuy = (artId: string) => {
         // In real app, show confirmation modal
-        buyNFT.mutate(artId);
+        buyArt.mutate(artId);
     };
 
     // Sort options for Select component
@@ -252,7 +252,7 @@ export function NFTMarketplacePage() {
             <StatsGrid>
                 <StatCard
                     title="Total Artworks"
-                    value={stats?.totalNFTs?.toLocaleString() || '0'}
+                    value={stats?.totalArts?.toLocaleString() || '0'}
                     icon={Sparkles}
                     color="bg-purple-500/10 text-purple-500"
                     isLoading={statsLoading}

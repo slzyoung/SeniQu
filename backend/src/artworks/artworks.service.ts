@@ -6,21 +6,39 @@ import { UpdateArtworkDto } from "./dto/update-artwork.dto"
 export interface Artwork {
     id: string
     title: string
+    slug?: string
     description: string
     artistId: string
+    institutionId?: string
     category: string
     region: string
     era?: string
     medium?: string
     dimensions?: string
-    imageUrl: string
+    genres?: string[]
+    style?: string
+    period?: string
+    yearCreated?: number
+    primaryImageUrl: string
+    images?: string
     thumbnailUrl?: string
     status: "draft" | "pending_review" | "published" | "archived" | "rejected"
+    isForSale?: boolean
+    price?: number
+    currency?: string
     isVerified: boolean
+    isArt: boolean
     verifiedBy?: string
     verifiedAt?: Date
+    views: number
+    likes: number
     createdAt: Date
     updatedAt: Date
+    artist?: {
+        id: string
+        displayName: string
+        avatarUrl?: string
+    }
 }
 
 @Injectable()
@@ -85,11 +103,16 @@ export class ArtworksService {
         const client = this.db.getClient()
         const offset = (page - 1) * limit
 
-        let query = client.from("artworks").select("*", { count: "exact" })
+        let query = client.from("artworks").select("*, artist:users!artist_id(id, display_name, avatar_url)", { count: "exact" })
 
         if (category) query = query.eq("category", category)
         if (region) query = query.eq("region", region)
-        if (status) query = query.eq("status", status)
+        if (status) {
+            query = query.eq("status", status)
+        } else {
+            // By default, show all non-draft artworks (published, pending_review, etc.)
+            query = query.neq("status", "draft")
+        }
 
         const { data, error, count } = await query
             .range(offset, offset + limit - 1)
@@ -173,21 +196,42 @@ export class ArtworksService {
         return {
             id: data.id,
             title: data.title,
+            slug: data.slug,
             description: data.description,
             artistId: data.artist_id,
+            institutionId: data.institution_id,
             category: data.category,
             region: data.region,
             era: data.era,
             medium: data.medium,
             dimensions: data.dimensions,
-            imageUrl: data.image_url,
+            genres: data.genres,
+            style: data.style,
+            period: data.period,
+            yearCreated: data.year_created,
+            primaryImageUrl: data.primary_image_url,
+            images: data.images,
             thumbnailUrl: data.thumbnail_url,
             status: data.status,
+            isForSale: data.is_for_sale,
+            price: data.price,
+            currency: data.currency,
             isVerified: data.is_verified,
+            isArt: data.is_art,
             verifiedBy: data.verified_by,
             verifiedAt: data.verified_at ? new Date(data.verified_at) : undefined,
+            views: data.views || 0,
+            likes: data.likes || 0,
             createdAt: new Date(data.created_at),
             updatedAt: new Date(data.updated_at),
+            // Include artist data from JOIN if available
+            ...(data.artist && {
+                artist: {
+                    id: data.artist.id,
+                    displayName: data.artist.display_name,
+                    avatarUrl: data.artist.avatar_url,
+                }
+            }),
         }
     }
 }

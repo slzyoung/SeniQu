@@ -19,7 +19,7 @@ import {
 import { PageContainer, StatsGrid } from '../../../components/common/DashboardLayout';
 import { Card, CardContent, Button, Badge, Tabs } from '../../../components/ui';
 import { useNavigate } from 'react-router-dom';
-import { useOwnedNFTs, useCreatedNFTs, useUnlistArt } from '../../../hooks/useArt';
+import { useOwnedArts, useCreatedArts, useUnlistArt } from '../../../hooks/useArt';
 
 // ============================================
 // TYPES
@@ -239,11 +239,11 @@ export function MyNFTsPage() {
     ];
 
     // Queries
-    const { data: ownedData, isLoading: ownedLoading } = useOwnedNFTs();
-    const { data: createdData, isLoading: createdLoading } = useCreatedNFTs();
+    const { data: ownedData, isLoading: ownedLoading } = useOwnedArts();
+    const { data: createdData, isLoading: createdLoading } = useCreatedArts();
 
     // Mutations
-    const unlistArt = useUnlistNFT();
+    const unlistArt = useUnlistArt();
 
     const ownedNFTs = ownedData?.data || [];
     const createdNFTs = createdData?.data || [];
@@ -262,7 +262,7 @@ export function MyNFTsPage() {
     };
 
     const handleUnlist = (artId: string) => {
-        unlistNFT.mutate(artId);
+        unlistArt.mutate(artId);
     };
 
     const handleTransfer = (art: any) => {

@@ -62,7 +62,7 @@ function ArtworkCard({
                 <div className={viewMode === 'list' ? "w-40 h-full relative" : "aspect-[4/5] relative overflow-hidden"}>
                     <div className="absolute inset-0 bg-theme-surface animate-pulse" />
                     <img
-                        src={artwork.imageUrl || artwork.images?.[0]?.url || '/placeholder-art.jpg'}
+                        src={(Array.isArray(artwork.images) && artwork.images.length > 0) ? (artwork.images[0]?.url || artwork.images[0]) : (artwork.primaryImageUrl || artwork.imageUrl || '/placeholder-art.jpg')}
                         alt={artwork.title}
                         loading="lazy"
                         className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"

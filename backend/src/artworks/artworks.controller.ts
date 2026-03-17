@@ -26,7 +26,7 @@ export class ArtworksController {
         @Query("region") region?: string,
     ) {
         return this.artworksService.findAll({
-            page, limit, category, region, status: "published"
+            page, limit, category, region
         })
     }
 

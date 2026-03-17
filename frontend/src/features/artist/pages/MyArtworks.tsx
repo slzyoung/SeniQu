@@ -30,15 +30,18 @@ import { debounce } from '../../../lib/sanitize';
 interface ArtworkType {
     id: string;
     title: string;
-    images?: { url: string }[];
+    images?: any;
     imageUrl?: string;
+    primary_image_url?: string;
     status: string;
     category?: string;
     medium?: string;
     views: number;
     likes: number;
-    isArt: boolean;
-    createdAt: string;
+    isArt?: boolean;
+    is_art?: boolean;
+    createdAt?: string;
+    created_at?: string;
 }
 
 function ArtworkGridCard({
@@ -55,7 +58,15 @@ function ArtworkGridCard({
     isDeleting?: boolean;
 }) {
     const [showMenu, setShowMenu] = useState(false);
-    const imageUrl = artwork.imageUrl || artwork.images?.[0]?.url;
+    
+    let parsedImages = [];
+    try {
+        parsedImages = typeof artwork.images === 'string' ? JSON.parse(artwork.images) : (artwork.images || []);
+    } catch(e) {}
+    
+    const imageUrl = artwork.imageUrl || artwork.primary_image_url || parsedImages?.[0]?.url || parsedImages?.[0];
+    const isArt = artwork.isArt ?? artwork.is_art;
+    const normalizedStatus = (artwork.status || 'DRAFT').toUpperCase();
 
     const statusColors: Record<string, string> = {
         PUBLISHED: 'bg-green-500/10 text-green-500 border-green-500/20',
@@ -89,12 +100,12 @@ function ArtworkGridCard({
 
                     {/* Status Badge */}
                     <Badge
-                        className={`absolute top-3 left-3 capitalize ${statusColors[artwork.status] || statusColors.DRAFT}`}
+                        className={`absolute top-3 left-3 capitalize ${statusColors[normalizedStatus] || statusColors.DRAFT}`}
                     >
-                        {statusLabels[artwork.status] || artwork.status}
+                        {statusLabels[normalizedStatus] || normalizedStatus}
                     </Badge>
 
-                    {artwork.isArt && (
+                    {isArt && (
                         <Badge variant="gold" className="absolute top-3 right-3">Art</Badge>
                     )}
 
@@ -209,19 +220,34 @@ export function MyArtworks() {
         currentPage,
         12,
         {
-            status: activeTab === 'all' ? undefined : activeTab.toUpperCase(),
+            status: activeTab === 'all' ? undefined : activeTab.toLowerCase(),
         }
     );
 
     const deleteMutation = useDeleteArtwork();
 
     // Safely extract artworks array regardless of API response structure
-    const artworks: ArtworkType[] = Array.isArray(artworkData) 
-        ? artworkData 
-        : (Array.isArray(artworkData?.data) ? artworkData.data : []);
+    const extractData = (res: any): ArtworkType[] => {
+        if (!res) return [];
+        if (Array.isArray(res)) return res;
+        if (Array.isArray(res.data)) return res.data;
+        if (res.data?.data && Array.isArray(res.data.data)) return res.data.data;
+        if (res.data?.artworks && Array.isArray(res.data.artworks)) return res.data.artworks;
+        return [];
+    };
+    
+    const artworks = extractData(artworkData);
         
-    const totalArtworks = artworkData?.meta?.total || artworks.length;
-    const totalPages = artworkData?.meta?.totalPages || 1;
+    const extractMeta = (res: any) => {
+        if (!res) return { total: 0, totalPages: 1 };
+        if (res.meta) return res.meta;
+        if (res.data?.meta) return res.data.meta;
+        return { total: extractData(res).length, totalPages: 1 };
+    };
+    
+    const meta = extractMeta(artworkData);
+    const totalArtworks = meta.total || artworks.length;
+    const totalPages = meta.totalPages || 1;
 
     const tabs = [
         { id: 'all', label: 'All', badge: totalArtworks },

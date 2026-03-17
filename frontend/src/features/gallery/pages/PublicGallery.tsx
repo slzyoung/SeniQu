@@ -130,36 +130,41 @@ export default function PublicGallery() {
                     }
                 >
                     <AnimatePresence>
-                        {artworks.map((artwork, index) => (
-                            <motion.div
-                                key={artwork.id}
-                                initial={{ opacity: 0, scale: 0.9 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ duration: 0.3, delay: index * 0.05 }}
-                            >
-                                <Link
-                                    to={ROUTES.GALLERY_ARTWORK.replace(':id', artwork.id)}
-                                    className="group block h-full"
-                                >
-                                    <GlowCard
-                                        className="h-full overflow-hidden border border-theme-border hover:border-gold/30"
-                                        glowColor="var(--text-gold)"
-                                    >
-                                        <div className={viewMode === 'grid' ? "flex flex-col h-full" : "flex flex-row h-40 gap-6"}>
-                                            {/* Image Container */}
-                                            <div className={viewMode === 'grid' ? "aspect-[4/5] relative overflow-hidden" : "w-40 h-full relative overflow-hidden"}>
-                                                <div className="absolute inset-0 bg-theme-surface animate-pulse" />
-                                                <img
-                                                    src={artwork.images?.[0]?.url || '/placeholder-art.jpg'}
-                                                    alt={artwork.title}
-                                                    loading="lazy"
-                                                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                                                />
-                                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        {artworks.map((artwork, index) => {
+                            const imgUrl = (Array.isArray(artwork.images) && artwork.images.length > 0)
+                                ? (artwork.images[0]?.url || artwork.images[0])
+                                : ((artwork as any).primaryImageUrl || (artwork as any).primary_image_url || (artwork as any).imageUrl || '/placeholder-art.jpg');
 
-                                                {artwork.isArt && (
-                                                    <Badge variant="gold" className="absolute top-3 right-3 shadow-lg z-10">Art</Badge>
-                                                )}
+                            return (
+                                <motion.div
+                                    key={artwork.id}
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                                >
+                                    <Link
+                                        to={ROUTES.GALLERY_ARTWORK.replace(':id', artwork.id)}
+                                        className="group block h-full"
+                                    >
+                                        <GlowCard
+                                            className="h-full overflow-hidden border border-theme-border hover:border-gold/30"
+                                            glowColor="var(--text-gold)"
+                                        >
+                                            <div className={viewMode === 'grid' ? "flex flex-col h-full" : "flex flex-row h-40 gap-6"}>
+                                                {/* Image Container */}
+                                                <div className={viewMode === 'grid' ? "aspect-[4/5] relative overflow-hidden" : "w-40 h-full relative overflow-hidden"}>
+                                                    <div className="absolute inset-0 bg-theme-surface animate-pulse" />
+                                                    <img
+                                                        src={imgUrl}
+                                                        alt={artwork.title}
+                                                        loading="lazy"
+                                                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                                    />
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                                                    {((artwork as any).isArt || (artwork as any).is_art) && (
+                                                        <Badge variant="gold" className="absolute top-3 right-3 shadow-lg z-10">Art</Badge>
+                                                    )}
 
                                                 {viewMode === 'grid' && (
                                                     <div className="absolute bottom-3 left-3 right-3 flex justify-between items-center opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300">
@@ -201,9 +206,10 @@ export default function PublicGallery() {
                                             </div>
                                         </div>
                                     </GlowCard>
-                                </Link>
-                            </motion.div>
-                        ))}
+                                    </Link>
+                                </motion.div>
+                            );
+                        })}
                     </AnimatePresence>
                 </motion.div>
             )}

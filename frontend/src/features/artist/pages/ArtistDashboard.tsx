@@ -129,7 +129,15 @@ export function ArtistDashboard() {
     const { data: stats, isLoading: statsLoading } = useArtistStats();
     const { data: analytics } = useArtistAnalytics('30d');
     const { data: performance } = useArtistPerformance();
-    const { data: artworksData } = useMyArtworks(1, 10, { status: 'PUBLISHED' });
+    const { data: artworksData } = useMyArtworks(1, 10, { status: 'published' });
+
+    const recentArtworks = React.useMemo(() => {
+        if (!artworksData) return [];
+        if (Array.isArray(artworksData)) return artworksData;
+        if (Array.isArray((artworksData as any).data)) return (artworksData as any).data;
+        if (Array.isArray((artworksData as any).data?.data)) return (artworksData as any).data.data;
+        return [];
+    }, [artworksData]);
 
     // Format currency
     const formatCurrency = (value: number) =>
@@ -295,20 +303,25 @@ export function ArtistDashboard() {
                                     title={art.title}
                                     views={art.views}
                                     likes={art.likes}
-                                    image={art.imageUrl || ''}
+                                    image={art.imageUrl || (art as any).primary_image_url || ''}
                                 />
                             ))
-                        ) : artworksData?.data?.length ? (
-                            artworksData.data.slice(0, 4).map((art, index) => (
-                                <TopArtworkCard
-                                    key={art.id}
-                                    rank={index + 1}
-                                    title={art.title}
-                                    views={art.views || 0}
-                                    likes={art.likes || 0}
-                                    image={art.imageUrl || ''}
-                                />
-                            ))
+                        ) : recentArtworks.length ? (
+                            recentArtworks.slice(0, 4).map((art: any, index: number) => {
+                                let parsedImages = [];
+                                try { parsedImages = typeof art.images === 'string' ? JSON.parse(art.images) : (art.images || []); } catch(e) {}
+                                const img = art.imageUrl || art.primary_image_url || parsedImages?.[0]?.url || parsedImages?.[0] || '';
+                                return (
+                                    <TopArtworkCard
+                                        key={art.id}
+                                        rank={index + 1}
+                                        title={art.title}
+                                        views={art.views || 0}
+                                        likes={art.likes || 0}
+                                        image={img}
+                                    />
+                                );
+                            })
                         ) : (
                             <div className="flex flex-col items-center justify-center h-40 text-theme-muted">
                                 <p className="text-sm">No artworks published yet</p>
