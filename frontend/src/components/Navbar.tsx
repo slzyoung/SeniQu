@@ -47,14 +47,19 @@ export function Navbar() {
 
         <div className="max-w-7xl mx-auto px-6 md:px-8 flex items-center justify-between">
           {/* Logo */}
-          <div className="flex items-center relative group cursor-pointer" onClick={() => navigate(ROUTES.HOME)}>
-            <span className="font-serif text-2xl md:text-3xl font-bold text-gold italic tracking-wide relative z-10">
+          <div 
+            className="flex items-center group cursor-pointer transition-all duration-300 hover:opacity-90" 
+            onClick={() => navigate(ROUTES.HOME)}
+          >
+            <img 
+              src="/images/logo/seniqu-Photoroom.png" 
+              alt="SeniQu Logo" 
+              className="w-14 h-14 md:w-16 md:h-16 -ml-2 object-contain transform transition-transform duration-500 group-hover:scale-105 drop-shadow-md"
+              loading="eager"
+            />
+            <span className="font-serif text-xl md:text-2xl font-bold text-gold italic tracking-wide drop-shadow-sm -ml-1">
               SeniQu
             </span>
-            <motion.div
-              className="absolute -bottom-1 left-0 right-0 h-[2px] bg-gold opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-              layoutId="logoUnderline" />
-
           </div>
 
           {/* Desktop Navigation */}
