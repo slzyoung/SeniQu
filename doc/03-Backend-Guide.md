@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The backend is a **NestJS** application providing RESTful APIs for the Seniqu art gallery and NFT marketplace. It handles authentication, data persistence, business logic, and integrates with Supabase for database operations.
+The backend is a **NestJS** application providing RESTful APIs for the SeniQu digital cultural heritage infrastructure platform. It handles authentication, data persistence, business logic, and integrates with Supabase for database operations.
 
 ## 2. Technology Stack
 

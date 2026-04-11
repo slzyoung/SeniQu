@@ -38,8 +38,7 @@ export function Footer() {
               SeniQu
             </span>
             <p className="text-theme-muted text-xs md:text-sm leading-relaxed mb-4 md:mb-6 max-w-xs mx-auto md:mx-0">
-              The premier Web3 platform for preserving the rich cultural
-              heritage of the Indonesian archipelago.
+              Indonesia's leading digital cultural heritage infrastructure — bridging museums, galleries, and heritage sites with AI-powered technology.
             </p>
             <div className="flex gap-3 justify-center md:justify-start">
               {[Twitter, Instagram, Disc, Mail].map((Icon, i) =>
@@ -115,7 +114,7 @@ export function Footer() {
 
         {/* Bottom Bar */}
         <div className="pt-6 md:pt-8 border-t border-theme-border flex flex-col md:flex-row justify-between items-center gap-3 md:gap-4 text-[10px] md:text-xs text-theme-muted/60">
-          <p>© 2026 SeniQu. Built with ♥ for Nusantara.</p>
+          <p>© 2026 SeniQu. Preserving Nusantara's Heritage, Digitally.</p>
           <div className="flex items-center gap-4 md:gap-6">
             <button
               onClick={scrollToTop}

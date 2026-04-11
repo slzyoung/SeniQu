@@ -50,7 +50,7 @@ export function LandingPage({ openAuthModal: shouldOpenModal }: LandingPageProps
     return (
         <div className="min-h-screen bg-theme-bg text-theme-text selection:bg-gold selection:text-charcoal font-sans transition-colors duration-300 scroll-smooth">
             <Navbar />
-            <main>
+            <main className="pb-20 md:pb-0">
                 <HeroSection />
                 <StatsBar />
                 <TrustedBy />

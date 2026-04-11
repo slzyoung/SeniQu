@@ -2,7 +2,7 @@
 
 ## 1. High-Level Overview
 
-Seniqu is an enterprise-grade **Indonesian Art Gallery & NFT Marketplace** platform. It utilizes a modern **Monorepo-style** structure separating the Client (Frontend) and Server (Backend), designed for scalability, performance, security, and maintainability.
+SeniQu is an enterprise-grade **Digital Cultural Heritage Infrastructure** platform, serving as a centralized hub for Indonesia's 12,000+ traditional artworks and heritage sites. It utilizes a modern **Monorepo-style** structure separating the Client (Frontend) and Server (Backend), designed for scalability, performance, security, and maintainability.
 
 ### Architecture Diagram
 
@@ -110,7 +110,7 @@ seniqu-webapp/
 │   │   ├── users/             # User management
 │   │   ├── wallet/            # Wallet connections, balances, transactions
 │   │   ├── artworks/          # Artwork CRUD
-│   │   ├── nfts/              # NFT marketplace
+│   │   ├── nfts/              # Digital asset registry
 │   │   ├── collections/       # User collections
 │   │   ├── museums/           # Museums & galleries
 │   │   ├── bookmarks/         # User bookmarks
@@ -145,7 +145,7 @@ seniqu-webapp/
 │   │   │   ├── auth/          # Login, Register, OAuth
 │   │   │   ├── community/     # Forum
 │   │   │   ├── gallery/       # Public gallery
-│   │   │   ├── marketplace/   # NFT marketplace
+│   │   │   ├── marketplace/   # Blockchain asset registry
 │   │   │   └── user/          # User dashboard
 │   │   │
 │   │   ├── hooks/             # Custom React hooks

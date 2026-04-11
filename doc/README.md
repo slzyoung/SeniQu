@@ -1,20 +1,23 @@
-# Seniqu WebApp Documentation
+# SeniQu — Technical Documentation
 
-Welcome to the official documentation for the **Seniqu WebApp**, an enterprise-grade Indonesian art gallery and NFT marketplace platform.
+> **SeniQu** is Indonesia's leading digital cultural heritage infrastructure — a digital sanctuary for Indonesia's heritage spanning museums, galleries, and historical sites where assets are verified, digitized, and preserved for long-term conservation to enable accessible cultural exploration and tourism guidance.
 
-## 📚 Documentation Structure
+---
+
+## 📚 Documentation Index
 
 | # | Document | Description |
 |---|----------|-------------|
-| 1 | [Architecture Overview](./01-Architecture.md) | System design, tech stack, patterns |
-| 2 | [Frontend Guide](./02-Frontend-Guide.md) | React/Vite, components, state, styling |
-| 3 | [Backend Guide](./03-Backend-Guide.md) | NestJS modules, services, middleware |
-| 4 | [Authentication & Security](./04-Authentication-Security.md) | JWT, OAuth, RBAC, OWASP compliance |
-| 5 | [Feature Specifications](./05-Feature-Documentation.md) | Gallery, marketplace, dashboards |
-| 6 | [Development Workflow](./06-Development-Workflow.md) | Setup, coding standards, deployment |
-| 7 | [Database Schema](./07-Database-Schema.md) | Supabase tables, functions, RLS |
-| 8 | [API Reference](./08-API-Reference.md) | Endpoints, parameters, examples |
-| 9 | [Wallet Integration](./09-Wallet-Integration.md) | Hybrid Wallet Strategy and Auto-Sync |
+| 1 | [Architecture Overview](./01-Architecture.md) | High-level system design, monorepo structure, technology stack, security layers, database ER diagram |
+| 2 | [Frontend Guide](./02-Frontend-Guide.md) | React/Vite setup, atomic component library, Zustand state, Tailwind theming, Web3 wallet integration |
+| 3 | [Backend Guide](./03-Backend-Guide.md) | NestJS modular architecture, API endpoints, security middleware, environment configuration |
+| 4 | [Authentication & Security](./04-Authentication-Security.md) | Multi-provider auth (JWT, OAuth, Privy, Wallet Signature), RBAC, OWASP Top 10 compliance |
+| 5 | [Feature Specifications](./05-Feature-Documentation.md) | Cultural discovery platform, AI-enhanced tools, tourism optimization, institutional dashboards |
+| 6 | [Development Workflow](./06-Development-Workflow.md) | Environment setup, TypeScript coding standards, semantic commits, CI/CD deployment |
+| 7 | [Database Schema](./07-Database-Schema.md) | PostgreSQL tables, PostGIS geolocation, Row Level Security (RLS), migration history |
+| 8 | [API Reference](./08-API-Reference.md) | REST endpoints, request/response schemas, authentication requirements, Swagger |
+| 9 | [Wallet Integration](./09-Wallet-Integration.md) | Hybrid wallet strategy: Privy embedded + manual (Phantom/Solflare/MetaMask), backend sync |
+| 10 | [Cloudflare R2 Integration](./10-Cloudflare-R2-Integration.md) | S3-compatible storage, signed upload URLs, geo-distributed CDN asset delivery |
 
 ---
 
@@ -22,159 +25,167 @@ Welcome to the official documentation for the **Seniqu WebApp**, an enterprise-g
 
 ### Prerequisites
 
-- Node.js 18+
-- npm 9+
-- Supabase account
-- Google OAuth credentials (optional)
+- **Node.js** 18+ (Node 24 recommended)
+- **npm** 9+
+- **Supabase** account with service key
+- **Privy** Project ID & App ID (for embedded wallets)
+- **Reown/WalletConnect** Project ID (for native Web3 users)
 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/seniqu-webapp.git
-cd seniqu-webapp
+# Clone
+git clone https://github.com/siabang35/seniquwebapp.git
+cd seniquwebapp
 
 # Install all dependencies
 npm install
 
-# Setup environment variables
+# Configure environment
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
-# Edit .env files with your credentials
-
-# Start development servers
-npm run dev  # Runs both frontend and backend
+# Edit .env files with your Supabase, Privy, and OAuth credentials
 ```
 
-### Individual Services
+### Running the Servers
 
 ```bash
-# Frontend only (Vite)
+# Terminal 1 — Frontend (Vite)
 cd frontend && npm run dev
 # → http://localhost:5173
 
-# Backend only (NestJS)
+# Terminal 2 — Backend (NestJS)
 cd backend && npm run start:dev
 # → http://localhost:3001
-# → Swagger: http://localhost:3001/api/docs
+# → Swagger Docs: http://localhost:3001/api/docs
 ```
 
 ---
 
-## 🏗️ Tech Stack
+## 🏗️ Technology Stack
 
 ### Frontend
-- React 18 + TypeScript
-- Vite (build tool)
-- Tailwind CSS
-- Zustand (state management)
-- React Router v6
-- Framer Motion
+
+| Technology | Purpose |
+|------------|---------|
+| React 18 + TypeScript | Interactive UI framework with type safety |
+| Vite | Lightning-fast build tool with HMR |
+| Tailwind CSS | Utility-first styling with custom design tokens (gold/charcoal/cream) |
+| Zustand | Lightweight, performant global state management |
+| React Router v6 | Client-side routing with lazy-loaded code splitting |
+| Framer Motion | Cinematic micro-animations and page transitions |
+| Recharts | Data visualization for analytics dashboards |
+| Reown AppKit | WalletConnect & multi-chain modal integration |
+| Ethers.js | EVM blockchain interaction layer |
 
 ### Backend
-- NestJS + TypeScript
-- Supabase (PostgreSQL)
-- Passport.js (JWT, OAuth, Privy)
-- class-validator
-- Swagger/OpenAPI
 
-### Database
-- PostgreSQL (via Supabase)
-- PostGIS (geolocation)
-- Row Level Security
+| Technology | Purpose |
+|------------|---------|
+| NestJS + TypeScript | Enterprise-grade modular Node.js framework |
+| Supabase (PostgreSQL) | Auto-scaling relational database |
+| PostGIS | Geolocation queries for cultural site mapping |
+| Passport.js | Multi-strategy authentication (JWT, OAuth, Privy, Wallet) |
+| class-validator | DTO validation with whitelist enforcement |
+| Swagger/OpenAPI | Interactive API documentation |
+| Helmet | Security HTTP headers |
+| Throttler | 3-tier rate limiting |
+
+### Infrastructure
+
+| Technology | Purpose |
+|------------|---------|
+| Cloudflare R2 | S3-compatible geo-distributed asset storage |
+| Solana RPC | Blockchain transaction verification and indexing |
+| Privy | Embedded non-custodial wallets for mainstream user onboarding |
+| Google Maps API | Institution geolocation and nearby discovery |
 
 ---
 
-## 🌟 Key Features
+## 🌟 Platform Features
 
-| Feature | Description |
-|---------|-------------|
-| **Virtual Museums** | Immersive digital galleries for institutions |
-| **NFT Marketplace** | Secure minting and trading of digital art |
-| **Manual Wallet Auth** | Direct login via Phantom, Solflare, MetaMask signature |
-| **Privy Embedded Wallet** | Auto-created, backend-verified non-custodial wallet |
-| **Deposit & Withdraw** | Instant access & robust mainnet transaction signing |
-| **Geolocation Search** | Find nearby museums and galleries |
-| **Community Forum** | Discussions for art enthusiasts |
-| **AI Art Analysis** | Genre detection and curation tools |
-| **Artist Dashboard** | Analytics, artwork management, sales |
-| **Mobile Notifications** | Real-time alerts with read/unread status |
-| **Admin Panel** | Content moderation, user management |
+| Category | Features |
+|----------|----------|
+| **Cultural Discovery** | Unified browsable hub of 12,000+ artworks, filterable by era, medium, ethnic group |
+| **Museum & Gallery Mapping** | PostGIS-powered geolocation of 450+ institutions with exhibition hours and directions |
+| **AI Cultural Engine** | Auto-generated summaries, genre detection, multilingual translation, audio guides |
+| **Smart Tourism Routes** | Curated paths linking historically connected heritage sites |
+| **Proof of Art (PoA)** | Blockchain-verified provenance and certificates of authenticity |
+| **Institutional Dashboards** | Digitization wizard, visitor analytics, engagement metrics |
+| **Community Forum** | Threaded discussions for cultural enthusiasts |
+| **Mobile Notifications** | Real-time alerts for exhibitions, events, and cultural updates |
 
 ---
 
 ## 📦 Backend Modules
 
-| Module | Description |
-|--------|-------------|
-| `auth` | Authentication (JWT, OAuth, Privy, Wallet Signature) |
-| `users` | User profiles and settings |
-| `wallet` | Wallet connections, balances, transactions, deposit/withdraw |
-| `artworks` | Artwork CRUD and management |
-| `nfts` | NFT minting and marketplace |
-| `museums` | Museums/galleries with geolocation |
-| `collections` | User artwork collections |
-| `bookmarks` | User bookmarks/favorites |
-| `forum` | Community threads and posts |
-| `search` | Global search and autocomplete |
-| `analytics` | Artist and admin dashboards |
-| `notifications` | User notification system |
-| `audit` | Security audit logging (OWASP) |
-| `admin` | Admin management tools |
+| Module | Endpoint | Description |
+|--------|----------|-------------|
+| `auth` | `/auth/*` | JWT, Google OAuth, Privy embedded, Phantom/Solflare wallet signature |
+| `users` | `/users/*` | Profiles, roles (USER, ARTIST, INSTITUTION, ADMIN), preferences |
+| `wallet` | `/wallet/*` | Nonce generation, wallet linking, balances, deposit/withdraw |
+| `artworks` | `/artworks/*` | Cultural properties CRUD, digitization status, metadata mapping |
+| `museums` | `/museums/*` | Geolocation-enabled institutions, nearby search, exhibitions |
+| `collections` | `/collections/*` | User curations, bookmark lists, cultural route planning |
+| `search` | `/search/*` | Full-text search, autocomplete, geospatial queries |
+| `analytics` | `/analytics/*` | Artist dashboards, visitor metrics, engagement time-series |
+| `notifications` | `/notifications/*` | Push notifications with read/unread tracking |
+| `forum` | `/forum/*` | Community threads and posts |
+| `audit` | `/audit/*` | OWASP-compliant security event logging |
+| `admin` | `/admin/*` | Institution approval workflow, content moderation, system health |
 
 ---
 
-## 🔒 Security Features
+## 🔒 Security Architecture
 
-- ✅ JWT with refresh tokens
-- ✅ OAuth 2.0 (Google)
-- ✅ Manual wallet signature verification (Phantom, Solflare, MetaMask)
-- ✅ WalletConnect / Reown mobile wallet connection
-- ✅ Privy non-custodial embedded wallets
-- ✅ Role-based access control (RBAC)
-- ✅ Row Level Security (RLS)
-- ✅ Rate limiting (3-tier + wallet-specific)
-- ✅ XSS sanitization
-- ✅ SQL injection prevention
-- ✅ Security headers (Helmet)
-- ✅ Single-use nonce anti-replay protection
-- ✅ Device fingerprinting for wallet sessions
-- ✅ Backend Source of Truth for (Anti-Spoofing)
-- ✅ Comprehensive audit logging
+| Layer | Implementation |
+|-------|----------------|
+| **Authentication** | JWT + refresh tokens, Google OAuth, Privy, wallet signature verification |
+| **Authorization** | Role-Based Access Control (RBAC) with 4 tiers |
+| **Database** | Row Level Security (RLS) policies on all Supabase tables |
+| **Input Validation** | class-validator DTOs with whitelist + forbidNonWhitelisted |
+| **Rate Limiting** | 3-tier Throttler (10 req/s, 50 req/10s, 100 req/min) |
+| **XSS Prevention** | Global XssSanitizerInterceptor on all inputs |
+| **SQL Injection** | SqlInjectionGuard detecting attack patterns |
+| **Anti-Replay** | Single-use nonces for all wallet signature flows |
+| **Device Tracking** | Fingerprinting for wallet session validation |
+| **Audit Trail** | Comprehensive security event logging with request IDs |
 
 ---
 
 ## 📊 Database Migrations
 
-Run SQL migrations in Supabase SQL Editor:
+Run in Supabase SQL Editor sequentially:
 
-1. `001_initial_schema.sql` — Core tables and types
-2. `002_functions.sql` — PostgreSQL functions
-3. `003_security_policies.sql` — RLS policies
-4. `004_indexes.sql` — Performance indexes
-5. `005_fix_user_schema.sql` — User schema fixes
-6. `006_seed_users.sql` — Seed data
-7. `007_dashboard_enhancements.sql` — Dashboard enhancements
-8. `008_add_category_and_missing_columns.sql` — Category support
-9. `009_add_google_id.sql` — Google OAuth ID
-10. `010_wallet_infrastructure.sql` — Wallet connections, nonces, sessions
-11. `011_security_hardening.sql` — Security hardening
-12. `012_fix_remaining_security.sql` — Security fixes
-13. `013_secure_spatial_ref_sys.sql` — PostGIS security
-14. `014_wallet_transactions.sql` — Transactions, balances, embedded wallet
+| Migration | Description |
+|-----------|-------------|
+| `001_initial_schema.sql` | Core tables, types, user roles |
+| `002_functions.sql` | PostgreSQL stored functions |
+| `003_security_policies.sql` | Row Level Security policies |
+| `004_indexes.sql` | Composite, partial, and GIN indexes |
+| `005_fix_user_schema.sql` | User schema refinements |
+| `006_seed_users.sql` | Development seed data |
+| `007_dashboard_enhancements.sql` | Analytics dashboard support |
+| `008_add_category_columns.sql` | Category and classification fields |
+| `009_add_google_id.sql` | Google OAuth user linking |
+| `010_wallet_infrastructure.sql` | Wallet connections, nonces, sessions |
+| `011_security_hardening.sql` | Advanced security policies |
+| `012_fix_remaining_security.sql` | Security patch |
+| `013_secure_spatial_ref_sys.sql` | PostGIS security hardening |
+| `014_wallet_transactions.sql` | Transactions, balances, embedded wallets |
 
 ---
 
 ## 🧪 Testing
 
 ```bash
-# Backend tests
+# Backend
 cd backend
-npm run test         # Unit tests
-npm run test:e2e     # E2E tests
-npm run test:cov     # Coverage
+npm run test           # Unit tests
+npm run test:e2e       # End-to-end tests
+npm run test:cov       # Coverage report
 
-# Frontend tests
+# Frontend
 cd frontend
 npm run test
 ```
@@ -184,19 +195,15 @@ npm run test
 ## 📝 Contributing
 
 1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing`)
-3. Commit changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing`)
+2. Create feature branch (`git checkout -b feature/cultural-routes`)
+3. Commit changes (`git commit -m 'feat: add smart museum navigation'`)
+4. Push to branch (`git push origin feature/cultural-routes`)
 5. Open Pull Request
 
 ---
 
 ## 📄 License
 
-This project is proprietary software. All rights reserved.
+SeniQu is proprietary software. All rights reserved.
 
----
-
-## 📧 Contact
-
-For questions or support, contact the development team.
+**© 2026 SeniQu — Preserving Nusantara's Heritage, Digitally.**

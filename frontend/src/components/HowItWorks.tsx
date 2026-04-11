@@ -1,31 +1,36 @@
-import { Upload, ShieldCheck, Lock } from 'lucide-react';
+import { Landmark, Wifi, Brain } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
 import { GlowCard } from './GlowCard';
+
 export function HowItWorks() {
   const { ref, isVisible } = useScrollAnimation();
   const steps = [
     {
-      icon: Upload,
-      title: 'Upload Your Artwork',
+      icon: Landmark,
+      number: '01',
+      title: 'Discover Cultural Spaces',
       description:
-        'Capture high-resolution images of traditional artworks with our guided digitization tools.',
+        'Browse museums, galleries & heritage buildings across the archipelago in one unified platform.',
       delay: 0
     },
     {
-      icon: ShieldCheck,
-      title: 'Verify Authenticity',
+      icon: Brain,
+      number: '02',
+      title: 'AI-Powered Insights',
       description:
-        'Our network of cultural experts and AI verification ensures provenance and authenticity.',
-      delay: 0.2
+        'Get smart summaries, audio guides, and contextual storytelling — personalized to your interests.',
+      delay: 0.15
     },
     {
-      icon: Lock,
-      title: 'Preserve Forever',
+      icon: Wifi,
+      number: '03',
+      title: 'Interactive Exploration',
       description:
-        'Artworks are permanently preserved on-chain, ensuring cultural heritage endures for generations.',
-      delay: 0.4
-    }];
+        'Navigate with digital guides, curated routes, and immersive content that transforms every visit.',
+      delay: 0.3
+    }
+  ];
 
   return (
     <section
@@ -40,17 +45,16 @@ export function HowItWorks() {
           backgroundSize: '30px 30px'
         }} />
 
-
       <div className="max-w-7xl mx-auto px-4 md:px-6 relative z-10">
         <div
           ref={ref}
           className={`text-center mb-12 md:mb-20 transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
 
           <h2 className="text-3xl md:text-5xl font-serif text-theme-text mb-3 md:mb-4">
-            Digitization Process
+            How It <span className="text-gold italic">Works</span>
           </h2>
-          <p className="text-theme-muted text-sm md:text-base max-w-2xl mx-auto">
-            We combine traditional expertise with blockchain technology.
+          <p className="text-theme-muted text-sm md:text-base max-w-lg mx-auto">
+            Three simple steps to explore Indonesia's cultural heritage.
           </p>
         </div>
 
@@ -58,61 +62,30 @@ export function HowItWorks() {
           {/* Connecting Line (Desktop) */}
           <div className="hidden md:block absolute top-16 left-[16%] right-[16%] h-[2px] bg-theme-border overflow-hidden">
             <motion.div
-              initial={{
-                width: '0%'
-              }}
-              whileInView={{
-                width: '100%'
-              }}
-              viewport={{
-                once: true
-              }}
-              transition={{
-                duration: 1.5,
-                delay: 0.5
-              }}
+              initial={{ width: '0%' }}
+              whileInView={{ width: '100%' }}
+              viewport={{ once: true }}
+              transition={{ duration: 1.5, delay: 0.5 }}
               className="h-full bg-gradient-to-r from-transparent via-gold to-transparent" />
-
           </div>
 
           {/* Mobile Connecting Line */}
           <div className="md:hidden absolute top-0 bottom-0 left-8 w-[2px] bg-theme-border">
             <motion.div
-              initial={{
-                height: '0%'
-              }}
-              whileInView={{
-                height: '100%'
-              }}
-              viewport={{
-                once: true
-              }}
-              transition={{
-                duration: 1.5,
-                delay: 0.3
-              }}
+              initial={{ height: '0%' }}
+              whileInView={{ height: '100%' }}
+              viewport={{ once: true }}
+              transition={{ duration: 1.5, delay: 0.3 }}
               className="w-full bg-gradient-to-b from-gold via-gold/50 to-transparent" />
-
           </div>
 
           {steps.map((step, index) =>
             <motion.div
               key={index}
-              initial={{
-                opacity: 0,
-                y: 30
-              }}
-              whileInView={{
-                opacity: 1,
-                y: 0
-              }}
-              viewport={{
-                once: true
-              }}
-              transition={{
-                duration: 0.6,
-                delay: step.delay
-              }}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: step.delay }}
               className="relative z-10">
 
               {/* Mobile: horizontal card layout */}
@@ -146,7 +119,7 @@ export function HowItWorks() {
 
                   <div className="relative flex flex-col items-center">
                     <span className="absolute -top-4 -right-4 text-8xl font-serif font-bold text-theme-text opacity-[0.03] select-none">
-                      {index + 1}
+                      {step.number}
                     </span>
                     <div className="w-20 h-20 rounded-2xl bg-theme-bg border border-gold/30 flex items-center justify-center mb-6 shadow-lg shadow-gold/5 relative overflow-hidden">
                       <div className="absolute inset-0 bg-gold/10 animate-pulse-glow" />

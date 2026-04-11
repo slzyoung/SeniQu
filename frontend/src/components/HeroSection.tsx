@@ -133,12 +133,12 @@ export function HeroSection() {
               </span>
               <br />
               <span className="text-3xl sm:text-4xl md:text-6xl text-charcoal/80 dark:text-cream transition-colors duration-500">
-                One Masterpiece at a Time
+                The Masterpiece
               </span>
             </h1>
 
             <p className="text-lg sm:text-xl md:text-2xl text-charcoal-light/80 dark:text-cream-muted font-light mb-8 tracking-wide max-w-xl mx-auto lg:mx-0 transition-colors duration-500">
-              A digital sanctuary for 12,000+ traditional artworks from across the Indonesian archipelago. Verified, digitized, and preserved on-chain.
+              A digital sanctuary for Indonesia’s heritage spanning museums, galleries, & historical sites where assets are verified, digitized, which supported for long-term conservation to enable accessible cultural exploration for Tourism Guidance.
             </p>
           </div>
 
