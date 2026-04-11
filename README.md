@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="frontend/public/images/logo/seniqu-logo.png" alt="SeniQu Logo" width="180" />
+  <img src="frontend/public/images/logo/seniqu.png" alt="SeniQu Logo" width="180" />
 
   # SeniQu 
   ### Indonesia's Digital Cultural Heritage Infrastructure
