@@ -47,13 +47,13 @@ export function Navbar() {
 
         <div className="max-w-7xl mx-auto px-6 md:px-8 flex items-center justify-between">
           {/* Logo */}
-          <div 
-            className="flex items-center group cursor-pointer transition-all duration-300 hover:opacity-90" 
+          <div
+            className="flex items-center group cursor-pointer transition-all duration-300 hover:opacity-90"
             onClick={() => navigate(ROUTES.HOME)}
           >
-            <img 
-              src="/images/logo/seniqu-Photoroom.png" 
-              alt="SeniQu Logo" 
+            <img
+              src="/images/logo/seniqu.png"
+              alt="SeniQu Logo"
               className="w-14 h-14 md:w-16 md:h-16 -ml-2 object-contain transform transition-transform duration-500 group-hover:scale-105 drop-shadow-md"
               loading="eager"
             />
