@@ -11,7 +11,7 @@ import { DashboardLayout } from './DashboardLayout';
 import { ROUTES } from '../../lib/constants';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { Avatar } from '../ui';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet } from 'react-router-dom';
 import { Navbar } from '../Navbar';
 import { Footer } from '../Footer';
 import { MobileNav } from '../MobileNav';
@@ -66,11 +66,6 @@ export function PublicLayout() {
         }
     }
 
-    const location = useLocation();
-    // Hide footer on mobile for Collections and Nearby pages
-    const isMobileFooterHidden = location.pathname === '/collections' || location.pathname === ROUTES.NEARBY;
-
-    // Use Landing Page style layout for guests
     if (!isAuthenticated) {
         return (
             <div className="min-h-screen bg-theme-bg flex flex-col">
@@ -78,7 +73,7 @@ export function PublicLayout() {
                 <main className="flex-1">
                     <Outlet />
                 </main>
-                <div className={isMobileFooterHidden ? 'hidden md:block' : ''}>
+                <div className="hidden md:block">
                     <Footer />
                 </div>
                 <MobileNav />

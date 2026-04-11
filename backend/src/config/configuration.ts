@@ -55,6 +55,15 @@ export const configuration = () => ({
         secretKey: process.env.WALLETCONNECT_SECRET_KEY,
     },
 
+    // Cloudflare R2 Storage
+    r2: {
+        accountId: process.env.R2_ACCOUNT_ID,
+        accessKeyId: process.env.R2_ACCESS_KEY_ID,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+        bucketName: process.env.R2_BUCKET_NAME || "seniqu-assets",
+        publicUrl: process.env.R2_PUBLIC_URL,
+    },
+
     // Security
     security: {
         corsOrigins: process.env.CORS_ORIGINS?.split(",") || ["http://localhost:3000"],
@@ -98,6 +107,13 @@ export const validationSchema = Joi.object({
     // WalletConnect / Reown
     WALLETCONNECT_PROJECT_ID: Joi.string().optional(),
     WALLETCONNECT_SECRET_KEY: Joi.string().optional(),
+
+    // Cloudflare R2 Storage
+    R2_ACCOUNT_ID: Joi.string().optional(),
+    R2_ACCESS_KEY_ID: Joi.string().optional(),
+    R2_SECRET_ACCESS_KEY: Joi.string().optional(),
+    R2_BUCKET_NAME: Joi.string().default("seniqu-assets"),
+    R2_PUBLIC_URL: Joi.string().optional(),
 })
 
 export type AppConfiguration = ReturnType<typeof configuration>

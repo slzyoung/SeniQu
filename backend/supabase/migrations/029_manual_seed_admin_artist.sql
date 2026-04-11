@@ -14,10 +14,10 @@ INSERT INTO users (
     is_verified,
     is_active
 ) VALUES (
-    'artist_manual@seniqu.com',
+    'artist@seniqu.com',
     '$2a$12$tHK5XPtZmclw/rJ.B39H8.N0RyK3VjUEVhypcpo0LFZ2LYM9cpS0a',
-    'artist_manual',
-    'Seniqu Manual Artist',
+    'artist',
+    'Seniqu Artist',
     'artist',
     true,
     true
@@ -37,10 +37,10 @@ INSERT INTO users (
     is_verified,
     is_active
 ) VALUES (
-    'admin_manual@seniqu.com',
+    'admin@seniqu.com',
     '$2a$12$tHK5XPtZmclw/rJ.B39H8.N0RyK3VjUEVhypcpo0LFZ2LYM9cpS0a', 
-    'admin_manual',
-    'Seniqu Manual Admin',
+    'admin',
+    'Seniqu Admin',
     'admin',
     'ADMIN',
     true,

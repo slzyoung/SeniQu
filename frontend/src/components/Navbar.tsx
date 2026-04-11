@@ -34,10 +34,10 @@ export function Navbar() {
     { label: 'My Collections', icon: FolderHeart, path: ROUTES.USER_COLLECTIONS },
     { label: 'Profile', icon: User, path: ROUTES.USER_PROFILE },
   ] : [
-    { label: 'Collections', path: '#collections' },
-    { label: 'Artists', path: '#artists' },
-    { label: 'How It Works', path: '#how-it-works' },
-    { label: 'About', path: '#about' },
+    { label: 'About', path: '/#about' },
+    { label: 'Collections', path: '/#collections' },
+    { label: 'Artists', path: '/#artists' },
+    { label: 'How It Works', path: '/#how-it-works' },
   ];
 
   return (
@@ -59,10 +59,10 @@ export function Navbar() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
-            {!isAuthenticated && ['Collections', 'Artists', 'How It Works', 'About'].map((item) =>
+            {!isAuthenticated && ['About', 'Collections', 'Artists', 'How It Works'].map((item) =>
               <a
                 key={item}
-                href={`#${item.toLowerCase().replace(/\s+/g, '-')}`}
+                href={`/#${item.toLowerCase().replace(/\s+/g, '-')}`}
                 className="text-theme-muted hover:text-gold transition-colors text-sm tracking-wide font-medium relative group">
 
                 {item}

@@ -3,7 +3,7 @@
  * Handles user profile fetching, updates, and statistics
  */
 
-import { apiGet, apiPut, apiPost, apiDelete } from '../lib/api';
+import { apiGet, apiPut, apiPost, apiDelete, uploadFile } from '../lib/api';
 import { User, Artwork, Collection } from '../lib/types';
 import { z } from 'zod';
 import { sanitizeInput } from '../lib/security';
@@ -218,9 +218,8 @@ class UserService {
      * Upload avatar
      */
     async uploadAvatar(file: File): Promise<{ url: string }> {
-        const formData = new FormData();
-        formData.append('avatar', file);
-        return apiPost<{ url: string }>('/users/me/avatar', formData);
+        const result = await uploadFile(file, 'avatars');
+        return { url: result.url };
     }
 }
 

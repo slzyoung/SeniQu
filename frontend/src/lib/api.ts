@@ -256,14 +256,15 @@ export async function apiDelete<T>(
 // ============================================
 
 export async function uploadFile(
-    url: string,
     file: File,
+    folder: 'artworks' | 'avatars' | 'videos' | 'collections' | 'general' = 'general',
     onProgress?: (progress: number) => void
-): Promise<{ url: string }> {
+): Promise<{ key: string; url: string; size: number; contentType: string }> {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('folder', folder);
 
-    const response = await api.post(url, formData, {
+    const response = await api.post('/storage/upload', formData, {
         headers: {
             'Content-Type': 'multipart/form-data',
         },
@@ -275,7 +276,7 @@ export async function uploadFile(
         },
     });
 
-    return response.data;
+    return response.data?.data || response.data;
 }
 
 // ============================================

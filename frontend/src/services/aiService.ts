@@ -89,7 +89,7 @@ export const aiService = {
 
     detectGenre: async (file: File, onProgress?: (progress: number) => void): Promise<GenreDetectionResult> => {
         // Upload image first
-        const uploadResult = await uploadFile('/ai/upload', file, onProgress);
+        const uploadResult = await uploadFile(file, 'general', onProgress);
 
         // Then analyze
         return apiPost('/ai/detect-genre', { imageUrl: uploadResult.url });

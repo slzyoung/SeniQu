@@ -143,7 +143,7 @@ const privyConfig = {
             // 'phantom', // Removed to prevents auto-open on refresh (Handled manually)
             // 'solflare', // Removed to prevents auto-open on refresh (Handled manually)
             // 'metamask', // Removed to prevents auto-open on refresh (Handled manually)
-            'detected_solana_wallets',
+            // 'detected_solana_wallets', // Removed due to aggressive polling triggering Solflare on navigation
             'detected_ethereum_wallets',
         ] as any[],
         showWalletLoginFirst: false,

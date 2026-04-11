@@ -77,32 +77,7 @@ class ArtworkService {
         }
 
         // Normalize artwork data: handle various image formats from backend
-        const normalizedArtworks: Artwork[] = extractedArtworks.map((artwork: any) => {
-            // Parse images field - it may be a JSON string like "[]" from the DB
-            let parsedImages: any[] = [];
-            if (typeof artwork.images === 'string') {
-                try { parsedImages = JSON.parse(artwork.images); } catch { parsedImages = []; }
-            } else if (Array.isArray(artwork.images)) {
-                parsedImages = artwork.images;
-            }
-
-            // Build the primary image URL from available fields
-            const primaryUrl = artwork.primaryImageUrl || artwork.primary_image_url || artwork.imageUrl || artwork.image_url || '';
-
-            // If parsed images are empty but we have a primary URL, create the images array
-            const finalImages = (parsedImages && parsedImages.length > 0)
-                ? parsedImages
-                : primaryUrl
-                    ? [{ id: artwork.id, url: primaryUrl, isPrimary: true }]
-                    : [];
-
-            return {
-                ...artwork,
-                images: finalImages,
-                // Normalize artist data from backend JOIN format
-                artist: artwork.artist || { id: artwork.artistId || artwork.artist_id, displayName: 'Unknown Artist' },
-            };
-        });
+        const normalizedArtworks: Artwork[] = extractedArtworks.map(a => this.normalizeArtwork(a));
 
         console.debug(`[ArtworkService] Extracted ${normalizedArtworks.length} artworks, total: ${extractedTotal}`);
 
@@ -117,11 +92,47 @@ class ArtworkService {
         };
     }
 
-    /**
-     * Get artwork by ID
-     */
     async getArtworkById(id: string): Promise<Artwork> {
-        return apiGet<Artwork>(`/artworks/${id}`);
+        const response = await apiGet<any>(`/artworks/${id}`);
+        
+        // Unwrap backend interceptor envelope ({ success: true, data: T }) if present
+        const artworkData = response?.data && !Array.isArray(response.data) && response.data.id 
+            ? response.data 
+            : response;
+            
+        return this.normalizeArtwork(artworkData);
+    }
+
+    /**
+     * Helper to normalize backend artwork data to frontend format
+     */
+    private normalizeArtwork(artwork: any): Artwork {
+        if (!artwork) return artwork;
+
+        // Parse images field - it may be a JSON string like "[]" from the DB
+        let parsedImages: any[] = [];
+        if (typeof artwork.images === 'string') {
+            try { parsedImages = JSON.parse(artwork.images); } catch { parsedImages = []; }
+        } else if (Array.isArray(artwork.images)) {
+            parsedImages = artwork.images;
+        }
+
+        // Build the primary image URL from available fields
+        const primaryUrl = artwork.primaryImageUrl || artwork.primary_image_url || artwork.imageUrl || artwork.image_url || '';
+
+        // If parsed images are empty but we have a primary URL, create the images array
+        const finalImages = (parsedImages && parsedImages.length > 0)
+            ? parsedImages
+            : primaryUrl
+                ? [{ id: artwork.id, url: primaryUrl, isPrimary: true }]
+                : [];
+
+        return {
+            ...artwork,
+            images: finalImages,
+            // Normalize artist data from backend JOIN format
+            artist: artwork.artist || { id: artwork.artistId || artwork.artist_id, displayName: 'Unknown Artist', avatar: artwork.artist?.avatarUrl || artwork.artist?.avatar_url },
+        } as Artwork;
     }
 
     /**

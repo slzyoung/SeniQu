@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import { PageContainer } from '../../../components/common/DashboardLayout';
 import { Card, CardHeader, CardContent, Button, Input, Textarea, Select, Badge } from '../../../components/ui';
 import { useToast } from '../../../stores/useNotificationStore';
+import { uploadFile } from '../../../lib/api';
 import { useCreateArtwork } from '../../../hooks/useArtist';
 import { validateUploadFile, sanitizeString } from '../../../lib/sanitize';
 
@@ -91,14 +92,6 @@ export function UploadArtwork() {
         setPreviewUrl(URL.createObjectURL(file));
     };
 
-    const convertFileToBase64 = (file: File): Promise<string> => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = error => reject(error);
-        });
-    };
 
     const handleSubmit = async (saveAsDraft = false) => {
         if (!uploadedFile) {
@@ -111,9 +104,8 @@ export function UploadArtwork() {
         }
 
         try {
-            // Convert file to base64 Data URI for backend
-            // In production, upload to cloud storage first and then send URL
-            const base64Image = await convertFileToBase64(uploadedFile);
+            // Upload file to R2 CDN first
+            const uploadResult = await uploadFile(uploadedFile, 'artworks');
 
             const artworkData = {
                 title: sanitizeString(formData.title),
@@ -121,7 +113,7 @@ export function UploadArtwork() {
                 category: formData.genre || 'contemporary',
                 medium: formData.medium,
                 dimensions: formData.dimensions,
-                imageUrl: base64Image,  // Use base64 string instead of blob preview URL
+                imageUrl: uploadResult.url,  // CDN URL from R2
                 status: saveAsDraft ? 'DRAFT' : 'PUBLISHED',
             };
 

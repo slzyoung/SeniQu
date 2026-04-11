@@ -28,6 +28,7 @@ import { AnalyticsModule } from "./analytics/analytics.module"
 import { NotificationsModule } from "./notifications/notifications.module"
 import { ArtistModule } from "./artist/artist.module"
 import { WalletModule } from "./wallet/wallet.module"
+import { StorageModule } from "./storage/storage.module"
 
 @Module({
     imports: [
@@ -97,6 +98,7 @@ import { WalletModule } from "./wallet/wallet.module"
         NotificationsModule,
         ArtistModule,
         WalletModule,
+        StorageModule,
     ],
     controllers: [AppController, JwksController],
     providers: [
