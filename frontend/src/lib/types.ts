@@ -34,6 +34,7 @@ export interface SocialLinks {
     instagram?: string;
     website?: string;
     linkedin?: string;
+    telegram?: string;
 }
 
 // Auth Types

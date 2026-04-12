@@ -75,14 +75,31 @@ export class StorageService implements OnModuleInit {
     }
 
     /**
-     * Upload a file to R2
+     * Upload a file to R2 (or return Base64 for avatars)
      */
     async uploadFile(
         file: Express.Multer.File,
         folder = "general",
     ): Promise<UploadResult> {
-        this.ensureClientReady()
         this.validateFile(file)
+
+        // Bypass CDN for avatars and store directly as Base64 in database
+        if (folder === "avatars") {
+            const base64Data = file.buffer.toString('base64');
+            const dataUri = `data:${file.mimetype};base64,${base64Data}`;
+            const key = `avatars/${uuidv4()}`;
+            
+            this.logger.log(`Avatar processed as Base64 data URI (${this.formatSize(file.size)})`);
+            
+            return {
+                key,
+                url: dataUri,
+                size: file.size,
+                contentType: file.mimetype,
+            };
+        }
+
+        this.ensureClientReady()
 
         const ext = this.getExtension(file.originalname)
         const key = `${folder}/${uuidv4()}${ext}`

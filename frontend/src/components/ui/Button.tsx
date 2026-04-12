@@ -36,7 +36,7 @@ const sizeStyles: Record<ButtonSize, string> = {
     icon: 'p-2.5 rounded-xl aspect-square',
 };
 
-export function Button({
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({
     variant = 'primary',
     size = 'md',
     isLoading = false,
@@ -47,11 +47,12 @@ export function Button({
     children,
     className = '',
     ...props
-}: ButtonProps) {
+}, ref) => {
     const isDisabled = disabled || isLoading;
 
     return (
         <motion.button
+            ref={ref}
             whileHover={isDisabled ? {} : { scale: 1.02 }}
             whileTap={isDisabled ? {} : { scale: 0.98 }}
             disabled={isDisabled}
@@ -76,6 +77,8 @@ export function Button({
             {!isLoading && rightIcon}
         </motion.button>
     );
-}
+});
+
+Button.displayName = 'Button';
 
 export default Button;

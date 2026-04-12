@@ -11,6 +11,9 @@ export class UploadFileDto {
     @IsOptional()
     @IsIn(["artworks", "avatars", "videos", "collections", "general"])
     folder?: string
+
+    @IsOptional()
+    file?: any
 }
 
 export interface UploadResult {

@@ -3,7 +3,7 @@
  * Handles user profile fetching, updates, and statistics
  */
 
-import { apiGet, apiPut, apiPost, apiDelete, uploadFile } from '../lib/api';
+import { apiGet, apiPatch, apiPost, apiDelete, uploadFile } from '../lib/api';
 import { User, Artwork, Collection } from '../lib/types';
 import { z } from 'zod';
 import { sanitizeInput } from '../lib/security';
@@ -38,12 +38,12 @@ export const updateProfileSchema = z.object({
     username: z.string().min(3).max(20).regex(/^[a-z0-9_]+$/).optional(),
     displayName: z.string().min(2).max(50).optional().transform(val => val ? sanitizeInput(val) : val),
     bio: z.string().max(500).optional().transform(val => val ? sanitizeInput(val) : val),
-    avatarUrl: z.string().url().optional().or(z.literal('')),
+    avatarUrl: z.string().optional().or(z.literal('')),
     socialLinks: z.object({
-        twitter: z.string().url().optional().or(z.literal('')),
-        instagram: z.string().url().optional().or(z.literal('')),
-        website: z.string().url().optional().or(z.literal('')),
-        linkedin: z.string().url().optional().or(z.literal('')),
+        twitter: z.string().optional().or(z.literal('')),
+        instagram: z.string().optional().or(z.literal('')),
+        telegram: z.string().optional().or(z.literal('')),
+        linkedin: z.string().optional().or(z.literal('')),
     }).optional(),
     notificationPrefs: z.record(z.boolean()).optional(),
     isTwoFactorEnabled: z.boolean().optional(),
@@ -142,7 +142,7 @@ class UserService {
      */
     async updateProfile(data: UpdateProfileData): Promise<User> {
         const validData = updateProfileSchema.parse(data);
-        const user = await apiPut<any>('/users/me', validData);
+        const user = await apiPatch<any>('/users/me', validData);
         return this.mapUser(user);
     }
 

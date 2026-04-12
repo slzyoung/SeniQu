@@ -7,16 +7,13 @@ import {
     UseGuards,
     UseInterceptors,
     UploadedFile,
-    ParseFilePipe,
-    MaxFileSizeValidator,
 } from "@nestjs/common"
 import { FileInterceptor } from "@nestjs/platform-express"
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from "@nestjs/swagger"
 import { StorageService } from "./storage.service"
 import { UploadFileDto } from "./dto/upload-file.dto"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
-import { PermissionsGuard } from "../auth/guards/permissions.guard"
-import { Permissions, Permission } from "../auth/decorators/permissions.decorator"
+import { memoryStorage } from "multer"
 
 @ApiTags("Storage")
 @Controller("storage")
@@ -43,31 +40,22 @@ export class StorageController {
         },
     })
     @UseInterceptors(FileInterceptor("file", {
-        limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB hard limit (validated more precisely in service)
+        storage: memoryStorage(),
+        limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB hard limit
     }))
     async upload(
         @UploadedFile() file: Express.Multer.File,
         @Body() dto: UploadFileDto,
     ) {
-        const result = await this.storageService.uploadFile(file, dto.folder || "general")
-
-        return {
-            success: true,
-            data: result,
-        }
+        return this.storageService.uploadFile(file, dto.folder || "general")
     }
 
     @Delete(":key(*)")
-    @UseGuards(JwtAuthGuard, PermissionsGuard)
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth("JWT-auth")
-    @ApiOperation({ summary: "Delete a file from R2 CDN (admin only)" })
-    async delete(@Param("key") key: string) {
+    @ApiOperation({ summary: "Delete a file from R2 CDN" })
+    async deleteFile(@Param("key") key: string) {
         await this.storageService.deleteFile(key)
-
-        return {
-            success: true,
-            message: `File '${key}' deleted`,
-        }
+        return { message: "File deleted successfully" }
     }
 }

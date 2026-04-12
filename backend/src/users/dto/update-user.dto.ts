@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum } from "class-validator"
+import { IsString, IsOptional, IsEnum, IsObject } from "class-validator"
 import { ApiPropertyOptional } from "@nestjs/swagger"
 
 export class UpdateUserDto {
@@ -25,10 +25,12 @@ export class UpdateUserDto {
     @ApiPropertyOptional()
     @IsString()
     @IsOptional()
-    @ApiPropertyOptional()
-    @IsString()
-    @IsOptional()
     avatarUrl?: string
+
+    @ApiPropertyOptional()
+    @IsObject()
+    @IsOptional()
+    socialLinks?: Record<string, string>
 
     @ApiPropertyOptional()
     @IsOptional()

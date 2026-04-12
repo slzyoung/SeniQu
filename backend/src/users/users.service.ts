@@ -10,6 +10,8 @@ export interface User {
     password?: string
     username?: string
     displayName?: string
+    bio?: string
+    avatar?: string
     userType: string
     adminRole?: string
     adminLevel?: number
@@ -17,6 +19,7 @@ export interface User {
     googleId?: string
     // REMOVED LEGACY COLUMNS: walletAddress, embeddedWalletAddress
     wallets?: { chainType: string; address: string; verifiedAt: Date; isEmbedded: boolean }[]
+    socialLinks?: Record<string, string>
     notificationPrefs?: Record<string, boolean>
     isTwoFactorEnabled: boolean
     loginAlertsEnabled: boolean
@@ -121,6 +124,19 @@ export class UsersService {
             }
         }
 
+        // 3. Fetch social links
+        const { data: socialLinksData } = await client
+            .from("user_social_links")
+            .select("platform, url")
+            .eq("user_id", id);
+            
+        if (socialLinksData && socialLinksData.length > 0) {
+            user.socialLinks = {};
+            socialLinksData.forEach(link => {
+                user.socialLinks![link.platform] = link.url;
+            });
+        }
+
         return user;
     }
 
@@ -210,8 +226,29 @@ export class UsersService {
         if (error) {
             throw new Error(error.message)
         }
+        
+        // Update social links if provided
+        if (dto.socialLinks) {
+            // First clear old links
+            await client.from("user_social_links").delete().eq("user_id", id);
+            
+            // Then insert new ones
+            const linksToInsert = Object.entries(dto.socialLinks)
+                .filter(([_, url]) => url && url.trim() !== "")
+                .map(([platform, url]) => ({
+                    user_id: id,
+                    platform,
+                    url
+                }));
+                
+            if (linksToInsert.length > 0) {
+                await client.from("user_social_links").insert(linksToInsert);
+            }
+        }
 
-        return this.mapToUser(data)
+        // Re-fetch user to include newly attached nested data like social links
+        const updatedUser = await this.findById(id);
+        return updatedUser || this.mapToUser(data);
     }
 
     async updateGoogleId(userId: string, googleId: string): Promise<void> {
@@ -280,6 +317,8 @@ export class UsersService {
             password: data.password_hash,
             username: data.username,
             displayName: data.display_name,
+            bio: data.bio,
+            avatar: data.avatar_url,
             userType: this.mapRoleToUserType(data.role),
             adminRole: data.admin_role,
             adminLevel: data.admin_level,
