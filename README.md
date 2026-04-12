@@ -103,8 +103,8 @@ SeniQu handles high-value cultural assets with enterprise-grade security:
 
 ```bash
 # Clone the repository
-git clone https://github.com/siabang35/seniquwebapp.git
-cd seniquwebapp
+git clone https://github.com/Salsa28/SeniQu
+cd SeniQu
 
 # Install root dependencies
 npm install
