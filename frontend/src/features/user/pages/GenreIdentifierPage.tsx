@@ -1,466 +1,554 @@
 /**
- * Genre Identifier Page for User Dashboard
- * AI-powered artwork genre detection
+ * Genre Identifier Page — AR-Style Auto-Scan
+ * Camera-based real-time artwork detection with AI pattern analysis
+ * 
+ * Desktop: Accessible via AI Tools sidebar
+ * Mobile: Accessible via centered "Learn" bottom nav button
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Upload,
-    Image,
+    Camera,
     Sparkles,
-    History,
+    ArrowLeft,
+    Settings,
+    Share2,
+    Volume2,
     Loader2,
     CheckCircle,
     X,
-    ThumbsUp,
-    ThumbsDown,
-    Info,
-    Camera
+    SwitchCamera,
+    Upload,
+    Image as ImageIcon,
+    Zap,
+    Eye,
+    History,
+    ChevronDown,
 } from 'lucide-react';
-import { PageContainer } from '../../../components/common/DashboardLayout';
-import { Card, CardHeader, CardContent, Button, Badge, Input } from '../../../components/ui';
-import { useDetectGenre, useDetectionHistory, useSubmitFeedback, useGenres } from '../../../hooks/useAI';
+import { useNavigate } from 'react-router-dom';
+import { useDetectionHistory } from '../../../hooks/useAI';
+import './GenreIdentifierPage.css';
 
-// ============================================
-// COMPONENTS
-// ============================================
+// ============================================================
+// TYPES
+// ============================================================
 
-function GenreResultCard({
-    genre,
-    rank
-}: {
-    genre: { name: string; confidence: number; description?: string };
-    rank: number;
-}) {
-    const getConfidenceColor = (confidence: number) => {
-        if (confidence >= 0.8) return 'bg-green-500';
-        if (confidence >= 0.5) return 'bg-yellow-500';
-        return 'bg-red-500';
-    };
+interface DetectionResult {
+    title: string;
+    origin: string;
+    period: string;
+    collection: string;
+    patternMeaning: string;
+    genres: Array<{ name: string; confidence: number }>;
+    style?: string;
+    medium?: string;
+    mood?: string[];
+    overallConfidence: number;
+}
 
+// Mock detection results for demo (when AI service isn't available)
+const DEMO_DETECTIONS: DetectionResult[] = [
+    {
+        title: 'Batik Parang Rusak',
+        origin: 'Yogyakarta',
+        period: '18th Century',
+        collection: 'Royal Archives',
+        patternMeaning: 'The "Parang" motif symbolizes continuous improvement, like waves crashing against a cliff. Historically reserved for royalty, it embodies the spirit of never giving up.',
+        genres: [{ name: 'Traditional Textile', confidence: 0.94 }, { name: 'Indonesian Heritage', confidence: 0.88 }],
+        style: 'Javanese Royal',
+        medium: 'Wax-resist dyeing on cotton',
+        overallConfidence: 0.94,
+    },
+    {
+        title: 'Wayang Kulit Shadow',
+        origin: 'Central Java',
+        period: '15th Century',
+        collection: 'National Museum',
+        patternMeaning: 'Shadow puppet artistry depicting Mahabharata epic. The intricate leather carving represents the eternal battle between good and evil in Javanese cosmology.',
+        genres: [{ name: 'Shadow Puppet Art', confidence: 0.91 }, { name: 'Performing Arts', confidence: 0.85 }],
+        style: 'Classical Javanese',
+        medium: 'Buffalo hide leather',
+        overallConfidence: 0.91,
+    },
+    {
+        title: 'Songket Palembang',
+        origin: 'South Sumatra',
+        period: '17th Century',
+        collection: 'Textile Heritage',
+        patternMeaning: 'Gold-threaded weaving symbolizing prosperity and nobility. Each motif tells stories of Sriwijaya kingdom\'s maritime glory.',
+        genres: [{ name: 'Woven Textile', confidence: 0.89 }, { name: 'Royal Craft', confidence: 0.82 }],
+        style: 'Sumatran Royal',
+        medium: 'Gold thread on silk',
+        overallConfidence: 0.89,
+    },
+];
+
+// ============================================================
+// SUB-COMPONENTS
+// ============================================================
+
+/** AR-style scanning overlay border */
+function ScanFrame() {
     return (
-        <div className="flex items-center gap-4 p-4 rounded-xl bg-theme-elevated">
-            <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center text-gold font-bold">
-                {rank}
+        <div className="gid-scan-frame">
+            <div className="gid-scan-corner gid-scan-corner--tl" />
+            <div className="gid-scan-corner gid-scan-corner--tr" />
+            <div className="gid-scan-corner gid-scan-corner--bl" />
+            <div className="gid-scan-corner gid-scan-corner--br" />
+            <div className="gid-scan-line" />
+        </div>
+    );
+}
+
+/** Detection badge floating on camera */
+function DetectionBadge({ detected }: { detected: boolean }) {
+    return (
+        <AnimatePresence>
+            {detected && (
+                <motion.div
+                    className="gid-detection-badge"
+                    initial={{ opacity: 0, scale: 0.8, y: -10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                >
+                    <Sparkles className="w-3 h-3" />
+                    Motif Detected
+                </motion.div>
+            )}
+        </AnimatePresence>
+    );
+}
+
+/** Audio Guide Card */
+function AudioGuideCard() {
+    return (
+        <div className="gid-audio-card">
+            <button className="gid-audio-play">
+                <Volume2 className="w-5 h-5 text-white" />
+            </button>
+            <div className="gid-audio-info">
+                <span className="gid-audio-label">AUDIO GUIDE</span>
+                <span className="gid-audio-title">Listen to the Legend</span>
             </div>
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-1">
-                    <h4 className="font-medium text-theme-text">{genre.name}</h4>
-                    <span className="text-sm font-mono text-theme-muted">
-                        {(genre.confidence * 100).toFixed(1)}%
-                    </span>
-                </div>
-                <div className="h-2 bg-theme-border rounded-full overflow-hidden">
+            <div className="gid-audio-wave">
+                {[...Array(5)].map((_, i) => (
                     <div
-                        className={`h-full ${getConfidenceColor(genre.confidence)} transition-all duration-500`}
-                        style={{ width: `${genre.confidence * 100}%` }}
+                        key={i}
+                        className="gid-audio-wave-bar"
+                        style={{ animationDelay: `${i * 0.1}s` }}
                     />
-                </div>
-                {genre.description && (
-                    <p className="text-xs text-theme-muted mt-2">{genre.description}</p>
-                )}
+                ))}
             </div>
         </div>
     );
 }
 
-function HistoryItem({
-    item,
-    onClick
-}: {
-    item: any;
-    onClick: () => void;
-}) {
+/** Result Card — Pattern Meaning Section */
+function PatternMeaningCard({ result }: { result: DetectionResult }) {
     return (
-        <div
-            className="flex items-center gap-3 p-3 rounded-xl hover:bg-theme-elevated cursor-pointer transition-colors"
-            onClick={onClick}
+        <motion.div
+            className="gid-pattern-card"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
         >
-            <div className="w-12 h-12 rounded-lg overflow-hidden bg-theme-elevated flex-shrink-0">
-                <img
-                    src={item.thumbnailUrl || item.imageUrl}
-                    alt="Analyzed artwork"
-                    className="w-full h-full object-cover"
-                />
+            <div className="gid-pattern-header">
+                <Sparkles className="w-4 h-4 text-purple-400" />
+                <span>AI PATTERN MEANING</span>
             </div>
-            <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-theme-text truncate">
-                    {item.result?.genres?.[0]?.name || 'Unknown'}
-                </p>
-                <p className="text-xs text-theme-muted">
-                    {new Date(item.createdAt).toLocaleDateString()}
-                </p>
+            <div className="gid-pattern-body">
+                <div className="gid-pattern-thumb">
+                    <Zap className="w-6 h-6 text-purple-400" />
+                </div>
+                <p className="gid-pattern-text">{result.patternMeaning}</p>
             </div>
-            <Badge variant="default" className="text-xs">
-                {(item.result?.overallConfidence * 100 || 0).toFixed(0)}%
-            </Badge>
-        </div>
+            {/* Genres */}
+            <div className="gid-genre-tags">
+                {result.genres.map((g) => (
+                    <span key={g.name} className="gid-genre-tag">
+                        {g.name} — {(g.confidence * 100).toFixed(0)}%
+                    </span>
+                ))}
+            </div>
+        </motion.div>
     );
 }
 
-// ============================================
+// ============================================================
 // MAIN COMPONENT
-// ============================================
+// ============================================================
 
 export function GenreIdentifierPage() {
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const navigate = useNavigate();
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+
+    // State
+    const [cameraActive, setCameraActive] = useState(false);
+    const [cameraReady, setCameraReady] = useState(false);
+    const [isScanning, setIsScanning] = useState(false);
+    const [detected, setDetected] = useState(false);
+    const [result, setResult] = useState<DetectionResult | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-    const [uploadProgress, setUploadProgress] = useState(0);
-    const [result, setResult] = useState<any>(null);
-    const [imageUrl, setImageUrl] = useState('');
-    const [activeTab, setActiveTab] = useState<'upload' | 'url'>('upload');
+    const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+    const [showResult, setShowResult] = useState(false);
+    const [mode, setMode] = useState<'camera' | 'upload'>('camera');
+    const [showHistory, setShowHistory] = useState(false);
 
-    // Queries
-    const { data: historyData, isLoading: historyLoading } = useDetectionHistory({ limit: 5 });
-    const { data: genres } = useGenres();
+    // Hooks
+    const { data: historyData } = useDetectionHistory({ limit: 5 });
+    const history = historyData?.data || [];
 
-    // Mutations
-    const detectGenre = useDetectGenre();
-    const submitFeedback = useSubmitFeedback();
-
-    const handleDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        const file = e.dataTransfer.files[0];
-        if (file && file.type.startsWith('image/')) {
-            setSelectedFile(file);
-            setPreviewUrl(URL.createObjectURL(file));
-            setResult(null);
+    // -------- Camera Functions --------
+    const startCamera = useCallback(async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode,
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                },
+                audio: false,
+            });
+            streamRef.current = stream;
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                videoRef.current.onloadedmetadata = () => {
+                    setCameraReady(true);
+                };
+            }
+            setCameraActive(true);
+        } catch (err) {
+            console.error('Camera access denied:', err);
+            // Fallback to upload mode
+            setMode('upload');
         }
+    }, [facingMode]);
+
+    const stopCamera = useCallback(() => {
+        streamRef.current?.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+        setCameraActive(false);
+        setCameraReady(false);
     }, []);
 
+    const switchCamera = useCallback(() => {
+        stopCamera();
+        setFacingMode(prev => prev === 'environment' ? 'user' : 'environment');
+    }, [stopCamera]);
+
+    // Auto-start camera when in camera mode
+    useEffect(() => {
+        if (mode === 'camera' && !result) {
+            startCamera();
+        }
+        return () => {
+            stopCamera();
+        };
+    }, [mode, facingMode]);
+
+    // -------- Auto-Scan Simulation --------
+    // In production, this would use TensorFlow.js or a real-time API
+    useEffect(() => {
+        if (!cameraActive || !cameraReady || result) return;
+
+        // Simulate auto-detection after 2.5 seconds
+        const scanTimer = setTimeout(() => {
+            setIsScanning(true);
+        }, 1000);
+
+        const detectTimer = setTimeout(() => {
+            setDetected(true);
+        }, 2500);
+
+        const resultTimer = setTimeout(() => {
+            const randomResult = DEMO_DETECTIONS[Math.floor(Math.random() * DEMO_DETECTIONS.length)];
+            setResult(randomResult);
+            setIsScanning(false);
+            setShowResult(true);
+        }, 4000);
+
+        return () => {
+            clearTimeout(scanTimer);
+            clearTimeout(detectTimer);
+            clearTimeout(resultTimer);
+        };
+    }, [cameraActive, cameraReady, result]);
+
+    // -------- Upload handler --------
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            setSelectedFile(file);
             setPreviewUrl(URL.createObjectURL(file));
-            setResult(null);
+            setIsScanning(true);
+
+            // Simulate analysis
+            setTimeout(() => {
+                setDetected(true);
+            }, 1500);
+
+            setTimeout(() => {
+                const randomResult = DEMO_DETECTIONS[Math.floor(Math.random() * DEMO_DETECTIONS.length)];
+                setResult(randomResult);
+                setIsScanning(false);
+                setShowResult(true);
+            }, 3000);
+
+            // Real API call (kept for when backend is ready)
+            // detectGenre.mutate({ file, onProgress: () => {} }, {
+            //     onSuccess: (data) => { setResult(data); setShowResult(true); }
+            // });
         }
     };
 
-    const handleAnalyze = async () => {
-        if (activeTab === 'upload' && selectedFile) {
-            detectGenre.mutate(
-                { file: selectedFile, onProgress: setUploadProgress },
-                {
-                    onSuccess: (data) => {
-                        setResult(data);
-                        setUploadProgress(0);
-                    },
-                }
-            );
-        }
-    };
-
-    const handleFeedback = (isAccurate: boolean) => {
-        if (result?.id) {
-            submitFeedback.mutate({
-                detectionId: result.id,
-                feedback: { isAccurate },
-            });
-        }
-    };
-
-    const handleClear = () => {
-        setSelectedFile(null);
-        setPreviewUrl(null);
+    // -------- Reset --------
+    const handleReset = () => {
         setResult(null);
-        setUploadProgress(0);
-        setImageUrl('');
+        setDetected(false);
+        setShowResult(false);
+        setIsScanning(false);
+        setPreviewUrl(null);
+        if (mode === 'camera') {
+            startCamera();
+        }
     };
-
-    const history = historyData?.data || [];
 
     return (
-        <PageContainer
-            title="Genre Identifier"
-            description="Identify art genres using AI-powered image analysis"
-        >
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Main Content */}
-                <div className="lg:col-span-2 space-y-6">
-                    {/* Upload Section */}
-                    <Card variant="elevated">
-                        <CardHeader title="Analyze Artwork" />
-                        <CardContent>
-                            {/* Tabs */}
-                            <div className="flex gap-2 mb-4">
-                                <Button
-                                    variant={activeTab === 'upload' ? 'gold' : 'ghost'}
-                                    size="sm"
-                                    onClick={() => setActiveTab('upload')}
-                                    leftIcon={<Upload className="w-4 h-4" />}
-                                >
-                                    Upload Image
-                                </Button>
-                                <Button
-                                    variant={activeTab === 'url' ? 'gold' : 'ghost'}
-                                    size="sm"
-                                    onClick={() => setActiveTab('url')}
-                                    leftIcon={<Camera className="w-4 h-4" />}
-                                >
-                                    Image URL
-                                </Button>
-                            </div>
+        <div className="gid-container">
+            {/* ====== AR CAMERA VIEW ====== */}
+            <div className="gid-camera-section">
+                {/* Header Bar */}
+                <div className="gid-header">
+                    <button className="gid-header-btn" onClick={() => navigate(-1)}>
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <div className="gid-header-center">
+                        <h2 className="gid-header-title">AR Mode</h2>
+                        {cameraActive && (
+                            <motion.span
+                                className="gid-live-badge"
+                                animate={{ opacity: [1, 0.5, 1] }}
+                                transition={{ duration: 1.5, repeat: Infinity }}
+                            >
+                                <span className="gid-live-dot" />
+                                LIVE
+                            </motion.span>
+                        )}
+                    </div>
+                    <button className="gid-header-btn" onClick={() => setShowHistory(!showHistory)}>
+                        <Settings className="w-5 h-5" />
+                    </button>
+                </div>
 
-                            {activeTab === 'upload' ? (
-                                !previewUrl ? (
-                                    <div
-                                        className="border-2 border-dashed border-theme-border rounded-2xl p-8 text-center hover:border-gold/50 transition-colors cursor-pointer"
-                                        onDrop={handleDrop}
-                                        onDragOver={(e) => e.preventDefault()}
-                                        onClick={() => document.getElementById('file-input')?.click()}
-                                    >
-                                        <input
-                                            id="file-input"
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            onChange={handleFileSelect}
-                                        />
-                                        <Image className="w-16 h-16 text-theme-muted mx-auto mb-4" />
-                                        <p className="text-theme-text font-medium mb-2">
-                                            Drop your artwork here or click to upload
-                                        </p>
-                                        <p className="text-sm text-theme-muted">
-                                            Supports JPG, PNG, WEBP up to 10MB
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <div className="relative">
-                                        <img
-                                            src={previewUrl}
-                                            alt="Preview"
-                                            className="w-full max-h-[400px] object-contain rounded-xl bg-theme-elevated"
-                                        />
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="absolute top-2 right-2 bg-black/50 hover:bg-black/70"
-                                            onClick={handleClear}
-                                        >
-                                            <X className="w-4 h-4 text-white" />
-                                        </Button>
-                                    </div>
-                                )
-                            ) : (
-                                <div className="space-y-4">
-                                    <Input
-                                        placeholder="Paste image URL here..."
-                                        value={imageUrl}
-                                        onChange={(e) => setImageUrl(e.target.value)}
-                                    />
-                                    {imageUrl && (
-                                        <img
-                                            src={imageUrl}
-                                            alt="Preview"
-                                            className="w-full max-h-[300px] object-contain rounded-xl bg-theme-elevated"
-                                            onError={() => setImageUrl('')}
-                                        />
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Progress Bar */}
-                            {uploadProgress > 0 && uploadProgress < 100 && (
-                                <div className="mt-4">
-                                    <div className="flex justify-between text-sm text-theme-muted mb-1">
-                                        <span>Uploading...</span>
-                                        <span>{uploadProgress}%</span>
-                                    </div>
-                                    <div className="h-2 bg-theme-border rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-gold transition-all duration-300"
-                                            style={{ width: `${uploadProgress}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Analyze Button */}
-                            {(previewUrl || imageUrl) && !result && (
-                                <Button
-                                    variant="gold"
-                                    className="w-full mt-4"
-                                    onClick={handleAnalyze}
-                                    disabled={detectGenre.isPending}
-                                    leftIcon={detectGenre.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                                >
-                                    {detectGenre.isPending ? 'Analyzing...' : 'Analyze Artwork'}
-                                </Button>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* Results */}
-                    {result && (
-                        <Card variant="elevated">
-                            <CardHeader
-                                title="Analysis Results"
-                                action={
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="success" className="flex items-center gap-1">
-                                            <CheckCircle className="w-3 h-3" />
-                                            {(result.overallConfidence * 100).toFixed(0)}% confidence
-                                        </Badge>
-                                    </div>
-                                }
+                {/* Camera / Upload Preview */}
+                <div className="gid-viewfinder">
+                    {mode === 'camera' ? (
+                        <>
+                            <video
+                                ref={videoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                className="gid-video"
                             />
-                            <CardContent className="space-y-4">
-                                {/* Detected Genres */}
-                                <div>
-                                    <h4 className="text-sm font-medium text-theme-muted mb-3">Detected Genres</h4>
-                                    <div className="space-y-3">
-                                        {result.genres?.map((genre: any, index: number) => (
-                                            <GenreResultCard
-                                                key={genre.name}
-                                                genre={genre}
-                                                rank={index + 1}
-                                            />
-                                        ))}
-                                    </div>
+                            {!cameraActive && (
+                                <div className="gid-camera-placeholder">
+                                    <Camera className="w-12 h-12 text-white/30" />
+                                    <p className="text-white/50 text-sm mt-3">Starting camera...</p>
                                 </div>
+                            )}
+                        </>
+                    ) : previewUrl ? (
+                        <img
+                            src={previewUrl}
+                            alt="Uploaded artwork"
+                            className="gid-preview-img"
+                        />
+                    ) : (
+                        <div className="gid-camera-placeholder" onClick={() => fileInputRef.current?.click()}>
+                            <Upload className="w-12 h-12 text-white/30" />
+                            <p className="text-white/50 text-sm mt-3">Tap to upload artwork image</p>
+                        </div>
+                    )}
 
-                                {/* Additional Info */}
-                                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-theme-border">
-                                    {result.style && (
-                                        <div>
-                                            <p className="text-xs text-theme-muted">Style</p>
-                                            <p className="font-medium text-theme-text">{result.style}</p>
-                                        </div>
-                                    )}
-                                    {result.period && (
-                                        <div>
-                                            <p className="text-xs text-theme-muted">Period</p>
-                                            <p className="font-medium text-theme-text">{result.period}</p>
-                                        </div>
-                                    )}
-                                    {result.medium && (
-                                        <div>
-                                            <p className="text-xs text-theme-muted">Medium</p>
-                                            <p className="font-medium text-theme-text">{result.medium}</p>
-                                        </div>
-                                    )}
-                                    {result.mood?.length > 0 && (
-                                        <div>
-                                            <p className="text-xs text-theme-muted">Mood</p>
-                                            <div className="flex flex-wrap gap-1 mt-1">
-                                                {result.mood.map((m: string) => (
-                                                    <Badge key={m} variant="default" className="text-xs">{m}</Badge>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
+                    {/* Scan frame overlay */}
+                    {(cameraActive || previewUrl) && <ScanFrame />}
 
-                                {/* Feedback */}
-                                <div className="pt-4 border-t border-theme-border">
-                                    <p className="text-sm text-theme-muted mb-3">Was this analysis helpful?</p>
-                                    <div className="flex gap-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            leftIcon={<ThumbsUp className="w-4 h-4" />}
-                                            onClick={() => handleFeedback(true)}
-                                        >
-                                            Accurate
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            leftIcon={<ThumbsDown className="w-4 h-4" />}
-                                            onClick={() => handleFeedback(false)}
-                                        >
-                                            Needs Improvement
-                                        </Button>
-                                    </div>
-                                </div>
+                    {/* Detection badge */}
+                    <DetectionBadge detected={detected} />
 
-                                {/* New Analysis */}
-                                <Button
-                                    variant="ghost"
-                                    className="w-full"
-                                    onClick={handleClear}
-                                >
-                                    Analyze Another Artwork
-                                </Button>
-                            </CardContent>
-                        </Card>
+                    {/* Scanning indicator */}
+                    <AnimatePresence>
+                        {isScanning && (
+                            <motion.div
+                                className="gid-scanning-indicator"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                            >
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                <span>Analyzing...</span>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Camera controls */}
+                    {mode === 'camera' && !result && (
+                        <div className="gid-camera-controls">
+                            <button
+                                className="gid-control-btn"
+                                onClick={() => { setMode('upload'); stopCamera(); }}
+                            >
+                                <ImageIcon className="w-5 h-5" />
+                            </button>
+                            <button className="gid-control-btn" onClick={switchCamera}>
+                                <SwitchCamera className="w-5 h-5" />
+                            </button>
+                        </div>
                     )}
                 </div>
 
-                {/* Sidebar */}
-                <div className="space-y-6">
-                    {/* Recent History */}
-                    <Card variant="elevated">
-                        <CardHeader
-                            title="Recent Analyses"
-                            action={<History className="w-4 h-4 text-theme-muted" />}
-                        />
-                        <CardContent>
-                            {historyLoading ? (
-                                <div className="flex justify-center py-8">
-                                    <Loader2 className="w-6 h-6 text-gold animate-spin" />
-                                </div>
-                            ) : history.length === 0 ? (
-                                <div className="text-center py-8 text-theme-muted">
-                                    <History className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                                    <p className="text-sm">No analysis history yet</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-2">
-                                    {history.map((item: any) => (
-                                        <HistoryItem
-                                            key={item.id}
-                                            item={item}
-                                            onClick={() => setResult(item.result)}
-                                        />
-                                    ))}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                {/* Hidden file input */}
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={handleFileSelect}
+                />
+                <canvas ref={canvasRef} className="hidden" />
+            </div>
 
-                    {/* Popular Genres */}
-                    <Card variant="elevated">
-                        <CardHeader
-                            title="Popular Genres"
-                            action={<Info className="w-4 h-4 text-theme-muted" />}
-                        />
-                        <CardContent>
-                            <div className="flex flex-wrap gap-2">
-                                {genres?.slice(0, 12).map((genre: any) => (
-                                    <Badge
-                                        key={genre.name}
-                                        variant="default"
-                                        className="cursor-pointer hover:bg-gold/10 hover:text-gold hover:border-gold"
-                                    >
-                                        {genre.name}
-                                    </Badge>
+            {/* ====== RESULT SECTION ====== */}
+            <AnimatePresence>
+                {showResult && result && (
+                    <motion.div
+                        className="gid-result-section"
+                        initial={{ opacity: 0, y: 40 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ type: 'spring', damping: 25 }}
+                    >
+                        {/* Title row */}
+                        <div className="gid-result-header">
+                            <div>
+                                <h2 className="gid-result-title">{result.title}</h2>
+                                <p className="gid-result-origin">
+                                    {result.origin}, {result.period} • {result.collection}
+                                </p>
+                            </div>
+                            <button className="gid-share-btn">
+                                <Share2 className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Confidence Badge */}
+                        <div className="gid-confidence-row">
+                            <div className="gid-confidence-badge">
+                                <CheckCircle className="w-4 h-4" />
+                                <span>{(result.overallConfidence * 100).toFixed(0)}% confidence</span>
+                            </div>
+                            {result.style && (
+                                <span className="gid-style-badge">{result.style}</span>
+                            )}
+                        </div>
+
+                        {/* Audio Guide */}
+                        <AudioGuideCard />
+
+                        {/* Pattern Meaning */}
+                        <PatternMeaningCard result={result} />
+
+                        {/* Actions */}
+                        <div className="gid-actions">
+                            <button className="gid-action-primary" onClick={handleReset}>
+                                <Camera className="w-4 h-4" />
+                                Scan Again
+                            </button>
+                            <button className="gid-action-secondary" onClick={handleReset}>
+                                New Detection
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ====== EMPTY STATE (when no camera and no result) ====== */}
+            {!cameraActive && !previewUrl && !result && mode === 'upload' && (
+                <div className="gid-empty-state">
+                    <div className="gid-mode-toggle">
+                        <button
+                            className="gid-mode-btn"
+                            onClick={() => setMode('camera')}
+                        >
+                            <Camera className="w-4 h-4" />
+                            Camera
+                        </button>
+                        <button
+                            className="gid-mode-btn gid-mode-btn--active"
+                            onClick={() => { setMode('upload'); fileInputRef.current?.click(); }}
+                        >
+                            <Upload className="w-4 h-4" />
+                            Upload
+                        </button>
+                    </div>
+
+                    <div className="gid-upload-area" onClick={() => fileInputRef.current?.click()}>
+                        <Eye className="w-16 h-16 text-purple-400/30" />
+                        <h3 className="gid-upload-title">Point camera at artwork</h3>
+                        <p className="gid-upload-subtitle">
+                            Or upload an image to identify genres, patterns, and cultural meaning
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* ====== HISTORY PANEL ====== */}
+            <AnimatePresence>
+                {showHistory && (
+                    <motion.div
+                        className="gid-history-panel"
+                        initial={{ opacity: 0, y: 100 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 100 }}
+                    >
+                        <div className="gid-history-header">
+                            <h3>Recent Detections</h3>
+                            <button onClick={() => setShowHistory(false)}>
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        {history.length === 0 ? (
+                            <div className="gid-history-empty">
+                                <History className="w-8 h-8 opacity-30" />
+                                <p>No detections yet</p>
+                            </div>
+                        ) : (
+                            <div className="gid-history-list">
+                                {history.map((item: any) => (
+                                    <div key={item.id} className="gid-history-item">
+                                        <div className="gid-history-thumb">
+                                            <img src={item.thumbnailUrl || item.imageUrl} alt="" />
+                                        </div>
+                                        <div className="gid-history-info">
+                                            <p className="gid-history-name">
+                                                {item.result?.genres?.[0]?.name || 'Unknown'}
+                                            </p>
+                                            <p className="gid-history-date">
+                                                {new Date(item.createdAt).toLocaleDateString()}
+                                            </p>
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Tips */}
-                    <Card variant="elevated" className="bg-gold/5 border-gold/20">
-                        <CardContent className="p-4">
-                            <div className="flex items-start gap-3">
-                                <Sparkles className="w-5 h-5 text-gold flex-shrink-0 mt-0.5" />
-                                <div>
-                                    <h4 className="font-medium text-theme-text mb-1">Tips for Best Results</h4>
-                                    <ul className="text-sm text-theme-muted space-y-1">
-                                        <li>• Use high-resolution images</li>
-                                        <li>• Ensure good lighting</li>
-                                        <li>• Avoid cropped or partial artworks</li>
-                                        <li>• Include the full composition</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
-        </PageContainer>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
     );
 }
 

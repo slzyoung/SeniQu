@@ -27,6 +27,12 @@ import { ChevronLeft } from 'lucide-react';
 import { useUIStore } from '../../stores/useUIStore';
 import type { SidebarSection, SidebarItem } from './Sidebar';
 
+/**
+ * Paths already shown in MobileBottomNav.
+ * We hide these from the mobile sidebar to avoid duplication.
+ */
+
+
 /* ──────────────────────────────────── Props ──────────────────────────────── */
 
 interface MobileSidebarProps {

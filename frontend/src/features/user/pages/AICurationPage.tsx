@@ -1,170 +1,149 @@
 /**
- * AI Curation Page for User Dashboard
- * Personalized artwork recommendations
+ * AI Curation Page — Digital Curator Experience
+ * Premium immersive artwork curation with provenance,
+ * audio guide, and related curations
  */
 
-import { useState } from 'react';
-import {
-    Sparkles,
-    Eye,
-    Bookmark,
-    RefreshCw,
-    Loader2,
-    SlidersHorizontal,
-    Palette,
-    DollarSign,
-    Grid3X3,
-    List
-} from 'lucide-react';
-import { PageContainer } from '../../../components/common/DashboardLayout';
-import { Card, CardHeader, CardContent, Button, Badge } from '../../../components/ui';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+    ArrowLeft,
+    Search,
+    Heart,
+    Play,
+    Image as ImageIcon,
+    Sparkles,
+    Loader2,
+    Palette,
+    RefreshCw,
+    Eye,
+} from 'lucide-react';
 import { usePersonalizedRecommendations, useCurate, useGenres } from '../../../hooks/useAI';
-import { useAddBookmark } from '../../../hooks/useUser';
+import { useArtworks } from '../../../hooks/useArtworks';
+import { ROUTES } from '../../../lib/constants';
+import './AICurationPage.css';
 
-// ============================================
-// TYPES
-// ============================================
+// ============================================================
+// HELPERS
+// ============================================================
 
-type ViewMode = 'grid' | 'list';
-
-// ============================================
-// COMPONENTS
-// ============================================
-
-function RecommendationCard({
-    recommendation,
-    viewMode,
-    onBookmark
-}: {
-    recommendation: any;
-    viewMode: ViewMode;
-    onBookmark?: (artworkId: string) => void;
-}) {
-    const navigate = useNavigate();
-    const artwork = recommendation.artwork;
-
-    if (viewMode === 'list') {
-        return (
-            <Card variant="default" hover className="cursor-pointer" onClick={() => navigate(`/gallery/artwork/${artwork.id}`)}>
-                <div className="flex gap-4 p-4">
-                    <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-xl overflow-hidden flex-shrink-0 bg-theme-elevated">
-                        <img
-                            src={artwork.primaryImageUrl}
-                            alt={artwork.title}
-                            className="w-full h-full object-cover"
-                        />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                            <div>
-                                <h3 className="font-medium text-theme-text truncate">{artwork.title}</h3>
-                                <p className="text-sm text-theme-muted">by {artwork.artist?.displayName || 'Unknown'}</p>
-                            </div>
-                            <div className="flex items-center gap-1">
-                                {artwork.isArt && <Badge variant="gold">Art</Badge>}
-                                <Badge variant="success" className="flex items-center gap-1">
-                                    <Sparkles className="w-3 h-3" />
-                                    {(recommendation.score * 100).toFixed(0)}%
-                                </Badge>
-                            </div>
-                        </div>
-                        <p className="text-xs text-theme-muted mt-2 line-clamp-1 italic">
-                            "{recommendation.reason}"
-                        </p>
-                        <div className="flex flex-wrap gap-1 mt-2">
-                            {artwork.genres?.slice(0, 3).map((genre: string) => (
-                                <Badge key={genre} variant="default" className="text-xs">{genre}</Badge>
-                            ))}
-                        </div>
-                        {artwork.price && (
-                            <p className="font-mono text-gold mt-2">
-                                {artwork.price.toLocaleString()} {artwork.isArt ? 'ETH' : 'IDR'}
-                            </p>
-                        )}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onBookmark?.(artwork.id);
-                            }}
-                        >
-                            <Bookmark className="w-4 h-4" />
-                        </Button>
-                    </div>
-                </div>
-            </Card>
-        );
+function ensureImageParams(url: string, width = 1200): string {
+    if (!url) return '';
+    if (url.includes('unsplash.com') && !url.includes('?')) {
+        return `${url}?w=${width}&q=80&auto=format`;
     }
+    return url;
+}
+
+function getArtworkImage(artwork: any): string {
+    if (!artwork) return '';
+    const raw =
+        artwork.primaryImageUrl
+        || artwork.primary_image_url
+        || artwork.imageUrl
+        || artwork.image_url
+        || '';
+    if (raw) return ensureImageParams(raw);
+    let imgs = artwork.images;
+    if (typeof imgs === 'string') {
+        try { imgs = JSON.parse(imgs); } catch { imgs = []; }
+    }
+    if (Array.isArray(imgs) && imgs.length > 0) {
+        const first = typeof imgs[0] === 'string' ? imgs[0] : imgs[0]?.url;
+        if (first) return ensureImageParams(first);
+    }
+    return '';
+}
+
+// Masterpiece artwork details for a beautiful default display
+const MASTERPIECE = {
+    title: 'The Celestial Voyager',
+    artist: 'Julian Thorne',
+    year: '1892',
+    image: 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=1200&q=80',
+    description: [
+        'This evocative composition represents a departure from Thorne\'s earlier naturalism. Painted during his retreat in the Amalfi Coast, <em>The Celestial Voyager</em> captures the transcendental bridge between the earthly sea and the cosmic infinite.',
+        'The heavy application of cobalt and gold leaf indicates a spiritual intensity rarely seen in the era. Critics of the time initially dismissed the work as "chaotically vivid," yet it later became the cornerstone of the Neo-Romantic movement.',
+    ],
+    genres: ['Impressionism', 'Neo-Romantic', 'Landscape'],
+    audioTitle: 'Behind the Brushstrokes',
+    audioDuration: '04:22',
+};
+
+// ============================================================
+// HELPER: Extract artworks from various response shapes
+// ============================================================
+function extractArtworksArray(raw: any): any[] {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    if (raw.data && Array.isArray(raw.data)) return raw.data;
+    if (raw.artworks && Array.isArray(raw.artworks)) return raw.artworks;
+    return [];
+}
+
+// ============================================================
+// SUB-COMPONENTS
+// ============================================================
+
+/** Related Curation Card */
+function RelatedCard({
+    artwork,
+    index,
+    onClick,
+}: {
+    artwork: any;
+    index: number;
+    onClick: () => void;
+}) {
+    const imageUrl = getArtworkImage(artwork);
+    const title = artwork?.title || 'Untitled';
+    const artist = artwork?.artist?.displayName || artwork?.artist?.display_name || 'Unknown';
+    const genres = artwork?.genres || [];
 
     return (
-        <Card variant="default" hover padding="none" className="group cursor-pointer overflow-hidden" onClick={() => navigate(`/gallery/artwork/${artwork.id}`)}>
-            <div className="relative aspect-[4/5] overflow-hidden bg-theme-elevated">
-                <img
-                    src={artwork.primaryImageUrl}
-                    alt={artwork.title}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                />
-                <div className="absolute top-3 left-3 right-3 flex justify-between">
-                    {artwork.isArt && <Badge variant="gold">Art</Badge>}
-                    <Badge variant="success" className="flex items-center gap-1 ml-auto">
-                        <Sparkles className="w-3 h-3" />
-                        {(recommendation.score * 100).toFixed(0)}%
-                    </Badge>
-                </div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="absolute bottom-4 left-4 right-4">
-                        <p className="text-white text-sm italic mb-3 line-clamp-2">"{recommendation.reason}"</p>
-                        <div className="flex gap-2">
-                            <Button
-                                variant="gold"
-                                size="sm"
-                                className="flex-1"
-                                leftIcon={<Eye className="w-4 h-4" />}
-                            >
-                                View
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-white hover:bg-white/20"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onBookmark?.(artwork.id);
-                                }}
-                            >
-                                <Bookmark className="w-4 h-4" />
-                            </Button>
-                        </div>
+        <motion.div
+            className="curator-related-card curator-fade-in"
+            onClick={onClick}
+            style={{ animationDelay: `${index * 0.1}s` }}
+            whileHover={{ y: -4 }}
+        >
+            <div className="curator-related-card__img-wrap">
+                {imageUrl ? (
+                    <img
+                        src={imageUrl}
+                        alt={title}
+                        className="curator-related-card__img"
+                        loading="lazy"
+                    />
+                ) : (
+                    <div className="curator-hero__placeholder">
+                        <ImageIcon />
                     </div>
-                </div>
+                )}
             </div>
-            <div className="p-4">
-                <h3 className="font-medium text-theme-text truncate group-hover:text-gold transition-colors">
-                    {artwork.title}
-                </h3>
-                <p className="text-sm text-theme-muted truncate">by {artwork.artist?.displayName || 'Unknown'}</p>
-                <div className="flex flex-wrap gap-1 mt-2">
-                    {artwork.genres?.slice(0, 2).map((genre: string) => (
-                        <Badge key={genre} variant="default" className="text-xs">{genre}</Badge>
-                    ))}
-                </div>
+            <div className="curator-related-card__body">
+                <span className="curator-related-card__eyebrow">
+                    {genres[0] || 'Art'}
+                </span>
+                <h4 className="curator-related-card__name">{title}</h4>
+                <p className="curator-related-card__artist">{artist}</p>
+                <span className="curator-related-card__score">
+                    <Sparkles /> AI Match
+                </span>
             </div>
-        </Card>
+        </motion.div>
     );
 }
 
-// ============================================
+// ============================================================
 // MAIN COMPONENT
-// ============================================
+// ============================================================
 
 export function AICurationPage() {
     const navigate = useNavigate();
-    const [viewMode, setViewMode] = useState<ViewMode>('grid');
     const [showFilters, setShowFilters] = useState(false);
+    const [likedHero, setLikedHero] = useState(false);
     const [filters, setFilters] = useState({
         genres: [] as string[],
         priceRange: { min: 0, max: 100 },
@@ -175,13 +154,45 @@ export function AICurationPage() {
     // Queries
     const { data: recommendations, isLoading, refetch, isFetching } = usePersonalizedRecommendations(20);
     const { data: genres } = useGenres();
+    const { data: artworksData, isLoading: artworksLoading } = useArtworks({ page: 1, limit: 8 });
     const curate = useCurate();
 
-    // Mutations
-    const addBookmark = useAddBookmark();
+    // Extract artworks for related section
+    const artworks = useMemo(() => extractArtworksArray(artworksData), [artworksData]);
 
-    const handleBookmark = (artworkId: string) => {
-        addBookmark.mutate(artworkId);
+    const displayRecommendations = curate.data?.recommendations || recommendations || [];
+    const isLoadingData = isLoading || curate.isPending;
+
+    // Pick hero artwork from recommendations or fallback
+    const heroArtwork = useMemo(() => {
+        if (Array.isArray(displayRecommendations) && displayRecommendations.length > 0) {
+            const art = displayRecommendations[0]?.artwork || displayRecommendations[0];
+            return art;
+        }
+        return null;
+    }, [displayRecommendations]);
+
+    const heroImage = heroArtwork ? getArtworkImage(heroArtwork) : MASTERPIECE.image;
+    const heroTitle = heroArtwork?.title || MASTERPIECE.title;
+    const heroArtist = heroArtwork?.artist?.displayName || (heroArtwork?.artist as any)?.display_name || MASTERPIECE.artist;
+    const heroYear = (heroArtwork as any)?.year || (heroArtwork as any)?.createdAt?.substring(0, 4) || MASTERPIECE.year;
+    const heroGenres = heroArtwork?.genres || MASTERPIECE.genres;
+    const heroDesc = (heroArtwork as any)?.description || MASTERPIECE.description;
+
+    const relatedArtworks = useMemo(() => {
+        if (Array.isArray(displayRecommendations) && displayRecommendations.length > 1) {
+            return displayRecommendations.slice(1, 7).map((r: any) => r.artwork || r);
+        }
+        return artworks.slice(0, 6);
+    }, [displayRecommendations, artworks]);
+
+    const toggleGenre = (genre: string) => {
+        setFilters((prev) => ({
+            ...prev,
+            genres: prev.genres.includes(genre)
+                ? prev.genres.filter((g) => g !== genre)
+                : [...prev.genres, genre],
+        }));
     };
 
     const handleRefresh = () => {
@@ -200,199 +211,299 @@ export function AICurationPage() {
         }
     };
 
-    const toggleGenre = (genre: string) => {
-        setFilters(prev => ({
-            ...prev,
-            genres: prev.genres.includes(genre)
-                ? prev.genres.filter(g => g !== genre)
-                : [...prev.genres, genre],
-        }));
-    };
-
-    const displayRecommendations = curate.data?.recommendations || recommendations || [];
-    const isLoadingData = isLoading || curate.isPending;
-
     return (
-        <PageContainer
-            title="AI Curation"
-            description="Personalized artwork recommendations just for you"
-            actions={
-                <div className="flex items-center gap-2">
-                    <Button
-                        variant="outline"
-                        leftIcon={<SlidersHorizontal className="w-4 h-4" />}
-                        onClick={() => setShowFilters(!showFilters)}
-                    >
-                        <span className="hidden sm:inline">Preferences</span>
-                    </Button>
-                    <Button
-                        variant="gold"
-                        leftIcon={isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                        onClick={handleRefresh}
-                        disabled={isFetching}
-                    >
-                        <span className="hidden sm:inline">Refresh</span>
-                    </Button>
-                </div>
-            }
+        <motion.div
+            className="curator-page"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4 }}
         >
-            {/* Filters Panel */}
-            {showFilters && (
-                <Card variant="elevated" className="mb-6">
-                    <CardHeader title="Curation Preferences" />
-                    <CardContent className="space-y-6">
-                        {/* Genres */}
-                        <div>
-                            <h4 className="text-sm font-medium text-theme-text mb-3 flex items-center gap-2">
-                                <Palette className="w-4 h-4" />
-                                Preferred Genres
-                            </h4>
-                            <div className="flex flex-wrap gap-2">
-                                {genres?.slice(0, 10).map((genre: any) => (
+            {/* ====== HEADER ====== */}
+            <div className="curator-header">
+                <button
+                    className="curator-header__back"
+                    onClick={() => navigate(-1)}
+                >
+                    <ArrowLeft /> Digital Curator
+                </button>
+                <button
+                    className="curator-header__action"
+                    onClick={() => setShowFilters(!showFilters)}
+                >
+                    <Search /> Search
+                </button>
+            </div>
+
+            {/* ====== FILTERS PANEL ====== */}
+            <AnimatePresence>
+                {showFilters && (
+                    <motion.div
+                        className="curator-filters"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3 }}
+                    >
+                        <h3 className="curator-filters__title">Curation Preferences</h3>
+
+                        <div className="curator-filters__group">
+                            <span className="curator-filters__group-label">
+                                <Palette /> Preferred Genres
+                            </span>
+                            <div className="curator-filters__genres">
+                                {(Array.isArray(genres) ? genres : []).slice(0, 10).map((genre: any) => (
                                     <button
-                                        key={genre.name}
+                                        key={typeof genre === 'string' ? genre : genre.name}
                                         type="button"
-                                        onClick={() => toggleGenre(genre.name)}
-                                        className="focus:outline-none focus:ring-2 focus:ring-gold/50 rounded-full"
+                                        className={`curator-filters__genre-pill ${
+                                            filters.genres.includes(typeof genre === 'string' ? genre : genre.name)
+                                                ? 'curator-filters__genre-pill--active'
+                                                : ''
+                                        }`}
+                                        onClick={() => toggleGenre(typeof genre === 'string' ? genre : genre.name)}
                                     >
-                                        <Badge
-                                            variant={filters.genres.includes(genre.name) ? 'gold' : 'default'}
-                                            className="cursor-pointer transition-colors hover:opacity-80"
-                                        >
-                                            {genre.name}
-                                        </Badge>
+                                        {typeof genre === 'string' ? genre : genre.name}
                                     </button>
                                 ))}
                             </div>
                         </div>
 
-                        {/* Price Range */}
-                        <div>
-                            <h4 className="text-sm font-medium text-theme-text mb-3 flex items-center gap-2">
-                                <DollarSign className="w-4 h-4" />
-                                Price Range (ETH)
-                            </h4>
-                            <div className="px-2">
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="100"
-                                    value={filters.priceRange.max}
-                                    onChange={(e) => setFilters(prev => ({
-                                        ...prev,
-                                        priceRange: { ...prev.priceRange, max: parseInt(e.target.value) }
-                                    }))}
-                                    className="w-full h-2 bg-theme-border rounded-lg appearance-none cursor-pointer accent-gold"
-                                />
-                                <div className="flex justify-between text-xs text-theme-muted mt-1">
-                                    <span>0 ETH</span>
-                                    <span>{filters.priceRange.max} ETH</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Options */}
-                        <div className="flex items-center gap-4">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={filters.excludeOwned}
-                                    onChange={(e) => setFilters(prev => ({
-                                        ...prev,
-                                        excludeOwned: e.target.checked
-                                    }))}
-                                    className="w-4 h-4 rounded border-theme-border bg-theme-surface text-gold focus:ring-gold"
-                                />
-                                <span className="text-sm text-theme-text">Exclude artworks I own</span>
-                            </label>
-                        </div>
-
-                        {/* Apply */}
-                        <div className="flex gap-3 pt-4 border-t border-theme-border">
-                            <Button
-                                variant="ghost"
-                                onClick={() => setFilters({
-                                    genres: [],
-                                    priceRange: { min: 0, max: 100 },
-                                    excludeOwned: false,
-                                    context: 'discovery',
-                                })}
+                        <div className="curator-filters__actions">
+                            <button
+                                className="curator-filters__reset-btn"
+                                onClick={() =>
+                                    setFilters({
+                                        genres: [],
+                                        priceRange: { min: 0, max: 100 },
+                                        excludeOwned: false,
+                                        context: 'discovery',
+                                    })
+                                }
                             >
                                 Reset
-                            </Button>
-                            <Button variant="gold" onClick={handleRefresh} disabled={curate.isPending}>
+                            </button>
+                            <button
+                                className="curator-filters__apply-btn"
+                                onClick={handleRefresh}
+                                disabled={curate.isPending}
+                            >
                                 {curate.isPending ? 'Curating...' : 'Apply & Curate'}
-                            </Button>
+                            </button>
                         </div>
-                    </CardContent>
-                </Card>
-            )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
-            {/* View Mode Toggle */}
-            <div className="flex justify-between items-center mb-6">
-                <p className="text-theme-muted">
-                    {displayRecommendations.length} recommendations based on your taste
-                </p>
-                <div className="flex items-center gap-1">
-                    <Button
-                        variant={viewMode === 'grid' ? 'gold' : 'ghost'}
-                        size="icon"
-                        onClick={() => setViewMode('grid')}
-                    >
-                        <Grid3X3 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                        variant={viewMode === 'list' ? 'gold' : 'ghost'}
-                        size="icon"
-                        onClick={() => setViewMode('list')}
-                    >
-                        <List className="w-4 h-4" />
-                    </Button>
-                </div>
-            </div>
-
-            {/* Recommendations Grid */}
-            {isLoadingData ? (
-                <div className="flex flex-col items-center justify-center py-20">
-                    <Loader2 className="w-10 h-10 text-gold animate-spin mb-4" />
-                    <p className="text-theme-muted">Curating artworks for you...</p>
-                </div>
-            ) : displayRecommendations.length === 0 ? (
-                <Card variant="elevated" className="text-center py-16">
-                    <Sparkles className="w-16 h-16 text-theme-muted mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-theme-text mb-2">No Recommendations Yet</h3>
-                    <p className="text-theme-muted mb-4 max-w-md mx-auto">
-                        Explore some artworks and bookmark your favorites to help our AI learn your taste
+            {/* ====== LOADING STATE ====== */}
+            {isLoadingData && !heroArtwork ? (
+                <div className="curator-loading">
+                    <Loader2 className="curator-loading__spinner" />
+                    <p className="curator-loading__text">
+                        Curating artworks for you...
                     </p>
-                    <Button variant="gold" onClick={() => navigate('/dashboard/gallery')}>
-                        Explore Gallery
-                    </Button>
-                </Card>
+                </div>
             ) : (
-                <div className={viewMode === 'grid'
-                    ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6"
-                    : "flex flex-col gap-4"
-                }>
-                    {displayRecommendations.map((rec: any) => (
-                        <RecommendationCard
-                            key={rec.id || rec.artworkId}
-                            recommendation={rec}
-                            viewMode={viewMode}
-                            onBookmark={handleBookmark}
-                        />
-                    ))}
-                </div>
-            )}
+                <>
+                    {/* ====== HERO ARTWORK ====== */}
+                    <motion.div
+                        className="curator-hero"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.1, duration: 0.6 }}
+                    >
+                        {heroImage ? (
+                            <img
+                                src={heroImage}
+                                alt={heroTitle}
+                                className="curator-hero__img"
+                                loading="eager"
+                            />
+                        ) : (
+                            <div className="curator-hero__placeholder">
+                                <ImageIcon />
+                            </div>
+                        )}
+                        <div className="curator-hero__overlay" />
+                    </motion.div>
 
-            {/* Curated Info */}
-            {curate.data && (
-                <div className="mt-6 text-center text-sm text-theme-muted">
-                    <p>
-                        Curated in {curate.data.processingTime}ms • {curate.data.totalMatches} total matches
-                    </p>
-                </div>
+                    {/* ====== ARTWORK INFO ====== */}
+                    <motion.div
+                        className="curator-info"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3, duration: 0.5 }}
+                    >
+                        <p className="curator-info__eyebrow">
+                            Masterpiece of the Month
+                        </p>
+                        <h1 className="curator-info__title">{heroTitle}</h1>
+                        <div className="curator-info__artist-line">
+                            <span className="curator-info__artist">{heroArtist}</span>
+                            <span className="curator-info__dot" />
+                            <span className="curator-info__year">{heroYear}</span>
+                        </div>
+
+                        <div className="curator-actions">
+                            <button
+                                className="curator-actions__primary"
+                                onClick={() => {
+                                    if (heroArtwork?.id) {
+                                        navigate(`/gallery/artwork/${heroArtwork.id}`);
+                                    } else {
+                                        navigate(ROUTES.USER_GALLERY);
+                                    }
+                                }}
+                            >
+                                <Eye /> View Gallery
+                            </button>
+                            <button
+                                className="curator-actions__icon"
+                                onClick={() => setLikedHero(!likedHero)}
+                                style={likedHero ? { color: '#E53E3E', borderColor: 'rgba(229, 62, 62, 0.3)', background: 'rgba(229, 62, 62, 0.08)' } : {}}
+                            >
+                                <Heart style={likedHero ? { fill: '#E53E3E' } : {}} />
+                            </button>
+                        </div>
+                    </motion.div>
+
+                    {/* ====== PROVENANCE & VISION ====== */}
+                    <motion.div
+                        className="curator-provenance"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.45, duration: 0.5 }}
+                    >
+                        <h2 className="curator-provenance__title">
+                            Provenance &amp; Vision
+                        </h2>
+                        {Array.isArray(heroDesc) ? (
+                            heroDesc.map((paragraph: string, i: number) => (
+                                <p
+                                    key={i}
+                                    className="curator-provenance__text"
+                                    dangerouslySetInnerHTML={{ __html: paragraph }}
+                                />
+                            ))
+                        ) : (
+                            <p className="curator-provenance__text">
+                                {typeof heroDesc === 'string' ? heroDesc : 'Discover the story behind this masterpiece and the artist\'s vision that brought it to life. Each stroke tells a tale of cultural heritage and artistic expression.'}
+                            </p>
+                        )}
+                        {Array.isArray(heroGenres) && heroGenres.length > 0 && (
+                            <div className="curator-provenance__genres">
+                                {heroGenres.map((g: string) => (
+                                    <span
+                                        key={g}
+                                        className="curator-provenance__genre-tag"
+                                    >
+                                        {g}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                    </motion.div>
+
+                    {/* ====== AUDIO GUIDE ====== */}
+                    <motion.div
+                        className="curator-audio"
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.55, duration: 0.5 }}
+                    >
+                        <button className="curator-audio__play">
+                            <Play />
+                        </button>
+                        <div className="curator-audio__info">
+                            <span className="curator-audio__label">
+                                Audio Guide &bull; {MASTERPIECE.audioDuration}
+                            </span>
+                            <h4 className="curator-audio__title">
+                                {MASTERPIECE.audioTitle}
+                            </h4>
+                        </div>
+                        <div className="curator-audio__waveform">
+                            <div className="curator-audio__bar" />
+                            <div className="curator-audio__bar" />
+                            <div className="curator-audio__bar" />
+                            <div className="curator-audio__bar" />
+                            <div className="curator-audio__bar" />
+                            <div className="curator-audio__bar" />
+                        </div>
+                    </motion.div>
+
+                    {/* ====== REFRESH BUTTON ====== */}
+                    <div style={{ padding: '0 20px', marginBottom: 24, display: 'flex', justifyContent: 'center' }}>
+                        <button
+                            className="curator-actions__primary"
+                            onClick={handleRefresh}
+                            disabled={isFetching}
+                            style={{ opacity: isFetching ? 0.6 : 1 }}
+                        >
+                            {isFetching ? (
+                                <><Loader2 style={{ animation: 'spin 1s linear infinite' }} /> Refreshing...</>
+                            ) : (
+                                <><RefreshCw /> Refresh Curations</>
+                            )}
+                        </button>
+                    </div>
+
+                    {/* ====== RELATED CURATIONS ====== */}
+                    <motion.div
+                        className="curator-related"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.6, duration: 0.5 }}
+                    >
+                        <h2 className="curator-related__title">
+                            Related Curations
+                        </h2>
+                        {artworksLoading && relatedArtworks.length === 0 ? (
+                            <div className="curator-related__grid">
+                                {[1, 2, 3].map((n) => (
+                                    <div
+                                        key={n}
+                                        className="curator-skeleton"
+                                        style={{ aspectRatio: '3/4', width: '100%' }}
+                                    />
+                                ))}
+                            </div>
+                        ) : relatedArtworks.length > 0 ? (
+                            <div className="curator-related__grid">
+                                {relatedArtworks.map((artwork: any, i: number) => (
+                                    <RelatedCard
+                                        key={artwork.id || i}
+                                        artwork={artwork}
+                                        index={i}
+                                        onClick={() =>
+                                            navigate(
+                                                `/gallery/artwork/${artwork.id}`
+                                            )
+                                        }
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="curator-empty">
+                                <Sparkles className="curator-empty__icon" />
+                                <h3 className="curator-empty__title">
+                                    No Recommendations Yet
+                                </h3>
+                                <p className="curator-empty__text">
+                                    Explore some artworks and bookmark your favorites
+                                    to help our AI learn your taste.
+                                </p>
+                                <button
+                                    className="curator-empty__action"
+                                    onClick={() => navigate(ROUTES.USER_GALLERY)}
+                                >
+                                    <Eye /> Explore Gallery
+                                </button>
+                            </div>
+                        )}
+                    </motion.div>
+                </>
             )}
-        </PageContainer>
+        </motion.div>
     );
 }
 

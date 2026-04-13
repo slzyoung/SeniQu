@@ -1,0 +1,972 @@
+/* ================================================
+   SENIQU AI CURATION — Digital Curator Experience
+   Premium immersive artwork curation page
+   
+   § 1. Layout & Container
+   § 2. Hero Artwork Section
+   § 3. Artwork Info & Actions
+   § 4. Provenance & Vision
+   § 5. Audio Guide
+   § 6. Related Curations
+   § 7. Empty & Loading
+   § 8. Animations
+   § 9. Responsive
+   ================================================ */
+
+
+/* ================================================
+   § 1. LAYOUT & CONTAINER
+   ================================================ */
+
+.curator-page {
+  width: 100%;
+  min-height: 100vh;
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .curator-page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding-bottom: 40px;
+  }
+}
+
+/* Header */
+.curator-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg-primary);
+  transition: background 0.3s ease;
+}
+
+@media (min-width: 768px) {
+  .curator-header {
+    padding: 20px 48px;
+    position: relative;
+    background: transparent;
+  }
+}
+
+.curator-header__back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 10px;
+  transition: all 0.25s ease;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.curator-header__back:hover {
+  background: var(--bg-surface);
+  color: var(--text-gold);
+}
+
+.curator-header__back svg {
+  width: 18px;
+  height: 18px;
+}
+
+.curator-header__title {
+  font-family: 'Playfair Display', serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.curator-header__action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-gold);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 10px;
+  transition: all 0.25s ease;
+}
+
+.curator-header__action:hover {
+  background: var(--glow-gold);
+}
+
+.curator-header__action svg {
+  width: 16px;
+  height: 16px;
+}
+
+
+/* ================================================
+   § 2. HERO ARTWORK SECTION
+   ================================================ */
+
+.curator-hero {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  max-height: 560px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+
+@media (min-width: 768px) {
+  .curator-hero {
+    aspect-ratio: 16 / 9;
+    max-height: 520px;
+    margin: 0 48px;
+    width: calc(100% - 96px);
+    border-radius: 24px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .curator-hero {
+    max-height: 600px;
+    border-radius: 28px;
+  }
+}
+
+.curator-hero__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.curator-hero:hover .curator-hero__img {
+  transform: scale(1.04);
+}
+
+.curator-hero__overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(
+    to top,
+    var(--bg-primary) 0%,
+    rgba(0, 0, 0, 0.3) 50%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+.dark .curator-hero__overlay {
+  background: linear-gradient(
+    to top,
+    #0D0D0D 0%,
+    rgba(13, 13, 13, 0.5) 50%,
+    transparent 100%
+  );
+}
+
+.curator-hero__placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(201, 168, 76, 0.04), transparent 70%),
+    var(--bg-elevated);
+}
+
+.curator-hero__placeholder svg {
+  width: 64px;
+  height: 64px;
+  color: var(--text-muted);
+  opacity: 0.15;
+}
+
+
+/* ================================================
+   § 3. ARTWORK INFO & ACTIONS
+   ================================================ */
+
+.curator-info {
+  padding: 0 20px;
+  margin-top: -40px;
+  position: relative;
+  z-index: 3;
+}
+
+@media (min-width: 768px) {
+  .curator-info {
+    padding: 0 48px;
+    margin-top: -60px;
+    max-width: 720px;
+  }
+}
+
+.curator-info__eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-gold);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.curator-info__title {
+  font-family: 'Playfair Display', serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+  line-height: 1.1;
+}
+
+@media (min-width: 768px) {
+  .curator-info__title {
+    font-size: 44px;
+  }
+}
+
+.curator-info__artist {
+  font-family: 'Playfair Display', serif;
+  font-size: 16px;
+  font-style: italic;
+  color: var(--text-muted);
+  margin: 0 0 4px 0;
+}
+
+.curator-info__year {
+  font-size: 13px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.curator-info__artist-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.curator-info__dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.5;
+}
+
+/* Action Buttons */
+.curator-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.curator-actions__primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #C9A84C 0%, #B8973E 100%);
+  color: #0D0D0D;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(201, 168, 76, 0.25);
+}
+
+.curator-actions__primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(201, 168, 76, 0.35);
+}
+
+.curator-actions__primary svg {
+  width: 16px;
+  height: 16px;
+}
+
+.curator-actions__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.dark .curator-actions__icon {
+  background: var(--bg-elevated);
+}
+
+.curator-actions__icon:hover {
+  color: var(--text-gold);
+  border-color: rgba(201, 168, 76, 0.3);
+  background: var(--glow-gold);
+}
+
+.curator-actions__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+
+/* ================================================
+   § 4. PROVENANCE & VISION
+   ================================================ */
+
+.curator-provenance {
+  padding: 0 20px;
+  margin-bottom: 32px;
+}
+
+@media (min-width: 768px) {
+  .curator-provenance {
+    padding: 0 48px;
+    max-width: 720px;
+  }
+}
+
+.curator-provenance__title {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 16px 0;
+}
+
+@media (min-width: 768px) {
+  .curator-provenance__title {
+    font-size: 26px;
+  }
+}
+
+.curator-provenance__text {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.8;
+  margin: 0 0 16px 0;
+}
+
+.curator-provenance__text em {
+  color: var(--text-primary);
+  font-style: italic;
+}
+
+.curator-provenance__genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.curator-provenance__genre-tag {
+  font-size: 11px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  transition: all 0.25s ease;
+  cursor: default;
+}
+
+.curator-provenance__genre-tag:nth-child(odd) {
+  background: var(--glow-gold);
+  color: var(--text-gold);
+  border: 1px solid rgba(201, 168, 76, 0.2);
+}
+
+.curator-provenance__genre-tag:nth-child(even) {
+  background: rgba(124, 107, 212, 0.08);
+  color: #B4A6E8;
+  border: 1px solid rgba(124, 107, 212, 0.15);
+}
+
+
+/* ================================================
+   § 5. AUDIO GUIDE
+   ================================================ */
+
+.curator-audio {
+  margin: 0 20px 36px;
+  padding: 18px;
+  border-radius: 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: all 0.3s ease;
+}
+
+.dark .curator-audio {
+  background: var(--bg-elevated);
+}
+
+@media (min-width: 768px) {
+  .curator-audio {
+    margin: 0 48px 36px;
+    max-width: 672px;
+    padding: 20px;
+    border-radius: 20px;
+  }
+}
+
+.curator-audio:hover {
+  border-color: rgba(201, 168, 76, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.dark .curator-audio:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.curator-audio__play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #C9A84C 0%, #B8973E 100%);
+  color: #0D0D0D;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(201, 168, 76, 0.2);
+}
+
+.curator-audio__play:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px rgba(201, 168, 76, 0.3);
+}
+
+.curator-audio__play svg {
+  width: 20px;
+  height: 20px;
+}
+
+.curator-audio__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.curator-audio__label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-gold);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.curator-audio__title {
+  font-family: 'Playfair Display', serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.curator-audio__duration {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.curator-audio__waveform {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.curator-audio__bar {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--text-gold);
+  opacity: 0.4;
+  animation: curator-wave 1.2s ease-in-out infinite;
+}
+
+.curator-audio__bar:nth-child(1) { height: 12px; animation-delay: 0s; }
+.curator-audio__bar:nth-child(2) { height: 20px; animation-delay: 0.1s; }
+.curator-audio__bar:nth-child(3) { height: 28px; animation-delay: 0.2s; }
+.curator-audio__bar:nth-child(4) { height: 16px; animation-delay: 0.3s; }
+.curator-audio__bar:nth-child(5) { height: 24px; animation-delay: 0.15s; }
+.curator-audio__bar:nth-child(6) { height: 14px; animation-delay: 0.25s; }
+
+@keyframes curator-wave {
+  0%, 100% { transform: scaleY(0.5); }
+  50% { transform: scaleY(1); }
+}
+
+
+/* ================================================
+   § 6. RELATED CURATIONS
+   ================================================ */
+
+.curator-related {
+  padding: 0 20px;
+  margin-bottom: 32px;
+}
+
+@media (min-width: 768px) {
+  .curator-related {
+    padding: 0 48px;
+  }
+}
+
+.curator-related__title {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 18px 0;
+}
+
+.curator-related__grid {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 16px;
+  scrollbar-width: none;
+}
+
+.curator-related__grid::-webkit-scrollbar {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .curator-related__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .curator-related__grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+}
+
+.curator-related-card {
+  flex: 0 0 240px;
+  scroll-snap-align: start;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (min-width: 768px) {
+  .curator-related-card {
+    flex: none;
+  }
+}
+
+.dark .curator-related-card {
+  background: var(--bg-elevated);
+}
+
+.curator-related-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+  border-color: rgba(201, 168, 76, 0.12);
+}
+
+.dark .curator-related-card:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+}
+
+.curator-related-card__img-wrap {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+
+.curator-related-card__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s ease;
+}
+
+.curator-related-card:hover .curator-related-card__img {
+  transform: scale(1.08);
+}
+
+.curator-related-card__body {
+  padding: 14px 16px;
+}
+
+.curator-related-card__eyebrow {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-gold);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.curator-related-card__name {
+  font-family: 'Playfair Display', serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px 0;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.curator-related-card__artist {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.curator-related-card__score {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-gold);
+  background: var(--glow-gold);
+  padding: 3px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(201, 168, 76, 0.15);
+  margin-top: 8px;
+}
+
+.curator-related-card__score svg {
+  width: 10px;
+  height: 10px;
+}
+
+
+/* ================================================
+   § 7. FILTERS PANEL
+   ================================================ */
+
+.curator-filters {
+  margin: 0 20px 24px;
+  padding: 20px;
+  border-radius: 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+}
+
+.dark .curator-filters {
+  background: var(--bg-elevated);
+}
+
+@media (min-width: 768px) {
+  .curator-filters {
+    margin: 0 48px 24px;
+    padding: 24px;
+    border-radius: 20px;
+  }
+}
+
+.curator-filters__title {
+  font-family: 'Playfair Display', serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 16px 0;
+}
+
+.curator-filters__group {
+  margin-bottom: 18px;
+}
+
+.curator-filters__group-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.curator-filters__group-label svg {
+  width: 14px;
+  height: 14px;
+  color: var(--text-gold);
+}
+
+.curator-filters__genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.curator-filters__genre-pill {
+  font-size: 11px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.curator-filters__genre-pill:hover {
+  border-color: rgba(201, 168, 76, 0.3);
+  color: var(--text-gold);
+}
+
+.curator-filters__genre-pill--active {
+  background: linear-gradient(135deg, #C9A84C 0%, #B8973E 100%);
+  color: #0D0D0D;
+  border-color: transparent;
+}
+
+.curator-filters__genre-pill--active:hover {
+  color: #0D0D0D;
+}
+
+.curator-filters__actions {
+  display: flex;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.curator-filters__reset-btn {
+  background: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 8px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.curator-filters__reset-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.curator-filters__apply-btn {
+  background: linear-gradient(135deg, #C9A84C 0%, #B8973E 100%);
+  color: #0D0D0D;
+  border: none;
+  padding: 8px 24px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.curator-filters__apply-btn:hover {
+  box-shadow: 0 4px 16px rgba(201, 168, 76, 0.25);
+  transform: translateY(-1px);
+}
+
+.curator-filters__apply-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+
+/* ================================================
+   § 8. EMPTY & LOADING STATES
+   ================================================ */
+
+.curator-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+  text-align: center;
+}
+
+.curator-loading__spinner {
+  width: 40px;
+  height: 40px;
+  color: var(--text-gold);
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.curator-loading__text {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.curator-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 28px;
+  text-align: center;
+  margin: 0 20px;
+  border-radius: 20px;
+  background: var(--bg-surface);
+  border: 1px dashed var(--border-color);
+}
+
+@media (min-width: 768px) {
+  .curator-empty {
+    margin: 0 48px;
+  }
+}
+
+.curator-empty__icon {
+  width: 56px;
+  height: 56px;
+  color: var(--text-muted);
+  opacity: 0.2;
+  margin-bottom: 16px;
+}
+
+.curator-empty__title {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+}
+
+.curator-empty__text {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0 0 20px 0;
+  max-width: 380px;
+}
+
+.curator-empty__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #C9A84C 0%, #B8973E 100%);
+  color: #0D0D0D;
+  border: none;
+  padding: 12px 26px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.curator-empty__action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(201, 168, 76, 0.3);
+}
+
+
+/* ================================================
+   § 9. ANIMATIONS
+   ================================================ */
+
+.curator-fade-in {
+  animation: curator-fade-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes curator-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.curator-skeleton {
+  background: linear-gradient(90deg,
+    var(--bg-elevated) 25%,
+    var(--bg-surface) 50%,
+    var(--bg-elevated) 75%);
+  background-size: 200% 100%;
+  animation: curator-shimmer 1.5s ease-in-out infinite;
+  border-radius: 18px;
+}
+
+@keyframes curator-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+
+/* ================================================
+   § 10. RESPONSIVE
+   ================================================ */
+
+@media (min-width: 768px) {
+  .curator-page--desktop-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+
+  .curator-page--desktop-layout .curator-hero {
+    grid-column: 1;
+    margin: 0;
+    width: 100%;
+    border-radius: 0;
+    aspect-ratio: auto;
+    height: 100%;
+    position: sticky;
+    top: 0;
+  }
+
+  .curator-page--desktop-layout .curator-content-side {
+    grid-column: 2;
+    padding: 40px 48px;
+  }
+}
+
+@media (max-width: 767px) {
+  .curator-related:last-child {
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  }
+}

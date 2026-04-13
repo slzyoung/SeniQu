@@ -45,7 +45,7 @@ const NearbyMuseums = lazy(() => import('../features/gallery/pages/NearbyMuseums
 
 // Lazy load marketplace pages
 const Marketplace = lazy(() => import('../features/marketplace/pages/Marketplace'));
-const ArtDetail = lazy(() => import('../features/marketplace/pages/NFTDetail'));
+const ArtDetail = lazy(() => import('../features/marketplace/pages/ArtDetail'));
 
 // Lazy load community pages
 const CommunityForum = lazy(() => import('../features/community/pages/CommunityForum'));
@@ -73,7 +73,7 @@ const SystemAnalytics = lazy(() => import('../features/admin/pages/SystemAnalyti
 const DatabaseManagement = lazy(() => import('../features/admin/pages/DatabaseManagement'));
 const SystemLogs = lazy(() => import('../features/admin/pages/SystemLogs'));
 const SecurityCenter = lazy(() => import('../features/admin/pages/SecurityCenter'));
-const ArtsOversight = lazy(() => import('../features/admin/pages/NFTOversight'));
+const ArtsOversight = lazy(() => import('../features/admin/pages/ArtsOversight'));
 const PremiumManagement = lazy(() => import('../features/admin/pages/PremiumManagement'));
 const GlobalSettings = lazy(() => import('../features/admin/pages/GlobalSettings'));
 const SystemHealth = lazy(() => import('../features/admin/pages/SystemHealth'));

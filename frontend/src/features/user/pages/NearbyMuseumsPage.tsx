@@ -1,6 +1,15 @@
 /**
- * Nearby Museums Page for User Dashboard
- * Find museums and galleries near user's location
+ * NearbyMuseumsPage — Explore & Nearby
+ * Map-first immersive museum discovery experience
+ * Inspired by Google Arts & Culture / Google Maps design
+ *
+ * Features:
+ * - Search bar with filter chips (All, Museum, Gallery, Heritage)
+ * - Interactive map placeholder with pins
+ * - Bottom sheet with museum details, crowd level, wait time
+ * - 360° Preview thumbnails carousel
+ * - Action buttons: Get Directions, Buy Ticket
+ * - Light & Dark mode compatible
  */
 
 import { useState, useEffect } from 'react';
@@ -13,20 +22,30 @@ import {
     Clock,
     Star,
     Map,
-    List,
-    RefreshCw,
-    AlertCircle
+    AlertCircle,
+    Layers,
+    Locate,
+    Plus,
+    Minus,
+    Compass,
+    Users,
+    Ticket,
+    Image,
+    ExternalLink,
+    X,
+    SlidersHorizontal,
 } from 'lucide-react';
-import { PageContainer } from '../../../components/common/DashboardLayout';
-import { Card, CardContent, Button, Input, Badge, Select } from '../../../components/ui';
 import { useNavigate } from 'react-router-dom';
 import { useMuseums, useNearbyMuseums } from '../../../hooks/useMuseums';
 import { extractArray } from '../../../lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
+import './NearbyMuseumsPage.css';
 
 // ============================================
 // TYPES
 // ============================================
 
+type FilterType = 'all' | 'museum' | 'gallery' | 'heritage';
 type ViewMode = 'map' | 'list';
 
 interface UserLocation {
@@ -34,143 +53,252 @@ interface UserLocation {
     longitude: number;
 }
 
-const radiusOptions = [
-    { value: '5', label: '5 km' },
-    { value: '10', label: '10 km' },
-    { value: '25', label: '25 km' },
-    { value: '50', label: '50 km' },
-    { value: '100', label: '100 km' },
+// ============================================
+// DEMO DATA (when no API results)
+// ============================================
+
+const DEMO_MUSEUMS = [
+    {
+        id: '1',
+        name: 'National Museum of Indonesia',
+        city: 'Jakarta',
+        province: 'DKI Jakarta',
+        address: 'Jalan Medan Merdeka Barat No.12',
+        type: 'museum',
+        rating: 4.8,
+        reviewCount: '1.2k',
+        totalArtworks: 1500,
+        crowdLevel: 'Moderate traffic',
+        waitTime: '~15 mins',
+        isVerified: true,
+        description: 'The largest and most complete museum in Indonesia, displaying over 140,000 objects.',
+        coverImageUrl: 'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=400&h=300&fit=crop',
+        previewImages: [
+            'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=200&h=150&fit=crop',
+            'https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?w=200&h=150&fit=crop',
+            'https://images.unsplash.com/photo-1544967082-d9d25d867d66?w=200&h=150&fit=crop',
+        ],
+        latitude: -6.1762,
+        longitude: 106.8222,
+    },
+    {
+        id: '2',
+        name: 'Museum of Fine Arts',
+        city: 'Yogyakarta',
+        province: 'DI Yogyakarta',
+        address: 'Jalan Solo No.5, Yogyakarta',
+        type: 'gallery',
+        rating: 4.6,
+        reviewCount: '890',
+        totalArtworks: 850,
+        crowdLevel: 'Not crowded',
+        waitTime: '~5 mins',
+        isVerified: true,
+        description: 'A premier gallery showcasing contemporary Indonesian fine arts.',
+        coverImageUrl: 'https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=400&h=300&fit=crop',
+        previewImages: [
+            'https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=200&h=150&fit=crop',
+            'https://images.unsplash.com/photo-1577083552431-6e5fd01988ec?w=200&h=150&fit=crop',
+        ],
+        latitude: -7.7886,
+        longitude: 110.3571,
+    },
+    {
+        id: '3',
+        name: 'Borobudur Heritage Center',
+        city: 'Magelang',
+        province: 'Central Java',
+        address: 'Jalan Badrawati, Borobudur',
+        type: 'heritage',
+        rating: 4.9,
+        reviewCount: '3.5k',
+        totalArtworks: 2000,
+        crowdLevel: 'Busy',
+        waitTime: '~25 mins',
+        isVerified: true,
+        description: 'A UNESCO World Heritage Site and the largest Buddhist temple in the world.',
+        coverImageUrl: 'https://images.unsplash.com/photo-1596402184320-417e7178b2cd?w=400&h=300&fit=crop',
+        previewImages: [
+            'https://images.unsplash.com/photo-1596402184320-417e7178b2cd?w=200&h=150&fit=crop',
+            'https://images.unsplash.com/photo-1555400038-63f5ba517a7b?w=200&h=150&fit=crop',
+            'https://images.unsplash.com/photo-1578469550956-0e16b69c6a3d?w=200&h=150&fit=crop',
+        ],
+        latitude: -7.6079,
+        longitude: 110.2038,
+    },
+];
+
+const FILTER_CHIPS: { id: FilterType; label: string; icon?: any }[] = [
+    { id: 'all', label: 'All' },
+    { id: 'museum', label: 'Museum', icon: Building2 },
+    { id: 'gallery', label: 'Gallery', icon: Image },
+    { id: 'heritage', label: 'Heritage', icon: Compass },
 ];
 
 // ============================================
-// COMPONENTS
+// SUB-COMPONENTS
 // ============================================
 
-function MuseumCard({
+/** Museum Detail Bottom Sheet Card */
+function MuseumDetailSheet({
     museum,
-    userLocation
+    expanded,
+    onToggle,
+    onClose,
 }: {
     museum: any;
-    userLocation?: UserLocation;
+    expanded: boolean;
+    onToggle: () => void;
+    onClose: () => void;
 }) {
     const navigate = useNavigate();
 
-    const calculateDistance = (lat: number, lng: number) => {
-        if (!userLocation) return null;
-        const R = 6371;
-        const dLat = (lat - userLocation.latitude) * Math.PI / 180;
-        const dLng = (lng - userLocation.longitude) * Math.PI / 180;
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(userLocation.latitude * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
-            Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-    };
-
-    const distance = museum.latitude && museum.longitude
-        ? calculateDistance(museum.latitude, museum.longitude)
-        : null;
+    const crowdColor = museum.crowdLevel?.includes('Busy')
+        ? 'nbm-badge--red'
+        : museum.crowdLevel?.includes('Moderate')
+            ? 'nbm-badge--amber'
+            : 'nbm-badge--green';
 
     return (
-        <Card
-            variant="default"
-            hover
-            className="cursor-pointer"
-            onClick={() => navigate(`/gallery/museum/${museum.id}`)}
+        <motion.div
+            className={`nbm-sheet ${expanded ? 'nbm-sheet--expanded' : ''}`}
+            initial={{ y: 200, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 200, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         >
-            <div className="flex gap-4 p-4">
-                <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-xl overflow-hidden flex-shrink-0 bg-theme-elevated">
-                    <img
-                        src={museum.coverImageUrl || museum.logoUrl || '/placeholder-museum.jpg'}
-                        alt={museum.name}
-                        className="w-full h-full object-cover"
-                    />
+            {/* Drag handle */}
+            <button className="nbm-sheet__handle" onClick={onToggle} aria-label="Toggle details">
+                <span className="nbm-sheet__handle-bar" />
+            </button>
+
+            {/* Header — badge + rating */}
+            <div className="nbm-sheet__header">
+                <div className="nbm-sheet__badges">
+                    <span className="nbm-type-badge">{museum.type || 'Museum'}</span>
+                    <span className="nbm-rating-badge">
+                        <Star className="w-3.5 h-3.5 fill-current" />
+                        {museum.rating?.toFixed(1) || '4.5'} ({museum.reviewCount || '0'})
+                    </span>
                 </div>
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                        <div>
-                            <h3 className="font-medium text-theme-text">{museum.name}</h3>
-                            <p className="text-sm text-theme-muted flex items-center gap-1">
-                                <MapPin className="w-3 h-3" />
-                                {museum.city}, {museum.province || museum.country}
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {museum.isVerified && <Badge variant="success">Verified</Badge>}
-                            {distance && (
-                                <Badge variant="default" className="flex items-center gap-1">
-                                    <Navigation className="w-3 h-3" />
-                                    {distance < 1 ? `${(distance * 1000).toFixed(0)}m` : `${distance.toFixed(1)}km`}
-                                </Badge>
-                            )}
-                        </div>
+                <button className="nbm-sheet__close" onClick={onClose}>
+                    <X className="w-4 h-4" />
+                </button>
+            </div>
+
+            {/* Name + Address */}
+            <h2 className="nbm-sheet__name">{museum.name}</h2>
+            <p className="nbm-sheet__address">
+                <MapPin className="w-3.5 h-3.5" />
+                {museum.address || `${museum.city}, ${museum.province || museum.country}`}
+            </p>
+
+            {/* Status pills */}
+            <div className="nbm-sheet__status">
+                <div className={`nbm-status-pill ${crowdColor}`}>
+                    <Users className="w-3.5 h-3.5" />
+                    <div>
+                        <span className="nbm-status-pill__label">CROWD LEVEL</span>
+                        <span className="nbm-status-pill__value">{museum.crowdLevel || 'Normal traffic'}</span>
                     </div>
-                    <p className="text-xs text-theme-muted mt-2 line-clamp-2">{museum.description}</p>
-                    <div className="flex flex-wrap items-center gap-3 mt-3 text-xs text-theme-muted">
-                        {museum.rating && (
-                            <span className="flex items-center gap-1">
-                                <Star className="w-3 h-3 fill-gold text-gold" />
-                                {museum.rating.toFixed(1)}
-                            </span>
-                        )}
-                        {museum.totalArtworks && (
-                            <span><strong className="text-gold">{museum.totalArtworks}</strong> artworks</span>
-                        )}
-                        {museum.openingHours && (
-                            <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" /> {museum.openingHours}
-                            </span>
-                        )}
+                </div>
+                <div className="nbm-status-pill nbm-badge--blue">
+                    <Clock className="w-3.5 h-3.5" />
+                    <div>
+                        <span className="nbm-status-pill__label">WAIT TIME</span>
+                        <span className="nbm-status-pill__value">{museum.waitTime || '~10 mins'}</span>
                     </div>
                 </div>
             </div>
-        </Card>
+
+            {/* 360° Preview */}
+            {(museum.previewImages?.length > 0 || museum.coverImageUrl) && (
+                <div className="nbm-preview">
+                    <div className="nbm-preview__header">
+                        <span>360° Preview</span>
+                        <button className="nbm-preview__viewall">View All</button>
+                    </div>
+                    <div className="nbm-preview__scroll">
+                        {(museum.previewImages || [museum.coverImageUrl]).map((img: string, i: number) => (
+                            <div key={i} className="nbm-preview__thumb">
+                                <img src={img} alt={`Preview ${i + 1}`} loading="lazy" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="nbm-sheet__actions">
+                <button
+                    className="nbm-action-btn nbm-action-btn--primary"
+                    onClick={() => {
+                        if (museum.latitude && museum.longitude) {
+                            window.open(
+                                `https://www.google.com/maps/dir/?api=1&destination=${museum.latitude},${museum.longitude}`,
+                                '_blank'
+                            );
+                        }
+                    }}
+                >
+                    <Navigation className="w-4 h-4" />
+                    Get Directions
+                </button>
+                <button
+                    className="nbm-action-btn nbm-action-btn--secondary"
+                    onClick={() => navigate(`/gallery/museum/${museum.id}`)}
+                >
+                    <Ticket className="w-4 h-4" />
+                    Buy Ticket
+                </button>
+            </div>
+        </motion.div>
     );
 }
 
-function MapPlaceholder({ museums, userLocation }: { museums: any[]; userLocation?: UserLocation }) {
+/** Museum List Card (for list view) */
+function MuseumListCard({ museum, onSelect }: { museum: any; onSelect: () => void }) {
     return (
-        <Card variant="elevated" className="relative h-[500px] overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-theme-elevated to-theme-surface">
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center p-8">
-                        <Map className="w-20 h-20 text-theme-muted mx-auto mb-4" />
-                        <h3 className="text-lg font-medium text-theme-text mb-2">Interactive Map</h3>
-                        <p className="text-theme-muted max-w-md">
-                            Map integration is available. Configure your Google Maps or Mapbox API key to enable the interactive map view.
-                        </p>
-                        <Badge variant="default" className="mt-4">
-                            {museums.length} locations found
-                        </Badge>
-                    </div>
-                </div>
-
-                {museums.slice(0, 5).map((museum, index) => (
-                    <div
-                        key={museum.id}
-                        className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group"
-                        style={{
-                            top: `${20 + (index * 15)}%`,
-                            left: `${20 + (index * 15)}%`,
-                        }}
-                    >
-                        <div className="relative">
-                            <MapPin className="w-8 h-8 text-gold drop-shadow-lg" />
-                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-black/80 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                                {museum.name}
-                            </div>
-                        </div>
-                    </div>
-                ))}
+        <motion.div
+            className="nbm-list-card"
+            onClick={onSelect}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileTap={{ scale: 0.98 }}
+        >
+            <div className="nbm-list-card__img">
+                <img
+                    src={museum.coverImageUrl || museum.logoUrl || 'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=200&h=200&fit=crop'}
+                    alt={museum.name}
+                    loading="lazy"
+                />
+                {museum.isVerified && <span className="nbm-list-card__verified">✓</span>}
             </div>
-
-            {userLocation && (
-                <div className="absolute bottom-4 left-4 bg-theme-card/90 backdrop-blur-sm rounded-xl px-4 py-2 flex items-center gap-2">
-                    <Navigation className="w-4 h-4 text-blue-500" />
-                    <span className="text-sm text-theme-text">Your Location</span>
+            <div className="nbm-list-card__info">
+                <div className="nbm-list-card__top">
+                    <span className="nbm-type-badge nbm-type-badge--sm">{museum.type || 'Museum'}</span>
+                    {museum.rating && (
+                        <span className="nbm-list-card__rating">
+                            <Star className="w-3 h-3 fill-current" /> {museum.rating.toFixed(1)}
+                        </span>
+                    )}
                 </div>
-            )}
-        </Card>
+                <h3 className="nbm-list-card__name">{museum.name}</h3>
+                <p className="nbm-list-card__location">
+                    <MapPin className="w-3 h-3" />
+                    {museum.city}{museum.province ? `, ${museum.province}` : ''}
+                </p>
+                <div className="nbm-list-card__meta">
+                    {museum.totalArtworks && (
+                        <span>{museum.totalArtworks} artworks</span>
+                    )}
+                    {museum.crowdLevel && (
+                        <span className="nbm-list-card__crowd">{museum.crowdLevel}</span>
+                    )}
+                </div>
+            </div>
+            <ExternalLink className="w-4 h-4 nbm-list-card__arrow" />
+        </motion.div>
     );
 }
 
@@ -179,218 +307,291 @@ function MapPlaceholder({ museums, userLocation }: { museums: any[]; userLocatio
 // ============================================
 
 export function NearbyMuseumsPage() {
-    const [viewMode, setViewMode] = useState<ViewMode>('list');
+    const navigate = useNavigate();
+    const [viewMode, setViewMode] = useState<ViewMode>('map');
     const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
     const [isLocating, setIsLocating] = useState(false);
     const [radius, setRadius] = useState('25');
     const [searchQuery, setSearchQuery] = useState('');
+    const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+    const [selectedMuseum, setSelectedMuseum] = useState<any | null>(null);
+    const [sheetExpanded, setSheetExpanded] = useState(false);
 
+    // Location
     const requestLocation = () => {
         setIsLocating(true);
         setLocationError(null);
-
         if (!navigator.geolocation) {
-            setLocationError('Geolocation is not supported by your browser');
+            setLocationError('Geolocation is not supported');
             setIsLocating(false);
             return;
         }
-
         navigator.geolocation.getCurrentPosition(
-            (position) => {
-                setUserLocation({
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude,
-                });
+            (pos) => {
+                setUserLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
                 setIsLocating(false);
             },
-            (error) => {
-                switch (error.code) {
-                    case error.PERMISSION_DENIED:
-                        setLocationError('Location permission denied. Please enable location access.');
-                        break;
-                    case error.POSITION_UNAVAILABLE:
-                        setLocationError('Location information unavailable.');
-                        break;
-                    case error.TIMEOUT:
-                        setLocationError('Location request timed out.');
-                        break;
-                    default:
-                        setLocationError('An error occurred while getting your location.');
-                }
+            (err) => {
+                const msgs: Record<number, string> = {
+                    1: 'Location permission denied.',
+                    2: 'Location unavailable.',
+                    3: 'Location request timed out.',
+                };
+                setLocationError(msgs[err.code] || 'Error getting location.');
                 setIsLocating(false);
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
         );
     };
 
-    useEffect(() => {
-        requestLocation();
-    }, []);
+    useEffect(() => { requestLocation(); }, []);
 
-    // Queries
-    const { data: nearbyMuseums, isLoading: nearbyLoading, refetch } = useNearbyMuseums({
+    // Queries — use real data if available, fall back to demo
+    const { data: nearbyMuseums, isLoading: nearbyLoading } = useNearbyMuseums({
         lat: userLocation?.latitude || 0,
         lng: userLocation?.longitude || 0,
         radius: parseInt(radius),
     });
-
     const { data: allMuseums, isLoading: allLoading } = useMuseums({ limit: 20 });
 
-    // Handle different data shapes (nearbyMuseums could be array or paginated, allMuseums is PaginatedResponse)
-    const museums = userLocation
+    const rawMuseums = userLocation
         ? extractArray(nearbyMuseums)
         : extractArray(allMuseums);
+
+    // Merge with demo data if API returns nothing
+    const mergedMuseums = rawMuseums.length > 0
+        ? rawMuseums.map((m: any) => ({
+            ...m,
+            type: m.type || 'museum',
+            crowdLevel: m.crowdLevel || 'Normal traffic',
+            waitTime: m.waitTime || '~10 mins',
+            reviewCount: m.reviewCount || '0',
+            previewImages: m.previewImages || (m.coverImageUrl ? [m.coverImageUrl] : []),
+        }))
+        : DEMO_MUSEUMS;
+
     const isLoading = userLocation ? nearbyLoading : allLoading;
 
-    return (
-        <PageContainer
-            title="Nearby Museums & Galleries"
-            description="Discover art institutions near your location"
-            actions={
-                <Button
-                    variant="gold"
-                    leftIcon={isLocating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
-                    onClick={requestLocation}
-                    disabled={isLocating}
-                >
-                    <span className="hidden sm:inline">{userLocation ? 'Update Location' : 'Get Location'}</span>
-                    <span className="sm:hidden">Locate</span>
-                </Button>
-            }
-        >
-            {/* Location Status */}
-            {locationError && (
-                <Card variant="elevated" className="mb-6 bg-red-500/10 border-red-500/20">
-                    <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                            <div>
-                                <h4 className="font-medium text-red-500">{locationError}</h4>
-                                <p className="text-sm text-theme-muted mt-1">
-                                    You can still browse all museums, but distance information won't be available.
-                                </p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
+    // Filter
+    const filteredMuseums = mergedMuseums.filter((m: any) => {
+        const matchesFilter = activeFilter === 'all' || m.type === activeFilter;
+        const matchesSearch = !searchQuery ||
+            m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            m.city?.toLowerCase().includes(searchQuery.toLowerCase());
+        return matchesFilter && matchesSearch;
+    });
 
-            {userLocation && (
-                <Card variant="elevated" className="mb-6 bg-green-500/10 border-green-500/20">
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between flex-wrap gap-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                                    <Navigation className="w-5 h-5 text-green-500" />
+    // Select first museum by default if none selected
+    useEffect(() => {
+        if (!selectedMuseum && filteredMuseums.length > 0) {
+            setSelectedMuseum(filteredMuseums[0]);
+        }
+    }, [filteredMuseums, selectedMuseum]);
+
+    return (
+        <div className="nbm-page">
+            {/* ===== MAP VIEW ===== */}
+            {viewMode === 'map' ? (
+                <div className="nbm-map-container">
+                    {/* Search + Filter overlay */}
+                    <div className="nbm-search-overlay">
+                        <div className="nbm-search-bar">
+                            <Search className="nbm-search-bar__icon" />
+                            <input
+                                className="nbm-search-bar__input"
+                                type="text"
+                                placeholder="Search heritage sites, museums..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                            <button
+                                className="nbm-search-bar__filter"
+                                onClick={() => setViewMode('list')}
+                            >
+                                <SlidersHorizontal className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="nbm-filter-chips">
+                            {FILTER_CHIPS.map((chip) => (
+                                <button
+                                    key={chip.id}
+                                    className={`nbm-chip ${activeFilter === chip.id ? 'nbm-chip--active' : ''}`}
+                                    onClick={() => setActiveFilter(chip.id)}
+                                >
+                                    {chip.icon && <chip.icon className="w-3.5 h-3.5" />}
+                                    {chip.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Map Area */}
+                    <div className="nbm-map">
+                        {/* Placeholder map background */}
+                        <div className="nbm-map__bg">
+                            <img
+                                src="https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/106.8456,-6.2088,11,0/800x600@2x?access_token=placeholder"
+                                alt="Map"
+                                className="nbm-map__img"
+                                onError={(e) => {
+                                    // Fallback to a gradient if Mapbox fails
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                            />
+                            <div className="nbm-map__fallback" />
+                        </div>
+
+                        {/* Museum Pins */}
+                        {filteredMuseums.slice(0, 6).map((museum: any, i: number) => (
+                            <button
+                                key={museum.id}
+                                className={`nbm-pin ${selectedMuseum?.id === museum.id ? 'nbm-pin--active' : ''}`}
+                                style={{
+                                    top: `${18 + (i * 12)}%`,
+                                    left: `${15 + (i * 14)}%`,
+                                }}
+                                onClick={() => {
+                                    setSelectedMuseum(museum);
+                                    setSheetExpanded(false);
+                                }}
+                            >
+                                <div className="nbm-pin__marker">
+                                    <Building2 className="w-3.5 h-3.5" />
                                 </div>
-                                <div>
-                                    <h4 className="font-medium text-theme-text">Location Active</h4>
-                                    <p className="text-sm text-theme-muted">
-                                        Showing museums within {radius}km of your location
-                                    </p>
-                                </div>
-                            </div>
-                            <Select
-                                options={radiusOptions}
-                                value={radius}
-                                onChange={(v) => setRadius(v as string)}
-                                placeholder="Radius"
+                                {selectedMuseum?.id === museum.id && (
+                                    <motion.span
+                                        className="nbm-pin__label"
+                                        initial={{ opacity: 0, y: 4 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                    >
+                                        {museum.name.length > 18 ? museum.name.slice(0, 18) + '…' : museum.name}
+                                    </motion.span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Map Controls (right side) */}
+                    <div className="nbm-map-controls">
+                        <button className="nbm-map-ctrl" onClick={() => setViewMode('list')}>
+                            <Layers className="w-4 h-4" />
+                        </button>
+                        <button className="nbm-map-ctrl" onClick={requestLocation}>
+                            {isLocating
+                                ? <Loader2 className="w-4 h-4 animate-spin" />
+                                : <Locate className="w-4 h-4" />
+                            }
+                        </button>
+                        <button className="nbm-map-ctrl"><Plus className="w-4 h-4" /></button>
+                        <button className="nbm-map-ctrl"><Minus className="w-4 h-4" /></button>
+                    </div>
+
+                    {/* Location error toast */}
+                    <AnimatePresence>
+                        {locationError && (
+                            <motion.div
+                                className="nbm-error-toast"
+                                initial={{ y: -20, opacity: 0 }}
+                                animate={{ y: 0, opacity: 1 }}
+                                exit={{ y: -20, opacity: 0 }}
+                            >
+                                <AlertCircle className="w-4 h-4" />
+                                <span>{locationError}</span>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Bottom Sheet */}
+                    <AnimatePresence>
+                        {selectedMuseum && (
+                            <MuseumDetailSheet
+                                museum={selectedMuseum}
+                                expanded={sheetExpanded}
+                                onToggle={() => setSheetExpanded(!sheetExpanded)}
+                                onClose={() => setSelectedMuseum(null)}
+                            />
+                        )}
+                    </AnimatePresence>
+                </div>
+            ) : (
+                /* ===== LIST VIEW ===== */
+                <div className="nbm-list-container">
+                    {/* Header */}
+                    <div className="nbm-list-header">
+                        <div>
+                            <h1 className="nbm-list-header__title">Explore Nearby</h1>
+                            <p className="nbm-list-header__subtitle">
+                                {filteredMuseums.length} locations found
+                            </p>
+                        </div>
+                        <div className="nbm-list-header__actions">
+                            <button className="nbm-map-ctrl" onClick={() => setViewMode('map')}>
+                                <Map className="w-4 h-4" />
+                            </button>
+                            <button className="nbm-map-ctrl" onClick={requestLocation}>
+                                {isLocating
+                                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                                    : <Locate className="w-4 h-4" />
+                                }
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Search + Filters */}
+                    <div className="nbm-list-search">
+                        <div className="nbm-search-bar">
+                            <Search className="nbm-search-bar__icon" />
+                            <input
+                                className="nbm-search-bar__input"
+                                placeholder="Search heritage sites, museums..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
                             />
                         </div>
-                    </CardContent>
-                </Card>
-            )}
-
-            {/* View Toggle & Search */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-muted" />
-                    <Input
-                        placeholder="Search museums..."
-                        className="pl-10"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button
-                        variant={viewMode === 'list' ? 'gold' : 'ghost'}
-                        size="icon"
-                        onClick={() => setViewMode('list')}
-                    >
-                        <List className="w-4 h-4" />
-                    </Button>
-                    <Button
-                        variant={viewMode === 'map' ? 'gold' : 'ghost'}
-                        size="icon"
-                        onClick={() => setViewMode('map')}
-                    >
-                        <Map className="w-4 h-4" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => refetch()}
-                    >
-                        <RefreshCw className="w-4 h-4" />
-                    </Button>
-                </div>
-            </div>
-
-            {/* Content */}
-            {isLoading ? (
-                <div className="flex items-center justify-center py-20">
-                    <Loader2 className="w-8 h-8 text-gold animate-spin" />
-                </div>
-            ) : viewMode === 'map' ? (
-                <MapPlaceholder museums={museums} userLocation={userLocation || undefined} />
-            ) : museums.length === 0 ? (
-                <Card variant="elevated" className="text-center py-16">
-                    <Building2 className="w-16 h-16 text-theme-muted mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-theme-text mb-2">
-                        {userLocation ? 'No Museums Found Nearby' : 'Enable Location'}
-                    </h3>
-                    <p className="text-theme-muted mb-4 max-w-md mx-auto">
-                        {userLocation
-                            ? `No museums found within ${radius}km of your location. Try increasing the search radius.`
-                            : 'Enable location access to find museums near you.'}
-                    </p>
-                    {!userLocation && (
-                        <Button variant="gold" onClick={requestLocation}>
-                            Enable Location
-                        </Button>
-                    )}
-                </Card>
-            ) : (
-                <div className="space-y-4">
-                    {museums.map((museum: any) => (
-                        <MuseumCard
-                            key={museum.id}
-                            museum={museum}
-                            userLocation={userLocation || undefined}
-                        />
-                    ))}
-                </div>
-            )}
-
-            {/* Map Integration Note */}
-            {viewMode === 'list' && museums.length > 0 && (
-                <Card variant="elevated" className="mt-6 bg-gold/5 border-gold/20">
-                    <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                            <Map className="w-5 h-5 text-gold flex-shrink-0 mt-0.5" />
-                            <div>
-                                <h4 className="font-medium text-theme-text">Map View Available</h4>
-                                <p className="text-sm text-theme-muted mt-1">
-                                    Switch to map view to see all locations on an interactive map.
-                                </p>
-                            </div>
+                        <div className="nbm-filter-chips">
+                            {FILTER_CHIPS.map((chip) => (
+                                <button
+                                    key={chip.id}
+                                    className={`nbm-chip ${activeFilter === chip.id ? 'nbm-chip--active' : ''}`}
+                                    onClick={() => setActiveFilter(chip.id)}
+                                >
+                                    {chip.icon && <chip.icon className="w-3.5 h-3.5" />}
+                                    {chip.label}
+                                </button>
+                            ))}
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+
+                    {/* List */}
+                    {isLoading ? (
+                        <div className="nbm-loading">
+                            <Loader2 className="w-8 h-8 animate-spin" />
+                            <span>Discovering places...</span>
+                        </div>
+                    ) : filteredMuseums.length === 0 ? (
+                        <div className="nbm-empty">
+                            <Building2 className="w-12 h-12" />
+                            <h3>No locations found</h3>
+                            <p>Try adjusting your filters or search query.</p>
+                        </div>
+                    ) : (
+                        <div className="nbm-list-items">
+                            {filteredMuseums.map((museum: any) => (
+                                <MuseumListCard
+                                    key={museum.id}
+                                    museum={museum}
+                                    onSelect={() => {
+                                        setSelectedMuseum(museum);
+                                        setViewMode('map');
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
             )}
-        </PageContainer>
+        </div>
     );
 }
 

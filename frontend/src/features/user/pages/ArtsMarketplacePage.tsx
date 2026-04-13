@@ -1,382 +1,184 @@
 /**
- * Arts Marketplace Page for User Dashboard
- * Browse and collect verified artworks — Proof of Art (PoA)
+ * Arts Marketplace
+ * Mockup Implementation based on provided design
  */
 
 import { useState } from 'react';
-import {
-    Search,
-    Filter,
-    Grid3X3,
-    List,
-    Wallet,
-    TrendingUp,
-    ShoppingCart,
-    Eye,
-    Heart,
-    Loader2,
-    Sparkles
-} from 'lucide-react';
-import { PageContainer, StatsGrid } from '../../../components/common/DashboardLayout';
-import { Card, CardContent, Button, Input, Badge, Select } from '../../../components/ui';
-import type { SelectOption } from '../../../components/ui';
 import { useNavigate } from 'react-router-dom';
-import { useArtMarketplace, useArtStats, useOwnedArts, useBuyArt } from '../../../hooks/useArt';
+import {
+    Heart,
+    Bell,
+    ArrowRight,
+} from 'lucide-react';
+import './ArtsMarketplace.css';
 
-// ============================================
-// TYPES
-// ============================================
+// Mockup Data
+const CATEGORIES = ['All', 'Abstract', 'Portraits', 'Digital', 'Classic'];
 
-type ViewMode = 'grid' | 'list';
-type SortOption = 'price-low' | 'price-high' | 'newest' | 'popular';
-
-// ============================================
-// COMPONENTS
-// ============================================
-
-function StatCard({
-    title,
-    value,
-    icon: Icon,
-    color,
-    isLoading
-}: {
-    title: string;
-    value: string;
-    icon: React.ElementType;
-    color: string;
-    isLoading?: boolean;
-}) {
-    return (
-        <Card variant="elevated" className="relative overflow-hidden">
-            <div className="flex items-start justify-between">
-                <div className="flex-1">
-                    <p className="text-sm text-theme-muted">{title}</p>
-                    {isLoading ? (
-                        <div className="h-8 w-16 bg-theme-elevated animate-pulse rounded mt-1" />
-                    ) : (
-                        <p className="text-xl sm:text-2xl font-bold text-theme-text mt-1">{value}</p>
-                    )}
-                </div>
-                <div className={`p-2 sm:p-3 rounded-xl ${color} flex-shrink-0`}>
-                    <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
-                </div>
-            </div>
-        </Card>
-    );
-}
-
-function NFTCard({
-    art,
-    viewMode,
-    onBuy
-}: {
-    art: any;
-    viewMode: ViewMode;
-    onBuy?: (artId: string) => void;
-}) {
-    const navigate = useNavigate();
-
-    if (viewMode === 'list') {
-        return (
-            <Card variant="default" hover className="cursor-pointer touch-manipulation active:bg-theme-elevated/50 transition-colors" onClick={() => navigate(`/marketplace/art/${art.id}`)}>
-                <div className="flex flex-col xs:flex-row gap-3 sm:gap-4 p-3 sm:p-4">
-                    <div className="w-full xs:w-20 xs:h-20 sm:w-28 sm:h-28 aspect-square rounded-xl overflow-hidden flex-shrink-0 bg-theme-elevated">
-                        <img
-                            src={art.artwork?.primaryImageUrl || '/placeholder-art.jpg'}
-                            alt={art.artwork?.title || 'Artwork'}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                        />
-                    </div>
-                    <div className="flex-1 min-w-0 flex flex-col justify-between">
-                        <div>
-                            <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                    <h3 className="font-medium text-theme-text truncate text-sm sm:text-base">{art.artwork?.title || 'Untitled'}</h3>
-                                    <p className="text-xs sm:text-sm text-theme-muted truncate">by {art.creator?.displayName || 'Unknown'}</p>
-                                </div>
-                                <Badge variant="gold" className="flex-shrink-0 flex items-center gap-1 scale-90 sm:scale-100 origin-right">
-                                    <Sparkles className="w-3 h-3" />
-                                    PoA
-                                </Badge>
-                            </div>
-                            <div className="flex items-center gap-3 sm:gap-4 mt-2 text-xs text-theme-muted">
-                                <span className="flex items-center gap-1">
-                                    <Eye className="w-3 h-3" /> {art.artwork?.views || 0}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                    <Heart className="w-3 h-3" /> {art.artwork?.likes || 0}
-                                </span>
-                                <Badge variant="default" className="scale-90 origin-left">{art.blockchain || 'Solana'}</Badge>
-                            </div>
-                        </div>
-                        <div className="flex items-center justify-between mt-3 gap-2">
-                            <div className="min-w-0">
-                                <p className="text-[10px] sm:text-xs text-theme-muted truncate">Current Price</p>
-                                <p className="font-mono text-sm sm:text-lg font-bold text-gold truncate">
-                                    {art.listingPrice || art.price} {art.currency || 'SOL'}
-                                </p>
-                            </div>
-                            <Button
-                                variant="gold"
-                                size="sm"
-                                leftIcon={<ShoppingCart className="w-4 h-4" />}
-                                className="flex-shrink-0"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onBuy?.(art.id);
-                                }}
-                            >
-                                Buy
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            </Card>
-        );
+const MOCKUP_ARTS = {
+    boldGaze: {
+        id: '1',
+        title: 'Bold Gaze',
+        subtitle: 'Bold Strong Alive.',
+        image: 'https://images.unsplash.com/photo-1543857778-c4a1a3e0b2eb?w=800&q=80',
+        liked: false,
+    },
+    monaGrace: {
+        id: '2',
+        title: 'Mona Grace',
+        subtitle: 'Elegant Enigmatic.',
+        image: 'https://images.unsplash.com/photo-1578301978018-3005759f48f7?w=800&q=80',
+        liked: true,
+    },
+    eternalGaze: {
+        id: '3',
+        title: 'Eternal Gaze',
+        subtitle: 'Light meets shadow.',
+        image: 'https://images.unsplash.com/photo-1583847268964-b28e50b84bc5?w=800&q=80',
+        liked: true,
     }
-
-    return (
-        <Card variant="default" hover padding="none" className="group cursor-pointer overflow-hidden touch-manipulation active:scale-[0.98] transition-all duration-200" onClick={() => navigate(`/marketplace/art/${art.id}`)}>
-            <div className="relative aspect-square overflow-hidden bg-theme-elevated">
-                <img
-                    src={art.artwork?.primaryImageUrl || '/placeholder-art.jpg'}
-                    alt={art.artwork?.title || 'Artwork'}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    loading="lazy"
-                />
-                <Badge variant="gold" className="absolute top-3 left-3 flex items-center gap-1 shadow-md">
-                    <Sparkles className="w-3 h-3" />
-                    PoA
-                </Badge>
-                {/* Mobile Buy Button (Visible always on small screens, or adjust as needed. Here keeping hover behavior but adding mobile support if needed) */}
-                {/* For mobile, hover doesn't exist, so we rely on clicking card to go to detail, where they can buy. */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block">
-                    <div className="absolute bottom-4 left-4 right-4">
-                        <Button
-                            variant="gold"
-                            className="w-full"
-                            leftIcon={<ShoppingCart className="w-4 h-4" />}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onBuy?.(art.id);
-                            }}
-                        >
-                            Collect Now
-                        </Button>
-                    </div>
-                </div>
-            </div>
-            <div className="p-3 sm:p-4">
-                <h3 className="font-medium text-theme-text truncate group-hover:text-gold transition-colors text-sm sm:text-base">
-                    {art.artwork?.title || 'Untitled'}
-                </h3>
-                <p className="text-xs sm:text-sm text-theme-muted truncate">by {art.creator?.displayName || 'Unknown'}</p>
-                <div className="flex items-center justify-between mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-theme-border">
-                    <div className="min-w-0">
-                        <p className="text-[10px] sm:text-xs text-theme-muted truncate">Price</p>
-                        <p className="font-mono font-bold text-gold text-sm sm:text-base truncate">
-                            {art.listingPrice || art.price} {art.currency || 'SOL'}
-                        </p>
-                    </div>
-                    <Badge variant="default" className="text-[10px] sm:text-xs scale-90 sm:scale-100 origin-right">{art.blockchain || 'SOL'}</Badge>
-                </div>
-            </div>
-        </Card>
-    );
-}
-
-// ============================================
-// MAIN COMPONENT
-// ============================================
+};
 
 export function NFTMarketplacePage() {
     const navigate = useNavigate();
-    const [viewMode, setViewMode] = useState<ViewMode>('grid');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [sortBy, setSortBy] = useState<SortOption>('newest');
-    const [filters, setFilters] = useState({
-        page: 1,
-        limit: 12,
-        minPrice: undefined as number | undefined,
-        maxPrice: undefined as number | undefined,
+    const [activeCategory, setActiveCategory] = useState('All');
+    
+    // Simulate likes state
+    const [likes, setLikes] = useState<Record<string, boolean>>({
+        '1': false,
+        '2': true,
+        '3': true,
     });
 
-    // Queries
-    const { data: marketplaceData, isLoading } = useArtMarketplace({
-        page: filters.page,
-        limit: filters.limit,
-        sortBy: sortBy === 'price-low' || sortBy === 'price-high' ? 'price' : sortBy === 'newest' ? 'createdAt' : 'views',
-        sortOrder: sortBy === 'price-low' ? 'asc' : 'desc',
-    });
-
-    const { data: stats, isLoading: statsLoading } = useArtStats();
-    const { data: ownedData } = useOwnedArts({ limit: 5 });
-
-    // Mutations
-    const buyArt = useBuyArt();
-
-    const arts = marketplaceData?.data || [];
-    const ownedNFTs = ownedData?.data || [];
-
-    const handleBuy = (artId: string) => {
-        // In real app, show confirmation modal
-        buyArt.mutate(artId);
+    const toggleLike = (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        setLikes(prev => ({ ...prev, [id]: !prev[id] }));
     };
 
-    // Sort options for Select component
-    const sortOptions: SelectOption[] = [
-        { value: 'newest', label: 'Newest' },
-        { value: 'popular', label: 'Most Popular' },
-        { value: 'price-low', label: 'Price: Low to High' },
-        { value: 'price-high', label: 'Price: High to Low' },
-    ];
-
     return (
-        <PageContainer
-            title="Arts Marketplace"
-            subtitle="Discover and collect verified heritage artworks"
-            actions={
-                <Button
-                    variant="gold"
-                    leftIcon={<Wallet className="w-4 h-4" />}
-                    onClick={() => navigate('/dashboard/my-arts')}
-                >
-                    <span className="hidden sm:inline">My Arts</span>
-                    <span className="sm:hidden">My Arts</span>
-                </Button>
-            }
-        >
-            {/* Stats */}
-            <StatsGrid>
-                <StatCard
-                    title="Total Artworks"
-                    value={stats?.totalArts?.toLocaleString() || '0'}
-                    icon={Sparkles}
-                    color="bg-purple-500/10 text-purple-500"
-                    isLoading={statsLoading}
-                />
-                <StatCard
-                    title="Listed for Sale"
-                    value={stats?.totalListed?.toLocaleString() || '0'}
-                    icon={ShoppingCart}
-                    color="bg-blue-500/10 text-blue-500"
-                    isLoading={statsLoading}
-                />
-                <StatCard
-                    title="Total Volume"
-                    value={`${stats?.totalVolume?.toFixed(2) || '0'} SOL`}
-                    icon={TrendingUp}
-                    color="bg-green-500/10 text-green-500"
-                    isLoading={statsLoading}
-                />
-                <StatCard
-                    title="Your Arts"
-                    value={ownedNFTs.length.toString()}
-                    icon={Wallet}
-                    color="bg-gold/10 text-gold"
-                />
-            </StatsGrid>
+        <div className="art-market-mockup">
+            
+            {/* ====== HEADER ====== */}
+            <div className="art-market-mockup__header">
+                <div className="art-market-mockup__user">
+                    <div className="art-market-mockup__avatar">
+                        <img 
+                            src="https://api.dicebear.com/7.x/avataaars/svg?seed=Alex" 
+                            alt="Alex Nova" 
+                        />
+                    </div>
+                    <span className="art-market-mockup__name">Alex Nova</span>
+                </div>
+                <button className="art-market-mockup__bell">
+                    <Bell style={{ width: 20, height: 20 }} />
+                </button>
+            </div>
 
-            {/* Search & Filters */}
-            <Card variant="elevated" className="my-6">
-                <CardContent>
-                    <div className="flex flex-col md:flex-row gap-4">
-                        <div className="relative flex-1">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-muted" />
-                            <Input
-                                placeholder="Search artworks by name, artist, or collection..."
-                                className="pl-10"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                        </div>
-                        <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 hide-scrollbar">
-                            <Select
-                                options={sortOptions}
-                                value={sortBy}
-                                onChange={(value) => setSortBy(value as SortOption)}
-                                placeholder="Sort by"
-                                className="w-[140px] sm:w-[180px] flex-shrink-0"
-                            />
-                            <Button variant="outline" size="sm" className="sm:h-10 text-xs sm:text-sm whitespace-nowrap" leftIcon={<Filter className="w-3 h-3 sm:w-4 sm:h-4" />}>
-                                Filters
-                            </Button>
-                            <div className="border-l border-theme-border h-6 sm:h-8 mx-1 sm:mx-2 hidden xs:block" />
-                            <div className="flex items-center gap-1">
-                                <Button
-                                    variant={viewMode === 'grid' ? 'gold' : 'ghost'}
-                                    size="icon"
-                                    className="w-8 h-8 sm:w-10 sm:h-10"
-                                    onClick={() => setViewMode('grid')}
-                                >
-                                    <Grid3X3 className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                    variant={viewMode === 'list' ? 'gold' : 'ghost'}
-                                    size="icon"
-                                    className="w-8 h-8 sm:w-10 sm:h-10"
-                                    onClick={() => setViewMode('list')}
-                                >
-                                    <List className="w-4 h-4" />
-                                </Button>
-                            </div>
+            {/* ====== TITLE ====== */}
+            <h1 className="art-market-mockup__title art-market-mockup__fade-in" style={{ animationDelay: '0.1s' }}>
+                Your Art<br />Marketplace
+            </h1>
+
+            {/* ====== CATEGORIES ====== */}
+            <div className="art-market-mockup__categories art-market-mockup__fade-in" style={{ animationDelay: '0.2s' }}>
+                {CATEGORIES.map((cat) => (
+                    <button
+                        key={cat}
+                        className={`art-market-mockup__pill ${activeCategory === cat ? 'art-market-mockup__pill--active' : ''}`}
+                        onClick={() => setActiveCategory(cat)}
+                    >
+                        {cat}
+                    </button>
+                ))}
+            </div>
+
+            {/* ====== SECTION HEADER ====== */}
+            <div className="art-market-mockup__section-header art-market-mockup__fade-in" style={{ animationDelay: '0.3s' }}>
+                <h2 className="art-market-mockup__section-title">Trending Art</h2>
+                <span className="art-market-mockup__see-all" onClick={() => navigate('/dashboard/my-arts')}>See All</span>
+            </div>
+
+            {/* ====== MASONRY GRID ====== */}
+            <div className="art-market-mockup__grid">
+                
+                {/* Left Column */}
+                <div className="art-market-mockup__col-left art-market-mockup__fade-in" style={{ animationDelay: '0.4s' }}>
+                    
+                    {/* Big Card - Bold Gaze */}
+                    <div 
+                        className="art-market-mockup__card art-market-mockup__card--large"
+                        onClick={() => navigate(`/marketplace/art/${MOCKUP_ARTS.boldGaze.id}`)}
+                    >
+                        <img src={MOCKUP_ARTS.boldGaze.image} alt="Bold Gaze" className="art-market-mockup__card-img" />
+                        
+                        <button 
+                            className={`art-market-mockup__card-heart ${likes['1'] ? 'art-market-mockup__card-heart--active' : ''}`}
+                            onClick={(e) => toggleLike(e, '1')}
+                        >
+                            <Heart />
+                        </button>
+                        
+                        <div className="art-market-mockup__card-info">
+                            <h3 className="art-market-mockup__card-title">{MOCKUP_ARTS.boldGaze.title}</h3>
+                            <p className="art-market-mockup__card-subtitle">{MOCKUP_ARTS.boldGaze.subtitle}</p>
                         </div>
                     </div>
-                </CardContent>
-            </Card>
 
-            {/* Art Grid */}
-            {isLoading ? (
-                <div className="flex items-center justify-center py-20">
-                    <Loader2 className="w-8 h-8 text-gold animate-spin" />
-                </div>
-            ) : arts.length === 0 ? (
-                <Card variant="elevated" className="text-center py-16">
-                    <Sparkles className="w-16 h-16 text-theme-muted mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-theme-text mb-2">No Artworks Listed</h3>
-                    <p className="text-theme-muted mb-4">The marketplace is awaiting its first listings</p>
-                </Card>
-            ) : (
-                <div className={viewMode === 'grid'
-                    ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6"
-                    : "flex flex-col gap-4"
-                }>
-                    {arts.map((art: any) => (
-                        <NFTCard
-                            key={art.id}
-                            art={art}
-                            viewMode={viewMode}
-                            onBuy={handleBuy}
-                        />
-                    ))}
-                </div>
-            )}
+                    {/* Buy Now Button (Placed under the large card as in mockup) */}
+                    <button className="art-market-mockup__buy-btn" onClick={() => navigate(`/marketplace/art/${MOCKUP_ARTS.boldGaze.id}`)}>
+                        Buy Now
+                        <ArrowRight style={{ width: 18, height: 18 }} />
+                    </button>
 
-            {/* Pagination */}
-            {(marketplaceData?.meta?.totalPages ?? 0) > 1 && (
-                <div className="flex justify-center gap-2 mt-8">
-                    <Button
-                        variant="ghost"
-                        disabled={filters.page === 1}
-                        onClick={() => setFilters(prev => ({ ...prev, page: prev.page - 1 }))}
-                    >
-                        Previous
-                    </Button>
-                    <span className="flex items-center px-4 text-theme-muted">
-                        Page {filters.page} of {marketplaceData?.meta?.totalPages}
-                    </span>
-                    <Button
-                        variant="ghost"
-                        disabled={filters.page >= (marketplaceData?.meta?.totalPages ?? 0)}
-                        onClick={() => setFilters(prev => ({ ...prev, page: prev.page + 1 }))}
-                    >
-                        Next
-                    </Button>
                 </div>
-            )}
-        </PageContainer>
+
+                {/* Right Column */}
+                <div className="art-market-mockup__col-right art-market-mockup__fade-in" style={{ animationDelay: '0.5s' }}>
+                    
+                    {/* Small Card 1 - Mona Grace */}
+                    <div 
+                        className="art-market-mockup__card art-market-mockup__card--small"
+                        onClick={() => navigate(`/marketplace/art/${MOCKUP_ARTS.monaGrace.id}`)}
+                    >
+                        <img src={MOCKUP_ARTS.monaGrace.image} alt="Mona Grace" className="art-market-mockup__card-img" style={{ objectPosition: 'top' }} />
+                        
+                        <button 
+                            className={`art-market-mockup__card-heart ${likes['2'] ? 'art-market-mockup__card-heart--active' : ''}`}
+                            onClick={(e) => toggleLike(e, '2')}
+                        >
+                            <Heart />
+                        </button>
+                        
+                        <div className="art-market-mockup__card-info">
+                            <h3 className="art-market-mockup__card-title">{MOCKUP_ARTS.monaGrace.title}</h3>
+                            <p className="art-market-mockup__card-subtitle">{MOCKUP_ARTS.monaGrace.subtitle}</p>
+                        </div>
+                    </div>
+
+                    {/* Small Card 2 - Eternal Gaze */}
+                    <div 
+                        className="art-market-mockup__card art-market-mockup__card--small"
+                        onClick={() => navigate(`/marketplace/art/${MOCKUP_ARTS.eternalGaze.id}`)}
+                    >
+                        <img src={MOCKUP_ARTS.eternalGaze.image} alt="Eternal Gaze" className="art-market-mockup__card-img" />
+                        
+                        <button 
+                            className={`art-market-mockup__card-heart ${likes['3'] ? 'art-market-mockup__card-heart--active' : ''}`}
+                            onClick={(e) => toggleLike(e, '3')}
+                        >
+                            <Heart />
+                        </button>
+                        
+                        <div className="art-market-mockup__card-info">
+                            <h3 className="art-market-mockup__card-title">{MOCKUP_ARTS.eternalGaze.title}</h3>
+                            <p className="art-market-mockup__card-subtitle">{MOCKUP_ARTS.eternalGaze.subtitle}</p>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
     );
 }
 

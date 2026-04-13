@@ -1,22 +1,21 @@
 /**
- * User Dashboard Page — Google Arts & Culture Style
- * Immersive visual dashboard with real data from Supabase
+ * User Dashboard Page — National Heritage Style
+ * Immersive cultural heritage explorer with city-based navigation
  */
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-    ArrowRight,
-    Heart,
-    Star,
-    Sparkles,
-    Landmark,
-    FolderHeart,
-    Image as ImageIcon,
+    Search,
+    SlidersHorizontal,
     ChevronRight,
     MapPin,
-    BookOpen,
+    Landmark,
+    Compass,
+    ArrowRight,
+    Sparkles,
+    Image as ImageIcon,
 } from 'lucide-react';
 import {
     useCurrentUser,
@@ -30,174 +29,133 @@ import { ROUTES } from '../../../lib/constants';
 import './UserDashboard.css';
 
 // ============================================================
-// UNSPLASH FALLBACK IMAGES
+// CITY DATA — Indonesian Heritage Cities
 // ============================================================
 
-const HERO_FALLBACK_IMAGES = [
-    'https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?w=1200&q=80',
-    'https://images.unsplash.com/photo-1545259741-2ea3ebf61fa3?w=1200&q=80',
-    'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=1200&q=80',
+interface CityData {
+    id: string;
+    name: string;
+    description: string;
+    badge?: string;
+    image: string;
+    featured?: boolean;
+}
+
+const HERITAGE_CITIES: CityData[] = [
+    {
+        id: 'jakarta',
+        name: 'Jakarta',
+        description: 'Where colonial history meets modern arts. Explore the Old Town\'s colonial architecture and galleries.',
+        badge: 'CAPITAL CITY',
+        image: 'https://images.unsplash.com/photo-1555899434-94d1368aa7af?w=1200&q=80',
+        featured: true,
+    },
+    {
+        id: 'yogyakarta',
+        name: 'Yogyakarta',
+        description: 'The heart of Javanese culture and their royal heritage.',
+        badge: 'HERITAGE HUB',
+        image: 'https://images.unsplash.com/photo-1596402184320-417e7178b2cd?w=1200&q=80',
+    },
+    {
+        id: 'bali',
+        name: 'Bali',
+        description: 'Island of arts, temples, and living traditions.',
+        badge: 'SPIRITUAL ISLE',
+        image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=1200&q=80',
+    },
+    {
+        id: 'bandung',
+        name: 'Bandung',
+        description: 'Known for its Art Deco architecture and creative energy.',
+        badge: 'ART DECO CITY',
+        image: 'https://images.unsplash.com/photo-1580481072645-022f17cc738b?w=1200&q=80',
+    },
+    {
+        id: 'surabaya',
+        name: 'Surabaya',
+        description: 'The hero city with a rich maritime and trade heritage.',
+        badge: 'HERO CITY',
+        image: 'https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?w=1200&q=80',
+    },
+    {
+        id: 'semarang',
+        name: 'Semarang',
+        description: 'Explore Dutch colonial history and the vibrant Chinatown heritage.',
+        image: 'https://images.unsplash.com/photo-1545259741-2ea3ebf61fa3?w=1200&q=80',
+    },
 ];
 
-const MUSEUM_FALLBACK_IMAGES: Record<string, string> = {
-    'national-gallery-indonesia': 'https://images.unsplash.com/photo-1583037189850-1921ae7c6c22?w=400&q=80',
-    'museum-nasional': 'https://images.unsplash.com/photo-1566127444979-b3d2b654e3d7?w=400&q=80',
-    'macan-museum': 'https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=400&q=80',
-    'sanggar-agung-temple': 'https://images.unsplash.com/photo-1555899434-94d1368aa7af?w=400&q=80',
-    'ullen-sentalu-museum': 'https://images.unsplash.com/photo-1580060839134-75a5edca2e99?w=400&q=80',
-};
-
-const COLLECTION_PLACEHOLDER_IMAGES: string[] = [
-    'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=400&q=80',
-    'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=400&q=80',
-    'https://images.unsplash.com/photo-1547891654-e66ed7ebb968?w=400&q=80',
-    'https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=400&q=80',
-];
+const HERO_IMAGE = 'https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?w=1800&q=85';
 
 // ============================================================
-// HELPER: Get artwork image
+// HELPER FUNCTIONS
 // ============================================================
 
-function getArtworkImage(artwork: any): string {
-    if (!artwork) return '';
-    return artwork.primaryImageUrl
-        || artwork.primary_image_url
-        || artwork.imageUrl
-        || artwork.image_url
-        || (Array.isArray(artwork.images) && artwork.images[0]?.url)
+function ensureImageParams(url: string, width = 1200): string {
+    if (!url) return '';
+    if (url.includes('unsplash.com') && !url.includes('?')) {
+        return `${url}?w=${width}&q=80&auto=format`;
+    }
+    return url;
+}
+
+function getMuseumImage(museum: any): string {
+    const raw =
+        museum?.coverImageUrl
+        || museum?.cover_image_url
+        || (museum?.images && museum.images[0])
         || '';
+    if (raw) return ensureImageParams(raw);
+    return 'https://images.unsplash.com/photo-1583037189850-1921ae7c6c22?w=400&q=80';
 }
 
 // ============================================================
 // SUB-COMPONENTS
 // ============================================================
 
-/** Skeleton placeholder while loading */
-function SkeletonCard({ width = '240px', height = '200px' }: { width?: string; height?: string }) {
-    return (
-        <div
-            className="dash-skeleton flex-shrink-0"
-            style={{ width, height, minWidth: width }}
-        />
-    );
-}
-
-/** Hero Featured Artwork Section */
-function HeroSection({ artwork, onClick }: { artwork: any; onClick: () => void }) {
-    const imageUrl = getArtworkImage(artwork);
-    const genres = artwork?.genres || [];
-
-    return (
-        <motion.div
-            className="dashboard-hero"
-            onClick={onClick}
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.6, ease: 'easeOut' }}
-        >
-            <img
-                src={imageUrl || HERO_FALLBACK_IMAGES[0]}
-                alt={artwork?.title || 'Featured Artwork'}
-                className="dashboard-hero__img"
-                loading="eager"
-            />
-            <div className="dashboard-hero__overlay">
-                <div className="dashboard-hero__badge">
-                    <Sparkles style={{ width: 12, height: 12 }} />
-                    Featured Artwork
-                </div>
-                <h2 className="dashboard-hero__title">
-                    {artwork?.title || 'Sunset Over Borobudur'}
-                </h2>
-                <p className="dashboard-hero__subtitle">
-                    {artwork?.description?.substring(0, 120) || 'A stunning landscape painting capturing the golden hour at Borobudur temple'}
-                    {artwork?.description?.length > 120 ? '...' : ''}
-                </p>
-                {genres.length > 0 && (
-                    <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-                        {genres.slice(0, 3).map((g: string) => (
-                            <span key={g} className="dash-artwork-card__genre-tag">{g}</span>
-                        ))}
-                    </div>
-                )}
-                <button className="dashboard-hero__cta">
-                    Enter 3D Experience <ArrowRight />
-                </button>
-            </div>
-        </motion.div>
-    );
-}
-
-/** Artwork Carousel Card */
-function ArtworkCarouselCard({
-    artwork,
+/** City Exploration Card */
+function CityCard({
+    city,
     index,
     onClick,
 }: {
-    artwork: any;
+    city: CityData;
     index: number;
     onClick: () => void;
 }) {
-    const imageUrl = getArtworkImage(artwork);
-    const genres = artwork?.genres || [];
-    const artistName = artwork?.artist?.displayName || artwork?.artist?.display_name || 'Unknown Artist';
-
     return (
         <motion.div
-            className="dash-artwork-card dash-fade-in"
+            className={`heritage-city-card heritage-fade-in ${city.featured ? 'heritage-city-card--featured' : 'heritage-city-card--regular'}`}
             onClick={onClick}
-            style={{ animationDelay: `${index * 0.08}s` }}
+            style={{ animationDelay: `${index * 0.1}s` }}
             whileHover={{ y: -4 }}
         >
-            <div className="dash-artwork-card__img-wrap">
-                {imageUrl ? (
-                    <img
-                        src={imageUrl}
-                        alt={artwork?.title}
-                        className="dash-artwork-card__img"
-                        loading="lazy"
-                    />
-                ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
-                        <ImageIcon style={{ width: 32, height: 32, opacity: 0.2, color: 'var(--text-muted)' }} />
-                    </div>
+            <img
+                src={city.image}
+                alt={city.name}
+                className="heritage-city-card__img"
+                loading={index < 2 ? 'eager' : 'lazy'}
+            />
+            <div className="heritage-city-card__gradient" />
+            <div className="heritage-city-card__content">
+                <h3 className="heritage-city-card__name">{city.name}</h3>
+                <p className="heritage-city-card__desc">{city.description}</p>
+                {city.badge && (
+                    <span className="heritage-city-card__badge">{city.badge}</span>
                 )}
-                <div className="dash-artwork-card__gradient" />
-                <div className="dash-artwork-card__overlay-text">
-                    <p className="dash-artwork-card__overlay-title">{artwork?.title}</p>
-                    <p className="dash-artwork-card__overlay-artist">{artistName}</p>
-                </div>
-                <button
-                    className="dash-artwork-card__bookmark"
-                    onClick={(e) => { e.stopPropagation(); }}
-                    aria-label="Bookmark artwork"
-                >
-                    <Heart />
-                </button>
-            </div>
-            <div className="dash-artwork-card__body">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        {artwork?.medium || 'Mixed Media'}
-                    </span>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        👁 {(artwork?.views || 0).toLocaleString()}
-                    </span>
-                </div>
-                {genres.length > 0 && (
-                    <div className="dash-artwork-card__genres">
-                        {genres.slice(0, 2).map((g: string) => (
-                            <span key={g} className="dash-artwork-card__genre-tag">{g}</span>
-                        ))}
-                    </div>
+                {city.featured && (
+                    <button className="heritage-city-card__explore-btn">
+                        Discover More <ArrowRight />
+                    </button>
                 )}
             </div>
         </motion.div>
     );
 }
 
-/** Museum / Virtual Tour Card */
-function TourCard({
+/** Curated Gallery Card */
+function GalleryCard({
     museum,
     index,
     onClick,
@@ -206,127 +164,38 @@ function TourCard({
     index: number;
     onClick: () => void;
 }) {
-    const slug = museum?.slug || '';
-    const imgUrl = museum?.coverImageUrl
-        || museum?.cover_image_url
-        || (museum?.images && museum.images[0])
-        || MUSEUM_FALLBACK_IMAGES[slug]
-        || 'https://images.unsplash.com/photo-1583037189850-1921ae7c6c22?w=400&q=80';
-
+    const imgUrl = getMuseumImage(museum);
     const city = museum?.city || museum?.address?.city || 'Indonesia';
-    const rating = museum?.rating || 4.5;
-    const totalArtworks = museum?.totalArtworks || museum?.total_artworks || museum?.artworksCount || 0;
 
     return (
         <motion.div
-            className="dash-tour-card dash-fade-in"
+            className="heritage-gallery-card heritage-fade-in"
             onClick={onClick}
-            style={{ animationDelay: `${index * 0.1}s` }}
-            whileHover={{ x: 4 }}
+            style={{ animationDelay: `${index * 0.08}s` }}
+            whileHover={{ y: -3 }}
         >
-            <div className="dash-tour-card__img-wrap">
+            <div className="heritage-gallery-card__img-wrap">
                 <img
                     src={imgUrl}
                     alt={museum?.name}
-                    className="dash-tour-card__img"
+                    className="heritage-gallery-card__img"
                     loading="lazy"
                 />
-                <span className="dash-tour-card__live-badge">LIVE</span>
             </div>
-            <div className="dash-tour-card__info">
-                <h4 className="dash-tour-card__name">{museum?.name || 'Museum'}</h4>
-                <div className="dash-tour-card__meta">
-                    <span className="dash-tour-card__city">
-                        <MapPin style={{ width: 11, height: 11, display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />
-                        {city}
-                    </span>
-                    <span className="dash-tour-card__rating">
-                        <Star style={{ width: 11, height: 11 }} />
-                        {rating}
-                    </span>
-                </div>
-                <span className="dash-tour-card__artworks-count">
-                    {totalArtworks} artworks
+            <div className="heritage-gallery-card__info">
+                <span className="heritage-gallery-card__eyebrow">
+                    {museum?.type || 'Collection'}
                 </span>
-            </div>
-            <div className="dash-tour-card__arrow">
-                <ChevronRight />
-            </div>
-        </motion.div>
-    );
-}
-
-/** Collection Card */
-function CollectionCard({
-    collection,
-    index,
-    onClick,
-}: {
-    collection: any;
-    index: number;
-    onClick: () => void;
-}) {
-    const coverImg = collection?.coverImageUrl
-        || collection?.cover_image_url
-        || COLLECTION_PLACEHOLDER_IMAGES[index % COLLECTION_PLACEHOLDER_IMAGES.length];
-    const count = collection?.artworkCount || collection?.artwork_count || collection?.artworksCount || 0;
-
-    return (
-        <motion.div
-            className="dash-collection-card dash-fade-in"
-            onClick={onClick}
-            style={{ animationDelay: `${index * 0.1}s` }}
-            whileHover={{ y: -3 }}
-        >
-            {coverImg ? (
-                <img
-                    src={coverImg}
-                    alt={collection?.name}
-                    className="dash-collection-card__img"
-                    loading="lazy"
-                />
-            ) : (
-                <div className="dash-collection-card__placeholder">
-                    <FolderHeart />
-                </div>
-            )}
-            <div className="dash-collection-card__overlay">
-                <h4 className="dash-collection-card__name">{collection?.name || 'Collection'}</h4>
-                <span className="dash-collection-card__count">{count} artworks</span>
+                <h4 className="heritage-gallery-card__name">
+                    {museum?.name || 'Gallery'}
+                </h4>
+                <p className="heritage-gallery-card__desc">
+                    {museum?.description
+                        ? museum.description.substring(0, 80) + (museum.description.length > 80 ? '...' : '')
+                        : `A curated journey through the artistic heritage of ${city}.`}
+                </p>
             </div>
         </motion.div>
-    );
-}
-
-/** Bookmark small card */
-function BookmarkCard({
-    bookmark,
-    onClick,
-}: {
-    bookmark: any;
-    onClick: () => void;
-}) {
-    const artwork = bookmark?.artwork || bookmark;
-    const imageUrl = getArtworkImage(artwork) || artwork?.imageUrl || '';
-    const title = artwork?.title || 'Untitled';
-    const artist = artwork?.artist?.displayName || 'Unknown';
-
-    return (
-        <div className="dash-bookmark-card" onClick={onClick}>
-            <div className="dash-bookmark-card__img-wrap">
-                {imageUrl ? (
-                    <img src={imageUrl} alt={title} className="dash-bookmark-card__img" loading="lazy" />
-                ) : (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-elevated)' }}>
-                        <ImageIcon style={{ width: 24, height: 24, opacity: 0.2, color: 'var(--text-muted)' }} />
-                    </div>
-                )}
-            </div>
-            <div className="dash-bookmark-card__body">
-                <p className="dash-bookmark-card__title">{title}</p>
-                <p className="dash-bookmark-card__artist">{artist}</p>
-            </div>
-        </div>
     );
 }
 
@@ -337,24 +206,13 @@ function BookmarkCard({
 export function UserDashboard() {
     const navigate = useNavigate();
     const { data: user } = useCurrentUser();
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Fetch real data from API
-    const { data: artworksData, isLoading: artworksLoading } = useArtworks({ limit: 10 });
-    const { data: museumsData, isLoading: museumsLoading } = useMuseums({ limit: 5 });
-    const { data: bookmarksData, isLoading: bookmarksLoading } = useBookmarks(1, 6);
-    const { data: collectionsData, isLoading: collectionsLoading } = useCollections(1, 4);
+    const { data: museumsData, isLoading: museumsLoading } = useMuseums({ limit: 8 });
 
     // Extract arrays safely
-    const artworks = React.useMemo(() => {
-        const raw = artworksData;
-        if (!raw) return [];
-        if (Array.isArray(raw)) return raw;
-        if (raw.data && Array.isArray(raw.data)) return raw.data;
-        if ((raw as any).artworks && Array.isArray((raw as any).artworks)) return (raw as any).artworks;
-        return extractArray(raw);
-    }, [artworksData]);
-
-    const museums = React.useMemo(() => {
+    const museums = useMemo(() => {
         const raw = museumsData;
         if (!raw) return [];
         if (Array.isArray(raw)) return raw;
@@ -362,237 +220,181 @@ export function UserDashboard() {
         return extractArray(raw);
     }, [museumsData]);
 
-    const bookmarks = extractArray(bookmarksData);
-    const collections = extractArray(collectionsData);
+    // Filter cities based on search
+    const filteredCities = useMemo(() => {
+        if (!searchQuery.trim()) return HERITAGE_CITIES;
+        const q = searchQuery.toLowerCase();
+        return HERITAGE_CITIES.filter(
+            (c) =>
+                c.name.toLowerCase().includes(q) ||
+                c.description.toLowerCase().includes(q)
+        );
+    }, [searchQuery]);
 
-    // Pick the hero artwork (most views)
-    const heroArtwork = React.useMemo(() => {
-        if (!artworks.length) return null;
-        const sorted = [...artworks].sort((a: any, b: any) => (b.views || 0) - (a.views || 0));
-        return sorted[0];
-    }, [artworks]);
-
-    // Curator picks = remaining artworks after hero
-    const curatorPicks = React.useMemo(() => {
-        if (!artworks.length) return [];
-        return artworks.filter((a: any) => a.id !== heroArtwork?.id);
-    }, [artworks, heroArtwork]);
+    const totalDistricts = museums.length + HERITAGE_CITIES.length;
 
     return (
         <motion.div
+            className="heritage-dashboard"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4 }}
-            style={{ maxWidth: 1200, margin: '0 auto' }}
         >
-            {/* Welcome Bar */}
-            <div className="dash-welcome">
-                <div className="dash-welcome__text">
-                    <h1>Welcome back, {user?.displayName || user?.username || 'Explorer'}</h1>
-                    <p>Discover Indonesia&apos;s cultural heritage</p>
+            {/* ====== HERO SECTION ====== */}
+            <div className="heritage-hero">
+                <img
+                    src={HERO_IMAGE}
+                    alt="National Heritage"
+                    className="heritage-hero__bg"
+                    loading="eager"
+                />
+                <div className="heritage-hero__overlay" />
+                <div className="heritage-hero__content">
+                    <motion.span
+                        className="heritage-hero__label"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2, duration: 0.5 }}
+                    >
+                        <Sparkles /> SeniQu Gallery
+                    </motion.span>
+                    <motion.h1
+                        className="heritage-hero__title"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3, duration: 0.6 }}
+                    >
+                        National Heritage
+                    </motion.h1>
+                    <motion.p
+                        className="heritage-hero__subtitle"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.45, duration: 0.6 }}
+                    >
+                        Discover the soul of Indonesia through its curated architectural and cultural districts.
+                    </motion.p>
                 </div>
             </div>
 
-            {/* ====== HERO SECTION ====== */}
-            {artworksLoading ? (
-                <div className="dash-skeleton" style={{ width: '100%', height: 340, borderRadius: 20 }} />
-            ) : heroArtwork ? (
-                <HeroSection
-                    artwork={heroArtwork}
-                    onClick={() => navigate(`/gallery/artwork/${heroArtwork.id}`)}
-                />
-            ) : (
-                <div className="dashboard-hero" style={{ background: 'var(--bg-surface)' }}>
-                    <div className="dashboard-hero__overlay">
-                        <div className="dashboard-hero__badge">
-                            <Sparkles style={{ width: 12, height: 12 }} />
-                            Welcome to SeniQu
-                        </div>
-                        <h2 className="dashboard-hero__title">Explore Indonesia&apos;s Art Heritage</h2>
-                        <p className="dashboard-hero__subtitle">
-                            Discover thousands of artworks from museums and galleries across the archipelago.
-                        </p>
-                        <button className="dashboard-hero__cta" onClick={() => navigate(ROUTES.GALLERY)}>
-                            Start Exploring <ArrowRight />
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* ====== AI CURATOR PICKS ====== */}
-            <div className="dash-section">
-                <div className="dash-section__header">
-                    <div>
-                        <h3 className="dash-section__title">
-                            <Sparkles style={{ width: 18, height: 18, color: 'var(--text-gold)' }} />
-                            AI Curator Picks
-                        </h3>
-                        <p className="dash-section__subtitle">Masterpieces selected just for you</p>
-                    </div>
-                    <button
-                        className="dash-section__see-all"
-                        onClick={() => navigate(ROUTES.GALLERY)}
-                    >
-                        See All <ChevronRight style={{ width: 14, height: 14 }} />
+            {/* ====== SEARCH BAR ====== */}
+            <motion.div
+                className="heritage-search"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5, duration: 0.5 }}
+            >
+                <div className="heritage-search__bar">
+                    <Search className="heritage-search__icon" />
+                    <input
+                        type="text"
+                        className="heritage-search__input"
+                        placeholder="Search heritage districts..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    <span className="heritage-search__count">
+                        {totalDistricts} districts
+                    </span>
+                    <button className="heritage-search__filter-btn">
+                        <SlidersHorizontal /> FILTER
                     </button>
                 </div>
-                <div className="dash-carousel">
-                    {artworksLoading ? (
-                        <>
-                            <SkeletonCard width="240px" height="220px" />
-                            <SkeletonCard width="240px" height="220px" />
-                            <SkeletonCard width="240px" height="220px" />
-                        </>
-                    ) : curatorPicks.length > 0 ? (
-                        curatorPicks.map((artwork: any, i: number) => (
-                            <ArtworkCarouselCard
-                                key={artwork.id || i}
-                                artwork={artwork}
-                                index={i}
-                                onClick={() => navigate(`/gallery/artwork/${artwork.id}`)}
-                            />
-                        ))
-                    ) : (
-                        <div className="dash-empty" style={{ width: '100%' }}>
-                            <ImageIcon className="dash-empty__icon" />
-                            <p className="dash-empty__text">No artworks discovered yet</p>
-                            <button className="dash-empty__action" onClick={() => navigate(ROUTES.GALLERY)}>
-                                Explore Gallery
-                            </button>
+            </motion.div>
+
+            {/* ====== EXPLORE BY CITY ====== */}
+            <div className="heritage-section">
+                <div className="heritage-section__header">
+                    <div>
+                        <p className="heritage-section__eyebrow">Cultural Atlas</p>
+                        <h2 className="heritage-section__title">Explore by City</h2>
+                    </div>
+                    <button
+                        className="heritage-section__see-all"
+                        onClick={() => navigate(ROUTES.USER_NEARBY)}
+                    >
+                        View All Districts <ChevronRight style={{ width: 14, height: 14 }} />
+                    </button>
+                </div>
+
+                <div className="heritage-cities">
+                    {filteredCities.map((city, i) => (
+                        <CityCard
+                            key={city.id}
+                            city={city}
+                            index={i}
+                            onClick={() => navigate(ROUTES.USER_NEARBY)}
+                        />
+                    ))}
+                    {filteredCities.length === 0 && (
+                        <div className="heritage-empty" style={{ gridColumn: '1 / -1' }}>
+                            <MapPin className="heritage-empty__icon" />
+                            <p className="heritage-empty__text">
+                                No cities match &quot;{searchQuery}&quot;
+                            </p>
                         </div>
                     )}
                 </div>
             </div>
 
-            {/* ====== LIVE VIRTUAL TOURS ====== */}
-            <div className="dash-section">
-                <div className="dash-section__header">
+            {/* ====== CURATED GALLERIES ====== */}
+            <div className="heritage-section">
+                <div className="heritage-section__header">
                     <div>
-                        <h3 className="dash-section__title">
-                            <Landmark style={{ width: 18, height: 18, color: 'var(--text-gold)' }} />
-                            Live Virtual Tours
-                        </h3>
-                        <p className="dash-section__subtitle">Explore museums across the archipelago</p>
+                        <p className="heritage-section__eyebrow">Handpicked</p>
+                        <h2 className="heritage-section__title">Curated Galleries</h2>
                     </div>
                     <button
-                        className="dash-section__see-all"
-                        onClick={() => navigate(ROUTES.USER_NEARBY)}
+                        className="heritage-section__see-all"
+                        onClick={() => navigate(ROUTES.USER_GALLERY)}
                     >
                         View All <ChevronRight style={{ width: 14, height: 14 }} />
                     </button>
                 </div>
-                <div className="dash-tours-grid">
-                    {museumsLoading ? (
-                        <>
-                            <div className="dash-skeleton" style={{ height: 92, borderRadius: 16 }} />
-                            <div className="dash-skeleton" style={{ height: 92, borderRadius: 16 }} />
-                        </>
-                    ) : museums.length > 0 ? (
-                        museums.slice(0, 4).map((museum: any, i: number) => (
-                            <TourCard
+
+                {museumsLoading ? (
+                    <div className="heritage-galleries">
+                        {[1, 2, 3].map((n) => (
+                            <div
+                                key={n}
+                                className="heritage-skeleton"
+                                style={{
+                                    flex: '0 0 300px',
+                                    height: 120,
+                                    borderRadius: 16,
+                                }}
+                            />
+                        ))}
+                    </div>
+                ) : museums.length > 0 ? (
+                    <div className="heritage-galleries">
+                        {museums.slice(0, 6).map((museum: any, i: number) => (
+                            <GalleryCard
                                 key={museum.id || i}
                                 museum={museum}
                                 index={i}
-                                onClick={() => navigate(`/gallery/museum/${museum.slug || museum.id}`)}
-                            />
-                        ))
-                    ) : (
-                        <div className="dash-empty">
-                            <Landmark className="dash-empty__icon" />
-                            <p className="dash-empty__text">No museums available</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* ====== FEATURED COLLECTIONS ====== */}
-            <div className="dash-section">
-                <div className="dash-section__header">
-                    <div>
-                        <h3 className="dash-section__title">
-                            <FolderHeart style={{ width: 18, height: 18, color: 'var(--text-gold)' }} />
-                            Featured Collections
-                        </h3>
-                        <p className="dash-section__subtitle">Your curated art collections</p>
-                    </div>
-                    <button
-                        className="dash-section__see-all"
-                        onClick={() => navigate(ROUTES.USER_COLLECTIONS)}
-                    >
-                        View All <ChevronRight style={{ width: 14, height: 14 }} />
-                    </button>
-                </div>
-                {collectionsLoading ? (
-                    <div className="dash-collections-grid">
-                        <div className="dash-skeleton" style={{ aspectRatio: '3/4' }} />
-                        <div className="dash-skeleton" style={{ aspectRatio: '3/4' }} />
-                        <div className="dash-skeleton" style={{ aspectRatio: '3/4' }} />
-                    </div>
-                ) : collections.length > 0 ? (
-                    <div className="dash-collections-grid">
-                        {collections.slice(0, 4).map((collection: any, i: number) => (
-                            <CollectionCard
-                                key={collection.id || i}
-                                collection={collection}
-                                index={i}
-                                onClick={() => navigate(`/dashboard/collections/${collection.id}`)}
+                                onClick={() =>
+                                    navigate(
+                                        `/gallery/museum/${museum.slug || museum.id}`
+                                    )
+                                }
                             />
                         ))}
                     </div>
                 ) : (
-                    <div className="dash-empty">
-                        <FolderHeart className="dash-empty__icon" />
-                        <p className="dash-empty__text">No collections yet — start curating!</p>
-                        <button className="dash-empty__action" onClick={() => navigate(ROUTES.USER_COLLECTIONS)}>
-                            Create Collection
+                    <div className="heritage-empty">
+                        <Landmark className="heritage-empty__icon" />
+                        <p className="heritage-empty__text">
+                            No galleries available yet — check back soon!
+                        </p>
+                        <button
+                            className="heritage-empty__action"
+                            onClick={() => navigate(ROUTES.GALLERY)}
+                        >
+                            Explore Public Gallery
                         </button>
                     </div>
                 )}
-            </div>
-
-            {/* ====== RECENT BOOKMARKS ====== */}
-            <div className="dash-section" style={{ marginBottom: 48 }}>
-                <div className="dash-section__header">
-                    <div>
-                        <h3 className="dash-section__title">
-                            <BookOpen style={{ width: 18, height: 18, color: 'var(--text-gold)' }} />
-                            Recent Bookmarks
-                        </h3>
-                        <p className="dash-section__subtitle">Artworks you&apos;ve saved</p>
-                    </div>
-                    <button
-                        className="dash-section__see-all"
-                        onClick={() => navigate(ROUTES.USER_BOOKMARKS)}
-                    >
-                        View All <ChevronRight style={{ width: 14, height: 14 }} />
-                    </button>
-                </div>
-                <div className="dash-carousel">
-                    {bookmarksLoading ? (
-                        <>
-                            <SkeletonCard width="160px" height="200px" />
-                            <SkeletonCard width="160px" height="200px" />
-                            <SkeletonCard width="160px" height="200px" />
-                            <SkeletonCard width="160px" height="200px" />
-                        </>
-                    ) : bookmarks.length > 0 ? (
-                        bookmarks.slice(0, 6).map((bookmark: any, i: number) => (
-                            <BookmarkCard
-                                key={bookmark.id || i}
-                                bookmark={bookmark}
-                                onClick={() => navigate(`/gallery/artwork/${bookmark.artworkId || bookmark.artwork_id || bookmark.id}`)}
-                            />
-                        ))
-                    ) : (
-                        <div className="dash-empty" style={{ width: '100%' }}>
-                            <Heart className="dash-empty__icon" />
-                            <p className="dash-empty__text">No bookmarks yet — discover art you love!</p>
-                            <button className="dash-empty__action" onClick={() => navigate(ROUTES.GALLERY)}>
-                                Start Exploring
-                            </button>
-                        </div>
-                    )}
-                </div>
             </div>
         </motion.div>
     );

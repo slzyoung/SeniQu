@@ -1,116 +1,44 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, MoreVertical, Edit2, Trash2, Lock, FolderHeart, Image, Loader2 } from 'lucide-react';
-import { PageContainer } from '../../../components/common/DashboardLayout';
-import { Card, Button, Badge, Modal, Input, Textarea } from '../../../components/ui';
-import { useToast } from '../../../stores/useNotificationStore';
+import { useNavigate } from 'react-router-dom';
 import { useMyCollections, useCreateCollection } from '../../../hooks/useCollections';
-import { Collection } from '../../../services/collectionsService';
 import { extractArray } from '../../../lib/utils';
+import {
+    ChevronLeft,
+    MoreVertical,
+    MapPin,
+    Facebook,
+    Twitter,
+    Linkedin,
+    Instagram,
+    Home,
+    Layers,
+    Compass,
+    Settings,
+    Plus,
+    Loader2
+} from 'lucide-react';
+import './MyCollections.css';
+import { Modal, Input, Textarea, Button } from '../../../components/ui';
+import { useToast } from '../../../stores/useNotificationStore';
 
-function CollectionCard({
-    collection,
-    onEdit,
-    onDelete
-}: {
-    collection: Collection;
-    onEdit: () => void;
-    onDelete: () => void;
-}) {
-    const [showMenu, setShowMenu] = useState(false);
-
-    return (
-        <motion.div
-            layout
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-        >
-            <Card variant="elevated" hover padding="none" className="group overflow-hidden">
-                <div className="relative aspect-[3/2]">
-                    <div className="w-full h-full bg-theme-elevated flex items-center justify-center">
-                        <FolderHeart className="w-12 h-12 text-theme-muted" />
-                    </div>
-
-                    {/* Overlay on hover */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-
-                    {/* Top badges */}
-                    <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
-                        {/* 
-                         * TODO: Add isPublic to backend schema 
-                         * For now assume all are private or check description
-                         */}
-                        <Badge variant="default" size="sm">
-                            <Lock className="w-3 h-3 mr-1" />
-                            Private
-                        </Badge>
-
-                        <div className="relative">
-                            <button
-                                onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-                                className="p-1.5 bg-black/40 backdrop-blur-sm text-white rounded-lg hover:bg-black/60 transition-colors"
-                            >
-                                <MoreVertical className="w-4 h-4" />
-                            </button>
-
-                            <AnimatePresence>
-                                {showMenu && (
-                                    <motion.div
-                                        initial={{ opacity: 0, scale: 0.95 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0.95 }}
-                                        className="absolute right-0 mt-1 w-36 bg-theme-surface border border-theme-border rounded-xl shadow-xl overflow-hidden z-10"
-                                    >
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onEdit(); setShowMenu(false); }}
-                                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-theme-text hover:bg-theme-elevated transition-colors"
-                                        >
-                                            <Edit2 className="w-4 h-4" />
-                                            Edit
-                                        </button>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onDelete(); setShowMenu(false); }}
-                                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-theme-elevated transition-colors"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                            Delete
-                                        </button>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-                    </div>
-
-                    {/* Bottom info */}
-                    <div className="absolute bottom-0 left-0 right-0 p-4">
-                        <h3 className="font-semibold text-white text-lg">{collection.name}</h3>
-                        <div className="flex items-center gap-2 mt-1">
-                            <Image className="w-3.5 h-3.5 text-white/70" />
-                            <span className="text-sm text-white/70">{collection.artworkCount || 0} artworks</span>
-                        </div>
-                    </div>
-                </div>
-
-                {collection.description && (
-                    <div className="p-4">
-                        <p className="text-sm text-theme-muted line-clamp-2">{collection.description}</p>
-                    </div>
-                )}
-            </Card>
-        </motion.div>
-    );
-}
+// Mockup Data
+const MOCK_PHOTOS = [
+    { id: 1, type: 'tall', img: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=600&q=80' },
+    { id: 2, type: 'short', img: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=600&q=80' },
+    { id: 3, type: 'short', img: 'https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07?w=600&q=80' },
+    { id: 4, type: 'tall', img: 'https://images.unsplash.com/photo-1542224566-6e85f2e6772f?w=600&q=80' }
+];
 
 export function MyCollections() {
+    const navigate = useNavigate();
     const { data: collectionsData, isLoading } = useMyCollections();
     const createMutation = useCreateCollection();
-
-    // Safely extract collections array from API response
-    const collections = extractArray<Collection>(collectionsData);
-
+    const toast = useToast();
+    
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [newCollection, setNewCollection] = useState({ name: '', description: '' });
-    const toast = useToast();
+
+    const collections = extractArray<any>(collectionsData) || [];
 
     const handleCreate = async () => {
         if (!newCollection.name.trim()) {
@@ -123,68 +51,139 @@ export function MyCollections() {
             setShowCreateModal(false);
             setNewCollection({ name: '', description: '' });
         } catch (error) {
-            // Handled by mutation hook
+            // Handled
         }
     };
 
-    const handleDelete = (_id: string) => {
-        // TODO: Implement delete in service/hook
-        toast.info('Delete feature coming soon');
-    };
-
     return (
-        <PageContainer
-            title="My Collections"
-            description={!isLoading ? `${collections?.length || 0} collections` : 'Loading...'}
-            actions={
-                <Button
-                    variant="primary"
-                    leftIcon={<Plus className="w-4 h-4" />}
-                    onClick={() => setShowCreateModal(true)}
-                >
-                    New Collection
-                </Button>
-            }
-        >
-            {isLoading ? (
-                <div className="py-20 flex justify-center">
-                    <Loader2 className="w-8 h-8 text-gold animate-spin" />
-                </div>
-            ) : !collections || collections.length === 0 ? (
-                <Card variant="elevated" className="text-center py-16">
-                    <FolderHeart className="w-16 h-16 text-theme-muted mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-theme-text mb-2">No collections yet</h3>
-                    <p className="text-theme-muted mb-6 max-w-sm mx-auto">
-                        Create your first collection to organize and showcase your favorite artworks
-                    </p>
-                    <Button
-                        variant="gold"
-                        leftIcon={<Plus className="w-4 h-4" />}
-                        onClick={() => setShowCreateModal(true)}
-                    >
-                        Create Collection
-                    </Button>
-                </Card>
-            ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {collections.map((collection) => (
-                        <CollectionCard
-                            key={collection.id}
-                            collection={collection}
-                            onEdit={() => toast.info('Edit feature coming soon')}
-                            onDelete={() => handleDelete(collection.id)}
-                        />
-                    ))}
-                </div>
-            )}
+        <div className="mc-page">
+            <div className="mc-container">
 
-            {/* Create Collection Modal */}
+                {/* Header */}
+                <div className="mc-header mc-fade-in" style={{ animationDelay: '0.1s' }}>
+                    <button className="mc-btn-icon" onClick={() => navigate(-1)}>
+                        <ChevronLeft style={{ width: 20, height: 20, marginLeft: -2 }} />
+                    </button>
+                    <button className="mc-btn-icon">
+                        <MoreVertical style={{ width: 20, height: 20 }} />
+                    </button>
+                </div>
+
+                {/* Profile Section */}
+                <div className="mc-profile mc-fade-in" style={{ animationDelay: '0.2s' }}>
+                    <div className="mc-avatar">
+                        <img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&q=80" alt="Profile" />
+                    </div>
+                    <h1 className="mc-name">Alex Nova</h1>
+                    <p className="mc-role">An artist with extensive Photography experience</p>
+                    
+                    <div className="mc-actions">
+                        <button className="mc-btn mc-btn--primary">Message</button>
+                        <button className="mc-btn mc-btn--primary">Follow</button>
+                    </div>
+
+                    <div className="mc-stats">
+                        <div className="mc-stat-item">
+                            <span className="mc-stat-val">197</span>
+                            <span className="mc-stat-label">Photos</span>
+                        </div>
+                        <div className="mc-stat-item">
+                            <span className="mc-stat-val">{collections.length}</span>
+                            <span className="mc-stat-label">Collections</span>
+                        </div>
+                        <div className="mc-stat-item">
+                            <span className="mc-stat-val">124</span>
+                            <span className="mc-stat-label">Likes</span>
+                        </div>
+                    </div>
+
+                    <div className="mc-location">
+                        <MapPin style={{ width: 14, height: 14 }} />
+                        New York, USA
+                    </div>
+
+                    <div className="mc-socials">
+                        <Facebook style={{ width: 18, height: 18 }} />
+                        <Twitter style={{ width: 18, height: 18 }} />
+                        <Linkedin style={{ width: 18, height: 18 }} />
+                        <Instagram style={{ width: 18, height: 18 }} />
+                    </div>
+                </div>
+
+                {/* Photos Section */}
+                <div className="mc-section mc-fade-in" style={{ animationDelay: '0.3s' }}>
+                    <div className="mc-section-header">
+                        <h2 className="mc-section-title">Photos</h2>
+                        <span className="mc-section-more">More</span>
+                    </div>
+                    <div className="mc-grid">
+                        <div className="mc-col">
+                            {MOCK_PHOTOS.slice(0, 2).map((p) => (
+                                <div key={p.id} className={`mc-photo-card ${p.type === 'tall' ? 'mc-photo-card--tall' : 'mc-photo-card--short'}`}>
+                                    <img src={p.img} alt="Photo" />
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mc-col">
+                            {MOCK_PHOTOS.slice(2, 4).map((p) => (
+                                <div key={p.id} className={`mc-photo-card ${p.type === 'tall' ? 'mc-photo-card--tall' : 'mc-photo-card--short'}`}>
+                                    <img src={p.img} alt="Photo" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Collections Section */}
+                <div className="mc-section mc-fade-in" style={{ animationDelay: '0.4s' }}>
+                    <div className="mc-section-header">
+                        <h2 className="mc-section-title">Collections</h2>
+                        <span className="mc-section-more">All</span>
+                    </div>
+                    
+                    {isLoading ? (
+                        <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}>
+                            <Loader2 className="animate-spin" style={{ color: 'var(--mc-primary)' }} />
+                        </div>
+                    ) : collections.length > 0 ? (
+                        <div className="mc-h-scroll">
+                            {collections.map((col: any, i: number) => (
+                                <div key={col.id} className="mc-collection-card">
+                                    <img 
+                                        src={MOCK_PHOTOS[i % MOCK_PHOTOS.length].img} 
+                                        alt={col.name} 
+                                    />
+                                    <div className="mc-collection-overlay">
+                                        <span className="mc-collection-title">{col.name}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="mc-h-scroll">
+                            <div className="mc-collection-card" onClick={() => setShowCreateModal(true)}>
+                                <img src="https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=400&q=80" alt="Nature" />
+                                <div className="mc-collection-overlay">
+                                    <span className="mc-collection-title">NATURE</span>
+                                </div>
+                            </div>
+                            <div className="mc-collection-card" onClick={() => setShowCreateModal(true)}>
+                                <img src="https://images.unsplash.com/photo-1542224566-6e85f2e6772f?w=400&q=80" alt="Animals" />
+                                <div className="mc-collection-overlay">
+                                    <span className="mc-collection-title">ANIMALS</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
             <Modal
                 isOpen={showCreateModal}
                 onClose={() => setShowCreateModal(false)}
                 title="Create New Collection"
                 footer={
-                    <div className="flex justify-end gap-3">
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
                         <Button variant="ghost" onClick={() => setShowCreateModal(false)}>
                             Cancel
                         </Button>
@@ -198,7 +197,7 @@ export function MyCollections() {
                     </div>
                 }
             >
-                <div className="space-y-4">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     <Input
                         label="Collection Name"
                         value={newCollection.name}
@@ -213,7 +212,7 @@ export function MyCollections() {
                     />
                 </div>
             </Modal>
-        </PageContainer>
+        </div>
     );
 }
 

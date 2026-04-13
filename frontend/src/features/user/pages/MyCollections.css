@@ -1,0 +1,382 @@
+/* ================================================
+   SENIQU MY COLLECTIONS — Mockup Design Match
+   "Profile & Collections View"
+   Supports Light & Dark Modes
+   ================================================ */
+
+:root {
+  --mc-bg: #F9FAFB;
+  --mc-text-primary: #111827;
+  --mc-text-secondary: #6B7280;
+  --mc-surface: #FFFFFF;
+  --mc-surface-elevated: #F3F4F6;
+  --mc-border: #E5E7EB;
+  --mc-primary: #3B82F6; /* Blue */
+  --mc-primary-text: #FFFFFF;
+  --mc-shadow: rgba(0, 0, 0, 0.05);
+}
+
+.dark {
+  --mc-bg: #121212;
+  --mc-text-primary: #F9FAFB;
+  --mc-text-secondary: #9CA3AF;
+  --mc-surface: #1E1E1E;
+  --mc-surface-elevated: #2A2A2A;
+  --mc-border: #374151;
+  --mc-primary: #3B82F6;
+  --mc-primary-text: #FFFFFF;
+  --mc-shadow: rgba(0, 0, 0, 0.3);
+}
+
+.mc-page {
+  width: 100%;
+  min-height: 100vh;
+  background-color: var(--mc-bg);
+  color: var(--mc-text-primary);
+  font-family: 'Inter', -apple-system, sans-serif;
+  margin: -16px;
+  width: calc(100% + 32px);
+  padding: 24px 20px 100px;
+  box-sizing: border-box;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+@media (min-width: 768px) {
+  .mc-page {
+    margin: -24px;
+    width: calc(100% + 48px);
+    padding: 32px 40px 120px;
+  }
+}
+
+.mc-container {
+  max-width: 600px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* --- HEADER --- */
+.mc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.mc-btn-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  box-shadow: 0 4px 12px var(--mc-shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mc-text-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mc-btn-icon:hover {
+  background: var(--mc-surface-elevated);
+}
+
+/* --- PROFILE INFO --- */
+.mc-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.mc-avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid var(--mc-surface);
+  box-shadow: 0 8px 24px var(--mc-shadow);
+  margin-bottom: 16px;
+}
+
+.mc-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mc-name {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 6px 0;
+  color: var(--mc-text-primary);
+}
+
+.mc-role {
+  font-size: 13px;
+  color: var(--mc-text-secondary);
+  margin: 0 0 16px 0;
+  max-width: 250px;
+}
+
+.mc-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.mc-btn {
+  padding: 10px 24px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mc-btn--primary {
+  background: var(--mc-primary);
+  color: var(--mc-primary-text);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.mc-btn--primary:hover {
+  background: #2563EB;
+}
+
+.mc-stats {
+  display: flex;
+  gap: 32px;
+  margin-bottom: 24px;
+}
+
+.mc-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.mc-stat-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: #10B981; /* Green accent from mockup */
+  margin: 0 0 4px 0;
+}
+
+.mc-stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mc-text-primary);
+}
+
+.mc-location {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mc-primary);
+  margin-bottom: 16px;
+}
+
+.mc-socials {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 32px;
+  color: var(--mc-text-secondary);
+}
+
+/* --- SECTION BLOCKS --- */
+.mc-section {
+  margin-bottom: 32px;
+}
+
+.mc-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.mc-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--mc-text-primary);
+  text-transform: uppercase;
+}
+
+.mc-section-more {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mc-text-secondary);
+  cursor: pointer;
+}
+
+/* Photo Masonry Layout */
+.mc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.mc-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mc-photo-card {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px var(--mc-shadow);
+}
+
+.mc-photo-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mc-photo-card--tall {
+  aspect-ratio: 4/5;
+}
+
+.mc-photo-card--short {
+  aspect-ratio: 5/4;
+}
+
+/* Collections Horizontal Scroll */
+.mc-h-scroll {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 8px;
+}
+
+.mc-h-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.mc-collection-card {
+  flex: 0 0 160px;
+  height: 100px;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 4px 12px var(--mc-shadow);
+  cursor: pointer;
+}
+
+.mc-collection-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mc-collection-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+  display: flex;
+  align-items: flex-end;
+  padding: 12px;
+}
+
+.mc-collection-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #FFFFFF;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* --- BOTTOM NAV (Diamond Plus) --- */
+.mc-bottom-nav {
+  position: fixed;
+  bottom: 0px;
+  left: 0;
+  right: 0;
+  background: var(--mc-surface);
+  border-top: 1px solid var(--mc-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 12px 24px calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 50;
+  box-shadow: 0 -4px 16px var(--mc-shadow);
+}
+
+@media (min-width: 600px) {
+  .mc-bottom-nav {
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 600px;
+    bottom: 24px;
+    border: 1px solid var(--mc-border);
+    border-radius: 24px;
+    padding: 16px 32px;
+  }
+}
+
+.mc-nav-item {
+  color: var(--mc-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+/* The diamond cutout and button */
+.mc-nav-center {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mc-nav-diamond {
+  position: absolute;
+  top: -24px;
+  width: 56px;
+  height: 56px;
+  background: var(--mc-primary);
+  color: var(--mc-primary-text);
+  border-radius: 12px;
+  transform: rotate(45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 16px rgba(59, 130, 246, 0.4);
+  cursor: pointer;
+  border: 4px solid var(--mc-surface);
+  transition: transform 0.2s;
+}
+
+.mc-nav-diamond:hover {
+  transform: rotate(45deg) scale(1.05);
+}
+
+.mc-nav-diamond svg {
+  transform: rotate(-45deg); /* Unrotate icon */
+}
+
+/* Animations */
+.mc-fade-in {
+  animation: fadeIn 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

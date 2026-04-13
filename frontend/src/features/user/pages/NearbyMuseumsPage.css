@@ -1,0 +1,988 @@
+/* ================================================
+   NEARBY MUSEUMS PAGE — Explore & Discover
+   Map-first immersive museum discovery
+   Light & Dark mode via CSS tokens
+   
+   § 1. Page Layout
+   § 2. Search Bar & Filter Chips
+   § 3. Map View
+   § 4. Map Pins
+   § 5. Map Controls
+   § 6. Bottom Sheet (Museum Detail)
+   § 7. Status Pills & Badges
+   § 8. 360° Preview
+   § 9. Action Buttons
+   § 10. List View
+   § 11. List Cards
+   § 12. Empty & Loading States
+   § 13. Error Toast
+   § 14. Responsive
+   ================================================ */
+
+
+/* ================================================
+   § 1. PAGE LAYOUT
+   ================================================ */
+
+.nbm-page {
+  width: 100%;
+  min-height: calc(100vh - 64px);
+  background: var(--bg-primary);
+  position: relative;
+}
+
+.nbm-map-container {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - 64px);
+  overflow: hidden;
+}
+
+@media (max-width: 767px) {
+  .nbm-map-container {
+    height: calc(100vh - 64px - 64px); /* minus top bar and bottom nav */
+  }
+}
+
+
+/* ================================================
+   § 2. SEARCH BAR & FILTER CHIPS
+   ================================================ */
+
+.nbm-search-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  padding: 16px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.nbm-search-overlay > * {
+  pointer-events: auto;
+}
+
+@media (min-width: 768px) {
+  .nbm-search-overlay {
+    max-width: 520px;
+    padding: 20px 24px 0;
+  }
+}
+
+.nbm-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 4px 6px 4px 16px;
+  box-shadow: 0 4px 20px var(--shadow-color);
+  transition: all 0.3s ease;
+}
+
+.nbm-search-bar:focus-within {
+  border-color: rgba(201, 168, 76, 0.4);
+  box-shadow: 0 4px 24px var(--shadow-color), 0 0 0 3px rgba(201, 168, 76, 0.08);
+}
+
+.nbm-search-bar__icon {
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.nbm-search-bar__input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  color: var(--text-primary);
+  padding: 10px 0;
+}
+
+.nbm-search-bar__input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.nbm-search-bar__filter {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  flex-shrink: 0;
+}
+
+.nbm-search-bar__filter:hover {
+  color: var(--text-gold);
+  background: var(--glow-gold);
+}
+
+/* Filter Chips */
+.nbm-filter-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+
+.nbm-filter-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.nbm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  box-shadow: 0 2px 8px var(--shadow-color);
+}
+
+.nbm-chip:hover {
+  border-color: rgba(201, 168, 76, 0.3);
+  color: var(--text-primary);
+}
+
+.nbm-chip--active {
+  background: linear-gradient(135deg, #3B82F6, #2563EB);
+  border-color: #3B82F6;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
+}
+
+.nbm-chip--active:hover {
+  color: #fff;
+}
+
+
+/* ================================================
+   § 3. MAP VIEW
+   ================================================ */
+
+.nbm-map {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.nbm-map__bg {
+  position: absolute;
+  inset: 0;
+}
+
+.nbm-map__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.85);
+}
+
+/* Themed map fallback */
+.nbm-map__fallback {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 40px, var(--border-color) 40px, var(--border-color) 41px),
+    repeating-linear-gradient(90deg, transparent, transparent 40px, var(--border-color) 40px, var(--border-color) 41px);
+  opacity: 0.3;
+}
+
+/* Dark mode gets a darker map */
+.dark .nbm-map__fallback {
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(255,255,255,0.03) 40px, rgba(255,255,255,0.03) 41px),
+    repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(255,255,255,0.03) 40px, rgba(255,255,255,0.03) 41px);
+  opacity: 1;
+}
+
+.nbm-map__bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bg-elevated);
+  opacity: 0.6;
+}
+
+.dark .nbm-map__bg::after {
+  background: #0D0D14;
+  opacity: 0.7;
+}
+
+
+/* ================================================
+   § 4. MAP PINS
+   ================================================ */
+
+.nbm-pin {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  transition: z-index 0s;
+}
+
+.nbm-pin--active {
+  z-index: 15;
+}
+
+.nbm-pin__marker {
+  width: 36px;
+  height: 36px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #3B82F6, #1D4ED8);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+  transition: all 0.3s ease;
+}
+
+.nbm-pin__marker > * {
+  transform: rotate(45deg);
+}
+
+.nbm-pin--active .nbm-pin__marker {
+  background: linear-gradient(135deg, #C9A84C, #A68A3A);
+  box-shadow: 0 4px 16px rgba(201, 168, 76, 0.45);
+  transform: rotate(-45deg) scale(1.15);
+}
+
+.nbm-pin:hover .nbm-pin__marker {
+  transform: rotate(-45deg) scale(1.1);
+}
+
+.nbm-pin__label {
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 12px var(--shadow-color);
+}
+
+
+/* ================================================
+   § 5. MAP CONTROLS
+   ================================================ */
+
+.nbm-map-controls {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 20;
+}
+
+@media (max-width: 767px) {
+  .nbm-map-controls {
+    right: 12px;
+    top: auto;
+    bottom: 50%;
+    transform: translateY(50%);
+  }
+}
+
+.nbm-map-ctrl {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 2px 8px var(--shadow-color);
+}
+
+.nbm-map-ctrl:hover {
+  background: var(--glow-gold);
+  color: var(--text-gold);
+  border-color: rgba(201, 168, 76, 0.3);
+}
+
+.nbm-map-ctrl:active {
+  transform: scale(0.95);
+}
+
+
+/* ================================================
+   § 6. BOTTOM SHEET (Museum Detail)
+   ================================================ */
+
+.nbm-sheet {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 25;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-color);
+  border-radius: 24px 24px 0 0;
+  padding: 12px 20px 24px;
+  max-height: 55%;
+  overflow-y: auto;
+  box-shadow: 0 -8px 40px var(--shadow-color);
+}
+
+.nbm-sheet--expanded {
+  max-height: 80%;
+}
+
+@media (min-width: 768px) {
+  .nbm-sheet {
+    left: auto;
+    right: 20px;
+    bottom: 20px;
+    width: 420px;
+    border-radius: 24px;
+    max-height: calc(100% - 120px);
+    border: 1px solid var(--border-color);
+  }
+}
+
+@media (min-width: 1024px) {
+  .nbm-sheet {
+    width: 460px;
+  }
+}
+
+@media (max-width: 767px) {
+  .nbm-sheet {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom) + 64px);
+  }
+}
+
+.nbm-sheet__handle {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .nbm-sheet__handle {
+    display: none;
+  }
+}
+
+.nbm-sheet__handle-bar {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+}
+
+.nbm-sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.nbm-sheet__badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nbm-sheet__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.nbm-sheet__close:hover {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+.nbm-sheet__name {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 6px 0;
+  line-height: 1.25;
+}
+
+.nbm-sheet__address {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 16px 0;
+}
+
+
+/* ================================================
+   § 7. STATUS PILLS & BADGES
+   ================================================ */
+
+.nbm-type-badge {
+  display: inline-flex;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  background: linear-gradient(135deg, #3B82F6, #2563EB);
+  color: #fff;
+}
+
+.nbm-type-badge--sm {
+  padding: 3px 8px;
+  font-size: 10px;
+  border-radius: 6px;
+}
+
+.nbm-rating-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--glow-gold);
+  color: var(--text-gold);
+}
+
+.nbm-sheet__status {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.nbm-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+}
+
+.nbm-status-pill__label {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.nbm-status-pill__value {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 1px;
+}
+
+/* Badge color variants */
+.nbm-badge--green { color: #43A047; }
+.nbm-badge--green .nbm-status-pill__value { color: #43A047; }
+.dark .nbm-badge--green { color: #81C784; }
+.dark .nbm-badge--green .nbm-status-pill__value { color: #81C784; }
+
+.nbm-badge--amber { color: #F59E0B; }
+.nbm-badge--amber .nbm-status-pill__value { color: #F59E0B; }
+
+.nbm-badge--red { color: #EF4444; }
+.nbm-badge--red .nbm-status-pill__value { color: #EF4444; }
+
+.nbm-badge--blue { color: #3B82F6; }
+.nbm-badge--blue .nbm-status-pill__value { color: #3B82F6; }
+
+
+/* ================================================
+   § 8. 360° PREVIEW
+   ================================================ */
+
+.nbm-preview {
+  margin-bottom: 18px;
+}
+
+.nbm-preview__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.nbm-preview__viewall {
+  font-size: 12px;
+  font-weight: 600;
+  color: #3B82F6;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.nbm-preview__viewall:hover {
+  opacity: 0.75;
+}
+
+.nbm-preview__scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+
+.nbm-preview__scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.nbm-preview__thumb {
+  width: 110px;
+  height: 80px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+}
+
+.nbm-preview__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.nbm-preview__thumb:hover img {
+  transform: scale(1.08);
+}
+
+
+/* ================================================
+   § 9. ACTION BUTTONS
+   ================================================ */
+
+.nbm-sheet__actions {
+  display: flex;
+  gap: 12px;
+}
+
+.nbm-action-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 20px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+}
+
+.nbm-action-btn--primary {
+  background: linear-gradient(135deg, #3B82F6, #1D4ED8);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+}
+
+.nbm-action-btn--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+}
+
+.nbm-action-btn--secondary {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.nbm-action-btn--secondary:hover {
+  background: var(--glow-gold);
+  color: var(--text-gold);
+  border-color: rgba(201, 168, 76, 0.3);
+  transform: translateY(-1px);
+}
+
+
+/* ================================================
+   § 10. LIST VIEW
+   ================================================ */
+
+.nbm-list-container {
+  padding: 20px 16px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+  .nbm-list-container {
+    padding: 28px 24px;
+  }
+}
+
+.nbm-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.nbm-list-header__title {
+  font-family: 'Playfair Display', serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+@media (min-width: 768px) {
+  .nbm-list-header__title {
+    font-size: 30px;
+  }
+}
+
+.nbm-list-header__subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 4px 0 0 0;
+}
+
+.nbm-list-header__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.nbm-list-search {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.nbm-list-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 80px;
+}
+
+@media (min-width: 768px) {
+  .nbm-list-items {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+}
+
+
+/* ================================================
+   § 11. LIST CARDS
+   ================================================ */
+
+.nbm-list-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px;
+  border-radius: 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.nbm-list-card:hover {
+  border-color: rgba(201, 168, 76, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px var(--shadow-color);
+}
+
+.nbm-list-card__img {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--bg-elevated);
+  position: relative;
+}
+
+@media (min-width: 768px) {
+  .nbm-list-card__img {
+    width: 88px;
+    height: 88px;
+  }
+}
+
+.nbm-list-card__img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.nbm-list-card:hover .nbm-list-card__img img {
+  transform: scale(1.08);
+}
+
+.nbm-list-card__verified {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #43A047;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.nbm-list-card__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.nbm-list-card__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.nbm-list-card__rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-gold);
+}
+
+.nbm-list-card__name {
+  font-family: 'Playfair Display', serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nbm-list-card__location {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.nbm-list-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.nbm-list-card__crowd {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--glow-gold);
+  color: var(--text-gold);
+  font-weight: 500;
+}
+
+.nbm-list-card__arrow {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  opacity: 0.4;
+  transition: all 0.25s ease;
+}
+
+.nbm-list-card:hover .nbm-list-card__arrow {
+  opacity: 1;
+  color: var(--text-gold);
+  transform: translateX(2px);
+}
+
+
+/* ================================================
+   § 12. EMPTY & LOADING STATES
+   ================================================ */
+
+.nbm-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  gap: 12px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.nbm-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.nbm-empty svg {
+  opacity: 0.25;
+  margin-bottom: 12px;
+}
+
+.nbm-empty h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 6px 0;
+}
+
+.nbm-empty p {
+  font-size: 14px;
+  margin: 0;
+  max-width: 320px;
+}
+
+
+/* ================================================
+   § 13. ERROR TOAST
+   ================================================ */
+
+.nbm-error-toast {
+  position: absolute;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #EF4444;
+  font-size: 13px;
+  font-weight: 500;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px var(--shadow-color);
+  white-space: nowrap;
+}
+
+.dark .nbm-error-toast {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+
+/* ================================================
+   § 14. RESPONSIVE REFINEMENTS
+   ================================================ */
+
+@media (max-width: 767px) {
+  .nbm-sheet__name {
+    font-size: 20px;
+  }
+
+  .nbm-status-pill {
+    padding: 8px 12px;
+  }
+
+  .nbm-preview__thumb {
+    width: 100px;
+    height: 72px;
+    border-radius: 12px;
+  }
+
+  .nbm-action-btn {
+    padding: 12px 16px;
+    font-size: 13px;
+    border-radius: 14px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .nbm-list-items {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
