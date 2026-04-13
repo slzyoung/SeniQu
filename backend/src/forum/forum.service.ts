@@ -29,15 +29,22 @@ export class ForumService {
     async getCategories() {
         const { data, error } = await this.supabase
             .from("forum_categories")
-            .select("*")
+            .select("*, forum_threads(count)")
             .eq("is_active", true)
             .order("sort_order", { ascending: true })
 
         if (error) throw error
-        return { data }
+
+        const mappedData = data.map((cat: any) => ({
+            ...cat,
+            threadCount: cat.forum_threads?.[0]?.count || 0,
+            thread_count: cat.forum_threads?.[0]?.count || 0,
+        }))
+
+        return { data: mappedData }
     }
 
-    async getThreads(categorySlug?: string, page = 1, limit = 20) {
+    async getThreads(categoryId?: string, page = 1, limit = 20, sortBy: "latest" | "popular" | "views" = "latest") {
         const offset = (page - 1) * limit
 
         let query = this.supabase
@@ -48,22 +55,21 @@ export class ForumService {
                 author:users(id, display_name, avatar_url, role)
             `, { count: "exact" })
 
-        if (categorySlug) {
-            const { data: category } = await this.supabase
-                .from("forum_categories")
-                .select("id")
-                .eq("slug", categorySlug)
-                .single()
+        if (categoryId) {
+            query = query.eq("category_id", categoryId)
+        }
 
-            if (category) {
-                query = query.eq("category_id", category.id)
-            }
+        // Apply sorting based on frontend choice
+        if (sortBy === "popular") {
+            query = query.order("is_pinned", { ascending: false }).order("likes", { ascending: false }).order("created_at", { ascending: false })
+        } else if (sortBy === "views") {
+            query = query.order("is_pinned", { ascending: false }).order("views", { ascending: false }).order("created_at", { ascending: false })
+        } else {
+            // Default: Latest
+            query = query.order("is_pinned", { ascending: false }).order("created_at", { ascending: false })
         }
 
         const { data, error, count } = await query
-            .order("is_pinned", { ascending: false })
-            .order("last_reply_at", { ascending: false, nullsFirst: false })
-            .order("created_at", { ascending: false })
             .range(offset, offset + limit - 1)
 
         if (error) throw error
@@ -103,6 +109,30 @@ export class ForumService {
         return { data }
     }
 
+    async getThreadById(id: string) {
+        const { data, error } = await this.supabase
+            .from("forum_threads")
+            .select(`
+                *,
+                category:forum_categories(id, name, slug),
+                author:users(id, display_name, avatar_url, role, is_verified)
+            `)
+            .eq("id", id)
+            .single()
+
+        if (error || !data) {
+            throw new NotFoundException(`Thread not found`)
+        }
+
+        // Increment views
+        await this.supabase
+            .from("forum_threads")
+            .update({ views: data.views + 1 })
+            .eq("id", data.id)
+
+        return { data }
+    }
+
     async createThread(dto: CreateThreadDto, authorId: string) {
         const slug = this.generateSlug(dto.title)
 
@@ -127,28 +157,40 @@ export class ForumService {
         return { data }
     }
 
-    async getPosts(threadId: string, page = 1, limit = 20) {
-        const offset = (page - 1) * limit
+    async getPosts(threadId: string, page: any = 1, limit: any = 20) {
+        let p = parseInt(page, 10);
+        let l = parseInt(limit, 10);
+        if (isNaN(p) || p < 1) p = 1;
+        if (isNaN(l) || l < 1) l = 20;
+
+        const offset = (p - 1) * l;
+
+        this.logger.debug(`Fetching posts for thread ${threadId}: page=${p}, limit=${l}, offset=${offset}`);
 
         const { data, error, count } = await this.supabase
             .from("forum_posts")
             .select(`
                 *,
-                author:users(id, display_name, avatar_url, role, is_verified)
+                author:users(id, username, display_name, avatar_url, role, is_verified)
             `, { count: "exact" })
             .eq("thread_id", threadId)
             .order("created_at", { ascending: true })
-            .range(offset, offset + limit - 1)
+            .range(offset, offset + l - 1);
 
-        if (error) throw error
+        if (error) {
+            this.logger.error("Error fetching posts:", error);
+            throw error;
+        }
+
+        this.logger.debug(`Found ${count} posts, mapping data: ${data?.length} records`);
 
         return {
             data,
             meta: {
                 total: count,
-                page,
-                limit,
-                totalPages: Math.ceil((count || 0) / limit),
+                page: p,
+                limit: l,
+                totalPages: Math.ceil((count || 0) / l),
             },
         }
     }
@@ -231,6 +273,43 @@ export class ForumService {
 
         if (error) throw error
         return { data }
+    }
+
+    async toggleLike(targetId: string, userId: string, type: 'forum_thread' | 'forum_post', isLike: boolean) {
+        const tableName = type === 'forum_thread' ? 'forum_threads' : 'forum_posts'
+
+        if (isLike) {
+            // Check if already liked using a safe method
+            const { error: insertError } = await this.supabase
+                .from('likes')
+                .insert({ user_id: userId, target_type: type, target_id: targetId })
+
+            // Only increment count if insert was successful (meaning they haven't liked it yet)
+            if (!insertError) {
+                const { data } = await this.supabase.from(tableName).select('likes').eq('id', targetId).single()
+                if (data) {
+                    await this.supabase.from(tableName).update({ likes: (data.likes || 0) + 1 }).eq('id', targetId)
+                }
+            }
+            return { success: true, liked: true }
+        } else {
+            // Delete like
+            const { error: deleteError, count } = await this.supabase
+                .from('likes')
+                .delete({ count: 'exact' })
+                .eq('user_id', userId)
+                .eq('target_type', type)
+                .eq('target_id', targetId)
+
+            // Decrement if one was deleted
+            if (!deleteError && count && count > 0) {
+                const { data } = await this.supabase.from(tableName).select('likes').eq('id', targetId).single()
+                if (data && data.likes > 0) {
+                    await this.supabase.from(tableName).update({ likes: data.likes - 1 }).eq('id', targetId)
+                }
+            }
+            return { success: true, liked: false }
+        }
     }
 
     private generateSlug(title: string): string {

@@ -3,7 +3,7 @@
  * Browse and participate in forum discussions
  */
 
-import { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
     Search,
     MessageSquare,
@@ -16,7 +16,10 @@ import {
     Loader2,
     Pin,
     Award,
-    Filter
+    Filter,
+    Image as ImageIcon,
+    Video,
+    X
 } from 'lucide-react';
 import { PageContainer } from '../../../components/common/DashboardLayout';
 import { Card, CardHeader, CardContent, Button, Input, Badge, Tabs, Avatar } from '../../../components/ui';
@@ -24,6 +27,8 @@ import { useNavigate } from 'react-router-dom';
 import { useForumCategories, useForumThreads, useTrendingThreads, useCreateThread } from '../../../hooks/useForum';
 import { useAuthStore } from '../../../stores/useAuthStore';
 import { extractArray } from '../../../lib/utils';
+import { uploadFile } from '../../../lib/api';
+import { useToast } from '../../../stores/useNotificationStore';
 
 // ============================================
 // TYPES
@@ -61,19 +66,19 @@ function ThreadCard({ thread }: { thread: any }) {
             <div className="p-3 sm:p-4">
                 <div className="flex items-start gap-3 sm:gap-4">
                     <Avatar
-                        src={thread.author?.avatarUrl}
-                        name={thread.author?.displayName || 'User'}
+                        src={thread.author?.avatar_url || thread.author?.avatarUrl}
+                        name={thread.author?.display_name || thread.author?.displayName || 'User'}
                         size="md"
-                        className="w-8 h-8 sm:w-10 sm:h-10 text-xs sm:text-sm"
+                        className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0 border-2 border-gold/10"
                     />
                     <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap mb-1">
-                            {thread.isPinned && (
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            {(thread.is_pinned || thread.isPinned) && (
                                 <Badge variant="warning" className="flex items-center gap-1 scale-90 sm:scale-100 origin-left">
                                     <Pin className="w-3 h-3" /> <span className="hidden sm:inline">Pinned</span>
                                 </Badge>
                             )}
-                            {thread.isFeatured && (
+                            {(thread.is_featured || thread.isFeatured) && (
                                 <Badge variant="gold" className="flex items-center gap-1 scale-90 sm:scale-100 origin-left">
                                     <Award className="w-3 h-3" /> <span className="hidden sm:inline">Featured</span>
                                 </Badge>
@@ -82,16 +87,28 @@ function ThreadCard({ thread }: { thread: any }) {
                                 {thread.category?.name || 'General'}
                             </Badge>
                         </div>
-                        <h3 className="font-medium text-theme-text group-hover:text-gold line-clamp-1 text-sm sm:text-base">
+                        <h3 className="font-semibold text-lg text-theme-text group-hover:text-gold transition-colors line-clamp-2">
                             {thread.title}
                         </h3>
-                        <p className="text-xs sm:text-sm text-theme-muted line-clamp-2 mt-1">{thread.content}</p>
+                        <p className="text-sm text-theme-muted line-clamp-3 mt-1.5 leading-relaxed">{thread.content}</p>
+                        
+                        {/* Media Preview Thumbnail */}
+                        {(thread.media_url || thread.mediaUrl) && (
+                            <div className="mt-3 rounded-xl overflow-hidden border border-theme-border/20 h-36 sm:h-44 relative">
+                                {(thread.media_type || thread.mediaType) === 'video' ? (
+                                    <video src={thread.media_url || thread.mediaUrl} className="w-full h-full object-cover" muted />
+                                ) : (
+                                    <img src={thread.media_url || thread.mediaUrl} alt="Thumbnail" className="w-full h-full object-cover" loading="lazy" />
+                                )}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
+                            </div>
+                        )}
                         <div className="flex items-center gap-3 sm:gap-4 mt-3 text-[10px] sm:text-xs text-theme-muted">
                             <span className="font-medium text-theme-text truncate max-w-[80px] sm:max-w-none">
-                                {thread.author?.displayName || 'Anonymous'}
+                                {thread.author?.display_name || thread.author?.displayName || 'Anonymous'}
                             </span>
                             <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" /> {formatTime(thread.createdAt)}
+                                <Clock className="w-3 h-3" /> {formatTime(thread.created_at || thread.createdAt)}
                             </span>
                             <span className="flex items-center gap-1">
                                 <Eye className="w-3 h-3" /> {thread.views || 0}
@@ -100,7 +117,7 @@ function ThreadCard({ thread }: { thread: any }) {
                                 <Heart className="w-3 h-3" /> {thread.likes || 0}
                             </span>
                             <span className="flex items-center gap-1">
-                                <MessageCircle className="w-3 h-3" /> {thread.replyCount || 0}
+                                <MessageCircle className="w-3 h-3" /> {thread.reply_count || thread.replyCount || 0}
                             </span>
                         </div>
                         {thread.tags?.length > 0 && (
@@ -132,92 +149,178 @@ function CreateThreadModal({
     const [content, setContent] = useState('');
     const [categoryId, setCategoryId] = useState('');
     const [tags, setTags] = useState('');
-
+    const [file, setFile] = useState<File | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const createThread = useCreateThread();
+    const toast = useToast();
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        createThread.mutate({
-            categoryId,
-            title,
-            content,
-            tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-        }, {
-            onSuccess: () => {
-                onClose();
-                setTitle('');
-                setContent('');
-                setCategoryId('');
-                setTags('');
+        
+        if (!title || !content || !categoryId) {
+            toast.error('Required Fields', 'Please fill in title, content, and category.');
+            return;
+        }
+
+        try {
+            setIsUploading(true);
+            let mediaUrl = undefined;
+            let mediaType = undefined;
+
+            if (file) {
+                mediaType = file.type.startsWith('video/') ? 'video' : 'image';
+                const uploadResult = await uploadFile(file, 'general');
+                mediaUrl = uploadResult.url;
             }
-        });
+
+            createThread.mutate({
+                categoryId,
+                title,
+                content,
+                tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+                mediaUrl,
+                mediaType
+            }, {
+                onSuccess: () => {
+                    toast.success('Discussion Created', 'Your discussion has been posted successfully.');
+                    onClose();
+                    setTitle('');
+                    setContent('');
+                    setCategoryId('');
+                    setTags('');
+                    setFile(null);
+                }
+            });
+        } catch (error: any) {
+            toast.error('Upload Failed', error.message || 'Could not upload media.');
+        } finally {
+            setIsUploading(false);
+        }
     };
 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <Card variant="elevated" className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
-                <CardHeader title="Create New Discussion" />
-                <CardContent>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-theme-text mb-1">Category</label>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+            <Card variant="elevated" className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-theme-background border-gold/20 shadow-[0_0_40px_rgba(212,175,55,0.15)] rounded-2xl relative">
+                <button 
+                    onClick={onClose} 
+                    className="absolute top-6 right-6 text-theme-muted hover:text-gold transition-colors z-10 bg-theme-surface p-2 rounded-full"
+                >
+                    <X className="w-5 h-5" />
+                </button>
+                <div className="p-6 md:p-8">
+                    <h2 className="text-2xl font-serif font-bold text-gold-hologram mb-6">Create New Discussion</h2>
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        <div className="relative">
+                            <label className="block text-sm font-medium text-theme-text mb-1.5 pl-1">Category <span className="text-red-500">*</span></label>
                             <select
                                 value={categoryId}
                                 onChange={(e) => setCategoryId(e.target.value)}
-                                className="w-full p-3 rounded-xl bg-theme-surface border border-theme-border text-theme-text focus:ring-2 focus:ring-gold focus:border-transparent"
+                                className="w-full p-3 rounded-xl bg-[#0a0a0a] border border-theme-border/70 text-white focus:ring-2 focus:ring-gold/50 focus:border-gold transition-all appearance-none pr-10 shadow-inner"
                                 required
                             >
-                                <option value="">Select a category</option>
+                                <option value="" disabled className="text-gray-500">Select an appropriate category</option>
                                 {categories.map((cat) => (
-                                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                    <option key={cat.id} value={cat.id} className="bg-[#121212] text-white py-2">{cat.name}</option>
                                 ))}
                             </select>
+                            <div className="absolute top-[38px] right-4 pointer-events-none text-theme-muted">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-theme-text mb-1">Title</label>
+                            <label className="block text-sm font-medium text-theme-text mb-1.5 pl-1">Title <span className="text-red-500">*</span></label>
                             <Input
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
                                 placeholder="What's your discussion about?"
+                                className="w-full p-3 rounded-xl bg-[#0a0a0a] border border-theme-border/70 text-white placeholder-gray-500 focus:ring-gold/50 focus:border-gold"
                                 required
+                                minLength={5}
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-theme-text mb-1">Content</label>
+                            <label className="block text-sm font-medium text-theme-text mb-1.5 pl-1">Content <span className="text-red-500">*</span></label>
                             <textarea
                                 value={content}
                                 onChange={(e) => setContent(e.target.value)}
-                                placeholder="Share your thoughts..."
-                                rows={5}
-                                className="w-full p-3 rounded-xl bg-theme-surface border border-theme-border text-theme-text focus:ring-2 focus:ring-gold focus:border-transparent resize-none"
+                                placeholder="Detail your thoughts, ask questions, or share insights..."
+                                rows={6}
+                                className="w-full p-4 rounded-xl bg-[#0a0a0a] border border-theme-border/70 text-white placeholder-gray-500 focus:ring-2 focus:ring-gold/50 focus:border-gold transition-all resize-none shadow-inner"
                                 required
+                                minLength={10}
                             />
                         </div>
+                        
                         <div>
-                            <label className="block text-sm font-medium text-theme-text mb-1">Tags (comma separated)</label>
+                            <label className="block text-sm font-medium text-theme-text mb-2 pl-1">Attach Media (Optional)</label>
+                            {file ? (
+                                <div className="flex items-center justify-between gap-4 bg-theme-surface/80 p-3 rounded-xl border border-gold/30 shadow-sm animate-in zoom-in-95 duration-200">
+                                    <div className="flex items-center gap-3 overflow-hidden">
+                                        {file.type.startsWith('video/') ? 
+                                            <div className="p-2 bg-blue-500/10 rounded-lg"><Video className="text-blue-400 w-5 h-5" /></div> : 
+                                            <div className="p-2 bg-pink-500/10 rounded-lg"><ImageIcon className="text-pink-400 w-5 h-5" /></div>
+                                        }
+                                        <span className="text-sm font-medium text-theme-text truncate flex-1">{file.name}</span>
+                                    </div>
+                                    <Button type="button" variant="ghost" size="sm" onClick={() => setFile(null)} className="text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg">
+                                        <X className="w-4 h-4 mr-1" /> Remove
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="flex gap-4">
+                                    <Button 
+                                        type="button" 
+                                        variant="outline" 
+                                        leftIcon={<ImageIcon className="w-4 h-4 text-gold" />}
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="w-full py-6 border-dashed border-2 hover:border-gold hover:bg-gold/5 transition-all text-theme-muted hover:text-theme-text"
+                                    >
+                                        Upload Poster, Image, or Video
+                                    </Button>
+                                    <input 
+                                        type="file" 
+                                        ref={fileInputRef} 
+                                        accept="image/*,video/*" 
+                                        className="hidden" 
+                                        onChange={e => {
+                                            if (e.target.files && e.target.files.length > 0) {
+                                                setFile(e.target.files[0]);
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-theme-text mb-1.5 pl-1">Tags (Optional)</label>
                             <Input
                                 value={tags}
                                 onChange={(e) => setTags(e.target.value)}
-                                placeholder="art, digital, nft"
+                                placeholder="e.g. art, digital, nft, exhibition (comma separated)"
+                                className="w-full p-3 rounded-xl bg-[#0a0a0a] border border-theme-border/70 text-white placeholder-gray-500 focus:ring-gold/50 focus:border-gold"
                             />
                         </div>
-                        <div className="flex gap-3 pt-4">
-                            <Button type="button" variant="ghost" onClick={onClose} className="flex-1">
+                        
+                        <div className="flex justify-end gap-4 pt-6 border-t border-theme-border/50 mt-8">
+                            <Button type="button" variant="ghost" onClick={onClose} className="px-6 rounded-xl hover:bg-theme-surface">
                                 Cancel
                             </Button>
                             <Button
                                 type="submit"
                                 variant="gold"
-                                className="flex-1"
-                                disabled={createThread.isPending}
+                                className="px-8 rounded-xl shadow-lg shadow-gold/20"
+                                isLoading={isUploading || createThread.isPending}
                             >
-                                {createThread.isPending ? 'Creating...' : 'Create Discussion'}
+                                {isUploading ? 'Uploading Media...' : createThread.isPending ? 'Posting...' : '🚀 Post Discussion'}
                             </Button>
                         </div>
                     </form>
-                </CardContent>
+                </div>
             </Card>
         </div>
     );
@@ -255,9 +358,20 @@ export function CommunityPage() {
     const { data: trendingData } = useTrendingThreads(5);
 
     // Use extractArray for safe data extraction
-    const categories = extractArray(categoriesData);
+    const fetchedCategories = extractArray(categoriesData);
     const threads = extractArray(threadsData);
     const trendingThreads = extractArray(trendingData);
+    
+    // Robust fallback categories for enterprise-grade safe UI
+    const defaultCategories = [
+        { id: 'bc5c6d36-8aed-4fd3-9b6f-7d1c67d710f1', name: 'Museums & Galleries', icon: '🏛️' },
+        { id: 'd2ea67f9-3d57-4180-a681-37faba49fb42', name: 'Cultural Heritage & Sites', icon: '🏺' },
+        { id: 'e1c9a173-6a9b-4e08-912c-0e868a2cbbe1', name: 'Traditional to Digital Arts', icon: '🎨' },
+        { id: 'f875dc91-3b7c-48c4-b778-90f77ea6bbcd', name: 'AI & Tech Innovations', icon: '🤖' },
+        { id: 'a571c482-5d9c-4b36-9b8e-32b0051e4590', name: 'Community Hub & Announcements', icon: '📢' }
+    ];
+
+    const categories = fetchedCategories.length > 0 ? fetchedCategories : defaultCategories;
 
     return (
         <PageContainer

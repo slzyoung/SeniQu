@@ -72,7 +72,22 @@ export function Sidebar({
                         exit={{ opacity: 0 }}
                     >
                         {logo || (
-                            <span className="text-xl font-serif font-bold text-gold">Seniqu</span>
+                            <div 
+                                className="flex items-center gap-1.5 group cursor-pointer"
+                                onClick={() => window.location.href = '/'}
+                            >
+                                <div className="relative flex-shrink-0">
+                                    <div className="absolute inset-0 bg-gold blur-md opacity-20 group-hover:opacity-40 transition-opacity duration-700 animate-pulse rounded-full" />
+                                    <img
+                                        src="/images/logo/seniqu.png"
+                                        alt="SeniQu Logo"
+                                        className="w-10 h-10 object-contain relative z-10 logo-hologram transform transition-transform duration-500 group-hover:scale-110"
+                                    />
+                                </div>
+                                <span className="font-serif text-2xl font-bold italic tracking-wide text-gold-hologram -ml-1">
+                                    SeniQu
+                                </span>
+                            </div>
                         )}
                     </motion.div>
                 )}

@@ -220,6 +220,17 @@ export function useLikeThread() {
     });
 }
 
+export function useUnlikeThread() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (id: string) => forumService.unlikeThread(id),
+        onSuccess: (_, id) => {
+            queryClient.invalidateQueries({ queryKey: forumKeys.thread(id) });
+        },
+    });
+}
+
 // ============================================
 // MUTATION HOOKS - POSTS
 // ============================================
@@ -273,6 +284,18 @@ export function useLikePost() {
     return useMutation({
         mutationFn: ({ id }: { id: string; threadId: string }) =>
             forumService.likePost(id),
+        onSuccess: (_, { threadId }) => {
+            queryClient.invalidateQueries({ queryKey: forumKeys.posts(threadId) });
+        },
+    });
+}
+
+export function useUnlikePost() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ id }: { id: string; threadId: string }) =>
+            forumService.unlikePost(id),
         onSuccess: (_, { threadId }) => {
             queryClient.invalidateQueries({ queryKey: forumKeys.posts(threadId) });
         },
