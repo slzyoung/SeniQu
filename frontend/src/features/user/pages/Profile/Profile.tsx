@@ -1,6 +1,7 @@
 /**
- * User Profile Page
- * Uses real API data with useUpdateProfile hook
+ * Profile Page — Premium Hero + Bottom Sheet Design
+ * Collaboration Trip App + Web3 Seamless
+ * Mobile-first, dark & light mode safe.
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -11,15 +12,30 @@ import {
     X,
     Loader2,
     Save,
-    Send
+    Send,
+    MapPin,
+    ChevronRight,
+    Mail,
+    Calendar,
+    Wallet,
+    LogOut,
+    Shield,
+    Copy,
+    Check,
+    Image as ImageIcon,
+    Settings as SettingsIcon,
+    User as UserIcon,
 } from 'lucide-react';
-import { PageContainer } from '../../../../components/common/DashboardLayout';
-import { Card, CardHeader, CardContent, Button, Input, Textarea, Avatar, Badge } from '../../../../components/ui';
 import { useAuthStore } from '../../../../stores/useAuthStore';
 import { useCurrentUser, useUpdateProfile, useUserStats, useUploadAvatar } from '../../../../hooks/useUser';
 import { usePrivy } from '@privy-io/react-auth';
 import { ConnectedWallets } from '../../components/ConnectedWallets';
 import { WalletSummaryCard } from '../../components/WalletSummaryCard';
+import './Profile.css';
+
+// ============================================
+// Real SVG Social Icons
+// ============================================
 
 const XLogo = (props: React.SVGProps<SVGSVGElement>) => (
     <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" {...props}>
@@ -27,9 +43,64 @@ const XLogo = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
+const InstagramLogo = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+        <circle cx="12" cy="12" r="5" />
+        <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none" />
+    </svg>
+);
+
+const TelegramLogo = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+        <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+    </svg>
+);
+
+// ============================================
+// Mock Data — Unsplash + Sample
+// ============================================
+
+const MOCK_COVER = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1400&q=80&auto=format';
+
+const MOCK_ARTS = [
+    { id: '1', title: 'Bali Temple Sunrise', img: 'https://images.unsplash.com/photo-1555400038-63f5ba517a47?w=400&q=80' },
+    { id: '2', title: 'Batik Patterns', img: 'https://images.unsplash.com/photo-1578301978018-3005759f48f7?w=400&q=80' },
+    { id: '3', title: 'Wayang Culture', img: 'https://images.unsplash.com/photo-1605540436563-5bca919ae766?w=400&q=80' },
+    { id: '4', title: 'Komodo Heritage', img: 'https://images.unsplash.com/photo-1570789210967-2cac24e2beee?w=400&q=80' },
+    { id: '5', title: 'Raja Ampat Dive', img: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=400&q=80' },
+    { id: '6', title: 'Borobudur Dawn', img: 'https://images.unsplash.com/photo-1596402184320-417e7178b2cd?w=400&q=80' },
+];
+
+const MOCK_TOKEN_THUMB = 'https://images.unsplash.com/photo-1578301978018-3005759f48f7?w=200&q=80';
+
+// Recent Visits — Museums, Galleries, Heritage Places
+const MOCK_RECENT_VISITS = [
+    { id: '1', name: 'Museum Nasional', location: 'Jakarta', date: 'Mar 2026', img: 'https://images.unsplash.com/photo-1566127444979-b3d2b654e3d7?w=400&q=80' },
+    { id: '2', name: 'Uluwatu Temple', location: 'Bali', date: 'Feb 2026', img: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=400&q=80' },
+    { id: '3', name: 'Borobudur', location: 'Yogyakarta', date: 'Jan 2026', img: 'https://images.unsplash.com/photo-1596402184320-417e7178b2cd?w=400&q=80' },
+    { id: '4', name: 'MACAN Museum', location: 'Jakarta', date: 'Dec 2025', img: 'https://images.unsplash.com/photo-1554907984-15263bfd63bd?w=400&q=80' },
+];
+
+// Chain logos
+const CHAIN_LOGOS: Record<string, string> = {
+    solana: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+    ethereum: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
+};
+
+// ============================================
+// TYPES
+// ============================================
+
+type TabId = 'about' | 'arts' | 'settings';
+
+// ============================================
+// MAIN COMPONENT
+// ============================================
+
 export function Profile() {
     const { user: authUser } = useAuthStore();
-    const { user: privyUser } = usePrivy();
+    const { user: privyUser, logout } = usePrivy();
     const { data: user, isLoading: userLoading } = useCurrentUser();
     const { data: stats } = useUserStats();
     const updateProfile = useUpdateProfile();
@@ -37,7 +108,9 @@ export function Profile() {
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const [activeTab, setActiveTab] = useState<TabId>('about');
     const [isEditing, setIsEditing] = useState(false);
+    const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
     const [formData, setFormData] = useState({
         displayName: '',
         username: '',
@@ -75,7 +148,6 @@ export function Profile() {
     };
 
     const handleCancel = () => {
-        // Reset form to original values
         if (user) {
             setFormData({
                 displayName: user.displayName || '',
@@ -92,17 +164,25 @@ export function Profile() {
     const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
         try {
-            // Upload the file to the backend
             const { url } = await uploadAvatar.mutateAsync(file);
-
-            // Once uploaded, save the avatar URL to the user's profile
-            await updateProfile.mutateAsync({
-                avatarUrl: url,
-            });
+            await updateProfile.mutateAsync({ avatarUrl: url });
         } catch (error) {
             console.error('Failed to upload and update avatar:', error);
+        }
+    };
+
+    const handleCopyAddress = (address: string) => {
+        navigator.clipboard.writeText(address);
+        setCopiedAddress(address);
+        setTimeout(() => setCopiedAddress(null), 2000);
+    };
+
+    const handleLogout = async () => {
+        try {
+            await logout();
+        } catch {
+            // handled
         }
     };
 
@@ -115,406 +195,485 @@ export function Profile() {
 
     const finalAvatar = displayUser?.avatar || socialAvatar;
 
+    // Get initials for avatar fallback
+    const getInitials = (name: string) => {
+        return name
+            .split(' ')
+            .map((n) => n[0])
+            .slice(0, 2)
+            .join('')
+            .toUpperCase();
+    };
+
+    // Get external wallet for compact display
+    const getExternalWallet = () => {
+        if (!displayUser?.wallets) return null;
+        const loginWallet = displayUser.wallets.find((w: any) => {
+            const isEmbedded = w.isEmbedded || w.is_embedded || w.privy_wallet_id || w.walletClientType === 'privy';
+            return !isEmbedded;
+        });
+        if (!loginWallet) return null;
+        const walletAny = loginWallet as any;
+        return {
+            chain: walletAny.chainType || walletAny.chain_type || 'solana',
+            address: walletAny.address || walletAny.wallet_address,
+        };
+    };
+
+    const externalWallet = getExternalWallet();
+
+    // ============================================
+    // LOADING STATE
+    // ============================================
+
     if (userLoading) {
         return (
-            <PageContainer title="Profile" subtitle="Loading...">
-                <div className="flex justify-center py-20">
-                    <Loader2 className="w-8 h-8 text-gold animate-spin" />
+            <div className="profile-v2">
+                <div className="pv2-skeleton-hero" />
+                <div className="pv2-sheet">
+                    <div className="pv2-sheet-handle"><span /></div>
+                    <div className="pv2-content" style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
+                        <Loader2 className="w-7 h-7 text-gold animate-spin" />
+                    </div>
                 </div>
-            </PageContainer>
+            </div>
         );
     }
 
+    // ============================================
+    // RENDER
+    // ============================================
+
     return (
-        <PageContainer
-            title="Profile"
-            subtitle="Manage your public profile information"
-            actions={
-                isEditing ? (
-                    <div className="flex gap-2">
-                        <Button
-                            variant="ghost"
+        <div className="profile-v2">
+            {/* ========== HERO SECTION ========== */}
+            <div className="pv2-hero">
+                <img
+                    src={MOCK_COVER}
+                    alt="Cover"
+                    className="pv2-hero-img"
+                    loading="eager"
+                />
+                <div className="pv2-hero-gradient" />
+
+                {/* Edit / Save-Cancel buttons */}
+                {isEditing ? (
+                    <div className="pv2-hero-actions">
+                        <button
+                            className="pv2-btn-cancel"
                             onClick={handleCancel}
-                            leftIcon={<X className="w-4 h-4" />}
                             disabled={updateProfile.isPending}
                         >
-                            <span className="hidden sm:inline">Cancel</span>
-                        </Button>
-                        <Button
-                            variant="primary"
+                            <X style={{ width: 14, height: 14 }} /> Cancel
+                        </button>
+                        <button
+                            className="pv2-btn-save"
                             onClick={handleSave}
-                            leftIcon={updateProfile.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                            isLoading={updateProfile.isPending}
+                            disabled={updateProfile.isPending}
                         >
-                            <span className="hidden sm:inline">Save Changes</span>
-                            <span className="sm:hidden">Save</span>
-                        </Button>
+                            {updateProfile.isPending
+                                ? <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />
+                                : <Save style={{ width: 14, height: 14 }} />
+                            }
+                            {updateProfile.isPending ? 'Saving...' : 'Save'}
+                        </button>
                     </div>
                 ) : (
-                    <Button
-                        variant="secondary"
-                        onClick={() => setIsEditing(true)}
-                        leftIcon={<Edit2 className="w-4 h-4" />}
-                    >
-                        <span className="hidden sm:inline">Edit Profile</span>
-                        <span className="sm:hidden">Edit</span>
-                    </Button>
-                )
-            }
-        >
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-                {/* Avatar & Quick Info */}
-                <Card variant="elevated">
-                    <CardContent className="text-center">
-                        <div className="relative inline-block mb-6 group">
-                            <div className="rounded-full p-1 border-2 border-theme-border/50 group-hover:border-gold/80 transition-colors shadow-xl shadow-gold/5">
-                                <Avatar
+                    <button className="pv2-hero-edit" onClick={() => setIsEditing(true)}>
+                        <Edit2 style={{ width: 14, height: 14 }} /> Edit
+                    </button>
+                )}
+
+                {/* Identity — Avatar + Name */}
+                <div className="pv2-hero-identity">
+                    <div className="pv2-avatar-wrap">
+                        <div className="pv2-avatar-ring">
+                            {finalAvatar ? (
+                                <img
                                     src={finalAvatar}
-                                    name={displayUser?.displayName || displayUser?.username || 'User'}
-                                    size="2xl"
+                                    alt={displayUser?.displayName || 'Avatar'}
                                 />
-                            </div>
-                            {isEditing && (
-                                <>
-                                    <button
-                                        className="absolute bottom-1 right-1 p-2 bg-theme-bg shadow-md border border-theme-border text-gold rounded-full hover:bg-theme-elevated transition-colors z-10"
-                                        onClick={() => fileInputRef.current?.click()}
-                                        disabled={uploadAvatar.isPending}
-                                    >
-                                        {uploadAvatar.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-                                    </button>
-                                    <input
-                                        type="file"
-                                        ref={fileInputRef}
-                                        className="hidden"
-                                        accept="image/jpeg,image/png,image/webp,image/gif"
-                                        onChange={handleAvatarUpload}
-                                    />
-                                </>
+                            ) : (
+                                <div className="pv2-avatar-fallback">
+                                    {getInitials(displayUser?.displayName || displayUser?.username || 'U')}
+                                </div>
                             )}
                         </div>
+                        {isEditing && (
+                            <>
+                                <button
+                                    className="pv2-avatar-camera"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={uploadAvatar.isPending}
+                                >
+                                    {uploadAvatar.isPending
+                                        ? <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />
+                                        : <Camera style={{ width: 14, height: 14 }} />
+                                    }
+                                </button>
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    className="hidden"
+                                    accept="image/jpeg,image/png,image/webp,image/gif"
+                                    onChange={handleAvatarUpload}
+                                />
+                            </>
+                        )}
+                    </div>
 
-                        <h2 className="text-lg sm:text-xl font-bold text-theme-text">
-                            {displayUser?.displayName || displayUser?.username}
-                        </h2>
-                        <p className="text-theme-muted text-sm">@{displayUser?.username}</p>
+                    <h1 className="pv2-hero-name">
+                        {displayUser?.displayName || displayUser?.username || 'Explorer'}
+                    </h1>
 
-                        <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+                    <p className="pv2-hero-username">@{displayUser?.username || 'username'}</p>
+
+                    <div className="pv2-hero-location">
+                        <MapPin style={{ width: 13, height: 13, opacity: 0.7 }} />
+                        Indonesia
+                    </div>
+
+                    {(displayUser?.isVerified || displayUser?.isPremium) && (
+                        <div className="pv2-hero-badges">
                             {displayUser?.isVerified && (
-                                <Badge variant="primary" dot>Verified</Badge>
+                                <span className="pv2-badge pv2-badge--verified">✦ Verified</span>
                             )}
                             {displayUser?.isPremium && (
-                                <Badge variant="gold">Premium</Badge>
+                                <span className="pv2-badge pv2-badge--premium">★ Premium</span>
                             )}
                         </div>
+                    )}
+                </div>
+            </div>
 
-                        <p className="text-sm text-theme-muted mt-4 line-clamp-3">
-                            {displayUser?.bio || 'No bio yet'}
-                        </p>
+            {/* ========== BOTTOM SHEET ========== */}
+            <div className="pv2-sheet">
+                <div className="pv2-sheet-handle"><span /></div>
 
-                        {/* Stats Summary */}
-                        {stats && (
-                            <div className="grid grid-cols-3 gap-2 mt-6 pt-4 border-t border-theme-border">
-                                <div className="text-center">
-                                    <p className="text-lg font-bold text-theme-text">{stats.bookmarksCount || 0}</p>
-                                    <p className="text-xs text-theme-muted">Bookmarks</p>
-                                </div>
-                                <div className="text-center">
-                                    <p className="text-lg font-bold text-theme-text">{stats.collectionsCount || 0}</p>
-                                    <p className="text-xs text-theme-muted">Collections</p>
-                                </div>
-                                <div className="text-center">
-                                    <p className="text-lg font-bold text-theme-text">{stats.nftCount || 0}</p>
-                                    <p className="text-xs text-theme-muted">Arts</p>
-                                </div>
-                            </div>
-                        )}
+                {/* Tab Navigation */}
+                <div className="pv2-tabs">
+                    {(['about', 'arts', 'settings'] as TabId[]).map((tab) => (
+                        <button
+                            key={tab}
+                            className={`pv2-tab ${activeTab === tab ? 'pv2-tab--active' : ''}`}
+                            onClick={() => setActiveTab(tab)}
+                        >
+                            {tab}
+                        </button>
+                    ))}
+                </div>
 
-                        {/* Social Links */}
-                        <div className="flex items-center justify-center gap-4 mt-6 pt-4 border-t border-theme-border">
-                            {displayUser?.socialLinks?.twitter && (
-                                <a
-                                    href={`https://x.com/${displayUser.socialLinks.twitter}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-2 rounded-lg bg-theme-elevated text-theme-muted hover:text-theme-text transition-colors"
-                                >
-                                    <XLogo className="w-5 h-5" />
-                                </a>
-                            )}
-                            {displayUser?.socialLinks?.instagram && (
-                                <a
-                                    href={`https://instagram.com/${displayUser.socialLinks.instagram}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-2 rounded-lg bg-theme-elevated text-theme-muted hover:text-theme-text transition-colors"
-                                >
-                                    <Instagram className="w-5 h-5" />
-                                </a>
-                            )}
-                            {displayUser?.socialLinks?.telegram && (
-                                <a
-                                    href={`https://t.me/${displayUser.socialLinks.telegram}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-2 rounded-lg bg-theme-elevated text-theme-muted hover:text-theme-text transition-colors"
-                                >
-                                    <Send className="w-5 h-5 -ml-0.5" />
-                                </a>
-                            )}
-                            {!displayUser?.socialLinks?.twitter && !displayUser?.socialLinks?.instagram && !displayUser?.socialLinks?.telegram && (
-                                <p className="text-xs text-theme-muted">No social links added</p>
-                            )}
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Profile Form */}
-                <div className="lg:col-span-2 space-y-4 sm:space-y-6">
-                    <Card variant="elevated" className={`transition-all duration-300 ${isEditing ? "ring-1 ring-gold/30 shadow-lg shadow-gold/5" : "border-theme-border/30 shadow-sm"}`}>
-                        <CardHeader title="Basic Information" />
-                        <CardContent className="space-y-5">
+                {/* Tab Content */}
+                <div className="pv2-content">
+                    {/* ====== ABOUT TAB ====== */}
+                    {activeTab === 'about' && (
+                        <div className="pv2-fade-in">
                             {isEditing ? (
+                                /* Edit Mode */
                                 <>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                        <Input
-                                            label="Display Name"
+                                    <div className="pv2-edit-field">
+                                        <label className="pv2-edit-label">Display Name</label>
+                                        <input
+                                            type="text"
+                                            className="pv2-edit-input"
                                             value={formData.displayName}
-                                            onChange={(e: any) => setFormData({ ...formData, displayName: e.target.value })}
+                                            onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
                                             placeholder="Your display name"
-                                            className="transition-all"
-                                        />
-                                        <Input
-                                            label="Username"
-                                            value={formData.username}
-                                            onChange={(e: any) => setFormData({ ...formData, username: e.target.value.replace(/^@/, '') })}
-                                            placeholder="username"
-                                            leftIcon={<span className="text-theme-muted font-medium">@</span>}
-                                            autoCapitalize="none"
-                                            autoCorrect="off"
-                                            className="transition-all"
                                         />
                                     </div>
 
-                                    <Textarea
-                                        label="Bio"
-                                        value={formData.bio}
-                                        onChange={(e: any) => setFormData({ ...formData, bio: e.target.value })}
-                                        placeholder="Tell us about yourself..."
-                                        hint={`${formData.bio.length}/500 characters`}
-                                        rows={4}
-                                        className="transition-all"
-                                    />
+                                    <div className="pv2-edit-field">
+                                        <label className="pv2-edit-label">Bio</label>
+                                        <textarea
+                                            className="pv2-edit-textarea"
+                                            value={formData.bio}
+                                            onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                                            placeholder="Tell us about yourself, your journey, your art..."
+                                            rows={4}
+                                            maxLength={500}
+                                        />
+                                        <p className="pv2-edit-char-count">{formData.bio.length}/500</p>
+                                    </div>
+
+                                    <div className="pv2-edit-field">
+                                        <label className="pv2-edit-label">Social Links</label>
+                                        <div className="pv2-edit-social-row">
+                                            <div className="pv2-edit-social-icon">
+                                                <XLogo style={{ width: 14, height: 14 }} />
+                                            </div>
+                                            <input
+                                                type="text"
+                                                className="pv2-edit-input"
+                                                value={formData.twitter}
+                                                onChange={(e) => setFormData({ ...formData, twitter: e.target.value.replace(/^@/, '') })}
+                                                placeholder="username"
+                                            />
+                                        </div>
+                                        <div className="pv2-edit-social-row">
+                                            <div className="pv2-edit-social-icon">
+                                                <Instagram style={{ width: 14, height: 14 }} />
+                                            </div>
+                                            <input
+                                                type="text"
+                                                className="pv2-edit-input"
+                                                value={formData.instagram}
+                                                onChange={(e) => setFormData({ ...formData, instagram: e.target.value.replace(/^@/, '') })}
+                                                placeholder="username"
+                                            />
+                                        </div>
+                                        <div className="pv2-edit-social-row">
+                                            <div className="pv2-edit-social-icon">
+                                                <Send style={{ width: 14, height: 14 }} />
+                                            </div>
+                                            <input
+                                                type="text"
+                                                className="pv2-edit-input"
+                                                value={formData.telegram}
+                                                onChange={(e) => setFormData({ ...formData, telegram: e.target.value.replace(/^@/, '') })}
+                                                placeholder="username"
+                                            />
+                                        </div>
+                                    </div>
                                 </>
                             ) : (
-                                <div className="space-y-4 sm:space-y-6">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                                        <div className="p-4 rounded-xl bg-theme-bg/40 border border-theme-border/30 backdrop-blur-xl hover:bg-theme-bg/60 transition-colors group">
-                                            <p className="text-[11px] sm:text-xs uppercase tracking-wider text-theme-muted font-bold mb-1.5 flex items-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-gold/50 group-hover:bg-gold transition-colors"></span>
-                                                Display Name
-                                            </p>
-                                            <p className="text-theme-text font-medium text-base sm:text-lg">{displayUser?.displayName || <span className="text-theme-muted/50 font-light">Not set</span>}</p>
-                                        </div>
-                                        <div className="p-4 rounded-xl bg-theme-bg/40 border border-theme-border/30 backdrop-blur-xl hover:bg-theme-bg/60 transition-colors group">
-                                            <p className="text-[11px] sm:text-xs uppercase tracking-wider text-theme-muted font-bold mb-1.5 flex items-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-gold/50 group-hover:bg-gold transition-colors"></span>
-                                                Username
-                                            </p>
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="text-theme-muted/50 font-light">@</span>
-                                                <p className="text-theme-text font-medium text-base sm:text-lg">{displayUser?.username || <span className="text-theme-muted/50 font-light">Not set</span>}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="p-4 rounded-xl bg-theme-bg/40 border border-theme-border/30 backdrop-blur-xl hover:bg-theme-bg/60 transition-colors group">
-                                        <p className="text-[11px] sm:text-xs uppercase tracking-wider text-theme-muted font-bold mb-2.5 flex items-center gap-1.5">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-gold/50 group-hover:bg-gold transition-colors"></span>
-                                            Bio
-                                        </p>
-                                        <p className="text-theme-text/90 leading-relaxed font-light text-sm sm:text-base">
-                                            {displayUser?.bio || <span className="text-theme-muted/50 italic">No bio yet. Click Edit Profile to add one.</span>}
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <Card variant="elevated" className={`transition-all duration-300 ${isEditing ? "ring-1 ring-gold/30 shadow-lg shadow-gold/5" : "border-theme-border/30 shadow-sm"}`}>
-                        <CardHeader title="Social Links" />
-                        <CardContent className="space-y-5">
-                            {isEditing ? (
+                                /* View Mode */
                                 <>
-                                    <Input
-                                        label="X"
-                                        value={formData.twitter}
-                                        onChange={(e: any) => setFormData({ ...formData, twitter: e.target.value.replace(/^@/, '') })}
-                                        placeholder="username"
-                                        leftIcon={
-                                            <div className="flex items-center gap-1.5">
-                                                <XLogo className="w-4 h-4 text-theme-text" />
-                                                <span className="text-theme-muted font-medium">@</span>
+                                    {/* Social Links — Centered */}
+                                    {(displayUser?.socialLinks?.twitter ||
+                                        displayUser?.socialLinks?.instagram ||
+                                        displayUser?.socialLinks?.telegram) ? (
+                                        <div className="pv2-socials-centered">
+                                            {displayUser?.socialLinks?.twitter && (
+                                                <a
+                                                    href={`https://x.com/${displayUser.socialLinks.twitter}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="pv2-social-circle pv2-social--x"
+                                                    title={`@${displayUser.socialLinks.twitter}`}
+                                                >
+                                                    <XLogo />
+                                                </a>
+                                            )}
+                                            {displayUser?.socialLinks?.instagram && (
+                                                <a
+                                                    href={`https://instagram.com/${displayUser.socialLinks.instagram}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="pv2-social-circle pv2-social--ig"
+                                                    title={`@${displayUser.socialLinks.instagram}`}
+                                                >
+                                                    <InstagramLogo />
+                                                </a>
+                                            )}
+                                            {displayUser?.socialLinks?.telegram && (
+                                                <a
+                                                    href={`https://t.me/${displayUser.socialLinks.telegram}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="pv2-social-circle pv2-social--tg"
+                                                    title={`@${displayUser.socialLinks.telegram}`}
+                                                >
+                                                    <TelegramLogo />
+                                                </a>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <p className="pv2-no-socials">No social links added yet</p>
+                                    )}
+
+                                    {/* Bio — Centered */}
+                                    <p className={`pv2-bio-centered ${!displayUser?.bio ? 'pv2-bio--empty' : ''}`}>
+                                        {displayUser?.bio || 'No bio yet. Tap Edit to tell the world about your journey.'}
+                                    </p>
+
+                                    {/* Stats */}
+                                    <div className="pv2-stats">
+                                        <div className="pv2-stat">
+                                            <p className="pv2-stat-value">{stats?.bookmarksCount || 0}</p>
+                                            <p className="pv2-stat-label">Bookmarks</p>
+                                        </div>
+                                        <div className="pv2-stat">
+                                            <p className="pv2-stat-value">{stats?.collectionsCount || 0}</p>
+                                            <p className="pv2-stat-label">Collections</p>
+                                        </div>
+                                        <div className="pv2-stat">
+                                            <p className="pv2-stat-value">{stats?.nftCount || 0}</p>
+                                            <p className="pv2-stat-label">Arts</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Recent Visits — Pro Trip Style */}
+                                    <div className="pv2-section-header" style={{ marginTop: 4 }}>
+                                        <h2 className="pv2-section-title">Recent Visits</h2>
+                                        <button className="pv2-section-more">See All</button>
+                                    </div>
+                                    <div className="pv2-recent-visits">
+                                        {MOCK_RECENT_VISITS.map((visit) => (
+                                            <div key={visit.id} className="pv2-visit-card">
+                                                <img src={visit.img} alt={visit.name} loading="lazy" />
+                                                <span className="pv2-visit-date">{visit.date}</span>
+                                                <div className="pv2-visit-overlay">
+                                                    <p className="pv2-visit-name">{visit.name}</p>
+                                                    <p className="pv2-visit-location">
+                                                        <MapPin style={{ width: 10, height: 10 }} />
+                                                        {visit.location}
+                                                    </p>
+                                                </div>
                                             </div>
-                                        }
-                                        inputMode="text"
-                                        autoCapitalize="none"
-                                        className="!pl-16 transition-all"
-                                    />
-                                    <Input
-                                        label="Instagram"
-                                        value={formData.instagram}
-                                        onChange={(e: any) => setFormData({ ...formData, instagram: e.target.value.replace(/^@/, '') })}
-                                        placeholder="username"
-                                        leftIcon={
-                                            <div className="flex items-center gap-1.5">
-                                                <Instagram className="w-4 h-4 text-pink-500" />
-                                                <span className="text-theme-muted font-medium">@</span>
-                                            </div>
-                                        }
-                                        inputMode="text"
-                                        autoCapitalize="none"
-                                        className="!pl-16 transition-all"
-                                    />
-                                    <Input
-                                        label="Telegram"
-                                        value={formData.telegram}
-                                        onChange={(e: any) => setFormData({ ...formData, telegram: e.target.value.replace(/^@/, '') })}
-                                        placeholder="username"
-                                        leftIcon={
-                                            <div className="flex items-center gap-1.5">
-                                                <Send className="w-4 h-4 text-[#2AABEE]" />
-                                                <span className="text-theme-muted font-medium">@</span>
-                                            </div>
-                                        }
-                                        inputMode="text"
-                                        className="!pl-16 transition-all"
-                                    />
+                                        ))}
+                                    </div>
                                 </>
-                            ) : (
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-4 p-3.5 sm:p-4 rounded-xl bg-theme-bg/40 border border-theme-border/30 backdrop-blur-xl hover:bg-theme-bg/60 hover:border-theme-border/80 transition-all duration-300 group">
-                                        <div className="p-2.5 rounded-xl bg-gradient-to-br from-theme-elevated to-theme-bg group-hover:scale-105 transition-all duration-300 shadow-sm border border-theme-border/30">
-                                            <XLogo className="w-5 h-5 text-theme-text transition-colors" />
-                                        </div>
-                                        <div>
-                                            <p className="text-[11px] sm:text-xs text-theme-muted font-bold tracking-wider uppercase mb-0.5">X</p>
-                                            <p className="text-theme-text font-medium text-sm sm:text-base">
-                                                {displayUser?.socialLinks?.twitter 
-                                                    ? <span className="flex items-center gap-0.5"><span className="text-theme-muted font-light">@</span>{displayUser.socialLinks.twitter.replace(/^@/, '')}</span> 
-                                                    : <span className="text-theme-muted/50 font-light">Not added</span>}
-                                            </p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ====== ARTS TAB ====== */}
+                    {activeTab === 'arts' && (
+                        <div className="pv2-fade-in">
+                            {/* Arts Summary Card */}
+                            <div className="pv2-tokens-card">
+                                <div className="pv2-tokens-info">
+                                    <h3>My Arts</h3>
+                                    <p>{stats?.nftCount || 0} Art Objects</p>
+                                    <div className="pv2-tokens-balance">
+                                        <div className="pv2-sol-icon">◎</div>
+                                        <span className="pv2-tokens-amount">
+                                            {stats?.nftCount || 0} Artworks
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="pv2-tokens-thumb">
+                                    <img src={MOCK_TOKEN_THUMB} alt="Art Preview" />
+                                </div>
+                            </div>
+
+                            {/* Art Grid */}
+                            <div className="pv2-section-header">
+                                <h2 className="pv2-section-title">Collection</h2>
+                                <button className="pv2-section-more">View All</button>
+                            </div>
+
+                            <div className="pv2-art-grid">
+                                {MOCK_ARTS.map((art) => (
+                                    <div key={art.id} className="pv2-art-card">
+                                        <img src={art.img} alt={art.title} loading="lazy" />
+                                        <div className="pv2-art-overlay">
+                                            <p className="pv2-art-title">{art.title}</p>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-4 p-3.5 sm:p-4 rounded-xl bg-theme-bg/40 border border-theme-border/30 backdrop-blur-xl hover:bg-pink-500/5 hover:border-pink-500/30 transition-all duration-300 group">
-                                        <div className="p-2.5 rounded-xl bg-gradient-to-br from-theme-elevated to-theme-bg group-hover:from-pink-500/10 group-hover:to-orange-500/10 group-hover:scale-105 transition-all duration-300 shadow-sm border border-theme-border/30">
-                                            <Instagram className="w-5 h-5 text-pink-500 transition-colors" />
-                                        </div>
-                                        <div>
-                                            <p className="text-[11px] sm:text-xs text-theme-muted font-bold tracking-wider uppercase mb-0.5">Instagram</p>
-                                            <p className="text-theme-text font-medium text-sm sm:text-base">
-                                                {displayUser?.socialLinks?.instagram 
-                                                    ? <span className="flex items-center gap-0.5"><span className="text-theme-muted font-light">@</span>{displayUser.socialLinks.instagram.replace(/^@/, '')}</span> 
-                                                    : <span className="text-theme-muted/50 font-light">Not added</span>}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-4 p-3.5 sm:p-4 rounded-xl bg-theme-bg/40 border border-theme-border/30 backdrop-blur-xl hover:bg-[#2AABEE]/5 hover:border-[#2AABEE]/30 transition-all duration-300 group">
-                                        <div className="p-2.5 rounded-xl bg-gradient-to-br from-theme-elevated to-theme-bg group-hover:from-[#2AABEE]/10 group-hover:to-[#2AABEE]/5 group-hover:scale-105 transition-all duration-300 shadow-sm border border-theme-border/30">
-                                            <Send className="w-5 h-5 text-[#2AABEE] transition-colors" />
-                                        </div>
-                                        <div>
-                                            <p className="text-[11px] sm:text-xs text-theme-muted font-bold tracking-wider uppercase mb-0.5">Telegram</p>
-                                            <p className="text-theme-text font-medium text-sm sm:text-base">
-                                                {displayUser?.socialLinks?.telegram 
-                                                    ? <span className="flex items-center gap-0.5"><span className="text-theme-muted font-light">@</span>{displayUser.socialLinks.telegram.replace(/^@/, '')}</span> 
-                                                    : <span className="text-theme-muted/50 font-light">Not added</span>}
-                                            </p>
-                                        </div>
-                                    </div>
+                                ))}
+                            </div>
+
+                            {MOCK_ARTS.length === 0 && (
+                                <div className="pv2-empty">
+                                    <ImageIcon className="pv2-empty-icon" />
+                                    <h3 className="pv2-empty-title">No Art Yet</h3>
+                                    <p className="pv2-empty-text">Your collected and created artworks will appear here.</p>
                                 </div>
                             )}
-                        </CardContent>
-                    </Card>
+                        </div>
+                    )}
 
-
-                    <WalletSummaryCard />
-                    <ConnectedWallets user={displayUser} />
-
-                    <Card variant="elevated">
-                        <CardHeader title="Account Information" />
-                        <CardContent className="space-y-2">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 border-b border-theme-border gap-2">
-                                <div>
-                                    <p className="text-sm font-medium text-theme-text">Email</p>
-                                    <p className="text-sm text-theme-muted break-all">{displayUser?.email}</p>
-                                </div>
-                                <Badge variant="success" dot className="self-start sm:self-center">Verified</Badge>
-                            </div>
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2">
-                                <div>
-                                    <p className="text-sm font-medium text-theme-text">Member Since</p>
-                                    <p className="text-sm text-theme-muted">
-                                        {displayUser?.createdAt
-                                            ? new Date(displayUser.createdAt).toLocaleDateString('en-US', {
-                                                year: 'numeric',
-                                                month: 'long',
-                                                day: 'numeric'
-                                            })
-                                            : 'N/A'
-                                        }
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Connected Login Wallet (External Only) */}
-                            {displayUser?.wallets && (() => {
-                                // Robust check for external wallets (exclude embedded/privy)
-                                const loginWallet = displayUser.wallets.find((w: any) => {
-                                    const isEmbedded = w.isEmbedded || w.is_embedded || w.privy_wallet_id || w.walletClientType === 'privy';
-                                    return !isEmbedded;
-                                });
-
-                                if (!loginWallet) return null;
-
-                                const walletAny = loginWallet as any;
-                                const chainType = walletAny.chainType || walletAny.chain_type || 'solana';
-                                const address = walletAny.address || walletAny.wallet_address;
-
-                                if (!address) return null;
-
-                                return (
-                                    <div className="py-3 border-t border-theme-border">
-                                        <p className="text-sm font-medium text-theme-text mb-2">Connected Wallet</p>
-                                        <div className="flex items-center justify-between p-2 rounded-lg bg-theme-bg">
-                                            <div className="flex items-center gap-2">
-                                                <Badge
-                                                    variant={chainType === 'solana' ? 'primary' : 'default'}
-                                                    className="text-[10px] px-1.5 py-0 h-4 uppercase"
-                                                >
-                                                    {chainType}
-                                                </Badge>
-                                                <p className="text-xs text-theme-muted font-mono">
-                                                    {address.slice(0, 6)}...{address.slice(-4)}
-                                                </p>
-                                                <Badge variant="gold" className="text-[9px] px-1 py-0 h-3">Login</Badge>
-                                            </div>
-                                            <button
-                                                onClick={() => navigator.clipboard.writeText(address)}
-                                                className="text-xs text-gold hover:text-gold-light transition-colors"
-                                                title="Copy address"
-                                            >
-                                                Copy
-                                            </button>
+                    {/* ====== SETTINGS TAB ====== */}
+                    {activeTab === 'settings' && (
+                        <div className="pv2-fade-in">
+                            {/* Account Section */}
+                            <div className="pv2-settings-section">
+                                <p className="pv2-settings-label">Account</p>
+                                <div className="pv2-settings-card">
+                                    <div className="pv2-settings-item">
+                                        <div className="pv2-settings-icon">
+                                            <Mail />
+                                        </div>
+                                        <div className="pv2-settings-info">
+                                            <p className="pv2-settings-title">Email</p>
+                                            <p className="pv2-settings-desc">{displayUser?.email || 'Not set'}</p>
+                                        </div>
+                                        <span className="pv2-badge pv2-badge--verified" style={{ fontSize: 9, padding: '2px 8px' }}>Verified</span>
+                                    </div>
+                                    <div className="pv2-settings-item">
+                                        <div className="pv2-settings-icon">
+                                            <Calendar />
+                                        </div>
+                                        <div className="pv2-settings-info">
+                                            <p className="pv2-settings-title">Member Since</p>
+                                            <p className="pv2-settings-desc">
+                                                {displayUser?.createdAt
+                                                    ? new Date(displayUser.createdAt).toLocaleDateString('en-US', {
+                                                        year: 'numeric',
+                                                        month: 'long',
+                                                        day: 'numeric'
+                                                    })
+                                                    : 'N/A'
+                                                }
+                                            </p>
                                         </div>
                                     </div>
-                                );
-                            })()}
-                        </CardContent>
-                    </Card>
-                </div >
-            </div >
-        </PageContainer >
+                                    <div className="pv2-settings-item">
+                                        <div className="pv2-settings-icon">
+                                            <Shield />
+                                        </div>
+                                        <div className="pv2-settings-info">
+                                            <p className="pv2-settings-title">Username</p>
+                                            <p className="pv2-settings-desc">@{displayUser?.username || 'not-set'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+
+
+                            {/* Quick Actions */}
+                            <div className="pv2-settings-section">
+                                <p className="pv2-settings-label">Quick Actions</p>
+                                <div className="pv2-settings-card">
+                                    <div
+                                        className="pv2-settings-item"
+                                        onClick={() => { setActiveTab('about'); setIsEditing(true); }}
+                                    >
+                                        <div className="pv2-settings-icon">
+                                            <Edit2 />
+                                        </div>
+                                        <div className="pv2-settings-info">
+                                            <p className="pv2-settings-title">Edit Profile</p>
+                                            <p className="pv2-settings-desc">Update your name, bio, and social links</p>
+                                        </div>
+                                        <ChevronRight className="pv2-settings-arrow" style={{ width: 16, height: 16 }} />
+                                    </div>
+
+                                    <div
+                                        className="pv2-settings-item"
+                                        onClick={() => window.location.href = '/dashboard/settings'}
+                                    >
+                                        <div className="pv2-settings-icon">
+                                            <SettingsIcon />
+                                        </div>
+                                        <div className="pv2-settings-info">
+                                            <p className="pv2-settings-title">App Settings</p>
+                                            <p className="pv2-settings-desc">Theme, notifications, security</p>
+                                        </div>
+                                        <ChevronRight className="pv2-settings-arrow" style={{ width: 16, height: 16 }} />
+                                    </div>
+
+                                    <div
+                                        className="pv2-settings-item pv2-settings-item--danger"
+                                        onClick={handleLogout}
+                                    >
+                                        <div className="pv2-settings-icon">
+                                            <LogOut />
+                                        </div>
+                                        <div className="pv2-settings-info">
+                                            <p className="pv2-settings-title">Sign Out</p>
+                                            <p className="pv2-settings-desc">Log out of your account</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
     );
 }
 

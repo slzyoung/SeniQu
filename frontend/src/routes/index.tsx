@@ -42,6 +42,8 @@ const PublicGallery = lazy(() => import('../features/gallery/pages/PublicGallery
 const MuseumDetail = lazy(() => import('../features/gallery/pages/MuseumDetail'));
 const ArtworkView = lazy(() => import('../features/gallery/pages/ArtworkView'));
 const NearbyMuseums = lazy(() => import('../features/gallery/pages/NearbyMuseums'));
+const CityRegions = lazy(() => import('../features/gallery/pages/CityRegions'));
+const RegionMuseums = lazy(() => import('../features/gallery/pages/RegionMuseums'));
 
 // Lazy load marketplace pages
 const Marketplace = lazy(() => import('../features/marketplace/pages/Marketplace'));
@@ -133,6 +135,8 @@ const router = createBrowserRouter(
                 {/* Gallery Routes */}
                 <Route path={ROUTES.GALLERY} element={<PublicGallery />} />
                 <Route path={ROUTES.COLLECTIONS} element={<CollectionsPage />} />
+                <Route path={ROUTES.GALLERY_CITY_REGIONS} element={<CityRegions />} />
+                <Route path={ROUTES.GALLERY_REGION_MUSEUMS} element={<RegionMuseums />} />
                 <Route path={ROUTES.GALLERY_MUSEUM} element={<MuseumDetail />} />
                 <Route path={ROUTES.GALLERY_ARTWORK} element={<ArtworkView />} />
                 <Route path={ROUTES.NEARBY} element={<NearbyMuseums />} />

@@ -27,6 +27,8 @@ export const ROUTES = {
     HOME: '/',
     GALLERY: '/gallery',
     COLLECTIONS: '/collections',
+    GALLERY_CITY_REGIONS: '/gallery/city/:id',
+    GALLERY_REGION_MUSEUMS: '/gallery/region/:id',
     GALLERY_MUSEUM: '/gallery/museum/:id',
     GALLERY_ARTWORK: '/gallery/artwork/:id',
     NEARBY: '/gallery/nearby',

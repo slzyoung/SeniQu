@@ -323,7 +323,7 @@ export function UserDashboard() {
                             key={city.id}
                             city={city}
                             index={i}
-                            onClick={() => navigate(ROUTES.USER_NEARBY)}
+                            onClick={() => navigate(`/gallery/city/${city.id}`)}
                         />
                     ))}
                     {filteredCities.length === 0 && (

@@ -6,7 +6,7 @@ import {
     Settings,
     Image,
     MapPin,
-    Sparkles,
+    ScanLine,
     Brain,
     ShoppingCart,
     Wallet,
@@ -67,8 +67,8 @@ export const userSidebarSections: SidebarSection[] = [
         items: [
             {
                 id: 'genre-identifier',
-                label: 'AI Art Detect',
-                icon: <Sparkles className="w-5 h-5" />,
+                label: 'Scan Art',
+                icon: <ScanLine className="w-5 h-5" />,
                 path: ROUTES.USER_GENRE_IDENTIFIER,
             },
             {
@@ -381,8 +381,8 @@ export const publicSidebarSections: SidebarSection[] = [
         items: [
             {
                 id: 'genre-identifier',
-                label: 'Genre Identifier',
-                icon: <Sparkles className="w-5 h-5" />,
+                label: 'Scan Art',
+                icon: <ScanLine className="w-5 h-5" />,
                 path: ROUTES.AI_GENRE,
             },
             {
