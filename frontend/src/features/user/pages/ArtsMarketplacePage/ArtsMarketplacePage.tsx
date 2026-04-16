@@ -10,7 +10,7 @@ import {
     Bell,
     ArrowRight,
 } from 'lucide-react';
-import './ArtsMarketplace.css';
+import './ArtsMarketplacePage.css';
 
 // Mockup Data
 const CATEGORIES = ['All', 'Abstract', 'Portraits', 'Digital', 'Classic'];

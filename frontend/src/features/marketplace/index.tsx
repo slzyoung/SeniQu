@@ -14,7 +14,7 @@ import {
     Heart
 } from 'lucide-react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import '../user/pages/ArtsMarketplace.css'; // Re-use the mockup CSS
+import '../user/pages/ArtsMarketplacePage/ArtsMarketplacePage.css'; // Re-use the mockup CSS
 
 // Mockup Data to exactly match the design
 const MOCKUP_ARTS: Record<string, any> = {

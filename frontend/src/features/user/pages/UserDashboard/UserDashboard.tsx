@@ -21,11 +21,11 @@ import {
     useCurrentUser,
     useBookmarks,
     useCollections,
-} from '../../../hooks/useUser';
-import { useArtworks } from '../../../hooks/useArtworks';
-import { useMuseums } from '../../../hooks/useMuseums';
-import { extractArray } from '../../../lib/utils';
-import { ROUTES } from '../../../lib/constants';
+} from '../../../../hooks/useUser';
+import { useArtworks } from '../../../../hooks/useArtworks';
+import { useMuseums } from '../../../../hooks/useMuseums';
+import { extractArray } from '../../../../lib/utils';
+import { ROUTES } from '../../../../lib/constants';
 import './UserDashboard.css';
 
 // ============================================================

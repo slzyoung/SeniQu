@@ -6,11 +6,11 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Grid, List, Heart, Trash2, Filter, Search, Loader2, Image as ImageIcon } from 'lucide-react';
-import { PageContainer } from '../../../components/common/DashboardLayout';
-import { Card, Button, Badge } from '../../../components/ui';
+import { PageContainer } from '../../../../components/common/DashboardLayout';
+import { Card, Button, Badge } from '../../../../components/ui';
 import { useNavigate } from 'react-router-dom';
-import { useBookmarks, useRemoveBookmark } from '../../../hooks/useUser';
-import { extractArray, extractPagination } from '../../../lib/utils';
+import { useBookmarks, useRemoveBookmark } from '../../../../hooks/useUser';
+import { extractArray, extractPagination } from '../../../../lib/utils';
 
 interface BookmarkedArtwork {
     id: string;

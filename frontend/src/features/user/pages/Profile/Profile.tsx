@@ -13,13 +13,13 @@ import {
     Save,
     Send
 } from 'lucide-react';
-import { PageContainer } from '../../../components/common/DashboardLayout';
-import { Card, CardHeader, CardContent, Button, Input, Textarea, Avatar, Badge } from '../../../components/ui';
-import { useAuthStore } from '../../../stores/useAuthStore';
-import { useCurrentUser, useUpdateProfile, useUserStats, useUploadAvatar } from '../../../hooks/useUser';
+import { PageContainer } from '../../../../components/common/DashboardLayout';
+import { Card, CardHeader, CardContent, Button, Input, Textarea, Avatar, Badge } from '../../../../components/ui';
+import { useAuthStore } from '../../../../stores/useAuthStore';
+import { useCurrentUser, useUpdateProfile, useUserStats, useUploadAvatar } from '../../../../hooks/useUser';
 import { usePrivy } from '@privy-io/react-auth';
-import { ConnectedWallets } from '../components/ConnectedWallets';
-import { WalletSummaryCard } from '../components/WalletSummaryCard';
+import { ConnectedWallets } from '../../components/ConnectedWallets';
+import { WalletSummaryCard } from '../../components/WalletSummaryCard';
 
 const XLogo = (props: React.SVGProps<SVGSVGElement>) => (
     <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" {...props}>

@@ -20,7 +20,7 @@ import { LandingPage } from './LandingPage';
 const UserDashboard = lazy(() => import('../features/user/pages/UserDashboard'));
 const UserProfile = lazy(() => import('../features/user/pages/Profile'));
 const UserBookmarks = lazy(() => import('../features/user/pages/Bookmarks'));
-const UserCollections = lazy(() => import('../features/user/pages/MyCollections'));
+const UserCollections = lazy(() => import('../features/user/pages/MyCollectionsPage'));
 const UserSettings = lazy(() => import('../features/user/pages/Settings'));
 // New User Dashboard Pages
 const UserGallery = lazy(() => import('../features/user/pages/GalleryPage'));

@@ -36,8 +36,8 @@ import {
     SlidersHorizontal,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useMuseums, useNearbyMuseums } from '../../../hooks/useMuseums';
-import { extractArray } from '../../../lib/utils';
+import { useMuseums, useNearbyMuseums } from '../../../../hooks/useMuseums';
+import { extractArray } from '../../../../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import './NearbyMuseumsPage.css';
 

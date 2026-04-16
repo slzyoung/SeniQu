@@ -18,15 +18,15 @@ import {
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { QrReader } from 'react-qr-reader';
-import { PageContainer } from '../../../components/common/DashboardLayout';
-import { Card, Button, Badge, Input, Modal } from '../../../components/ui';
-import { usePrivyWallet } from '../../../hooks/usePrivyWallet';
-import { useToast } from '../../../stores/useNotificationStore';
-import { useCurrentUser } from '../../../hooks/useUser';
-import { useWalletTransactions } from '../../../hooks/useWalletData';
-import { useTokenPrices } from '../../../hooks/useTokenPrices';
-import { useAuthStore } from '../../../stores/useAuthStore';
-import api from '../../../lib/api';
+import { PageContainer } from '../../../../components/common/DashboardLayout';
+import { Card, Button, Badge, Input, Modal } from '../../../../components/ui';
+import { usePrivyWallet } from '../../../../hooks/usePrivyWallet';
+import { useToast } from '../../../../stores/useNotificationStore';
+import { useCurrentUser } from '../../../../hooks/useUser';
+import { useWalletTransactions } from '../../../../hooks/useWalletData';
+import { useTokenPrices } from '../../../../hooks/useTokenPrices';
+import { useAuthStore } from '../../../../stores/useAuthStore';
+import api from '../../../../lib/api';
 
 import { Connection, PublicKey, LAMPORTS_PER_SOL, clusterApiUrl, Transaction, SystemProgram } from '@solana/web3.js';
 

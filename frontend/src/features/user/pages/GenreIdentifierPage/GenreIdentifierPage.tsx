@@ -27,7 +27,7 @@ import {
     ChevronDown,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useDetectionHistory } from '../../../hooks/useAI';
+import { useDetectionHistory } from '../../../../hooks/useAI';
 import './GenreIdentifierPage.css';
 
 // ============================================================

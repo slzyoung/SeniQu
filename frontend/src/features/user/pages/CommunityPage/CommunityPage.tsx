@@ -21,14 +21,14 @@ import {
     Video,
     X
 } from 'lucide-react';
-import { PageContainer } from '../../../components/common/DashboardLayout';
-import { Card, CardHeader, CardContent, Button, Input, Badge, Tabs, Avatar } from '../../../components/ui';
+import { PageContainer } from '../../../../components/common/DashboardLayout';
+import { Card, CardHeader, CardContent, Button, Input, Badge, Tabs, Avatar } from '../../../../components/ui';
 import { useNavigate } from 'react-router-dom';
-import { useForumCategories, useForumThreads, useTrendingThreads, useCreateThread } from '../../../hooks/useForum';
-import { useAuthStore } from '../../../stores/useAuthStore';
-import { extractArray } from '../../../lib/utils';
-import { uploadFile } from '../../../lib/api';
-import { useToast } from '../../../stores/useNotificationStore';
+import { useForumCategories, useForumThreads, useTrendingThreads, useCreateThread } from '../../../../hooks/useForum';
+import { useAuthStore } from '../../../../stores/useAuthStore';
+import { extractArray } from '../../../../lib/utils';
+import { uploadFile } from '../../../../lib/api';
+import { useToast } from '../../../../stores/useNotificationStore';
 
 // ============================================
 // TYPES

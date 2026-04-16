@@ -6,20 +6,15 @@
 
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
-    Heart,
-    ShoppingCart,
     Send,
     Tag,
     Loader2,
-    Eye,
-    Plus,
-    Check,
     Image as ImageIcon
 } from 'lucide-react';
-import { useOwnedArts, useCreatedArts, useUnlistArt } from '../../../hooks/useArt';
-import './MyArts.css';
+import { useOwnedArts, useCreatedArts, useUnlistArt } from '../../../../hooks/useArt';
+import './MyArtsPage.css';
 
 // ============================================================
 // HELPERS

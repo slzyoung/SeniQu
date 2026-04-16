@@ -19,9 +19,9 @@ import {
     RefreshCw,
     Eye,
 } from 'lucide-react';
-import { usePersonalizedRecommendations, useCurate, useGenres } from '../../../hooks/useAI';
-import { useArtworks } from '../../../hooks/useArtworks';
-import { ROUTES } from '../../../lib/constants';
+import { usePersonalizedRecommendations, useCurate, useGenres } from '../../../../hooks/useAI';
+import { useArtworks } from '../../../../hooks/useArtworks';
+import { ROUTES } from '../../../../lib/constants';
 import './AICurationPage.css';
 
 // ============================================================

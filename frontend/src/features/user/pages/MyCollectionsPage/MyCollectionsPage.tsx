@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMyCollections, useCreateCollection } from '../../../hooks/useCollections';
-import { extractArray } from '../../../lib/utils';
+import { useMyCollections, useCreateCollection } from '../../../../hooks/useCollections';
+import { extractArray } from '../../../../lib/utils';
 import {
     ChevronLeft,
     MoreVertical,
@@ -10,16 +10,11 @@ import {
     Twitter,
     Linkedin,
     Instagram,
-    Home,
-    Layers,
-    Compass,
-    Settings,
-    Plus,
     Loader2
 } from 'lucide-react';
-import './MyCollections.css';
-import { Modal, Input, Textarea, Button } from '../../../components/ui';
-import { useToast } from '../../../stores/useNotificationStore';
+import './MyCollectionsPage.css';
+import { Modal, Input, Textarea, Button } from '../../../../components/ui';
+import { useToast } from '../../../../stores/useNotificationStore';
 
 // Mockup Data
 const MOCK_PHOTOS = [

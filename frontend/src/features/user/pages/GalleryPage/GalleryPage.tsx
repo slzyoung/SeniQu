@@ -13,11 +13,11 @@ import {
     LayoutGrid,
     Library
 } from 'lucide-react';
-import { useMuseums } from '../../../hooks/useMuseums';
-import { useArtworks } from '../../../hooks/useArtworks';
-import { extractArray } from '../../../lib/utils';
-import { ROUTES } from '../../../lib/constants';
-import { useAuthStore } from '../../../stores/useAuthStore';
+import { useMuseums } from '../../../../hooks/useMuseums';
+import { useArtworks } from '../../../../hooks/useArtworks';
+import { extractArray } from '../../../../lib/utils';
+import { ROUTES } from '../../../../lib/constants';
+import { useAuthStore } from '../../../../stores/useAuthStore';
 import './GalleryPage.css';
 
 function ensureImageParams(url: string, width = 800): string {
