@@ -176,7 +176,7 @@ export default function Bookmarks() {
                 drag="x"
                 dragConstraints={{ left: 0, right: 0 }}
                 dragElastic={0.2}
-                onDragEnd={(e, { offset, velocity }) => {
+                onDragEnd={(_, { offset, velocity }) => {
                     if (offset.x < -50 || velocity.x < -300) {
                         handleNext();
                     } else if (offset.x > 50 || velocity.x > 300) {

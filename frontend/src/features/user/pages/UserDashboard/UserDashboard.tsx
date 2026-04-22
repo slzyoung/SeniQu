@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import {
     useCurrentUser,
-    useBookmarks,
     useCollections,
 } from '../../../../hooks/useUser';
 import { useArtworks } from '../../../../hooks/useArtworks';
