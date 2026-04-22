@@ -28,7 +28,8 @@ import {
     Upload,
     TrendingUp,
     Image as ImageIcon,
-    Palette
+    Palette,
+    Wand2
 } from 'lucide-react';
 import { SidebarSection } from '../components/ui/Sidebar';
 import { ROUTES } from '../lib/constants';
@@ -76,6 +77,12 @@ export const userSidebarSections: SidebarSection[] = [
                 label: 'AI Curation',
                 icon: <Brain className="w-5 h-5" />,
                 path: ROUTES.USER_AI_CURATION,
+            },
+            {
+                id: 'ai-create',
+                label: 'Create with AI',
+                icon: <Wand2 className="w-5 h-5" />,
+                path: ROUTES.USER_AI_CREATE,
             },
         ],
     },

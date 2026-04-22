@@ -42,6 +42,7 @@ const PublicGallery = lazy(() => import('../features/gallery/pages/PublicGallery
 const MuseumDetail = lazy(() => import('../features/gallery/pages/MuseumDetail'));
 const ArtworkView = lazy(() => import('../features/gallery/pages/ArtworkView'));
 const NearbyMuseums = lazy(() => import('../features/gallery/pages/NearbyMuseums'));
+const PublicNearbyPage = lazy(() => import('../features/gallery/pages/PublicNearbyPage'));
 const CityRegions = lazy(() => import('../features/gallery/pages/CityRegions'));
 const RegionMuseums = lazy(() => import('../features/gallery/pages/RegionMuseums'));
 
@@ -56,6 +57,7 @@ const ThreadView = lazy(() => import('../features/community/pages/ThreadView'));
 // Lazy load AI pages
 const GenreIdentifier = lazy(() => import('../features/ai/pages/GenreIdentifier'));
 const AICuration = lazy(() => import('../features/ai/pages/AICuration'));
+const AIDashboardPage = lazy(() => import('../features/ai/pages/AIDashboardPage'));
 
 // Lazy load artist pages
 const ArtistDashboard = lazy(() => import('../features/artist/pages/ArtistDashboard'));
@@ -140,6 +142,7 @@ const router = createBrowserRouter(
                 <Route path={ROUTES.GALLERY_MUSEUM} element={<MuseumDetail />} />
                 <Route path={ROUTES.GALLERY_ARTWORK} element={<ArtworkView />} />
                 <Route path={ROUTES.NEARBY} element={<NearbyMuseums />} />
+                <Route path={ROUTES.NEARBY_PUBLIC} element={<PublicNearbyPage />} />
 
                 {/* Legal Routes */}
                 <Route path="/terms" element={<TermsOfService />} />
@@ -162,6 +165,7 @@ const router = createBrowserRouter(
                 <Route path={ROUTES.USER_NEARBY} element={<UserNearby />} />
                 <Route path={ROUTES.USER_GENRE_IDENTIFIER} element={<UserGenreIdentifier />} />
                 <Route path={ROUTES.USER_AI_CURATION} element={<UserAICuration />} />
+                <Route path={ROUTES.USER_AI_CREATE} element={<AIDashboardPage />} />
                 <Route path={ROUTES.USER_MARKETPLACE} element={<UserMarketplace />} />
                 <Route path={ROUTES.USER_MY_ARTS} element={<UserMyArts />} />
                 <Route path={ROUTES.USER_WALLET} element={<UserWallet />} />

@@ -3,13 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useMyCollections, useCreateCollection } from '../../../../hooks/useCollections';
 import { extractArray } from '../../../../lib/utils';
 import {
-    ChevronLeft,
-    MoreVertical,
-    MapPin,
-    Facebook,
-    Twitter,
-    Linkedin,
-    Instagram,
     Loader2
 } from 'lucide-react';
 import './MyCollectionsPage.css';
@@ -54,59 +47,9 @@ export function MyCollections() {
         <div className="mc-page">
             <div className="mc-container">
 
-                {/* Header */}
-                <div className="mc-header mc-fade-in" style={{ animationDelay: '0.1s' }}>
-                    <button className="mc-btn-icon" onClick={() => navigate(-1)}>
-                        <ChevronLeft style={{ width: 20, height: 20, marginLeft: -2 }} />
-                    </button>
-                    <button className="mc-btn-icon">
-                        <MoreVertical style={{ width: 20, height: 20 }} />
-                    </button>
-                </div>
-
-                {/* Profile Section */}
-                <div className="mc-profile mc-fade-in" style={{ animationDelay: '0.2s' }}>
-                    <div className="mc-avatar">
-                        <img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&q=80" alt="Profile" />
-                    </div>
-                    <h1 className="mc-name">Alex Nova</h1>
-                    <p className="mc-role">An artist with extensive Photography experience</p>
-                    
-                    <div className="mc-actions">
-                        <button className="mc-btn mc-btn--primary">Message</button>
-                        <button className="mc-btn mc-btn--primary">Follow</button>
-                    </div>
-
-                    <div className="mc-stats">
-                        <div className="mc-stat-item">
-                            <span className="mc-stat-val">197</span>
-                            <span className="mc-stat-label">Photos</span>
-                        </div>
-                        <div className="mc-stat-item">
-                            <span className="mc-stat-val">{collections.length}</span>
-                            <span className="mc-stat-label">Collections</span>
-                        </div>
-                        <div className="mc-stat-item">
-                            <span className="mc-stat-val">124</span>
-                            <span className="mc-stat-label">Likes</span>
-                        </div>
-                    </div>
-
-                    <div className="mc-location">
-                        <MapPin style={{ width: 14, height: 14 }} />
-                        New York, USA
-                    </div>
-
-                    <div className="mc-socials">
-                        <Facebook style={{ width: 18, height: 18 }} />
-                        <Twitter style={{ width: 18, height: 18 }} />
-                        <Linkedin style={{ width: 18, height: 18 }} />
-                        <Instagram style={{ width: 18, height: 18 }} />
-                    </div>
-                </div>
 
                 {/* Photos Section */}
-                <div className="mc-section mc-fade-in" style={{ animationDelay: '0.3s' }}>
+                <div className="mc-section mc-fade-in" style={{ animationDelay: '0.1s' }}>
                     <div className="mc-section-header">
                         <h2 className="mc-section-title">Photos</h2>
                         <span className="mc-section-more">More</span>
@@ -130,7 +73,7 @@ export function MyCollections() {
                 </div>
 
                 {/* Collections Section */}
-                <div className="mc-section mc-fade-in" style={{ animationDelay: '0.4s' }}>
+                <div className="mc-section mc-fade-in" style={{ animationDelay: '0.2s' }}>
                     <div className="mc-section-header">
                         <h2 className="mc-section-title">Collections</h2>
                         <span className="mc-section-more">All</span>

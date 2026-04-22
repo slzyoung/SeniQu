@@ -1,0 +1,957 @@
+/* ================================================
+   AI CREATE PAGE — Premium Art Generation Hub
+   3-screen flow: Hero → Dashboard → Edit Result
+   Matches ART.AI mobile app design reference
+   Light & Dark mode via CSS tokens
+   ================================================ */
+
+
+/* ================================================
+   § 1. SHARED / RESET
+   ================================================ */
+
+.aic-page {
+  width: 100%;
+  min-height: calc(100vh - 160px);
+  background: var(--bg-primary);
+  font-family: 'Inter', sans-serif;
+  position: relative;
+  overflow-x: hidden;
+}
+
+
+/* ================================================
+   § 2. HERO SCREEN (Screen 1)
+   "Create artwork with AI"
+   ================================================ */
+
+.aic-hero {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - 160px);
+  min-height: 450px;
+  max-height: 800px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  border-radius: 20px;
+}
+
+.aic-hero__bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.aic-hero__bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.aic-hero__gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.1) 0%,
+    rgba(0, 0, 0, 0.3) 40%,
+    rgba(0, 0, 0, 0.85) 75%,
+    rgba(0, 0, 0, 0.95) 100%
+  );
+  z-index: 1;
+}
+
+
+
+/* Sparkle effects */
+.aic-hero__sparkle {
+  position: absolute;
+  z-index: 2;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 12px 3px rgba(255, 255, 255, 0.4);
+  animation: aic-sparkle-pulse 3s ease-in-out infinite;
+}
+
+.aic-hero__sparkle--1 { top: 25%; left: 30%; animation-delay: 0s; }
+.aic-hero__sparkle--2 { top: 35%; right: 25%; animation-delay: 1.2s; width: 4px; height: 4px; }
+.aic-hero__sparkle--3 { top: 18%; left: 55%; animation-delay: 2s; width: 5px; height: 5px; }
+
+@keyframes aic-sparkle-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.aic-hero__content {
+  position: relative;
+  z-index: 5;
+  padding: 0 28px 40px;
+  text-align: center;
+}
+
+.aic-hero__title {
+  font-family: 'Playfair Display', serif;
+  font-size: 42px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.1;
+  margin: 0 0 16px;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
+}
+
+@media (min-width: 768px) {
+  .aic-hero__title {
+    font-size: 56px;
+  }
+}
+
+.aic-hero__subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.6;
+  margin: 0 0 28px;
+  max-width: 300px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.aic-hero__swipe {
+  font-size: 16px;
+  font-weight: 600;
+  color: #b5e48c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  margin-top: 10px;
+}
+
+/* Light mode hero overlay */
+.light .aic-hero__gradient {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(0, 0, 0, 0.2) 40%,
+    rgba(0, 0, 0, 0.75) 75%,
+    rgba(0, 0, 0, 0.9) 100%
+  );
+}
+
+
+/* ================================================
+   § 3. DASHBOARD SCREEN (Screen 2)
+   Main hub with feed, styles, community
+   ================================================ */
+
+.aic-dash {
+  padding-bottom: 100px;
+  position: relative;
+}
+
+.aic-edge-swipe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 24px;
+  z-index: 50;
+  touch-action: none;
+}
+
+/* Header */
+.aic-dash__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+}
+
+.aic-dash__header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.aic-dash__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border-color);
+}
+
+.aic-dash__premium {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: linear-gradient(135deg, rgba(201, 168, 76, 0.15), rgba(201, 168, 76, 0.05));
+  color: var(--text-gold);
+  border: 1px solid rgba(201, 168, 76, 0.25);
+}
+
+.aic-dash__bell {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.aic-dash__bell:hover {
+  color: var(--text-gold);
+  background: var(--glow-gold);
+}
+
+/* Section Titles */
+.aic-section {
+  padding: 0 20px;
+  margin-bottom: 16px;
+}
+
+.aic-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.aic-section__title {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.aic-section__all {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.aic-section__all:hover {
+  color: var(--text-gold);
+}
+
+
+/* ================================================
+   § 3a. FOR YOU — Horizontal cards
+   ================================================ */
+
+.aic-foryou {
+  display: flex;
+  flex-flow: row nowrap;
+  gap: 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 20px 4px;
+  margin-bottom: 28px;
+}
+
+.aic-foryou::-webkit-scrollbar { display: none; }
+
+.aic-foryou__card {
+  flex: 0 0 auto;
+  width: 240px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+}
+
+.aic-foryou__card:hover {
+  border-color: rgba(201, 168, 76, 0.3);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px var(--shadow-color);
+}
+
+.aic-foryou__img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+}
+
+.aic-foryou__like {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.aic-foryou__like:hover {
+  background: rgba(239, 68, 68, 0.6);
+  transform: scale(1.1);
+}
+
+.aic-foryou__body {
+  padding: 12px 14px;
+}
+
+.aic-foryou__author {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.aic-foryou__author-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.aic-foryou__author-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.aic-foryou__author-star {
+  width: 12px;
+  height: 12px;
+  color: var(--text-gold);
+}
+
+.aic-foryou__prompt {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+}
+
+
+/* ================================================
+   § 3b. FEATURED STYLES — Horizontal cards
+   ================================================ */
+
+.aic-styles {
+  display: flex;
+  flex-flow: row nowrap;
+  gap: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 20px 4px;
+  margin-bottom: 28px;
+}
+
+.aic-styles::-webkit-scrollbar { display: none; }
+
+.aic-styles__card {
+  flex: 0 0 auto;
+  width: 150px;
+  height: 90px;
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.aic-styles__card:hover {
+  transform: scale(1.03);
+}
+
+.aic-styles__card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.aic-styles__card:hover .aic-styles__card-img {
+  transform: scale(1.1);
+}
+
+.aic-styles__card-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 60%);
+  display: flex;
+  align-items: flex-end;
+  padding: 10px 12px;
+}
+
+.aic-styles__card-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+
+
+/* ================================================
+   § 3c. COMMUNITY FEED — Horizontal avatars + art
+   ================================================ */
+
+.aic-community {
+  display: flex;
+  flex-flow: row nowrap;
+  gap: 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 20px 4px;
+  margin-bottom: 28px;
+}
+
+.aic-community::-webkit-scrollbar { display: none; }
+
+.aic-community__card {
+  flex: 0 0 auto;
+  width: 130px;
+  cursor: pointer;
+  transition: transform 0.3s ease;
+}
+
+.aic-community__card:hover {
+  transform: translateY(-3px);
+}
+
+.aic-community__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.aic-community__avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid var(--border-color);
+}
+
+.aic-community__name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aic-community__star {
+  width: 11px;
+  height: 11px;
+  color: var(--text-gold);
+  flex-shrink: 0;
+}
+
+.aic-community__img {
+  width: 100%;
+  height: 130px;
+  border-radius: 14px;
+  object-fit: cover;
+  border: 1px solid var(--border-color);
+}
+
+
+/* ================================================
+   § 3d. FAB — Create button
+   ================================================ */
+
+.aic-fab {
+  position: fixed;
+  bottom: 90px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #b5e48c, #76c893);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #111;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(118, 200, 147, 0.35);
+  transition: all 0.3s ease;
+  z-index: 40;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.aic-fab:hover {
+  transform: scale(1.08) translateY(-2px);
+  box-shadow: 0 12px 32px rgba(118, 200, 147, 0.5);
+}
+
+.aic-fab:active {
+  transform: scale(0.95);
+}
+
+@media (min-width: 768px) {
+  .aic-fab {
+    bottom: 32px;
+    right: 32px;
+    width: 64px;
+    height: 64px;
+  }
+}
+
+
+/* ================================================
+   § 4. EDIT ARTWORK SCREEN (Screen 3)
+   Result view with grid, actions, share/publish
+   ================================================ */
+
+.aic-edit {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.aic-edit__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+}
+
+.aic-edit__title {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.aic-edit__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.aic-edit__close:hover {
+  color: var(--text-primary);
+}
+
+/* Artwork Grid */
+.aic-edit__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  padding: 0 20px;
+  margin-bottom: 20px;
+  flex: 1;
+}
+
+.aic-edit__grid-item {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  aspect-ratio: 3 / 4;
+  background: var(--bg-elevated);
+}
+
+.aic-edit__grid-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.aic-edit__grid-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+}
+
+.aic-edit__grid-lock {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.aic-edit__grid-lock:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+/* Action Buttons Row */
+.aic-edit__actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 20px;
+  margin-bottom: 20px;
+}
+
+.aic-edit__action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 20px;
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  min-width: 80px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.aic-edit__action-btn:hover {
+  background: var(--glow-gold);
+  color: var(--text-gold);
+  border-color: rgba(201, 168, 76, 0.3);
+}
+
+/* Share & Publish Buttons */
+.aic-edit__bottom {
+  padding: 0 20px 32px;
+}
+
+.aic-edit__share-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  background: #d4e6a5;
+  border: none;
+  color: #111;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-bottom: 10px;
+}
+
+.aic-edit__share-btn:hover {
+  background: #c5d98a;
+  transform: translateY(-1px);
+}
+
+.aic-edit__publish-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  background: #b5e48c;
+  border: none;
+  color: #111;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.aic-edit__publish-btn:hover {
+  background: #9ed674;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(158, 214, 116, 0.3);
+}
+
+
+/* ================================================
+   § 5. GENERATE MODAL
+   Prompt input overlay
+   ================================================ */
+
+.aic-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 768px) {
+  .aic-modal-backdrop {
+    align-items: center;
+  }
+}
+
+.aic-modal {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 24px 24px 0 0;
+  padding: 24px 20px 32px;
+  max-height: 85vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (min-width: 768px) {
+  .aic-modal {
+    border-radius: 24px;
+    max-height: 80vh;
+  }
+}
+
+.aic-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.aic-modal__title {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.aic-modal__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.aic-modal__close:hover {
+  color: var(--text-primary);
+}
+
+.aic-modal__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+}
+
+.aic-modal__textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.3s ease;
+  margin-bottom: 16px;
+  box-sizing: border-box;
+}
+
+.aic-modal__textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.aic-modal__textarea:focus {
+  border-color: rgba(201, 168, 76, 0.4);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.08);
+}
+
+.aic-modal__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.aic-modal__chip {
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  user-select: none;
+}
+
+.aic-modal__chip:hover {
+  border-color: rgba(201, 168, 76, 0.3);
+  color: var(--text-primary);
+}
+
+.aic-modal__chip--active {
+  background: linear-gradient(135deg, rgba(181, 228, 140, 0.15), rgba(181, 228, 140, 0.05));
+  border-color: #b5e48c;
+  color: #b5e48c;
+}
+
+.aic-modal__submit {
+  width: 100%;
+  padding: 16px;
+  border-radius: 14px;
+  background: #b5e48c;
+  border: none;
+  color: #111;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.aic-modal__submit:hover {
+  background: #9ed674;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(158, 214, 116, 0.3);
+}
+
+.aic-modal__submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+
+/* ================================================
+   § 6. LOADING
+   ================================================ */
+
+.aic-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  gap: 16px;
+  color: var(--text-muted);
+}
+
+
+/* ================================================
+   § 7. DESKTOP RESPONSIVE
+   ================================================ */
+
+@media (min-width: 1024px) {
+  .aic-foryou {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .aic-foryou__card {
+    width: calc(33.33% - 12px);
+  }
+
+  .aic-styles {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .aic-styles__card {
+    width: calc(25% - 10px);
+    height: 120px;
+  }
+
+  .aic-community {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .aic-community__card {
+    width: calc(16.66% - 12px);
+  }
+
+  .aic-edit__grid {
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .aic-edit__actions {
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .aic-edit__bottom {
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}

@@ -423,32 +423,4 @@ export function MuseumDetail() {
     );
 }
 
-// NearbyMuseums uses existing component
-import { NearbyMuseumsMap } from './components/NearbyMuseumsMap';
-
-export function NearbyMuseums() {
-    return (
-        <PageContainer className="max-w-7xl mx-auto pt-20 px-4 sm:px-6">
-            <div className="mb-8">
-                <div className="inline-flex items-center gap-2 py-1 px-3 border border-gold/30 rounded-full bg-gold/5 backdrop-blur-sm mb-4">
-                    <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                    </span>
-                    <span className="text-gold text-xs tracking-wider uppercase font-medium">
-                        Discover
-                    </span>
-                </div>
-                <h1 className="text-3xl md:text-5xl font-serif font-bold text-theme-text mb-4">
-                    Nearby <span className="text-gold italic">Museums</span>
-                </h1>
-                <p className="text-theme-muted text-lg max-w-2xl">
-                    Find and explore cultural heritage sites, museums, and galleries in your vicinity.
-                </p>
-            </div>
-            <NearbyMuseumsMap />
-        </PageContainer>
-    );
-}
-
 export default GalleryLayout;

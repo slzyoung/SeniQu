@@ -1,22 +1,8 @@
 /* ================================================
-   NEARBY MUSEUMS PAGE — Explore & Discover
-   Map-first immersive museum discovery
+   PUBLIC NEARBY PAGE — Standalone Map Discovery
+   For unauthenticated users at /nearby
+   Accounts for fixed Navbar (top) + MobileNav (bottom)
    Light & Dark mode via CSS tokens
-   
-   § 1. Page Layout
-   § 2. Search Bar & Filter Chips
-   § 3. Map View
-   § 4. Map Pins
-   § 5. Map Controls
-   § 6. Bottom Sheet (Museum Detail)
-   § 7. Status Pills & Badges
-   § 8. 360° Preview
-   § 9. Action Buttons
-   § 10. List View
-   § 11. List Cards
-   § 12. Empty & Loading States
-   § 13. Error Toast
-   § 14. Responsive
    ================================================ */
 
 
@@ -24,23 +10,24 @@
    § 1. PAGE LAYOUT
    ================================================ */
 
-.nbm-page {
+.pnb-page {
   width: 100%;
-  min-height: calc(100vh - 64px);
+  min-height: 100vh;
   background: var(--bg-primary);
   position: relative;
 }
 
-.nbm-map-container {
+.pnb-map-container {
   position: relative;
   width: 100%;
-  height: calc(100vh - 64px);
+  height: 100vh;
   overflow: hidden;
 }
 
 @media (max-width: 767px) {
-  .nbm-map-container {
-    height: calc(100vh - 64px - 64px); /* minus top bar and bottom nav */
+  .pnb-map-container {
+    height: 100vh;
+    /* Mobile: full viewport, content offset via inner elements */
   }
 }
 
@@ -49,31 +36,32 @@
    § 2. SEARCH BAR & FILTER CHIPS
    ================================================ */
 
-.nbm-search-overlay {
+.pnb-search-overlay {
   position: absolute;
-  top: 0;
+  top: 84px; /* Below fixed Navbar */
   left: 0;
   right: 0;
   z-index: 20;
-  padding: 16px 16px 0;
+  padding: 12px 16px 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   pointer-events: none;
 }
 
-.nbm-search-overlay > * {
+.pnb-search-overlay > * {
   pointer-events: auto;
 }
 
 @media (min-width: 768px) {
-  .nbm-search-overlay {
+  .pnb-search-overlay {
+    top: 92px;
     max-width: 520px;
-    padding: 20px 24px 0;
+    padding: 16px 24px 0;
   }
 }
 
-.nbm-search-bar {
+.pnb-search-bar {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -85,19 +73,19 @@
   transition: all 0.3s ease;
 }
 
-.nbm-search-bar:focus-within {
+.pnb-search-bar:focus-within {
   border-color: rgba(201, 168, 76, 0.4);
   box-shadow: 0 4px 24px var(--shadow-color), 0 0 0 3px rgba(201, 168, 76, 0.08);
 }
 
-.nbm-search-bar__icon {
+.pnb-search-bar__icon {
   width: 18px;
   height: 18px;
   color: var(--text-muted);
   flex-shrink: 0;
 }
 
-.nbm-search-bar__input {
+.pnb-search-bar__input {
   flex: 1;
   background: transparent;
   border: none;
@@ -106,14 +94,15 @@
   font-family: 'Inter', sans-serif;
   color: var(--text-primary);
   padding: 10px 0;
+  min-width: 0;
 }
 
-.nbm-search-bar__input::placeholder {
+.pnb-search-bar__input::placeholder {
   color: var(--text-muted);
   opacity: 0.7;
 }
 
-.nbm-search-bar__filter {
+.pnb-search-bar__filter {
   width: 40px;
   height: 40px;
   border-radius: 12px;
@@ -128,25 +117,26 @@
   flex-shrink: 0;
 }
 
-.nbm-search-bar__filter:hover {
+.pnb-search-bar__filter:hover {
   color: var(--text-gold);
   background: var(--glow-gold);
 }
 
 /* Filter Chips */
-.nbm-filter-chips {
+.pnb-filter-chips {
   display: flex;
   gap: 8px;
   overflow-x: auto;
   scrollbar-width: none;
   padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
 }
 
-.nbm-filter-chips::-webkit-scrollbar {
+.pnb-filter-chips::-webkit-scrollbar {
   display: none;
 }
 
-.nbm-chip {
+.pnb-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -161,21 +151,23 @@
   background: var(--bg-surface);
   color: var(--text-muted);
   box-shadow: 0 2px 8px var(--shadow-color);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.nbm-chip:hover {
+.pnb-chip:hover {
   border-color: rgba(201, 168, 76, 0.3);
   color: var(--text-primary);
 }
 
-.nbm-chip--active {
+.pnb-chip--active {
   background: linear-gradient(135deg, #3B82F6, #2563EB);
   border-color: #3B82F6;
   color: #fff;
   box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
 }
 
-.nbm-chip--active:hover {
+.pnb-chip--active:hover {
   color: #fff;
 }
 
@@ -184,27 +176,27 @@
    § 3. MAP VIEW
    ================================================ */
 
-.nbm-map {
+.pnb-map {
   width: 100%;
   height: 100%;
   position: relative;
   overflow: hidden;
 }
 
-.nbm-map__bg {
+.pnb-map__bg {
   position: absolute;
   inset: 0;
 }
 
-.nbm-map__img {
+.pnb-map__img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   filter: saturate(0.85);
 }
 
-/* Themed map fallback */
-.nbm-map__fallback {
+/* Themed map fallback grid */
+.pnb-map__fallback {
   position: absolute;
   inset: 0;
   background:
@@ -213,15 +205,14 @@
   opacity: 0.3;
 }
 
-/* Dark mode gets a darker map */
-.dark .nbm-map__fallback {
+.dark .pnb-map__fallback {
   background:
     repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(255,255,255,0.03) 40px, rgba(255,255,255,0.03) 41px),
     repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(255,255,255,0.03) 40px, rgba(255,255,255,0.03) 41px);
   opacity: 1;
 }
 
-.nbm-map__bg::after {
+.pnb-map__bg::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -229,7 +220,7 @@
   opacity: 0.6;
 }
 
-.dark .nbm-map__bg::after {
+.dark .pnb-map__bg::after {
   background: #0D0D14;
   opacity: 0.7;
 }
@@ -239,7 +230,7 @@
    § 4. MAP PINS
    ================================================ */
 
-.nbm-pin {
+.pnb-pin {
   position: absolute;
   z-index: 10;
   display: flex;
@@ -251,13 +242,14 @@
   border: none;
   padding: 0;
   transition: z-index 0s;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.nbm-pin--active {
+.pnb-pin--active {
   z-index: 15;
 }
 
-.nbm-pin__marker {
+.pnb-pin__marker {
   width: 36px;
   height: 36px;
   border-radius: 50% 50% 50% 0;
@@ -271,21 +263,21 @@
   transition: all 0.3s ease;
 }
 
-.nbm-pin__marker > * {
+.pnb-pin__marker > * {
   transform: rotate(45deg);
 }
 
-.nbm-pin--active .nbm-pin__marker {
+.pnb-pin--active .pnb-pin__marker {
   background: linear-gradient(135deg, #C9A84C, #A68A3A);
   box-shadow: 0 4px 16px rgba(201, 168, 76, 0.45);
   transform: rotate(-45deg) scale(1.15);
 }
 
-.nbm-pin:hover .nbm-pin__marker {
+.pnb-pin:hover .pnb-pin__marker {
   transform: rotate(-45deg) scale(1.1);
 }
 
-.nbm-pin__label {
+.pnb-pin__label {
   padding: 4px 10px;
   border-radius: 8px;
   font-size: 11px;
@@ -302,7 +294,7 @@
    § 5. MAP CONTROLS
    ================================================ */
 
-.nbm-map-controls {
+.pnb-map-controls {
   position: absolute;
   right: 16px;
   top: 50%;
@@ -314,15 +306,15 @@
 }
 
 @media (max-width: 767px) {
-  .nbm-map-controls {
+  .pnb-map-controls {
     right: 12px;
     top: auto;
-    bottom: 50%;
+    bottom: 55%;
     transform: translateY(50%);
   }
 }
 
-.nbm-map-ctrl {
+.pnb-map-ctrl {
   width: 40px;
   height: 40px;
   border-radius: 12px;
@@ -335,15 +327,16 @@
   cursor: pointer;
   transition: all 0.25s ease;
   box-shadow: 0 2px 8px var(--shadow-color);
+  -webkit-tap-highlight-color: transparent;
 }
 
-.nbm-map-ctrl:hover {
+.pnb-map-ctrl:hover {
   background: var(--glow-gold);
   color: var(--text-gold);
   border-color: rgba(201, 168, 76, 0.3);
 }
 
-.nbm-map-ctrl:active {
+.pnb-map-ctrl:active {
   transform: scale(0.95);
 }
 
@@ -352,7 +345,7 @@
    § 6. BOTTOM SHEET (Museum Detail)
    ================================================ */
 
-.nbm-sheet {
+.pnb-sheet {
   position: absolute;
   bottom: 0;
   left: 0;
@@ -365,14 +358,16 @@
   max-height: 55%;
   overflow-y: auto;
   box-shadow: 0 -8px 40px var(--shadow-color);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
-.nbm-sheet--expanded {
+.pnb-sheet--expanded {
   max-height: 80%;
 }
 
 @media (min-width: 768px) {
-  .nbm-sheet {
+  .pnb-sheet {
     left: auto;
     right: 20px;
     bottom: 20px;
@@ -384,18 +379,19 @@
 }
 
 @media (min-width: 1024px) {
-  .nbm-sheet {
+  .pnb-sheet {
     width: 460px;
   }
 }
 
+/* Extra bottom padding for MobileNav on mobile */
 @media (max-width: 767px) {
-  .nbm-sheet {
-    padding-bottom: calc(24px + env(safe-area-inset-bottom) + 64px);
+  .pnb-sheet {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom) + 80px);
   }
 }
 
-.nbm-sheet__handle {
+.pnb-sheet__handle {
   display: flex;
   justify-content: center;
   padding: 4px 0 12px;
@@ -403,35 +399,36 @@
   border: none;
   cursor: pointer;
   width: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 @media (min-width: 768px) {
-  .nbm-sheet__handle {
+  .pnb-sheet__handle {
     display: none;
   }
 }
 
-.nbm-sheet__handle-bar {
+.pnb-sheet__handle-bar {
   width: 40px;
   height: 4px;
   border-radius: 999px;
   background: var(--bg-elevated);
 }
 
-.nbm-sheet__header {
+.pnb-sheet__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 10px;
 }
 
-.nbm-sheet__badges {
+.pnb-sheet__badges {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.nbm-sheet__close {
+.pnb-sheet__close {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -443,14 +440,15 @@
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.nbm-sheet__close:hover {
+.pnb-sheet__close:hover {
   color: var(--text-primary);
   background: var(--bg-primary);
 }
 
-.nbm-sheet__name {
+.pnb-sheet__name {
   font-family: 'Playfair Display', serif;
   font-size: 22px;
   font-weight: 700;
@@ -459,7 +457,7 @@
   line-height: 1.25;
 }
 
-.nbm-sheet__address {
+.pnb-sheet__address {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -473,7 +471,7 @@
    § 7. STATUS PILLS & BADGES
    ================================================ */
 
-.nbm-type-badge {
+.pnb-type-badge {
   display: inline-flex;
   padding: 4px 12px;
   border-radius: 8px;
@@ -485,13 +483,13 @@
   color: #fff;
 }
 
-.nbm-type-badge--sm {
+.pnb-type-badge--sm {
   padding: 3px 8px;
   font-size: 10px;
   border-radius: 6px;
 }
 
-.nbm-rating-badge {
+.pnb-rating-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -503,13 +501,13 @@
   color: var(--text-gold);
 }
 
-.nbm-sheet__status {
+.pnb-sheet__status {
   display: flex;
   gap: 10px;
   margin-bottom: 18px;
 }
 
-.nbm-status-pill {
+.pnb-status-pill {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -520,7 +518,7 @@
   border: 1px solid var(--border-color);
 }
 
-.nbm-status-pill__label {
+.pnb-status-pill__label {
   display: block;
   font-size: 9px;
   font-weight: 700;
@@ -530,7 +528,7 @@
   opacity: 0.7;
 }
 
-.nbm-status-pill__value {
+.pnb-status-pill__value {
   display: block;
   font-size: 12px;
   font-weight: 600;
@@ -539,30 +537,30 @@
 }
 
 /* Badge color variants */
-.nbm-badge--green { color: #43A047; }
-.nbm-badge--green .nbm-status-pill__value { color: #43A047; }
-.dark .nbm-badge--green { color: #81C784; }
-.dark .nbm-badge--green .nbm-status-pill__value { color: #81C784; }
+.pnb-badge--green { color: #43A047; }
+.pnb-badge--green .pnb-status-pill__value { color: #43A047; }
+.dark .pnb-badge--green { color: #81C784; }
+.dark .pnb-badge--green .pnb-status-pill__value { color: #81C784; }
 
-.nbm-badge--amber { color: #F59E0B; }
-.nbm-badge--amber .nbm-status-pill__value { color: #F59E0B; }
+.pnb-badge--amber { color: #F59E0B; }
+.pnb-badge--amber .pnb-status-pill__value { color: #F59E0B; }
 
-.nbm-badge--red { color: #EF4444; }
-.nbm-badge--red .nbm-status-pill__value { color: #EF4444; }
+.pnb-badge--red { color: #EF4444; }
+.pnb-badge--red .pnb-status-pill__value { color: #EF4444; }
 
-.nbm-badge--blue { color: #3B82F6; }
-.nbm-badge--blue .nbm-status-pill__value { color: #3B82F6; }
+.pnb-badge--blue { color: #3B82F6; }
+.pnb-badge--blue .pnb-status-pill__value { color: #3B82F6; }
 
 
 /* ================================================
    § 8. 360° PREVIEW
    ================================================ */
 
-.nbm-preview {
+.pnb-preview {
   margin-bottom: 18px;
 }
 
-.nbm-preview__header {
+.pnb-preview__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -572,7 +570,7 @@
   color: var(--text-primary);
 }
 
-.nbm-preview__viewall {
+.pnb-preview__viewall {
   font-size: 12px;
   font-weight: 600;
   color: #3B82F6;
@@ -582,23 +580,24 @@
   transition: opacity 0.2s;
 }
 
-.nbm-preview__viewall:hover {
+.pnb-preview__viewall:hover {
   opacity: 0.75;
 }
 
-.nbm-preview__scroll {
+.pnb-preview__scroll {
   display: flex;
   gap: 10px;
   overflow-x: auto;
   scrollbar-width: none;
   padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
 }
 
-.nbm-preview__scroll::-webkit-scrollbar {
+.pnb-preview__scroll::-webkit-scrollbar {
   display: none;
 }
 
-.nbm-preview__thumb {
+.pnb-preview__thumb {
   width: 110px;
   height: 80px;
   flex-shrink: 0;
@@ -608,14 +607,14 @@
   border: 1px solid var(--border-color);
 }
 
-.nbm-preview__thumb img {
+.pnb-preview__thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   transition: transform 0.5s ease;
 }
 
-.nbm-preview__thumb:hover img {
+.pnb-preview__thumb:hover img {
   transform: scale(1.08);
 }
 
@@ -624,12 +623,12 @@
    § 9. ACTION BUTTONS
    ================================================ */
 
-.nbm-sheet__actions {
+.pnb-sheet__actions {
   display: flex;
   gap: 12px;
 }
 
-.nbm-action-btn {
+.pnb-action-btn {
   flex: 1;
   display: inline-flex;
   align-items: center;
@@ -642,26 +641,27 @@
   cursor: pointer;
   transition: all 0.3s ease;
   border: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.nbm-action-btn--primary {
+.pnb-action-btn--primary {
   background: linear-gradient(135deg, #3B82F6, #1D4ED8);
   color: #fff;
   box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
 }
 
-.nbm-action-btn--primary:hover {
+.pnb-action-btn--primary:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
 }
 
-.nbm-action-btn--secondary {
+.pnb-action-btn--secondary {
   background: var(--bg-elevated);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
 }
 
-.nbm-action-btn--secondary:hover {
+.pnb-action-btn--secondary:hover {
   background: var(--glow-gold);
   color: var(--text-gold);
   border-color: rgba(201, 168, 76, 0.3);
@@ -673,26 +673,27 @@
    § 10. LIST VIEW
    ================================================ */
 
-.nbm-list-container {
-  padding: 20px 16px;
+.pnb-list-container {
+  padding: 96px 16px 20px; /* top offset for Navbar */
   max-width: 900px;
   margin: 0 auto;
+  min-height: 100vh;
 }
 
 @media (min-width: 768px) {
-  .nbm-list-container {
-    padding: 28px 24px;
+  .pnb-list-container {
+    padding: 108px 24px 28px;
   }
 }
 
-.nbm-list-header {
+.pnb-list-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 20px;
 }
 
-.nbm-list-header__title {
+.pnb-list-header__title {
   font-family: 'Playfair Display', serif;
   font-size: 24px;
   font-weight: 700;
@@ -701,41 +702,42 @@
 }
 
 @media (min-width: 768px) {
-  .nbm-list-header__title {
+  .pnb-list-header__title {
     font-size: 30px;
   }
 }
 
-.nbm-list-header__subtitle {
+.pnb-list-header__subtitle {
   font-size: 13px;
   color: var(--text-muted);
   margin: 4px 0 0 0;
 }
 
-.nbm-list-header__actions {
+.pnb-list-header__actions {
   display: flex;
   gap: 8px;
 }
 
-.nbm-list-search {
+.pnb-list-search {
   display: flex;
   flex-direction: column;
   gap: 12px;
   margin-bottom: 24px;
 }
 
-.nbm-list-items {
+.pnb-list-items {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding-bottom: 80px;
+  padding-bottom: 100px; /* extra space for MobileNav */
 }
 
 @media (min-width: 768px) {
-  .nbm-list-items {
+  .pnb-list-items {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 16px;
+    padding-bottom: 40px;
   }
 }
 
@@ -744,7 +746,7 @@
    § 11. LIST CARDS
    ================================================ */
 
-.nbm-list-card {
+.pnb-list-card {
   display: flex;
   align-items: center;
   gap: 16px;
@@ -756,15 +758,16 @@
   transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);
   position: relative;
   overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.nbm-list-card:hover {
+.pnb-list-card:hover {
   border-color: rgba(201, 168, 76, 0.2);
   transform: translateY(-2px);
   box-shadow: 0 8px 24px var(--shadow-color);
 }
 
-.nbm-list-card__img {
+.pnb-list-card__img {
   width: 72px;
   height: 72px;
   border-radius: 14px;
@@ -775,24 +778,24 @@
 }
 
 @media (min-width: 768px) {
-  .nbm-list-card__img {
+  .pnb-list-card__img {
     width: 88px;
     height: 88px;
   }
 }
 
-.nbm-list-card__img img {
+.pnb-list-card__img img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   transition: transform 0.5s ease;
 }
 
-.nbm-list-card:hover .nbm-list-card__img img {
+.pnb-list-card:hover .pnb-list-card__img img {
   transform: scale(1.08);
 }
 
-.nbm-list-card__verified {
+.pnb-list-card__verified {
   position: absolute;
   bottom: 4px;
   right: 4px;
@@ -808,19 +811,19 @@
   font-weight: 700;
 }
 
-.nbm-list-card__info {
+.pnb-list-card__info {
   flex: 1;
   min-width: 0;
 }
 
-.nbm-list-card__top {
+.pnb-list-card__top {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 4px;
 }
 
-.nbm-list-card__rating {
+.pnb-list-card__rating {
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -829,7 +832,7 @@
   color: var(--text-gold);
 }
 
-.nbm-list-card__name {
+.pnb-list-card__name {
   font-family: 'Playfair Display', serif;
   font-size: 15px;
   font-weight: 600;
@@ -840,7 +843,7 @@
   text-overflow: ellipsis;
 }
 
-.nbm-list-card__location {
+.pnb-list-card__location {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -849,7 +852,7 @@
   margin: 0;
 }
 
-.nbm-list-card__meta {
+.pnb-list-card__meta {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -858,7 +861,7 @@
   color: var(--text-muted);
 }
 
-.nbm-list-card__crowd {
+.pnb-list-card__crowd {
   padding: 2px 8px;
   border-radius: 6px;
   background: var(--glow-gold);
@@ -866,14 +869,14 @@
   font-weight: 500;
 }
 
-.nbm-list-card__arrow {
+.pnb-list-card__arrow {
   flex-shrink: 0;
   color: var(--text-muted);
   opacity: 0.4;
   transition: all 0.25s ease;
 }
 
-.nbm-list-card:hover .nbm-list-card__arrow {
+.pnb-list-card:hover .pnb-list-card__arrow {
   opacity: 1;
   color: var(--text-gold);
   transform: translateX(2px);
@@ -884,7 +887,7 @@
    § 12. EMPTY & LOADING STATES
    ================================================ */
 
-.nbm-loading {
+.pnb-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -895,7 +898,7 @@
   font-size: 14px;
 }
 
-.nbm-empty {
+.pnb-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -905,19 +908,19 @@
   color: var(--text-muted);
 }
 
-.nbm-empty svg {
+.pnb-empty svg {
   opacity: 0.25;
   margin-bottom: 12px;
 }
 
-.nbm-empty h3 {
+.pnb-empty h3 {
   font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 6px 0;
 }
 
-.nbm-empty p {
+.pnb-empty p {
   font-size: 14px;
   margin: 0;
   max-width: 320px;
@@ -928,9 +931,9 @@
    § 13. ERROR TOAST
    ================================================ */
 
-.nbm-error-toast {
+.pnb-error-toast {
   position: absolute;
-  top: 100px;
+  top: 170px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 30;
@@ -950,7 +953,7 @@
   white-space: nowrap;
 }
 
-.dark .nbm-error-toast {
+.dark .pnb-error-toast {
   background: rgba(239, 68, 68, 0.15);
 }
 
@@ -960,21 +963,21 @@
    ================================================ */
 
 @media (max-width: 767px) {
-  .nbm-sheet__name {
+  .pnb-sheet__name {
     font-size: 20px;
   }
 
-  .nbm-status-pill {
+  .pnb-status-pill {
     padding: 8px 12px;
   }
 
-  .nbm-preview__thumb {
+  .pnb-preview__thumb {
     width: 100px;
     height: 72px;
     border-radius: 12px;
   }
 
-  .nbm-action-btn {
+  .pnb-action-btn {
     padding: 12px 16px;
     font-size: 13px;
     border-radius: 14px;
@@ -982,69 +985,7 @@
 }
 
 @media (min-width: 1024px) {
-  .nbm-list-items {
+  .pnb-list-items {
     grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-
-/* ================================================
-   § 15. PUBLIC (UNAUTHENTICATED) MODE
-   When rendered in PublicLayout with fixed Navbar,
-   offset all elements to prevent overlapping.
-   Navbar height ≈ 80px on mobile, 88px on desktop.
-   MobileNav height ≈ 72px (bottom).
-   ================================================ */
-
-/* Map container: account for Navbar + bottom nav */
-.nbm-page--public .nbm-map-container {
-  height: calc(100vh - 72px); /* minus bottom MobileNav */
-}
-
-@media (max-width: 767px) {
-  .nbm-page--public .nbm-map-container {
-    height: 100vh; /* full height, offset handled by search overlay + bottom sheet */
-  }
-}
-
-/* Search overlay: push down below the fixed Navbar */
-.nbm-page--public .nbm-search-overlay {
-  top: 80px;
-}
-
-@media (min-width: 768px) {
-  .nbm-page--public .nbm-search-overlay {
-    top: 92px;
-  }
-}
-
-/* List view: add top padding so header doesn't hide behind Navbar */
-.nbm-page--public .nbm-list-container {
-  padding-top: 96px;
-}
-
-@media (min-width: 768px) {
-  .nbm-page--public .nbm-list-container {
-    padding-top: 108px;
-  }
-}
-
-/* Error toast: shift down to be visible below search overlay */
-.nbm-page--public .nbm-error-toast {
-  top: 180px;
-}
-
-/* Bottom sheet on mobile: extra padding for MobileNav */
-@media (max-width: 767px) {
-  .nbm-page--public .nbm-sheet {
-    padding-bottom: calc(24px + env(safe-area-inset-bottom) + 80px);
-  }
-}
-
-/* Map controls: shift slightly to avoid Navbar overlap */
-@media (max-width: 767px) {
-  .nbm-page--public .nbm-map-controls {
-    top: auto;
-    bottom: 55%;
   }
 }

@@ -1,18 +1,26 @@
 /**
- * NearbyMuseumsPage — Explore & Nearby
- * Map-first immersive museum discovery experience
- * Inspired by Google Arts & Culture / Google Maps design
+ * PublicNearbyPage — Public Nearby Museum Discovery
+ * Standalone page for unauthenticated users at /nearby
  *
- * Features:
- * - Search bar with filter chips (All, Museum, Gallery, Heritage)
- * - Interactive map placeholder with pins
- * - Bottom sheet with museum details, crowd level, wait time
- * - 360° Preview thumbnails carousel
- * - Action buttons: Get Directions, Buy Ticket
- * - Light & Dark mode compatible
+ * SECURITY:
+ * - No auth store dependency — fully public
+ * - Search input sanitized (XSS prevention)
+ * - Geolocation rate-limited (max 1 request per 5s)
+ * - API queries use staleTime to prevent excessive calls
+ * - No sensitive data exposure
+ *
+ * FEATURES:
+ * - Map-first immersive design
+ * - Search + filter chips (All, Museum, Gallery, Heritage)
+ * - Interactive pins with bottom sheet details
+ * - List view toggle
+ * - 360° Preview thumbnails
+ * - Get Directions + Buy Ticket actions
+ * - Light & Dark mode
+ * - Fully responsive (mobile-first)
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
     MapPin,
     Navigation,
@@ -35,12 +43,10 @@ import {
     X,
     SlidersHorizontal,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../../../stores/useAuthStore';
 import { useMuseums, useNearbyMuseums } from '../../../../hooks/useMuseums';
 import { extractArray } from '../../../../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import './NearbyMuseumsPage.css';
+import './PublicNearbyPage.css';
 
 // ============================================
 // TYPES
@@ -55,12 +61,25 @@ interface UserLocation {
 }
 
 // ============================================
-// DEMO DATA (when no API results)
+// SECURITY: Input sanitization
+// ============================================
+
+/** Strip HTML tags and limit length to prevent XSS/injection */
+function sanitizeInput(input: string, maxLength = 100): string {
+    return input
+        .replace(/<[^>]*>/g, '')
+        .replace(/[<>"'&]/g, '')
+        .slice(0, maxLength)
+        .trim();
+}
+
+// ============================================
+// DEMO DATA (fallback when API returns empty)
 // ============================================
 
 const DEMO_MUSEUMS = [
     {
-        id: '1',
+        id: 'demo-1',
         name: 'National Museum of Indonesia',
         city: 'Jakarta',
         province: 'DKI Jakarta',
@@ -72,7 +91,7 @@ const DEMO_MUSEUMS = [
         crowdLevel: 'Moderate traffic',
         waitTime: '~15 mins',
         isVerified: true,
-        description: 'The largest and most complete museum in Indonesia, displaying over 140,000 objects.',
+        description: 'The largest and most complete museum in Indonesia.',
         coverImageUrl: 'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=400&h=300&fit=crop',
         previewImages: [
             'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=200&h=150&fit=crop',
@@ -83,7 +102,7 @@ const DEMO_MUSEUMS = [
         longitude: 106.8222,
     },
     {
-        id: '2',
+        id: 'demo-2',
         name: 'Museum of Fine Arts',
         city: 'Yogyakarta',
         province: 'DI Yogyakarta',
@@ -105,7 +124,7 @@ const DEMO_MUSEUMS = [
         longitude: 110.3571,
     },
     {
-        id: '3',
+        id: 'demo-3',
         name: 'Borobudur Heritage Center',
         city: 'Magelang',
         province: 'Central Java',
@@ -140,7 +159,7 @@ const FILTER_CHIPS: { id: FilterType; label: string; icon?: any }[] = [
 // SUB-COMPONENTS
 // ============================================
 
-/** Museum Detail Bottom Sheet Card */
+/** Museum Detail Bottom Sheet */
 function MuseumDetailSheet({
     museum,
     expanded,
@@ -152,76 +171,74 @@ function MuseumDetailSheet({
     onToggle: () => void;
     onClose: () => void;
 }) {
-    const navigate = useNavigate();
-
     const crowdColor = museum.crowdLevel?.includes('Busy')
-        ? 'nbm-badge--red'
+        ? 'pnb-badge--red'
         : museum.crowdLevel?.includes('Moderate')
-            ? 'nbm-badge--amber'
-            : 'nbm-badge--green';
+            ? 'pnb-badge--amber'
+            : 'pnb-badge--green';
 
     return (
         <motion.div
-            className={`nbm-sheet ${expanded ? 'nbm-sheet--expanded' : ''}`}
+            className={`pnb-sheet ${expanded ? 'pnb-sheet--expanded' : ''}`}
             initial={{ y: 200, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 200, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         >
             {/* Drag handle */}
-            <button className="nbm-sheet__handle" onClick={onToggle} aria-label="Toggle details">
-                <span className="nbm-sheet__handle-bar" />
+            <button className="pnb-sheet__handle" onClick={onToggle} aria-label="Toggle details">
+                <span className="pnb-sheet__handle-bar" />
             </button>
 
-            {/* Header — badge + rating */}
-            <div className="nbm-sheet__header">
-                <div className="nbm-sheet__badges">
-                    <span className="nbm-type-badge">{museum.type || 'Museum'}</span>
-                    <span className="nbm-rating-badge">
+            {/* Header */}
+            <div className="pnb-sheet__header">
+                <div className="pnb-sheet__badges">
+                    <span className="pnb-type-badge">{museum.type || 'Museum'}</span>
+                    <span className="pnb-rating-badge">
                         <Star className="w-3.5 h-3.5 fill-current" />
                         {museum.rating?.toFixed(1) || '4.5'} ({museum.reviewCount || '0'})
                     </span>
                 </div>
-                <button className="nbm-sheet__close" onClick={onClose}>
+                <button className="pnb-sheet__close" onClick={onClose}>
                     <X className="w-4 h-4" />
                 </button>
             </div>
 
             {/* Name + Address */}
-            <h2 className="nbm-sheet__name">{museum.name}</h2>
-            <p className="nbm-sheet__address">
+            <h2 className="pnb-sheet__name">{museum.name}</h2>
+            <p className="pnb-sheet__address">
                 <MapPin className="w-3.5 h-3.5" />
-                {museum.address || `${museum.city}, ${museum.province || museum.country}`}
+                {museum.address || `${museum.city}, ${museum.province || ''}`}
             </p>
 
             {/* Status pills */}
-            <div className="nbm-sheet__status">
-                <div className={`nbm-status-pill ${crowdColor}`}>
+            <div className="pnb-sheet__status">
+                <div className={`pnb-status-pill ${crowdColor}`}>
                     <Users className="w-3.5 h-3.5" />
                     <div>
-                        <span className="nbm-status-pill__label">CROWD LEVEL</span>
-                        <span className="nbm-status-pill__value">{museum.crowdLevel || 'Normal traffic'}</span>
+                        <span className="pnb-status-pill__label">CROWD LEVEL</span>
+                        <span className="pnb-status-pill__value">{museum.crowdLevel || 'Normal traffic'}</span>
                     </div>
                 </div>
-                <div className="nbm-status-pill nbm-badge--blue">
+                <div className="pnb-status-pill pnb-badge--blue">
                     <Clock className="w-3.5 h-3.5" />
                     <div>
-                        <span className="nbm-status-pill__label">WAIT TIME</span>
-                        <span className="nbm-status-pill__value">{museum.waitTime || '~10 mins'}</span>
+                        <span className="pnb-status-pill__label">WAIT TIME</span>
+                        <span className="pnb-status-pill__value">{museum.waitTime || '~10 mins'}</span>
                     </div>
                 </div>
             </div>
 
             {/* 360° Preview */}
             {(museum.previewImages?.length > 0 || museum.coverImageUrl) && (
-                <div className="nbm-preview">
-                    <div className="nbm-preview__header">
+                <div className="pnb-preview">
+                    <div className="pnb-preview__header">
                         <span>360° Preview</span>
-                        <button className="nbm-preview__viewall">View All</button>
+                        <button className="pnb-preview__viewall">View All</button>
                     </div>
-                    <div className="nbm-preview__scroll">
+                    <div className="pnb-preview__scroll">
                         {(museum.previewImages || [museum.coverImageUrl]).map((img: string, i: number) => (
-                            <div key={i} className="nbm-preview__thumb">
+                            <div key={i} className="pnb-preview__thumb">
                                 <img src={img} alt={`Preview ${i + 1}`} loading="lazy" />
                             </div>
                         ))}
@@ -230,14 +247,15 @@ function MuseumDetailSheet({
             )}
 
             {/* Action buttons */}
-            <div className="nbm-sheet__actions">
+            <div className="pnb-sheet__actions">
                 <button
-                    className="nbm-action-btn nbm-action-btn--primary"
+                    className="pnb-action-btn pnb-action-btn--primary"
                     onClick={() => {
                         if (museum.latitude && museum.longitude) {
                             window.open(
                                 `https://www.google.com/maps/dir/?api=1&destination=${museum.latitude},${museum.longitude}`,
-                                '_blank'
+                                '_blank',
+                                'noopener,noreferrer'
                             );
                         }
                     }}
@@ -246,8 +264,10 @@ function MuseumDetailSheet({
                     Get Directions
                 </button>
                 <button
-                    className="nbm-action-btn nbm-action-btn--secondary"
-                    onClick={() => navigate(`/gallery/museum/${museum.id}`)}
+                    className="pnb-action-btn pnb-action-btn--secondary"
+                    onClick={() => {
+                        window.open(`/gallery/museum/${museum.id}`, '_self');
+                    }}
                 >
                     <Ticket className="w-4 h-4" />
                     Buy Ticket
@@ -257,48 +277,44 @@ function MuseumDetailSheet({
     );
 }
 
-/** Museum List Card (for list view) */
+/** Museum List Card */
 function MuseumListCard({ museum, onSelect }: { museum: any; onSelect: () => void }) {
     return (
         <motion.div
-            className="nbm-list-card"
+            className="pnb-list-card"
             onClick={onSelect}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             whileTap={{ scale: 0.98 }}
         >
-            <div className="nbm-list-card__img">
+            <div className="pnb-list-card__img">
                 <img
-                    src={museum.coverImageUrl || museum.logoUrl || 'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=200&h=200&fit=crop'}
+                    src={museum.coverImageUrl || 'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=200&h=200&fit=crop'}
                     alt={museum.name}
                     loading="lazy"
                 />
-                {museum.isVerified && <span className="nbm-list-card__verified">✓</span>}
+                {museum.isVerified && <span className="pnb-list-card__verified">✓</span>}
             </div>
-            <div className="nbm-list-card__info">
-                <div className="nbm-list-card__top">
-                    <span className="nbm-type-badge nbm-type-badge--sm">{museum.type || 'Museum'}</span>
+            <div className="pnb-list-card__info">
+                <div className="pnb-list-card__top">
+                    <span className="pnb-type-badge pnb-type-badge--sm">{museum.type || 'Museum'}</span>
                     {museum.rating && (
-                        <span className="nbm-list-card__rating">
+                        <span className="pnb-list-card__rating">
                             <Star className="w-3 h-3 fill-current" /> {museum.rating.toFixed(1)}
                         </span>
                     )}
                 </div>
-                <h3 className="nbm-list-card__name">{museum.name}</h3>
-                <p className="nbm-list-card__location">
+                <h3 className="pnb-list-card__name">{museum.name}</h3>
+                <p className="pnb-list-card__location">
                     <MapPin className="w-3 h-3" />
                     {museum.city}{museum.province ? `, ${museum.province}` : ''}
                 </p>
-                <div className="nbm-list-card__meta">
-                    {museum.totalArtworks && (
-                        <span>{museum.totalArtworks} artworks</span>
-                    )}
-                    {museum.crowdLevel && (
-                        <span className="nbm-list-card__crowd">{museum.crowdLevel}</span>
-                    )}
+                <div className="pnb-list-card__meta">
+                    {museum.totalArtworks && <span>{museum.totalArtworks} artworks</span>}
+                    {museum.crowdLevel && <span className="pnb-list-card__crowd">{museum.crowdLevel}</span>}
                 </div>
             </div>
-            <ExternalLink className="w-4 h-4 nbm-list-card__arrow" />
+            <ExternalLink className="w-4 h-4 pnb-list-card__arrow" />
         </motion.div>
     );
 }
@@ -307,30 +323,42 @@ function MuseumListCard({ museum, onSelect }: { museum: any; onSelect: () => voi
 // MAIN COMPONENT
 // ============================================
 
-export function NearbyMuseumsPage() {
-    const navigate = useNavigate();
+export default function PublicNearbyPage() {
     const [viewMode, setViewMode] = useState<ViewMode>('map');
     const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
     const [isLocating, setIsLocating] = useState(false);
-    const [radius, setRadius] = useState('25');
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
     const [selectedMuseum, setSelectedMuseum] = useState<any | null>(null);
     const [sheetExpanded, setSheetExpanded] = useState(false);
 
-    // Location
-    const requestLocation = () => {
+    // SECURITY: Rate-limit geolocation requests (5s cooldown)
+    const lastLocationRequestRef = useRef<number>(0);
+    const LOCATION_COOLDOWN_MS = 5000;
+
+    const requestLocation = useCallback(() => {
+        const now = Date.now();
+        if (now - lastLocationRequestRef.current < LOCATION_COOLDOWN_MS) {
+            return; // Throttled
+        }
+        lastLocationRequestRef.current = now;
+
         setIsLocating(true);
         setLocationError(null);
+
         if (!navigator.geolocation) {
             setLocationError('Geolocation is not supported');
             setIsLocating(false);
             return;
         }
+
         navigator.geolocation.getCurrentPosition(
             (pos) => {
-                setUserLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+                setUserLocation({
+                    latitude: pos.coords.latitude,
+                    longitude: pos.coords.longitude,
+                });
                 setIsLocating(false);
             },
             (err) => {
@@ -344,15 +372,17 @@ export function NearbyMuseumsPage() {
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
         );
-    };
+    }, []);
 
-    useEffect(() => { requestLocation(); }, []);
+    useEffect(() => {
+        requestLocation();
+    }, [requestLocation]);
 
-    // Queries — use real data if available, fall back to demo
+    // API Queries — staleTime prevents excessive refetching (anti-throttling)
     const { data: nearbyMuseums, isLoading: nearbyLoading } = useNearbyMuseums({
         lat: userLocation?.latitude || 0,
         lng: userLocation?.longitude || 0,
-        radius: parseInt(radius),
+        radius: 25,
     });
     const { data: allMuseums, isLoading: allLoading } = useMuseums({ limit: 20 });
 
@@ -374,54 +404,60 @@ export function NearbyMuseumsPage() {
 
     const isLoading = userLocation ? nearbyLoading : allLoading;
 
-    // Filter
+    // Filter with sanitized search
     const filteredMuseums = mergedMuseums.filter((m: any) => {
         const matchesFilter = activeFilter === 'all' || m.type === activeFilter;
-        const matchesSearch = !searchQuery ||
-            m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            m.city?.toLowerCase().includes(searchQuery.toLowerCase());
+        const safeQuery = sanitizeInput(searchQuery);
+        const matchesSearch = !safeQuery ||
+            m.name?.toLowerCase().includes(safeQuery.toLowerCase()) ||
+            m.city?.toLowerCase().includes(safeQuery.toLowerCase());
         return matchesFilter && matchesSearch;
     });
 
-    // Select first museum by default if none selected
+    // Select first museum by default
     useEffect(() => {
         if (!selectedMuseum && filteredMuseums.length > 0) {
             setSelectedMuseum(filteredMuseums[0]);
         }
     }, [filteredMuseums, selectedMuseum]);
 
-    const { isAuthenticated } = useAuthStore();
-    // When rendered in PublicLayout (not authenticated), the fixed Navbar needs extra offset
-    const isPublic = !isAuthenticated;
+    // SECURITY: Handle search input with sanitization
+    const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchQuery(sanitizeInput(e.target.value));
+    }, []);
 
     return (
-        <div className={`nbm-page ${isPublic ? 'nbm-page--public' : ''}`}>
+        <div className="pnb-page">
             {/* ===== MAP VIEW ===== */}
             {viewMode === 'map' ? (
-                <div className="nbm-map-container">
+                <div className="pnb-map-container">
                     {/* Search + Filter overlay */}
-                    <div className="nbm-search-overlay">
-                        <div className="nbm-search-bar">
-                            <Search className="nbm-search-bar__icon" />
+                    <div className="pnb-search-overlay">
+                        <div className="pnb-search-bar">
+                            <Search className="pnb-search-bar__icon" />
                             <input
-                                className="nbm-search-bar__input"
+                                className="pnb-search-bar__input"
                                 type="text"
                                 placeholder="Search heritage sites, museums..."
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onChange={handleSearchChange}
+                                maxLength={100}
+                                autoComplete="off"
+                                spellCheck={false}
                             />
                             <button
-                                className="nbm-search-bar__filter"
+                                className="pnb-search-bar__filter"
                                 onClick={() => setViewMode('list')}
+                                aria-label="Switch to list view"
                             >
                                 <SlidersHorizontal className="w-4 h-4" />
                             </button>
                         </div>
-                        <div className="nbm-filter-chips">
+                        <div className="pnb-filter-chips">
                             {FILTER_CHIPS.map((chip) => (
                                 <button
                                     key={chip.id}
-                                    className={`nbm-chip ${activeFilter === chip.id ? 'nbm-chip--active' : ''}`}
+                                    className={`pnb-chip ${activeFilter === chip.id ? 'pnb-chip--active' : ''}`}
                                     onClick={() => setActiveFilter(chip.id)}
                                 >
                                     {chip.icon && <chip.icon className="w-3.5 h-3.5" />}
@@ -432,26 +468,24 @@ export function NearbyMuseumsPage() {
                     </div>
 
                     {/* Map Area */}
-                    <div className="nbm-map">
-                        {/* Placeholder map background */}
-                        <div className="nbm-map__bg">
+                    <div className="pnb-map">
+                        <div className="pnb-map__bg">
                             <img
                                 src="https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/106.8456,-6.2088,11,0/800x600@2x?access_token=placeholder"
                                 alt="Map"
-                                className="nbm-map__img"
+                                className="pnb-map__img"
                                 onError={(e) => {
-                                    // Fallback to a gradient if Mapbox fails
                                     (e.target as HTMLImageElement).style.display = 'none';
                                 }}
                             />
-                            <div className="nbm-map__fallback" />
+                            <div className="pnb-map__fallback" />
                         </div>
 
                         {/* Museum Pins */}
                         {filteredMuseums.slice(0, 6).map((museum: any, i: number) => (
                             <button
                                 key={museum.id}
-                                className={`nbm-pin ${selectedMuseum?.id === museum.id ? 'nbm-pin--active' : ''}`}
+                                className={`pnb-pin ${selectedMuseum?.id === museum.id ? 'pnb-pin--active' : ''}`}
                                 style={{
                                     top: `${18 + (i * 12)}%`,
                                     left: `${15 + (i * 14)}%`,
@@ -461,12 +495,12 @@ export function NearbyMuseumsPage() {
                                     setSheetExpanded(false);
                                 }}
                             >
-                                <div className="nbm-pin__marker">
+                                <div className="pnb-pin__marker">
                                     <Building2 className="w-3.5 h-3.5" />
                                 </div>
                                 {selectedMuseum?.id === museum.id && (
                                     <motion.span
-                                        className="nbm-pin__label"
+                                        className="pnb-pin__label"
                                         initial={{ opacity: 0, y: 4 }}
                                         animate={{ opacity: 1, y: 0 }}
                                     >
@@ -477,26 +511,26 @@ export function NearbyMuseumsPage() {
                         ))}
                     </div>
 
-                    {/* Map Controls (right side) */}
-                    <div className="nbm-map-controls">
-                        <button className="nbm-map-ctrl" onClick={() => setViewMode('list')}>
+                    {/* Map Controls */}
+                    <div className="pnb-map-controls">
+                        <button className="pnb-map-ctrl" onClick={() => setViewMode('list')} aria-label="List view">
                             <Layers className="w-4 h-4" />
                         </button>
-                        <button className="nbm-map-ctrl" onClick={requestLocation}>
+                        <button className="pnb-map-ctrl" onClick={requestLocation} aria-label="My location">
                             {isLocating
                                 ? <Loader2 className="w-4 h-4 animate-spin" />
                                 : <Locate className="w-4 h-4" />
                             }
                         </button>
-                        <button className="nbm-map-ctrl"><Plus className="w-4 h-4" /></button>
-                        <button className="nbm-map-ctrl"><Minus className="w-4 h-4" /></button>
+                        <button className="pnb-map-ctrl" aria-label="Zoom in"><Plus className="w-4 h-4" /></button>
+                        <button className="pnb-map-ctrl" aria-label="Zoom out"><Minus className="w-4 h-4" /></button>
                     </div>
 
                     {/* Location error toast */}
                     <AnimatePresence>
                         {locationError && (
                             <motion.div
-                                className="nbm-error-toast"
+                                className="pnb-error-toast"
                                 initial={{ y: -20, opacity: 0 }}
                                 animate={{ y: 0, opacity: 1 }}
                                 exit={{ y: -20, opacity: 0 }}
@@ -521,20 +555,20 @@ export function NearbyMuseumsPage() {
                 </div>
             ) : (
                 /* ===== LIST VIEW ===== */
-                <div className="nbm-list-container">
+                <div className="pnb-list-container">
                     {/* Header */}
-                    <div className="nbm-list-header">
+                    <div className="pnb-list-header">
                         <div>
-                            <h1 className="nbm-list-header__title">Explore Nearby</h1>
-                            <p className="nbm-list-header__subtitle">
+                            <h1 className="pnb-list-header__title">Explore Nearby</h1>
+                            <p className="pnb-list-header__subtitle">
                                 {filteredMuseums.length} locations found
                             </p>
                         </div>
-                        <div className="nbm-list-header__actions">
-                            <button className="nbm-map-ctrl" onClick={() => setViewMode('map')}>
+                        <div className="pnb-list-header__actions">
+                            <button className="pnb-map-ctrl" onClick={() => setViewMode('map')} aria-label="Map view">
                                 <Map className="w-4 h-4" />
                             </button>
-                            <button className="nbm-map-ctrl" onClick={requestLocation}>
+                            <button className="pnb-map-ctrl" onClick={requestLocation} aria-label="My location">
                                 {isLocating
                                     ? <Loader2 className="w-4 h-4 animate-spin" />
                                     : <Locate className="w-4 h-4" />
@@ -544,21 +578,24 @@ export function NearbyMuseumsPage() {
                     </div>
 
                     {/* Search + Filters */}
-                    <div className="nbm-list-search">
-                        <div className="nbm-search-bar">
-                            <Search className="nbm-search-bar__icon" />
+                    <div className="pnb-list-search">
+                        <div className="pnb-search-bar">
+                            <Search className="pnb-search-bar__icon" />
                             <input
-                                className="nbm-search-bar__input"
+                                className="pnb-search-bar__input"
                                 placeholder="Search heritage sites, museums..."
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onChange={handleSearchChange}
+                                maxLength={100}
+                                autoComplete="off"
+                                spellCheck={false}
                             />
                         </div>
-                        <div className="nbm-filter-chips">
+                        <div className="pnb-filter-chips">
                             {FILTER_CHIPS.map((chip) => (
                                 <button
                                     key={chip.id}
-                                    className={`nbm-chip ${activeFilter === chip.id ? 'nbm-chip--active' : ''}`}
+                                    className={`pnb-chip ${activeFilter === chip.id ? 'pnb-chip--active' : ''}`}
                                     onClick={() => setActiveFilter(chip.id)}
                                 >
                                     {chip.icon && <chip.icon className="w-3.5 h-3.5" />}
@@ -570,18 +607,18 @@ export function NearbyMuseumsPage() {
 
                     {/* List */}
                     {isLoading ? (
-                        <div className="nbm-loading">
+                        <div className="pnb-loading">
                             <Loader2 className="w-8 h-8 animate-spin" />
                             <span>Discovering places...</span>
                         </div>
                     ) : filteredMuseums.length === 0 ? (
-                        <div className="nbm-empty">
+                        <div className="pnb-empty">
                             <Building2 className="w-12 h-12" />
                             <h3>No locations found</h3>
                             <p>Try adjusting your filters or search query.</p>
                         </div>
                     ) : (
-                        <div className="nbm-list-items">
+                        <div className="pnb-list-items">
                             {filteredMuseums.map((museum: any) => (
                                 <MuseumListCard
                                     key={museum.id}
@@ -599,5 +636,3 @@ export function NearbyMuseumsPage() {
         </div>
     );
 }
-
-export default NearbyMuseumsPage;

@@ -88,11 +88,12 @@ export const PrivyAuthenticationLogic = () => {
 
             console.log('[PrivyAuth] Backend sync successful');
 
-            // D. Navigation Redirect (only if strictly on public auth pages)
-            const publicAuthRoutes = ['/', '/gallery', '/auth/callback'];
-            const isPublicAuthRoute = publicAuthRoutes.includes(location.pathname) || location.pathname.startsWith('/auth');
+            // D. Navigation Redirect — ONLY from auth-specific pages
+            // Do NOT redirect from public content pages like /gallery/nearby, /marketplace, etc.
+            const authOnlyRoutes = ['/', '/auth/callback'];
+            const isAuthRoute = authOnlyRoutes.includes(location.pathname) || location.pathname.startsWith('/auth/');
 
-            if (isPublicAuthRoute) {
+            if (isAuthRoute) {
                 const needsCompletion = needsProfileCompletion(response.user);
                 const dashboardRoute = needsCompletion
                     ? '/complete-profile'
