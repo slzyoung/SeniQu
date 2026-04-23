@@ -6,7 +6,7 @@ import {
     Settings,
     Image,
     MapPin,
-    Sparkles,
+    ScanLine,
     Brain,
     ShoppingCart,
     Wallet,
@@ -27,7 +27,9 @@ import {
     Home,
     Upload,
     TrendingUp,
-    Image as ImageIcon
+    Image as ImageIcon,
+    Palette,
+    Wand2
 } from 'lucide-react';
 import { SidebarSection } from '../components/ui/Sidebar';
 import { ROUTES } from '../lib/constants';
@@ -66,8 +68,8 @@ export const userSidebarSections: SidebarSection[] = [
         items: [
             {
                 id: 'genre-identifier',
-                label: 'Genre Identifier',
-                icon: <Sparkles className="w-5 h-5" />,
+                label: 'Scan Art',
+                icon: <ScanLine className="w-5 h-5" />,
                 path: ROUTES.USER_GENRE_IDENTIFIER,
             },
             {
@@ -75,6 +77,12 @@ export const userSidebarSections: SidebarSection[] = [
                 label: 'AI Curation',
                 icon: <Brain className="w-5 h-5" />,
                 path: ROUTES.USER_AI_CURATION,
+            },
+            {
+                id: 'ai-create',
+                label: 'Create with AI',
+                icon: <Wand2 className="w-5 h-5" />,
+                path: ROUTES.USER_AI_CREATE,
             },
         ],
     },
@@ -90,7 +98,7 @@ export const userSidebarSections: SidebarSection[] = [
             {
                 id: 'my-arts',
                 label: 'My Arts',
-                icon: <Wallet className="w-5 h-5" />,
+                icon: <Palette className="w-5 h-5" />,
                 path: ROUTES.USER_MY_ARTS,
             },
         ],
@@ -299,7 +307,7 @@ export const getArtistSidebarSections = (isInstitution: boolean): SidebarSection
             {
                 id: 'marketplace',
                 label: 'Arts Marketplace',
-                icon: <Wallet className="w-5 h-5" />,
+                icon: <Palette className="w-5 h-5" />,
                 path: ROUTES.MARKETPLACE,
             },
         ],
@@ -380,8 +388,8 @@ export const publicSidebarSections: SidebarSection[] = [
         items: [
             {
                 id: 'genre-identifier',
-                label: 'Genre Identifier',
-                icon: <Sparkles className="w-5 h-5" />,
+                label: 'Scan Art',
+                icon: <ScanLine className="w-5 h-5" />,
                 path: ROUTES.AI_GENRE,
             },
             {

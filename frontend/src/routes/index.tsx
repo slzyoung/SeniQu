@@ -20,7 +20,7 @@ import { LandingPage } from './LandingPage';
 const UserDashboard = lazy(() => import('../features/user/pages/UserDashboard'));
 const UserProfile = lazy(() => import('../features/user/pages/Profile'));
 const UserBookmarks = lazy(() => import('../features/user/pages/Bookmarks'));
-const UserCollections = lazy(() => import('../features/user/pages/MyCollections'));
+const UserCollections = lazy(() => import('../features/user/pages/MyCollectionsPage'));
 const UserSettings = lazy(() => import('../features/user/pages/Settings'));
 // New User Dashboard Pages
 const UserGallery = lazy(() => import('../features/user/pages/GalleryPage'));
@@ -42,10 +42,13 @@ const PublicGallery = lazy(() => import('../features/gallery/pages/PublicGallery
 const MuseumDetail = lazy(() => import('../features/gallery/pages/MuseumDetail'));
 const ArtworkView = lazy(() => import('../features/gallery/pages/ArtworkView'));
 const NearbyMuseums = lazy(() => import('../features/gallery/pages/NearbyMuseums'));
+const PublicNearbyPage = lazy(() => import('../features/gallery/pages/PublicNearbyPage'));
+const CityRegions = lazy(() => import('../features/gallery/pages/CityRegions'));
+const RegionMuseums = lazy(() => import('../features/gallery/pages/RegionMuseums'));
 
 // Lazy load marketplace pages
 const Marketplace = lazy(() => import('../features/marketplace/pages/Marketplace'));
-const ArtDetail = lazy(() => import('../features/marketplace/pages/NFTDetail'));
+const ArtDetail = lazy(() => import('../features/marketplace/pages/ArtDetail'));
 
 // Lazy load community pages
 const CommunityForum = lazy(() => import('../features/community/pages/CommunityForum'));
@@ -54,6 +57,7 @@ const ThreadView = lazy(() => import('../features/community/pages/ThreadView'));
 // Lazy load AI pages
 const GenreIdentifier = lazy(() => import('../features/ai/pages/GenreIdentifier'));
 const AICuration = lazy(() => import('../features/ai/pages/AICuration'));
+const AIDashboardPage = lazy(() => import('../features/ai/pages/AIDashboardPage'));
 
 // Lazy load artist pages
 const ArtistDashboard = lazy(() => import('../features/artist/pages/ArtistDashboard'));
@@ -73,7 +77,7 @@ const SystemAnalytics = lazy(() => import('../features/admin/pages/SystemAnalyti
 const DatabaseManagement = lazy(() => import('../features/admin/pages/DatabaseManagement'));
 const SystemLogs = lazy(() => import('../features/admin/pages/SystemLogs'));
 const SecurityCenter = lazy(() => import('../features/admin/pages/SecurityCenter'));
-const ArtsOversight = lazy(() => import('../features/admin/pages/NFTOversight'));
+const ArtsOversight = lazy(() => import('../features/admin/pages/ArtsOversight'));
 const PremiumManagement = lazy(() => import('../features/admin/pages/PremiumManagement'));
 const GlobalSettings = lazy(() => import('../features/admin/pages/GlobalSettings'));
 const SystemHealth = lazy(() => import('../features/admin/pages/SystemHealth'));
@@ -133,9 +137,12 @@ const router = createBrowserRouter(
                 {/* Gallery Routes */}
                 <Route path={ROUTES.GALLERY} element={<PublicGallery />} />
                 <Route path={ROUTES.COLLECTIONS} element={<CollectionsPage />} />
+                <Route path={ROUTES.GALLERY_CITY_REGIONS} element={<CityRegions />} />
+                <Route path={ROUTES.GALLERY_REGION_MUSEUMS} element={<RegionMuseums />} />
                 <Route path={ROUTES.GALLERY_MUSEUM} element={<MuseumDetail />} />
                 <Route path={ROUTES.GALLERY_ARTWORK} element={<ArtworkView />} />
                 <Route path={ROUTES.NEARBY} element={<NearbyMuseums />} />
+                <Route path={ROUTES.NEARBY_PUBLIC} element={<PublicNearbyPage />} />
 
                 {/* Legal Routes */}
                 <Route path="/terms" element={<TermsOfService />} />
@@ -158,6 +165,7 @@ const router = createBrowserRouter(
                 <Route path={ROUTES.USER_NEARBY} element={<UserNearby />} />
                 <Route path={ROUTES.USER_GENRE_IDENTIFIER} element={<UserGenreIdentifier />} />
                 <Route path={ROUTES.USER_AI_CURATION} element={<UserAICuration />} />
+                <Route path={ROUTES.USER_AI_CREATE} element={<AIDashboardPage />} />
                 <Route path={ROUTES.USER_MARKETPLACE} element={<UserMarketplace />} />
                 <Route path={ROUTES.USER_MY_ARTS} element={<UserMyArts />} />
                 <Route path={ROUTES.USER_WALLET} element={<UserWallet />} />

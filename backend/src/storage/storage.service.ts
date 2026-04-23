@@ -126,8 +126,18 @@ export class StorageService implements OnModuleInit {
                 contentType: file.mimetype,
             }
         } catch (error) {
-            this.logger.error(`Upload failed for ${key}: ${error.message}`)
-            throw new InternalServerErrorException("File upload failed. Please try again.")
+            this.logger.warn(`R2 CDN Upload failed for ${key}: ${error.message}. Falling back to Base64 database storage!`)
+            
+            // Fallback: Convert file to Base64 and store directly in DB
+            const base64Data = file.buffer.toString('base64');
+            const dataUri = `data:${file.mimetype};base64,${base64Data}`;
+            
+            return {
+                key,
+                url: dataUri,
+                size: file.size,
+                contentType: file.mimetype,
+            }
         }
     }
 

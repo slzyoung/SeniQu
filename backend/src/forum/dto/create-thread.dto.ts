@@ -29,4 +29,14 @@ export class CreateThreadDto {
     @IsArray()
     @IsString({ each: true })
     tags?: string[]
+
+    @ApiPropertyOptional({ description: "Media URL (image or video)" })
+    @IsOptional()
+    @IsString()
+    media_url?: string
+
+    @ApiPropertyOptional({ description: "Media Type (image or video)" })
+    @IsOptional()
+    @IsString()
+    media_type?: string
 }

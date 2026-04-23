@@ -28,6 +28,8 @@ export interface ForumThread {
     title: string;
     slug: string;
     content: string;
+    mediaUrl?: string;
+    mediaType?: string;
     tags: string[];
     isPinned: boolean;
     isLocked: boolean;
@@ -54,6 +56,8 @@ export interface ForumPost {
     authorId: string;
     parentId?: string;
     content: string;
+    mediaUrl?: string;
+    mediaType?: string;
     likes: number;
     isSolution: boolean;
     isEdited: boolean;
@@ -73,12 +77,16 @@ export interface CreateThreadData {
     categoryId: string;
     title: string;
     content: string;
+    mediaUrl?: string;
+    mediaType?: 'image' | 'video' | string;
     tags?: string[];
 }
 
 export interface CreatePostData {
     threadId: string;
     content: string;
+    mediaUrl?: string;
+    mediaType?: 'image' | 'video' | string;
     parentId?: string;
 }
 
@@ -132,7 +140,15 @@ export const forumService = {
     },
 
     createThread: async (data: CreateThreadData): Promise<ForumThread> => {
-        return apiPost('/forum/threads', data);
+        const payload = {
+            category_id: data.categoryId,
+            title: data.title,
+            content: data.content,
+            tags: data.tags,
+            media_url: data.mediaUrl,
+            media_type: data.mediaType
+        };
+        return apiPost('/forum/threads', payload);
     },
 
     updateThread: async (id: string, data: Partial<CreateThreadData>): Promise<ForumThread> => {
@@ -163,7 +179,13 @@ export const forumService = {
     },
 
     createPost: async (data: CreatePostData): Promise<ForumPost> => {
-        return apiPost('/forum/posts', data);
+        const payload = {
+            content: data.content,
+            media_url: data.mediaUrl,
+            media_type: data.mediaType,
+            parent_id: data.parentId
+        };
+        return apiPost(`/forum/threads/${data.threadId}/posts`, payload);
     },
 
     updatePost: async (id: string, content: string): Promise<ForumPost> => {

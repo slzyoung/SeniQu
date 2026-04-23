@@ -16,4 +16,14 @@ export class CreatePostDto {
     @IsOptional()
     @IsUUID()
     parent_id?: string
+
+    @ApiPropertyOptional({ description: "Media URL (image or video)" })
+    @IsOptional()
+    @IsString()
+    media_url?: string
+
+    @ApiPropertyOptional({ description: "Media Type (image or video)" })
+    @IsOptional()
+    @IsString()
+    media_type?: string
 }

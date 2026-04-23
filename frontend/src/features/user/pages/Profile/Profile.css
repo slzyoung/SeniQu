@@ -1,0 +1,1403 @@
+/**
+ * Profile Page — Premium Hero + Bottom Sheet Design
+ * Collaboration Trip App + Web3 Aesthetic
+ * Mobile-first, dark/light mode safe.
+ */
+
+/* ============================================
+   ROOT LAYOUT — Full viewport, defeats parent padding
+   ============================================ */
+.profile-v2 {
+    margin: -1rem;
+    position: relative;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg-primary);
+}
+
+@media (min-width: 640px) {
+    .profile-v2 {
+        margin: -1.5rem;
+    }
+}
+
+/* ============================================
+   HERO SECTION — Full-bleed background image
+   ============================================ */
+.pv2-hero {
+    position: relative;
+    width: 100%;
+    height: 44vh;
+    min-height: 280px;
+    max-height: 420px;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.pv2-hero-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 30%;
+    transition: transform 0.6s ease;
+}
+
+.pv2-hero:hover .pv2-hero-img {
+    transform: scale(1.02);
+}
+
+/* Gradient overlay for text readability */
+.pv2-hero-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.05) 0%,
+        rgba(0, 0, 0, 0.15) 30%,
+        rgba(0, 0, 0, 0.55) 70%,
+        rgba(0, 0, 0, 0.85) 100%
+    );
+    z-index: 2;
+}
+
+/* Light mode: slightly stronger gradient so text stays readable */
+:root:not(.dark) .pv2-hero-gradient {
+    background: linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.02) 0%,
+        rgba(0, 0, 0, 0.1) 30%,
+        rgba(0, 0, 0, 0.4) 70%,
+        rgba(0, 0, 0, 0.75) 100%
+    );
+}
+
+/* Edit button on hero */
+.pv2-hero-edit {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 100px;
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    letter-spacing: 0.2px;
+}
+
+.pv2-hero-edit:hover {
+    background: rgba(255, 255, 255, 0.22);
+    transform: translateY(-1px);
+}
+
+.pv2-hero-edit:active {
+    transform: scale(0.97);
+}
+
+/* Save/Cancel bar on hero */
+.pv2-hero-actions {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 10;
+    display: flex;
+    gap: 8px;
+}
+
+.pv2-hero-actions button {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 14px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.pv2-btn-cancel {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    color: #fff;
+}
+
+.pv2-btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.pv2-btn-save {
+    background: linear-gradient(135deg, #C9A84C, #B08D57);
+    color: #0D0D0D;
+    box-shadow: 0 2px 12px rgba(201, 168, 76, 0.35);
+}
+
+.pv2-btn-save:hover {
+    box-shadow: 0 4px 20px rgba(201, 168, 76, 0.5);
+    transform: translateY(-1px);
+}
+
+.pv2-btn-save:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Hero identity overlaid */
+.pv2-hero-identity {
+    position: absolute;
+    bottom: 44px;
+    left: 0;
+    right: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 0 24px;
+}
+
+.pv2-avatar-wrap {
+    position: relative;
+    margin-bottom: 12px;
+}
+
+.pv2-avatar-ring {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    padding: 3px;
+    background: linear-gradient(135deg, rgba(201, 168, 76, 0.6), rgba(176, 141, 87, 0.3));
+    transition: all 0.3s;
+}
+
+.pv2-avatar-ring:hover {
+    background: linear-gradient(135deg, rgba(201, 168, 76, 0.9), rgba(176, 141, 87, 0.6));
+}
+
+.pv2-avatar-ring img,
+.pv2-avatar-ring .pv2-avatar-fallback {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(0, 0, 0, 0.3);
+}
+
+.pv2-avatar-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #C9A84C, #8B7A3E);
+}
+
+.pv2-avatar-camera {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    color: #C9A84C;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 6;
+}
+
+.pv2-avatar-camera:hover {
+    background: rgba(0, 0, 0, 0.85);
+    transform: scale(1.1);
+}
+
+.pv2-hero-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.15;
+    margin: 0 0 4px 0;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+    letter-spacing: -0.3px;
+}
+
+.pv2-hero-location {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.75);
+    font-weight: 400;
+}
+
+/* Verified / Premium badges on hero */
+.pv2-hero-badges {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.pv2-badge {
+    padding: 3px 10px;
+    border-radius: 100px;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+.pv2-badge--verified {
+    background: rgba(201, 168, 76, 0.2);
+    color: #C9A84C;
+    border: 1px solid rgba(201, 168, 76, 0.3);
+}
+
+.pv2-badge--premium {
+    background: linear-gradient(135deg, rgba(201, 168, 76, 0.25), rgba(176, 141, 87, 0.15));
+    color: #D4B96A;
+    border: 1px solid rgba(201, 168, 76, 0.35);
+}
+
+/* ============================================
+   BOTTOM SHEET — Overlapping the hero
+   ============================================ */
+.pv2-sheet {
+    position: relative;
+    flex: 1;
+    margin-top: -28px;
+    background-color: var(--bg-primary);
+    border-top-left-radius: 28px;
+    border-top-right-radius: 28px;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    min-height: 56vh;
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.08);
+    transition: background-color 0.3s;
+}
+
+.dark .pv2-sheet {
+    background-color: #0D0D0D;
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Drag handle */
+.pv2-sheet-handle {
+    display: flex;
+    justify-content: center;
+    padding: 12px 0 4px;
+}
+
+.pv2-sheet-handle span {
+    width: 36px;
+    height: 4px;
+    border-radius: 100px;
+    background: var(--border-color);
+    transition: background 0.2s;
+}
+
+.dark .pv2-sheet-handle span {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================
+   TAB NAVIGATION
+   ============================================ */
+.pv2-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    padding: 8px 24px 0;
+    border-bottom: 1px solid var(--border-color);
+    position: relative;
+}
+
+.pv2-tab {
+    position: relative;
+    padding: 10px 20px 14px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.25s;
+    background: none;
+    border: none;
+    outline: none;
+}
+
+.pv2-tab:hover {
+    color: var(--text-primary);
+}
+
+.pv2-tab--active {
+    color: var(--text-primary);
+}
+
+.pv2-tab--active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 3px;
+    border-radius: 100px;
+    background: linear-gradient(90deg, #C9A84C, #B08D57);
+    box-shadow: 0 0 8px rgba(201, 168, 76, 0.4);
+}
+
+/* ============================================
+   CONTENT AREA — Scrollable
+   ============================================ */
+.pv2-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 20px 100px;
+    scrollbar-width: none;
+}
+
+.pv2-content::-webkit-scrollbar {
+    display: none;
+}
+
+/* Fade-in animation for tab content */
+.pv2-fade-in {
+    animation: pv2FadeIn 0.3s ease-out;
+}
+
+@keyframes pv2FadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================
+   ABOUT TAB
+   ============================================ */
+.pv2-bio {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text-primary);
+    font-weight: 400;
+    margin-bottom: 24px;
+    opacity: 0.9;
+}
+
+.pv2-bio--empty {
+    color: var(--text-muted);
+    font-style: italic;
+    opacity: 0.6;
+}
+
+
+
+/* Stats Row */
+.pv2-stats {
+    display: flex;
+    justify-content: space-around;
+    padding: 20px 0;
+    margin-bottom: 24px;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.pv2-stat {
+    text-align: center;
+    flex: 1;
+}
+
+.pv2-stat-value {
+    font-family: 'Inter', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.pv2-stat-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Section Headers */
+.pv2-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.pv2-section-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.pv2-section-more {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-gold);
+    cursor: pointer;
+    transition: opacity 0.2s;
+    background: none;
+    border: none;
+}
+
+.pv2-section-more:hover {
+    opacity: 0.7;
+}
+
+/* ============================================
+   ARTS TAB — Tokens Card + Grid
+   ============================================ */
+
+/* Token Summary Card */
+.pv2-tokens-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    border-radius: 20px;
+    margin-bottom: 24px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    transition: all 0.3s;
+}
+
+.dark .pv2-tokens-card {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.pv2-tokens-info h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 2px 0;
+}
+
+.pv2-tokens-info p {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0 0 10px 0;
+}
+
+.pv2-tokens-balance {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pv2-sol-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #9945FF, #14F195);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 800;
+    color: #fff;
+}
+
+.pv2-tokens-amount {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.pv2-tokens-usd {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-left: 4px;
+}
+
+.pv2-tokens-thumb {
+    width: 72px;
+    height: 72px;
+    border-radius: 16px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.pv2-tokens-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Art Grid */
+.pv2-art-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    padding-bottom: 16px;
+}
+
+@media (min-width: 640px) {
+    .pv2-art-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .pv2-art-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.pv2-art-card {
+    aspect-ratio: 1;
+    border-radius: 18px;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    background: var(--bg-elevated);
+}
+
+.pv2-art-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s ease;
+}
+
+.pv2-art-card:hover img {
+    transform: scale(1.08);
+}
+
+.pv2-art-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.75) 0%, transparent 55%);
+    opacity: 0;
+    transition: opacity 0.3s;
+    display: flex;
+    align-items: flex-end;
+    padding: 12px;
+}
+
+.pv2-art-card:hover .pv2-art-overlay {
+    opacity: 1;
+}
+
+/* Always visible on mobile touch */
+@media (hover: none) {
+    .pv2-art-overlay {
+        opacity: 1;
+        background: linear-gradient(to top, rgba(0, 0, 0, 0.6) 0%, transparent 50%);
+    }
+}
+
+.pv2-art-title {
+    color: #fff;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    margin: 0;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================
+   SETTINGS TAB — List items
+   ============================================ */
+.pv2-settings-section {
+    margin-bottom: 24px;
+}
+
+.pv2-settings-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    padding-left: 4px;
+}
+
+.pv2-settings-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 4px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background 0.2s;
+    border-radius: 0;
+}
+
+.pv2-settings-item:last-child {
+    border-bottom: none;
+}
+
+.pv2-settings-item:hover {
+    background: var(--bg-surface);
+    border-radius: 12px;
+    padding-left: 12px;
+    padding-right: 12px;
+    margin-left: -8px;
+    margin-right: -8px;
+}
+
+.pv2-settings-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--bg-surface);
+    color: var(--text-muted);
+    transition: all 0.2s;
+}
+
+.dark .pv2-settings-icon {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.pv2-settings-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.pv2-settings-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.pv2-settings-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.pv2-settings-desc {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 2px 0 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pv2-settings-arrow {
+    color: var(--text-muted);
+    opacity: 0.4;
+    flex-shrink: 0;
+}
+
+.pv2-settings-item--danger .pv2-settings-icon {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.pv2-settings-item--danger .pv2-settings-title {
+    color: #ef4444;
+}
+
+/* Wallet compact row */
+.pv2-wallet-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    margin-bottom: 8px;
+    transition: all 0.2s;
+}
+
+.dark .pv2-wallet-row {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.04);
+}
+
+.pv2-wallet-row:hover {
+    border-color: var(--text-gold);
+}
+
+.pv2-wallet-chain {
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-family: 'Inter', sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: rgba(201, 168, 76, 0.1);
+    color: var(--text-gold);
+}
+
+.pv2-wallet-address {
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+    flex: 1;
+}
+
+.pv2-wallet-copy {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-gold);
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.pv2-wallet-copy:hover {
+    background: rgba(201, 168, 76, 0.1);
+}
+
+/* ============================================
+   EDIT MODE — Inline form fields
+   ============================================ */
+.pv2-edit-field {
+    margin-bottom: 16px;
+}
+
+.pv2-edit-label {
+    display: block;
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.pv2-edit-input {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    outline: none;
+    transition: all 0.2s;
+    box-sizing: border-box;
+}
+
+.pv2-edit-input:focus {
+    border-color: var(--text-gold);
+    box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.1);
+}
+
+.dark .pv2-edit-input {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+.dark .pv2-edit-input:focus {
+    border-color: rgba(201, 168, 76, 0.5);
+    box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.08);
+}
+
+.pv2-edit-textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    outline: none;
+    resize: vertical;
+    min-height: 80px;
+    transition: all 0.2s;
+    box-sizing: border-box;
+    line-height: 1.6;
+}
+
+.pv2-edit-textarea:focus {
+    border-color: var(--text-gold);
+    box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.1);
+}
+
+.dark .pv2-edit-textarea {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+.pv2-edit-char-count {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: right;
+    margin-top: 4px;
+    opacity: 0.6;
+}
+
+.pv2-edit-social-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.pv2-edit-social-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: var(--bg-surface);
+    color: var(--text-muted);
+}
+
+.dark .pv2-edit-social-icon {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.pv2-edit-social-row .pv2-edit-input {
+    flex: 1;
+}
+
+/* ============================================
+   LOADING SKELETON
+   ============================================ */
+.pv2-skeleton-hero {
+    width: 100%;
+    height: 44vh;
+    min-height: 280px;
+    background: linear-gradient(135deg, var(--bg-surface), var(--bg-elevated));
+    animation: pv2Pulse 2s ease-in-out infinite;
+}
+
+@keyframes pv2Pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
+/* ============================================
+   DESKTOP OVERRIDES (md+)
+   ============================================ */
+@media (min-width: 768px) {
+    .pv2-hero {
+        height: 48vh;
+        max-height: 480px;
+    }
+
+    .pv2-hero-name {
+        font-size: 34px;
+    }
+
+    .pv2-avatar-ring {
+        width: 110px;
+        height: 110px;
+    }
+
+    .pv2-content {
+        padding: 24px 32px 60px;
+        max-width: 720px;
+        margin: 0 auto;
+    }
+
+    .pv2-tabs {
+        gap: 8px;
+    }
+
+    .pv2-tab {
+        padding: 12px 28px 16px;
+        font-size: 12px;
+    }
+
+    .pv2-bio {
+        font-size: 15px;
+    }
+
+    .pv2-stat-value {
+        font-size: 26px;
+    }
+}
+
+/* Large desktop */
+@media (min-width: 1200px) {
+    .pv2-content {
+        max-width: 800px;
+    }
+}
+
+/* ============================================
+   EMPTY STATE
+   ============================================ */
+.pv2-empty {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.pv2-empty-icon {
+    width: 48px;
+    height: 48px;
+    color: var(--text-muted);
+    opacity: 0.3;
+    margin: 0 auto 12px;
+}
+
+.pv2-empty-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 6px;
+}
+
+.pv2-empty-text {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+/* ============================================
+   USERNAME UNDER HERO NAME (on the hero itself)
+   ============================================ */
+.pv2-hero-username {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 2px;
+    letter-spacing: 0.3px;
+}
+
+/* ============================================
+   ABOUT TAB — Centered Layout
+   ============================================ */
+
+/* Social Links — Centered */
+.pv2-socials-centered {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    margin: 16px 0 20px;
+}
+
+.pv2-social-circle {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.25s;
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+}
+
+.pv2-social-circle:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    border-color: var(--text-gold);
+    color: var(--text-gold);
+}
+
+.dark .pv2-social-circle {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+.dark .pv2-social-circle:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(201, 168, 76, 0.4);
+}
+
+.pv2-social-circle svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Bio — Centered */
+.pv2-bio-centered {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text-primary);
+    font-weight: 400;
+    text-align: center;
+    margin: 0 auto 24px;
+    max-width: 400px;
+    opacity: 0.85;
+}
+
+.pv2-bio-centered.pv2-bio--empty {
+    color: var(--text-muted);
+    font-style: italic;
+    opacity: 0.5;
+}
+
+/* ---- Social Brand Colors ---- */
+
+/* X (Twitter) — dark fill style */
+.pv2-social--x {
+    background: #000;
+    border-color: #000;
+    color: #fff;
+}
+
+.dark .pv2-social--x {
+    background: #fff;
+    border-color: #fff;
+    color: #000;
+}
+
+.pv2-social--x:hover {
+    background: #1d1d1d !important;
+    border-color: #1d1d1d !important;
+    color: #fff !important;
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.dark .pv2-social--x:hover {
+    background: #e0e0e0 !important;
+    border-color: #e0e0e0 !important;
+    color: #000 !important;
+}
+
+/* Instagram — gradient */
+.pv2-social--ig {
+    background: linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+    border-color: transparent;
+    color: #fff;
+}
+
+.dark .pv2-social--ig {
+    background: linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+    border-color: transparent;
+    color: #fff;
+}
+
+.pv2-social--ig:hover {
+    background: linear-gradient(135deg, #e08020, #d55830, #c91f38, #b51d58, #a51578) !important;
+    border-color: transparent !important;
+    color: #fff !important;
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(225, 48, 108, 0.35);
+}
+
+/* Telegram — blue */
+.pv2-social--tg {
+    background: #0088cc;
+    border-color: #0088cc;
+    color: #fff;
+}
+
+.dark .pv2-social--tg {
+    background: #0088cc;
+    border-color: #0088cc;
+    color: #fff;
+}
+
+.pv2-social--tg:hover {
+    background: #006daa !important;
+    border-color: #006daa !important;
+    color: #fff !important;
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 136, 204, 0.35);
+}
+
+/* No social links message */
+.pv2-no-socials {
+    text-align: center;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    color: var(--text-muted);
+    opacity: 0.4;
+    font-style: italic;
+    margin: 16px 0 20px;
+}
+
+/* ============================================
+   RECENT VISITS — Professional Trip Style
+   Horizontal scroll with snap
+   ============================================ */
+.pv2-recent-visits {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    padding: 4px 0 20px;
+    margin: 0 -20px;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+.pv2-recent-visits::-webkit-scrollbar {
+    display: none;
+}
+
+.pv2-visit-card {
+    flex-shrink: 0;
+    width: 200px;
+    height: 260px;
+    border-radius: 20px;
+    overflow: hidden;
+    position: relative;
+    scroll-snap-align: start;
+    cursor: pointer;
+    background: var(--bg-elevated);
+    transition: transform 0.3s;
+}
+
+.pv2-visit-card:hover {
+    transform: translateY(-4px);
+}
+
+.pv2-visit-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s ease;
+}
+
+.pv2-visit-card:hover img {
+    transform: scale(1.06);
+}
+
+.pv2-visit-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        to top,
+        rgba(0, 0, 0, 0.8) 0%,
+        rgba(0, 0, 0, 0.2) 40%,
+        transparent 60%
+    );
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 16px;
+}
+
+.pv2-visit-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 4px;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+    line-height: 1.2;
+}
+
+.pv2-visit-location {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 0;
+}
+
+/* Visit date badge overlay */
+.pv2-visit-date {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: 0.3px;
+}
+
+/* Responsive visit cards */
+@media (min-width: 768px) {
+    .pv2-visit-card {
+        width: 220px;
+        height: 280px;
+    }
+
+    .pv2-recent-visits {
+        margin: 0;
+        padding-left: 0;
+        padding-right: 0;
+    }
+}
+
+/* ============================================
+   SETTINGS TAB — Refined Cards
+   ============================================ */
+
+/* Settings grouped card */
+.pv2-settings-card {
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    margin-bottom: 16px;
+}
+
+.dark .pv2-settings-card {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.04);
+}
+
+.pv2-settings-card .pv2-settings-item {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    border-radius: 0;
+    margin: 0;
+}
+
+.pv2-settings-card .pv2-settings-item:last-child {
+    border-bottom: none;
+}
+
+.pv2-settings-card .pv2-settings-item:hover {
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 0;
+    padding-left: 16px;
+    padding-right: 16px;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.dark .pv2-settings-card .pv2-settings-item:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Chain logo in wallet rows */
+.pv2-chain-logo {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.pv2-wallet-row-v2 {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    margin-bottom: 10px;
+    transition: all 0.2s;
+}
+
+.dark .pv2-wallet-row-v2 {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.04);
+}
+
+.pv2-wallet-row-v2:hover {
+    border-color: rgba(201, 168, 76, 0.3);
+}
+
+.pv2-wallet-meta {
+    flex: 1;
+    min-width: 0;
+}
+
+.pv2-wallet-meta-chain {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pv2-wallet-meta-chain .pv2-chain-tag {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: rgba(201, 168, 76, 0.1);
+    color: var(--text-gold);
+}
+
+.pv2-wallet-meta-address {
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 2px 0 0;
+}

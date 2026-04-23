@@ -95,6 +95,15 @@ export function extractArray<T>(data: unknown): T[] {
         if (Array.isArray(obj.results)) return obj.results as T[];
         if (Array.isArray(obj.rows)) return obj.rows as T[];
         if (Array.isArray(obj.records)) return obj.records as T[];
+
+        // Handle double-nested data from backend TransformInterceptor wrapper
+        // Response shape: { success: true, data: { data: [...], meta: {...} } }
+        if (obj.data && typeof obj.data === 'object' && !Array.isArray(obj.data)) {
+            const inner = obj.data as Record<string, unknown>;
+            if (Array.isArray(inner.data)) return inner.data as T[];
+            if (Array.isArray(inner.items)) return inner.items as T[];
+            if (Array.isArray(inner.results)) return inner.results as T[];
+        }
     }
 
     return [];

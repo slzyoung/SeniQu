@@ -29,6 +29,7 @@ import { NotificationsModule } from "./notifications/notifications.module"
 import { ArtistModule } from "./artist/artist.module"
 import { WalletModule } from "./wallet/wallet.module"
 import { StorageModule } from "./storage/storage.module"
+import { AiModule } from "./modules/ai/ai.module"
 
 @Module({
     imports: [
@@ -99,6 +100,7 @@ import { StorageModule } from "./storage/storage.module"
         ArtistModule,
         WalletModule,
         StorageModule,
+        AiModule,
     ],
     controllers: [AppController, JwksController],
     providers: [

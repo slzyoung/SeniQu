@@ -12,7 +12,7 @@ export function MobileNav() {
   const getActiveTab = (pathname: string) => {
     if (pathname === '/') return 'Home';
     if (pathname.startsWith('/collections')) return 'Collections';
-    if (pathname.startsWith('/gallery/nearby')) return 'Nearby';
+    if (pathname.startsWith('/gallery/nearby') || pathname.startsWith('/nearby')) return 'Nearby';
     if (pathname === '/gallery') return 'Explore';
     return 'Home'; // Default or handle other cases
   };
@@ -28,7 +28,7 @@ export function MobileNav() {
         navigate('/collections');
         break;
       case 'Nearby':
-        navigate(ROUTES.NEARBY);
+        navigate(ROUTES.NEARBY_PUBLIC);
         break;
       case 'Explore':
         openAuthModal();

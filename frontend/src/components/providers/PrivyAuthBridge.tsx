@@ -132,11 +132,12 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
 
             console.log('[PrivyAuthBridge] Token exchange successful, user:', response.user.id);
 
-            // Redirect if needed
-            const isOnPublicPage = ['/', '/gallery', '/auth/callback'].includes(location.pathname) ||
-                location.pathname.startsWith('/auth');
+            // Redirect ONLY from auth-specific pages (landing, login, callback)
+            // Do NOT redirect from public content pages like /gallery/nearby, /marketplace, etc.
+            const isAuthPage = ['/', '/auth/callback'].includes(location.pathname) ||
+                location.pathname.startsWith('/auth/');
 
-            if (isOnPublicPage) {
+            if (isAuthPage) {
                 const needsCompletion = needsProfileCompletion(response.user);
                 const dashboardRoute = needsCompletion
                     ? '/complete-profile'

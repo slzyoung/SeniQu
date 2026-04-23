@@ -27,9 +27,12 @@ export const ROUTES = {
     HOME: '/',
     GALLERY: '/gallery',
     COLLECTIONS: '/collections',
+    GALLERY_CITY_REGIONS: '/gallery/city/:id',
+    GALLERY_REGION_MUSEUMS: '/gallery/region/:id',
     GALLERY_MUSEUM: '/gallery/museum/:id',
     GALLERY_ARTWORK: '/gallery/artwork/:id',
     NEARBY: '/gallery/nearby',
+    NEARBY_PUBLIC: '/nearby',
     MARKETPLACE: '/marketplace',
     MARKETPLACE_ART: '/marketplace/art/:id',
     COMMUNITY: '/community',
@@ -51,6 +54,7 @@ export const ROUTES = {
     USER_NEARBY: '/dashboard/nearby',
     USER_GENRE_IDENTIFIER: '/dashboard/genre-identifier',
     USER_AI_CURATION: '/dashboard/ai-curation',
+    USER_AI_CREATE: '/dashboard/ai-create',
     USER_MARKETPLACE: '/dashboard/marketplace',
     USER_MY_ARTS: '/dashboard/my-arts',
     USER_WALLET: '/dashboard/wallet',
@@ -87,6 +91,7 @@ export const ROUTES = {
     // AI Features
     AI_GENRE: '/ai/genre',
     AI_CURATION: '/ai/curation',
+    AI_CREATE: '/ai/create',
 } as const;
 
 // API Endpoints

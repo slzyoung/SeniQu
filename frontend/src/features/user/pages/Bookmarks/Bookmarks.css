@@ -1,0 +1,340 @@
+/* ================================================
+   3D Virtual Art Gallery Bookmarks UI
+   ================================================ */
+
+.bm-page {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  background-color: #000;
+  font-family: 'Inter', sans-serif;
+  z-index: 10; /* Ensures it sits above standard layouts if needed */
+}
+
+/* Background Image Layer */
+.bm-background {
+  position: absolute;
+  inset: -5%; /* Slight bleed for parallax/drag effects */
+  width: 110%;
+  height: 110%;
+  background-image: url('https://images.unsplash.com/photo-1577083165215-6134a6caa922?w=1600&q=80'); /* Mock gallery background */
+  background-size: cover;
+  background-position: center;
+  filter: blur(8px) brightness(0.6);
+  z-index: 0;
+  transition: all 0.5s ease;
+}
+
+.dark .bm-background {
+  filter: blur(8px) brightness(0.3);
+}
+
+/* Overlay for gradient/fade */
+.bm-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.8) 100%);
+  z-index: 1;
+}
+
+/* Top Search Bar */
+.bm-search-container {
+  position: absolute;
+  top: env(safe-area-inset-top, 24px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: 90%;
+  max-width: 400px;
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.bm-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 12px 24px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 14px;
+  width: 100%;
+}
+
+.bm-search-bar input {
+  background: transparent;
+  border: none;
+  color: #fff;
+  width: 100%;
+  outline: none;
+}
+
+.bm-search-bar input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Sidebar Navigation */
+.bm-sidebar {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 32px 16px;
+  border-radius: 32px;
+}
+
+@media (max-width: 768px) {
+  .bm-sidebar {
+    display: none; /* Hide on mobile to save space */
+  }
+}
+
+.bm-nav-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.bm-nav-btn:hover, .bm-nav-btn.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* 3D Coverflow Container */
+.bm-coverflow-wrapper {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1500px; /* Crucial for 3D depth */
+  overflow: hidden;
+  touch-action: none; /* Prevent browser scrolling while swiping */
+}
+
+/* Individual Card */
+.bm-card-wrapper {
+  position: absolute;
+  width: 280px;
+  height: 420px;
+  transform-style: preserve-3d;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (min-width: 768px) {
+  .bm-card-wrapper {
+    width: 360px;
+    height: 540px;
+  }
+}
+
+.bm-card {
+  width: 100%;
+  height: 100%;
+  border-radius: 20px;
+  overflow: hidden;
+  position: relative;
+  background: rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  transition: box-shadow 0.3s ease;
+}
+
+.bm-card.active {
+  border-color: rgba(201, 168, 76, 0.5); /* Gold accent for active */
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.7), 0 0 40px rgba(201, 168, 76, 0.2);
+}
+
+.bm-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+/* Overlay for inactive cards to darken them */
+.bm-card-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  transition: opacity 0.3s ease;
+}
+
+.bm-card.active .bm-card-overlay {
+  opacity: 0;
+}
+
+/* Card Info (Title inside card) */
+.bm-card-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 40px 20px 20px;
+  background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+  color: #fff;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.4s ease;
+}
+
+.bm-card.active .bm-card-info {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.bm-card-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  line-height: 1.2;
+}
+
+@media (min-width: 768px) {
+  .bm-card-title {
+    font-size: 24px;
+  }
+}
+
+.bm-card-artist {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Fullscreen Expand Icon */
+.bm-expand-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.bm-card.active .bm-expand-btn {
+  opacity: 1;
+}
+
+/* Floating Action Bar (Bottom of active card) */
+.bm-action-bar {
+  position: absolute;
+  bottom: -70px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 12px 24px;
+  border-radius: 999px;
+  color: #fff;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+@media (min-width: 768px) {
+  .bm-action-bar {
+    bottom: -80px;
+  }
+}
+
+.bm-card.active .bm-action-bar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.bm-action-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.bm-action-item:hover {
+  color: #c9a84c; /* Gold */
+}
+
+/* Mobile Swipe Hint */
+.bm-swipe-hint {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.bm-swipe-hint-line {
+  width: 40px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.bm-close-page {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 30;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+}

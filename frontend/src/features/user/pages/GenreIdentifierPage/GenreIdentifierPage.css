@@ -1,0 +1,1004 @@
+/* ================================================
+   GENRE IDENTIFIER — AR Mode Auto-Scan Styles
+   Premium immersive design • Light & Dark Mode
+   
+   Uses project theme tokens from index.css:
+   --bg-primary, --bg-surface, --bg-elevated
+   --text-primary, --text-muted, --text-gold
+   --border-color, --glow-gold, --glass-bg, --glass-border
+   
+   § 1. Layout & Container
+   § 2. Header & Controls  
+   § 3. Camera / Viewfinder
+   § 4. Scan Overlay & Animations
+   § 5. Detection Result Section
+   § 6. Audio Guide Card
+   § 7. Pattern Meaning Card
+   § 8. Action Buttons
+   § 9. Empty / Upload State
+   § 10. History Panel
+   § 11. Responsive & Safe Area
+   ================================================ */
+
+
+/* ================================================
+   § 1. LAYOUT & CONTAINER
+   ================================================ */
+
+.gid-container {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 64px);
+  background: var(--bg-primary);
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
+}
+
+@media (min-width: 768px) {
+  .gid-container {
+    max-width: 900px;
+    margin: 0 auto;
+    min-height: auto;
+    border-radius: 24px;
+    border: 1px solid var(--border-color);
+    box-shadow:
+      0 20px 60px var(--shadow-color),
+      inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+}
+
+@media (min-width: 1024px) {
+  .gid-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    max-width: 1100px;
+    min-height: 620px;
+  }
+}
+
+
+/* ================================================
+   § 2. HEADER & CONTROLS
+   ================================================ */
+
+.gid-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6) 0%, transparent 100%);
+}
+
+.gid-header-btn {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gid-header-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+.gid-header-btn:active {
+  transform: scale(0.95);
+}
+
+.gid-header-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.gid-header-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.gid-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(229, 57, 53, 0.2);
+  border: 1px solid rgba(229, 57, 53, 0.45);
+  padding: 2px 12px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #FF5252;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.gid-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #FF5252;
+  box-shadow: 0 0 6px rgba(255, 82, 82, 0.6);
+  animation: gid-pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes gid-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+
+/* ================================================
+   § 3. CAMERA / VIEWFINDER
+   ================================================ */
+
+.gid-camera-section {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  max-height: 480px;
+  background: #111;
+  overflow: hidden;
+}
+
+@media (min-width: 768px) {
+  .gid-camera-section {
+    aspect-ratio: 4 / 3;
+    max-height: 460px;
+    border-radius: 24px 24px 0 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .gid-camera-section {
+    aspect-ratio: auto;
+    max-height: none;
+    min-height: 100%;
+    border-radius: 24px 0 0 24px;
+  }
+}
+
+.gid-viewfinder {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.gid-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gid-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gid-camera-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  cursor: pointer;
+  transition: background 0.4s ease;
+}
+
+.gid-camera-placeholder:hover {
+  opacity: 0.85;
+}
+
+
+/* ================================================
+   § 4. SCAN OVERLAY & ANIMATIONS
+   ================================================ */
+
+.gid-scan-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 68%;
+  aspect-ratio: 1;
+  max-width: 280px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+@media (min-width: 768px) {
+  .gid-scan-frame {
+    width: 58%;
+    max-width: 320px;
+  }
+}
+
+.gid-scan-corner {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-style: solid;
+  border-width: 0;
+}
+
+.gid-scan-corner--tl {
+  top: 0; left: 0;
+  border-top-width: 3px;
+  border-left-width: 3px;
+  border-top-left-radius: 10px;
+  border-color: rgba(124, 107, 212, 0.7);
+}
+
+.gid-scan-corner--tr {
+  top: 0; right: 0;
+  border-top-width: 3px;
+  border-right-width: 3px;
+  border-top-right-radius: 10px;
+  border-color: rgba(201, 168, 76, 0.6);
+}
+
+.gid-scan-corner--bl {
+  bottom: 0; left: 0;
+  border-bottom-width: 3px;
+  border-left-width: 3px;
+  border-bottom-left-radius: 10px;
+  border-color: rgba(201, 168, 76, 0.6);
+}
+
+.gid-scan-corner--br {
+  bottom: 0; right: 0;
+  border-bottom-width: 3px;
+  border-right-width: 3px;
+  border-bottom-right-radius: 10px;
+  border-color: rgba(124, 107, 212, 0.7);
+}
+
+.gid-scan-line {
+  position: absolute;
+  top: 0;
+  left: 8%;
+  right: 8%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(201, 168, 76, 0.6) 25%,
+    rgba(124, 107, 212, 0.9) 50%,
+    rgba(201, 168, 76, 0.6) 75%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 16px rgba(124, 107, 212, 0.4),
+    0 0 8px rgba(201, 168, 76, 0.3);
+  animation: gid-scan-sweep 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes gid-scan-sweep {
+  0%, 100% { top: 4%; opacity: 0.2; }
+  50% { top: 92%; opacity: 1; }
+}
+
+/* Detection Badge — always white-on-glass since it sits on video */
+.gid-detection-badge {
+  position: absolute;
+  top: 50%;
+  right: 10%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(76, 175, 80, 0.2);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(76, 175, 80, 0.35);
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #81C784;
+  z-index: 15;
+  letter-spacing: 0.4px;
+  box-shadow: 0 4px 16px rgba(76, 175, 80, 0.15);
+}
+
+/* Scanning Indicator — on video overlay */
+.gid-scanning-indicator {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 10px 24px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  z-index: 15;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* Camera Controls — on video overlay */
+.gid-camera-controls {
+  position: absolute;
+  bottom: 18px;
+  right: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 15;
+}
+
+.gid-control-btn {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gid-control-btn:hover {
+  background: rgba(124, 107, 212, 0.3);
+  border-color: rgba(124, 107, 212, 0.4);
+  transform: scale(1.08);
+}
+
+
+/* ================================================
+   § 5. DETECTION RESULT SECTION
+   — Uses theme tokens for light/dark
+   ================================================ */
+
+.gid-result-section {
+  padding: 28px 20px 100px;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  position: relative;
+}
+
+@media (min-width: 768px) {
+  .gid-result-section {
+    padding: 36px 32px 40px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .gid-result-section {
+    overflow-y: auto;
+    max-height: 100%;
+    padding: 36px 32px;
+  }
+}
+
+.gid-result-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.gid-result-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+@media (min-width: 768px) {
+  .gid-result-title {
+    font-size: 32px;
+  }
+}
+
+.gid-result-origin {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 8px 0 0 0;
+  letter-spacing: 0.3px;
+}
+
+.gid-share-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.gid-share-btn:hover {
+  background: var(--glow-gold);
+  border-color: rgba(201, 168, 76, 0.3);
+  color: var(--text-gold);
+}
+
+
+/* ================================================
+   § 5b. CONFIDENCE & STYLE BADGES
+   ================================================ */
+
+.gid-confidence-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.gid-confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(76, 175, 80, 0.1);
+  border: 1px solid rgba(76, 175, 80, 0.2);
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #43A047;
+}
+
+.dark .gid-confidence-badge {
+  background: rgba(76, 175, 80, 0.12);
+  border-color: rgba(76, 175, 80, 0.25);
+  color: #81C784;
+}
+
+.gid-style-badge {
+  display: inline-flex;
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--glow-gold);
+  border: 1px solid rgba(201, 168, 76, 0.2);
+  color: var(--text-gold);
+}
+
+
+/* ================================================
+   § 6. AUDIO GUIDE CARD
+   ================================================ */
+
+.gid-audio-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  padding: 16px 20px;
+  cursor: pointer;
+  transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Shimmer on hover */
+.gid-audio-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.04), transparent);
+  transition: left 0.6s ease;
+}
+
+.gid-audio-card:hover::before {
+  left: 100%;
+}
+
+.gid-audio-card:hover {
+  background: var(--bg-elevated);
+  border-color: rgba(201, 168, 76, 0.15);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px var(--shadow-color);
+}
+
+.gid-audio-play {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7C6BD4, #5B4CB0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(124, 107, 212, 0.3);
+  color: #fff;
+}
+
+.gid-audio-play:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 24px rgba(124, 107, 212, 0.45);
+}
+
+.gid-audio-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.gid-audio-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.gid-audio-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.gid-audio-wave {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 30px;
+}
+
+.gid-audio-wave-bar {
+  width: 3px;
+  border-radius: 999px;
+  animation: gid-wave 0.8s ease-in-out infinite alternate;
+}
+
+/* Alternating wave bar colors — gold & purple */
+.gid-audio-wave-bar:nth-child(1) { height: 8px;  background: rgba(201, 168, 76, 0.5); }
+.gid-audio-wave-bar:nth-child(2) { height: 18px; background: rgba(124, 107, 212, 0.5); }
+.gid-audio-wave-bar:nth-child(3) { height: 26px; background: rgba(201, 168, 76, 0.6); }
+.gid-audio-wave-bar:nth-child(4) { height: 14px; background: rgba(124, 107, 212, 0.5); }
+.gid-audio-wave-bar:nth-child(5) { height: 10px; background: rgba(201, 168, 76, 0.4); }
+
+@keyframes gid-wave {
+  0% { transform: scaleY(0.4); }
+  100% { transform: scaleY(1.3); }
+}
+
+
+/* ================================================
+   § 7. PATTERN MEANING CARD
+   ================================================ */
+
+.gid-pattern-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Corner accent — gold triangle */
+.gid-pattern-card::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(225deg, rgba(201, 168, 76, 0.1), transparent 70%);
+  border-bottom-left-radius: 30px;
+  pointer-events: none;
+}
+
+.gid-pattern-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-gold);
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  opacity: 0.8;
+}
+
+.gid-pattern-body {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.gid-pattern-thumb {
+  width: 60px;
+  height: 60px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  background: var(--glow-gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(201, 168, 76, 0.12);
+  color: var(--text-gold);
+}
+
+.gid-pattern-text {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.gid-genre-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.gid-genre-tag {
+  font-size: 11px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-weight: 500;
+  transition: all 0.25s ease;
+}
+
+/* Alternating tag colors — purple & gold */
+.gid-genre-tag:nth-child(odd) {
+  background: rgba(124, 107, 212, 0.1);
+  border: 1px solid rgba(124, 107, 212, 0.18);
+  color: #7C6BD4;
+}
+
+.dark .gid-genre-tag:nth-child(odd) {
+  color: #B4A6E8;
+}
+
+.gid-genre-tag:nth-child(even) {
+  background: var(--glow-gold);
+  border: 1px solid rgba(201, 168, 76, 0.18);
+  color: var(--text-gold);
+}
+
+.gid-genre-tag:hover {
+  transform: translateY(-1px);
+}
+
+
+/* ================================================
+   § 8. ACTION BUTTONS
+   ================================================ */
+
+.gid-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.gid-action-primary {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 24px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #7C6BD4, #5B4CB0);
+  border: none;
+  cursor: pointer;
+  transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: 0 4px 20px rgba(124, 107, 212, 0.25);
+}
+
+.gid-action-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 32px rgba(124, 107, 212, 0.4);
+}
+
+.gid-action-primary:active {
+  transform: translateY(0);
+}
+
+.gid-action-secondary {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 24px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.gid-action-secondary:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+
+/* ================================================
+   § 9. EMPTY / UPLOAD STATE
+   ================================================ */
+
+.gid-empty-state {
+  padding: 28px 20px 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  background: var(--bg-primary);
+}
+
+.gid-mode-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 4px;
+}
+
+.gid-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: 11px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.gid-mode-btn:hover {
+  color: var(--text-primary);
+}
+
+.gid-mode-btn--active {
+  background: var(--glow-gold);
+  color: var(--text-gold);
+  box-shadow: 0 2px 8px var(--shadow-color);
+}
+
+.gid-upload-area {
+  width: 100%;
+  max-width: 380px;
+  padding: 52px 28px;
+  border: 2px dashed var(--border-color);
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.35s ease;
+  color: var(--text-muted);
+}
+
+.gid-upload-area:hover {
+  border-color: rgba(201, 168, 76, 0.3);
+  background: var(--glow-gold);
+  transform: translateY(-2px);
+}
+
+.gid-upload-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 18px 0 8px 0;
+}
+
+.gid-upload-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.6;
+  max-width: 280px;
+}
+
+
+/* ================================================
+   § 10. HISTORY PANEL
+   ================================================ */
+
+.gid-history-panel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-top: 1px solid var(--border-color);
+  border-radius: 24px 24px 0 0;
+  padding: 24px;
+  max-height: 60%;
+  overflow-y: auto;
+  z-index: 30;
+}
+
+@media (min-width: 1024px) {
+  .gid-history-panel {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    left: auto;
+    width: 380px;
+    border-radius: 24px;
+    max-height: 420px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 20px 60px var(--shadow-color);
+  }
+}
+
+.gid-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.gid-history-header h3 {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.gid-history-header button {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.gid-history-header button:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.gid-history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 36px;
+  color: var(--text-muted);
+  font-size: 13px;
+  gap: 10px;
+  opacity: 0.6;
+}
+
+.gid-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gid-history-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.gid-history-item:hover {
+  background: var(--bg-surface);
+}
+
+.gid-history-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+}
+
+.gid-history-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gid-history-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.gid-history-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gid-history-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 4px 0 0 0;
+}
+
+
+/* ================================================
+   § 11. MOBILE SAFE AREA & BOTTOM NAV SPACING
+   ================================================ */
+
+@media (max-width: 767px) {
+  .gid-container {
+    border-radius: 0;
+    min-height: calc(100vh - 64px);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .gid-result-section {
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+}

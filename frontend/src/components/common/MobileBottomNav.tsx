@@ -1,6 +1,7 @@
 /**
  * MobileBottomNav Component
- * Role-based bottom navigation for mobile devices
+ * Role-based bottom navigation with centered "Scan" (AI Art Detect) button
+ * Inspired by Google Arts & Culture mobile nav
  */
 
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -19,6 +20,8 @@ import {
     Bell,
     Grid,
     MapPin,
+    ScanLine,
+    Bookmark,
     Wallet,
     type LucideIcon,
 } from 'lucide-react';
@@ -33,17 +36,25 @@ interface NavItem {
     icon: LucideIcon;
     label: string;
     requiresAuth?: boolean;
+    isCenter?: boolean; // Centered elevated button
 }
+
+// ============================================================
+// NAV ITEMS PER ROLE
+// ============================================================
 
 const guestNavItems: NavItem[] = [
     { path: ROUTES.HOME, icon: Home, label: 'Home' },
-    { path: '/collections', icon: Grid, label: 'Collections' },
+    { path: ROUTES.GALLERY, icon: Grid, label: 'Gallery' },
+    { path: ROUTES.AI_GENRE, icon: ScanLine, label: 'Scan', isCenter: true },
     { path: ROUTES.NEARBY, icon: MapPin, label: 'Nearby' },
+    { path: ROUTES.COMMUNITY, icon: Bookmark, label: 'More' },
 ];
 
 const userNavItems: NavItem[] = [
     { path: ROUTES.USER_DASHBOARD, icon: Home, label: 'Home' },
-    { path: ROUTES.USER_GALLERY, icon: Search, label: 'Explore' },
+    { path: ROUTES.USER_NEARBY, icon: Search, label: 'Explore' },
+    { path: ROUTES.USER_GENRE_IDENTIFIER, icon: ScanLine, label: 'Scan', isCenter: true },
     { path: ROUTES.USER_WALLET, icon: Wallet, label: 'Wallet' },
     { path: ROUTES.USER_PROFILE, icon: User, label: 'Profile' },
 ];
@@ -51,7 +62,7 @@ const userNavItems: NavItem[] = [
 const artistNavItems: NavItem[] = [
     { path: ROUTES.ARTIST_DASHBOARD, icon: Home, label: 'Home' },
     { path: ROUTES.ARTIST_ARTWORKS, icon: Palette, label: 'Artworks' },
-    { path: ROUTES.ARTIST_UPLOAD, icon: Upload, label: 'Upload' },
+    { path: ROUTES.ARTIST_UPLOAD, icon: Upload, label: 'Upload', isCenter: true },
     { path: ROUTES.ARTIST_ANALYTICS, icon: BarChart3, label: 'Analytics' },
     { path: ROUTES.ARTIST_SETTINGS, icon: Settings, label: 'Settings' },
 ];
@@ -67,16 +78,22 @@ const adminNavItems: NavItem[] = [
 function getNavItems(role: string): NavItem[] {
     switch (role) {
         case 'admin':
+        case 'super_admin':
             return adminNavItems;
         case 'artist':
         case 'institution':
             return artistNavItems;
         case 'user':
+        case 'collector':
             return userNavItems;
         default:
             return guestNavItems;
     }
 }
+
+// ============================================================
+// COMPONENT
+// ============================================================
 
 export function MobileBottomNav() {
     const location = useLocation();
@@ -93,7 +110,7 @@ export function MobileBottomNav() {
     }
 
     const handleNavClick = (item: NavItem) => {
-        // Ensure sidebar/mobile menu is closed when navigating via bottom nav
+        // Close sidebar/mobile menu when navigating
         useUIStore.getState().setMobileMenuOpen(false);
 
         if (item.requiresAuth && !isAuthenticated) {
@@ -104,9 +121,9 @@ export function MobileBottomNav() {
     };
 
     return (
-        <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-theme-surface/80 backdrop-blur-xl border-t border-theme-border/50 pb-[env(safe-area-inset-bottom)] shadow-lg shadow-theme-bg/20">
+        <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-theme-surface/90 backdrop-blur-xl border-t border-theme-border/50 pb-[env(safe-area-inset-bottom)] shadow-lg shadow-theme-bg/20">
             <div
-                className="grid h-16 items-center px-2"
+                className="grid h-16 items-end px-1"
                 style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}
             >
                 {navItems.map((item) => {
@@ -120,7 +137,7 @@ export function MobileBottomNav() {
                         ? currentPath === item.path
                         : currentPath.startsWith(item.path);
 
-                    // Special case: Keep Home active when viewing Gallery
+                    // Keep Home active on Gallery
                     if (item.label === 'Home' && currentPath === ROUTES.GALLERY) {
                         isActive = true;
                     }
@@ -128,11 +145,54 @@ export function MobileBottomNav() {
                     const Icon = item.icon;
                     const isProfile = item.label === 'Profile' && isAuthenticated;
 
+                    // ---- CENTER BUTTON (elevated) ----
+                    if (item.isCenter) {
+                        return (
+                            <button
+                                key={item.label}
+                                onClick={() => handleNavClick(item)}
+                                className="relative flex flex-col items-center justify-end h-full w-full touch-manipulation"
+                            >
+                                {/* Elevated circle */}
+                                <motion.div
+                                    className={`relative -mt-4 mb-0.5 w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${
+                                        isActive
+                                            ? 'bg-gradient-to-br from-[#C9A84C] to-[#A68A3A] shadow-[0_4px_20px_rgba(201,168,76,0.45)]'
+                                            : 'bg-gradient-to-br from-[#7C6BD4] to-[#5B4CB0] shadow-[0_4px_16px_rgba(124,107,212,0.35)]'
+                                    }`}
+                                    whileTap={{ scale: 0.9 }}
+                                    whileHover={{ scale: 1.08 }}
+                                >
+                                    <Icon className="w-5 h-5 text-white" />
+                                    {/* Glow ring */}
+                                    {isActive && (
+                                        <motion.div
+                                            className="absolute inset-0 rounded-full"
+                                            style={{
+                                                boxShadow: '0 0 18px rgba(201,168,76,0.5)',
+                                            }}
+                                            animate={{ opacity: [0.4, 0.8, 0.4] }}
+                                            transition={{ duration: 2, repeat: Infinity }}
+                                        />
+                                    )}
+                                </motion.div>
+                                <span
+                                    className={`text-[10px] font-semibold mb-1.5 transition-colors duration-300 ${
+                                        isActive ? 'text-seniqu-gold' : 'text-[#7C6BD4]'
+                                    }`}
+                                >
+                                    {item.label}
+                                </span>
+                            </button>
+                        );
+                    }
+
+                    // ---- STANDARD BUTTON ----
                     return (
                         <button
                             key={item.label}
                             onClick={() => handleNavClick(item)}
-                            className="relative flex flex-col items-center justify-center gap-1 h-full w-full touch-manipulation active:scale-95 transition-transform duration-200"
+                            className="relative flex flex-col items-center justify-center gap-0.5 h-full w-full touch-manipulation active:scale-95 transition-transform duration-200"
                         >
                             <div className="relative p-1.5 rounded-xl transition-colors duration-300">
                                 {isActive && (
@@ -162,9 +222,9 @@ export function MobileBottomNav() {
                                 )}
                             </div>
                             <span
-                                className={`text-[10px] font-medium transition-all duration-300 ${isActive
-                                    ? 'text-seniqu-gold translate-y-0 opacity-100'
-                                    : 'text-theme-muted translate-y-0.5 opacity-70'
+                                className={`text-[10px] font-medium transition-all duration-300 mb-1 ${isActive
+                                    ? 'text-seniqu-gold'
+                                    : 'text-theme-muted opacity-70'
                                     }`}
                             >
                                 {item.label}
@@ -174,7 +234,7 @@ export function MobileBottomNav() {
                             {isActive && (
                                 <motion.div
                                     layoutId="nav-dot"
-                                    className="absolute -top-1 w-1 h-1 rounded-full bg-seniqu-gold shadow-[0_0_8px_rgba(201,168,76,0.6)]"
+                                    className="absolute top-0.5 w-1 h-1 rounded-full bg-seniqu-gold shadow-[0_0_8px_rgba(201,168,76,0.6)]"
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
                                     transition={{ type: 'spring', stiffness: 500, damping: 25 }}

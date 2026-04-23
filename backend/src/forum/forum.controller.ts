@@ -50,22 +50,29 @@ export class ForumController {
     @Public()
     @Get("threads")
     @ApiOperation({ summary: "List forum threads" })
-    @ApiQuery({ name: "category", required: false })
+    @ApiQuery({ name: "categoryId", required: false })
     @ApiQuery({ name: "page", required: false })
     @ApiQuery({ name: "limit", required: false })
+    @ApiQuery({ name: "sortBy", required: false })
     async getThreads(
-        @Query("category") category?: string,
+        @Query("categoryId") categoryId?: string,
         @Query("page") page?: number,
         @Query("limit") limit?: number,
+        @Query("sortBy") sortBy?: "latest" | "popular" | "views",
     ) {
-        return this.forumService.getThreads(category, page, limit)
+        return this.forumService.getThreads(categoryId, page, limit, sortBy)
     }
 
     @Public()
-    @Get("threads/:slug")
-    @ApiOperation({ summary: "Get thread by slug" })
-    async getThread(@Param("slug") slug: string) {
-        return this.forumService.getThreadBySlug(slug)
+    @Get("threads/:idOrSlug")
+    @ApiOperation({ summary: "Get thread by ID or slug" })
+    async getThread(@Param("idOrSlug") idOrSlug: string) {
+        // UUID v4 pattern detection
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        if (uuidRegex.test(idOrSlug)) {
+            return this.forumService.getThreadById(idOrSlug)
+        }
+        return this.forumService.getThreadBySlug(idOrSlug)
     }
 
     @Post("threads")
@@ -143,5 +150,53 @@ export class ForumController {
         @GetUser("role") role: string,
     ) {
         return this.forumService.deletePost(id, userId, role)
+    }
+
+    // ===========================================
+    // LIKES
+    // ===========================================
+
+    @Post("threads/:id/like")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth("JWT-auth")
+    @ApiOperation({ summary: "Like a thread" })
+    async likeThread(
+        @Param("id", ParseUUIDPipe) id: string,
+        @GetUser("id") userId: string,
+    ) {
+        return this.forumService.toggleLike(id, userId, 'forum_thread', true)
+    }
+
+    @Delete("threads/:id/like")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth("JWT-auth")
+    @ApiOperation({ summary: "Unlike a thread" })
+    async unlikeThread(
+        @Param("id", ParseUUIDPipe) id: string,
+        @GetUser("id") userId: string,
+    ) {
+        return this.forumService.toggleLike(id, userId, 'forum_thread', false)
+    }
+
+    @Post("posts/:id/like")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth("JWT-auth")
+    @ApiOperation({ summary: "Like a post" })
+    async likePost(
+        @Param("id", ParseUUIDPipe) id: string,
+        @GetUser("id") userId: string,
+    ) {
+        return this.forumService.toggleLike(id, userId, 'forum_post', true)
+    }
+
+    @Delete("posts/:id/like")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth("JWT-auth")
+    @ApiOperation({ summary: "Unlike a post" })
+    async unlikePost(
+        @Param("id", ParseUUIDPipe) id: string,
+        @GetUser("id") userId: string,
+    ) {
+        return this.forumService.toggleLike(id, userId, 'forum_post', false)
     }
 }

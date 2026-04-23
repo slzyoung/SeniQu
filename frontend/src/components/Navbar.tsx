@@ -48,16 +48,19 @@ export function Navbar() {
         <div className="max-w-7xl mx-auto px-6 md:px-8 flex items-center justify-between">
           {/* Logo */}
           <div
-            className="flex items-center group cursor-pointer transition-all duration-300 hover:opacity-90"
+            className="flex items-center gap-1.5 group cursor-pointer transition-all duration-300 hover:opacity-90 relative"
             onClick={() => navigate(ROUTES.HOME)}
           >
-            <img
-              src="/images/logo/seniqu.png"
-              alt="SeniQu Logo"
-              className="w-14 h-14 md:w-16 md:h-16 -ml-2 object-contain transform transition-transform duration-500 group-hover:scale-105 drop-shadow-md"
-              loading="eager"
-            />
-            <span className="font-serif text-xl md:text-2xl font-bold text-gold italic tracking-wide drop-shadow-sm -ml-1">
+            <div className="relative flex-shrink-0">
+              <div className="absolute inset-0 bg-gold blur-md opacity-20 group-hover:opacity-40 transition-opacity duration-700 animate-pulse rounded-full" />
+              <img
+                src="/images/logo/seniqu.png"
+                alt="SeniQu Logo"
+                className="w-14 h-14 md:w-16 md:h-16 -ml-2 object-contain relative z-10 logo-hologram transform transition-transform duration-500 group-hover:scale-110 drop-shadow-md"
+                loading="eager"
+              />
+            </div>
+            <span className="font-serif text-2xl md:text-3xl font-bold italic tracking-wide text-gold-hologram -ml-1">
               SeniQu
             </span>
           </div>
