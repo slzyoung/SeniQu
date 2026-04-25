@@ -2,8 +2,11 @@ import { ArrowRight, Compass } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ParticleField } from './ParticleField';
 import { Link } from 'react-router-dom';
+import { useAuthModalStore } from '../stores/useAuthModalStore';
 
 export function CTASection() {
+  const { openAuthModal } = useAuthModalStore();
+
   return (
     <section className="py-20 md:py-32 relative overflow-hidden flex items-center justify-center bg-theme-bg transition-colors duration-300">
       <div className="absolute inset-0 bg-theme-bg z-0">
@@ -32,13 +35,13 @@ export function CTASection() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 md:gap-4">
-            <Link
-              to="/collections"
+            <button
+              onClick={() => openAuthModal()}
               className="w-full sm:w-auto px-6 md:px-8 py-3.5 md:py-4 bg-gold text-charcoal font-bold rounded-full hover:bg-gold-light transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(201,168,76,0.4)] animate-pulse-glow text-sm md:text-base"
             >
               <Compass className="w-4 h-4 md:w-5 md:h-5" />
               Start Exploring
-            </Link>
+            </button>
             <Link
               to="/#about"
               className="w-full sm:w-auto px-6 md:px-8 py-3.5 md:py-4 text-theme-text hover:text-gold transition-colors flex items-center justify-center gap-2 font-medium backdrop-blur-sm border border-theme-border rounded-full hover:bg-theme-surface text-sm md:text-base"

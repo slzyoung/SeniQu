@@ -108,7 +108,7 @@ const CollectionCard = React.forwardRef<HTMLDivElement, CollectionCardProps>(({
       transition={{
         duration: 0.35
       }}
-      className="relative h-[280px] sm:h-[320px] md:h-[380px]"
+      className="relative h-[280px] sm:h-[320px] md:h-[380px] w-full"
       style={{
         perspective: 800
       }}>
@@ -131,76 +131,75 @@ const CollectionCard = React.forwardRef<HTMLDivElement, CollectionCardProps>(({
             className="relative h-full w-full group cursor-pointer"
             onClick={() => navigate(`/gallery/artwork/${data.id}`)}
           >
-            {/* Background */}
-            <div
-              className={`absolute inset-0 bg-gradient-to-br ${data.gradient} transition-transform duration-700 group-hover:scale-110`}>
-
+            {/* Background Image / Fallback */}
+            <div className="absolute inset-0 overflow-hidden bg-theme-elevated">
               {data.imageUrl ? (
                 <img
                   src={data.imageUrl}
                   alt={data.title}
-                  className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-overlay group-hover:opacity-80 transition-opacity duration-500"
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                 />
               ) : (
                 <div
-                  className="absolute inset-0"
-                  style={{
-                    backgroundImage: data.pattern,
-                    backgroundSize: '20px 20px'
-                  }}
-                />
+                  className={`w-full h-full bg-gradient-to-br ${data.gradient} transition-transform duration-700 group-hover:scale-110`}
+                >
+                  <div
+                    className="absolute inset-0 opacity-20"
+                    style={{
+                      backgroundImage: data.pattern,
+                      backgroundSize: '20px 20px'
+                    }}
+                  />
+                </div>
               )}
-
-              <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors duration-500" />
+              
+              {/* Gradient Overlay for Text Readability */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10 opacity-80 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
             </div>
 
-            {/* Top Bar */}
-            <div className="absolute top-0 left-0 right-0 p-4 md:p-6 flex justify-between items-start z-10">
-              <span className="px-2.5 py-1 bg-black/30 backdrop-blur-md rounded-full text-[10px] md:text-xs font-medium text-cream border border-white/10">
+            {/* Top Bar Actions */}
+            <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-20">
+              <span className="px-2.5 py-1 bg-black/40 backdrop-blur-md rounded-full text-[10px] md:text-xs font-medium text-white border border-white/20 shadow-sm">
                 {data.category}
               </span>
               <motion.button
-                whileTap={{
-                  scale: 0.8
-                }}
+                whileTap={{ scale: 0.8 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleFavorite(data.id);
                 }}
-                className={`w-9 h-9 md:w-8 md:h-8 rounded-full backdrop-blur-md flex items-center justify-center border border-white/10 transition-colors ${isFavorite ? 'bg-red-500/20 text-red-500 border-red-500/30' : 'bg-black/30 text-cream'}`}>
-
-                <Heart
-                  className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
-
+                className={`w-8 h-8 rounded-full backdrop-blur-md flex items-center justify-center border transition-all ${isFavorite ? 'bg-red-500/20 text-red-500 border-red-500/40 shadow-[0_0_10px_rgba(239,68,68,0.3)]' : 'bg-black/40 text-white border-white/20 hover:bg-black/60'}`}
+              >
+                <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
               </motion.button>
             </div>
 
-            {/* Center Title */}
-            <div className="absolute inset-0 p-4 md:p-6 flex flex-col justify-center items-center text-center z-0 pointer-events-none">
-              <h3 className="text-lg md:text-2xl font-serif text-cream font-bold mb-1 group-hover:text-gold transition-colors drop-shadow-lg line-clamp-2">
+            {/* Card Content (Title & Origin) */}
+            <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 flex flex-col justify-end z-10 pointer-events-none transition-transform duration-500 ease-out md:translate-y-0 md:group-hover:-translate-y-14">
+              <h3 className="text-lg md:text-xl font-serif text-white font-bold mb-1.5 group-hover:text-gold transition-colors drop-shadow-md line-clamp-2">
                 {data.title}
               </h3>
-              <p className="text-xs md:text-sm text-cream-muted flex items-center gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-500">
-                <span className="w-1 h-1 rounded-full bg-gold" />
+              <p className="text-xs text-white/80 flex items-center gap-2 drop-shadow-md font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-gold shadow-[0_0_5px_rgba(201,168,76,0.8)]" />
                 {data.origin}
               </p>
             </div>
 
             {/* Glass Info Bar — Always visible on mobile, slide-up on desktop */}
-            <div className="absolute bottom-0 left-0 right-0 bg-theme-glass/95 backdrop-blur-xl border-t border-theme-glass-border p-3 md:p-4 translate-y-0 md:translate-y-full md:group-hover:translate-y-0 transition-transform duration-500 ease-out z-20">
+            <div className="absolute bottom-0 left-0 right-0 bg-black/40 backdrop-blur-xl border-t border-white/10 p-3 md:p-4 translate-y-0 md:translate-y-full md:group-hover:translate-y-0 transition-transform duration-500 ease-out z-20">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 text-[10px] md:text-xs text-theme-muted">
+                  <div className="flex items-center gap-2 text-[10px] md:text-xs text-white/90 font-medium">
                     <span className="truncate">{data.artist}</span>
-                    <span className="text-theme-border">•</span>
-                    <span className="whitespace-nowrap">{data.year}</span>
+                    <span className="text-white/40">•</span>
+                    <span className="whitespace-nowrap text-white/70">{data.year}</span>
                   </div>
-                  <div className="flex items-center gap-1.5 mt-1 text-gold text-[10px] md:text-xs font-medium">
-                    <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
-                    <span>Verified</span>
+                  <div className="flex items-center gap-1.5 mt-1 text-gold text-[10px] md:text-[11px] font-semibold tracking-wide uppercase">
+                    <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>Verified Masterpiece</span>
                   </div>
                 </div>
-                <button className="flex-shrink-0 w-9 h-9 md:w-8 md:h-8 rounded-full bg-gold/10 text-gold flex items-center justify-center hover:bg-gold/20 transition-colors">
+                <button className="flex-shrink-0 w-8 h-8 rounded-full bg-gold text-black flex items-center justify-center hover:bg-white hover:text-black hover:scale-110 transition-all shadow-md">
                   <ArrowUpRight className="w-4 h-4" />
                 </button>
               </div>
@@ -225,19 +224,23 @@ export function FeaturedCollections() {
   });
 
   // Map to CollectionData format
-  const collections: CollectionData[] = artworksData?.data?.map((artwork: any, index: number) => ({
-    id: artwork.id,
-    category: artwork.genre?.[0] || 'Art',
-    title: artwork.title,
-    origin: 'Indonesia', // Static for now as API might not provide
-    artist: artwork.artist?.displayName || 'Unknown Artist',
-    year: artwork.year?.toString() || new Date().getFullYear().toString(),
-    technique: artwork.medium || 'Mixed Media',
-    pieces: 1,
-    gradient: getGradient(index),
-    pattern: 'radial-gradient(circle, rgba(201, 168, 76, 0.1) 2px, transparent 2px)',
-    imageUrl: artwork.primaryImageUrl || artwork.images?.[0]?.url
-  })) || [];
+  const collections: CollectionData[] = artworksData?.data?.map((artwork: any, index: number) => {
+    const imageUrl = artwork.primaryImageUrl || artwork.images?.[0]?.url;
+
+    return {
+      id: artwork.id,
+      category: artwork.genre?.[0] || 'Art',
+      title: artwork.title,
+      origin: 'Indonesia', // Static for now as API might not provide
+      artist: artwork.artist?.displayName || 'Unknown Artist',
+      year: artwork.year?.toString() || new Date().getFullYear().toString(),
+      technique: artwork.medium || 'Mixed Media',
+      pieces: 1,
+      gradient: getGradient(index),
+      pattern: 'radial-gradient(circle, rgba(201, 168, 76, 0.1) 2px, transparent 2px)',
+      imageUrl: imageUrl
+    };
+  }) || [];
 
   const toggleFavorite = (id: string) => {
     setFavorites((prev) =>

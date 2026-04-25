@@ -1,11 +1,16 @@
 /**
- * Landing Page Component - Wrapper for existing landing page
+ * Landing Page Component — Dashboard-Style Public Explorer
+ * Adopts the National Heritage dashboard aesthetic for a premium
+ * public-facing experience. Uses landing-* CSS classes to avoid
+ * collision with the authenticated dashboard's heritage-* classes.
  */
 
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { HeroSection } from '../components/HeroSection';
+import { LandingSearchBar } from '../components/LandingSearchBar';
+import { ExploreCities } from '../components/ExploreCities';
 import { StatsBar } from '../components/StatsBar';
 import { TrustedBy } from '../components/TrustedBy';
 import { FeaturedCollections } from '../components/FeaturedCollections';
@@ -50,8 +55,10 @@ export function LandingPage({ openAuthModal: shouldOpenModal }: LandingPageProps
     return (
         <div className="min-h-screen bg-theme-bg text-theme-text selection:bg-gold selection:text-charcoal font-sans transition-colors duration-300 scroll-smooth">
             <Navbar />
-            <main className="pb-20 md:pb-0">
+            <main className="pt-20 md:pt-24 pb-20 md:pb-0">
                 <HeroSection />
+                <LandingSearchBar />
+                <ExploreCities />
                 <StatsBar />
                 <TrustedBy />
                 <AboutSection />

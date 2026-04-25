@@ -295,9 +295,9 @@ export function MuseumDetail() {
     ];
 
     return (
-        <div className="min-h-screen bg-[#EBEAE4] dark:bg-[#1a1a1a] text-[#1a1a1a] dark:text-[#EBEAE4] font-sans overflow-x-hidden" style={{ margin: '-2rem -1rem', paddingBottom: '5rem' }}>
-            {/* Top Fixed Actions */}
-            <div className="fixed top-0 inset-x-0 z-50 flex items-center justify-between px-6 py-4 md:py-6 max-w-lg mx-auto md:max-w-4xl pt-safe">
+        <div className="relative min-h-screen bg-[#EBEAE4] dark:bg-[#1a1a1a] text-[#1a1a1a] dark:text-[#EBEAE4] font-sans overflow-x-hidden" style={{ margin: '-2rem -1rem', paddingBottom: '5rem' }}>
+            {/* Top Actions */}
+            <div className="absolute top-12 md:top-16 inset-x-0 z-40 flex items-center justify-between px-6 max-w-lg mx-auto md:max-w-4xl">
                 <button onClick={() => navigate(-1)} className="p-2 rounded-full text-white bg-black/30 hover:bg-black/50 backdrop-blur-md transition-colors">
                     <ArrowLeft className="w-6 h-6" />
                 </button>
