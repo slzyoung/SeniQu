@@ -40,7 +40,7 @@ const HERITAGE_CITIES: CityData[] = [
     name: 'Bandung',
     description: 'Known for its Art Deco architecture and creative energy.',
     badge: 'ART DECO CITY',
-    image: 'https://images.unsplash.com/photo-1580481072645-022f17cc738b?w=1200&q=80',
+    image: '/images/city/bandung.jpg',
   },
   {
     id: 'surabaya',
@@ -53,7 +53,7 @@ const HERITAGE_CITIES: CityData[] = [
     id: 'semarang',
     name: 'Semarang',
     description: 'Explore Dutch colonial history and the vibrant Chinatown heritage.',
-    image: 'https://images.unsplash.com/photo-1545259741-2ea3ebf61fa3?w=1200&q=80',
+    image: '/images/city/semarang.jpg',
   },
 ];
 
