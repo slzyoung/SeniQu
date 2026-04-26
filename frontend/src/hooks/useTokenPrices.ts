@@ -20,35 +20,63 @@ export const useTokenPrices = () => {
 
     const fetchPrices = async () => {
         try {
-            // Fetch from Coingecko (Simple Price API)
-            // ids: solana, ethereum, tether, usd-coin
-            const response = await fetch(
-                'https://api.coingecko.com/api/v3/simple/price?ids=solana,ethereum,tether,usd-coin&vs_currencies=usd'
-            );
+            // Primary: CryptoCompare (more reliable for public unauthenticated requests)
+            try {
+                const response = await fetch(
+                    'https://min-api.cryptocompare.com/data/pricemulti?fsyms=SOL,ETH,USDT,USDC&tsyms=USD'
+                );
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.SOL?.USD) {
+                        setPrices({
+                            solana: data.SOL.USD,
+                            ethereum: data.ETH?.USD || DEFAULT_PRICES.ethereum,
+                            tether: data.USDT?.USD || DEFAULT_PRICES.tether,
+                            'usd-coin': data.USDC?.USD || DEFAULT_PRICES['usd-coin'],
+                        });
+                        setIsLoading(false);
+                        return; // Success, exit
+                    }
+                }
+            } catch (err) {
+                console.warn('[useTokenPrices] CryptoCompare failed, trying fallback...', err);
+            }
 
-            if (!response.ok) throw new Error('Failed to fetch prices');
+            // Fallback: CoinGecko
+            try {
+                const response = await fetch(
+                    'https://api.coingecko.com/api/v3/simple/price?ids=solana,ethereum,tether,usd-coin&vs_currencies=usd'
+                );
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.solana?.usd) {
+                        setPrices({
+                            solana: data.solana.usd,
+                            ethereum: data.ethereum?.usd || DEFAULT_PRICES.ethereum,
+                            tether: data.tether?.usd || DEFAULT_PRICES.tether,
+                            'usd-coin': data['usd-coin']?.usd || DEFAULT_PRICES['usd-coin'],
+                        });
+                        setIsLoading(false);
+                        return; // Success, exit
+                    }
+                }
+            } catch (err) {
+                console.warn('[useTokenPrices] CoinGecko fallback failed.', err);
+            }
 
-            const data = await response.json();
-
-            setPrices({
-                solana: data.solana?.usd || DEFAULT_PRICES.solana,
-                ethereum: data.ethereum?.usd || DEFAULT_PRICES.ethereum,
-                tether: data.tether?.usd || DEFAULT_PRICES.tether,
-                'usd-coin': data['usd-coin']?.usd || DEFAULT_PRICES['usd-coin'],
-            });
+            // If all APIs fail, use last known prices or defaults
             setIsLoading(false);
+
         } catch (error) {
-            // Suppress noise for common network errors (dev env, offline, blocked)
-            // console.warn('[useTokenPrices] Failed to fetch live prices, using defaults.');
-            setPrices(DEFAULT_PRICES);
+            console.warn('[useTokenPrices] All price fetching methods failed.');
             setIsLoading(false);
         }
     };
 
     useEffect(() => {
         fetchPrices();
-        // Refresh every 60 seconds
-        const interval = setInterval(fetchPrices, 60000);
+        // Refresh every 30 seconds for more real-time feel
+        const interval = setInterval(fetchPrices, 30000);
         return () => clearInterval(interval);
     }, []);
 
