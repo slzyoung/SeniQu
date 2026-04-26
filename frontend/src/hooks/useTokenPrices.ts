@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface TokenPrices {
     solana: number;
@@ -17,67 +17,101 @@ const DEFAULT_PRICES: TokenPrices = {
 export const useTokenPrices = () => {
     const [prices, setPrices] = useState<TokenPrices>(DEFAULT_PRICES);
     const [isLoading, setIsLoading] = useState(true);
+    const wsRef = useRef<WebSocket | null>(null);
 
-    const fetchPrices = async () => {
-        try {
-            // Primary: CryptoCompare (more reliable for public unauthenticated requests)
+    useEffect(() => {
+        let reconnectTimer: NodeJS.Timeout;
+        let isComponentMounted = true;
+
+        const connectWebSocket = () => {
+            // Use Binance miniTicker stream for lighter payload
+            // solusdt for Solana, ethusdt for Ethereum, usdcusdt for USDC. Tether is pegged to 1.
+            const wsUrl = 'wss://stream.binance.com:9443/ws/solusdt@miniTicker/ethusdt@miniTicker/usdcusdt@miniTicker';
+            
+            try {
+                const ws = new WebSocket(wsUrl);
+                wsRef.current = ws;
+
+                ws.onopen = () => {
+                    console.log('[useTokenPrices] Connected to Binance WebSocket');
+                    setIsLoading(false);
+                };
+
+                ws.onmessage = (event) => {
+                    if (!isComponentMounted) return;
+                    
+                    try {
+                        const data = JSON.parse(event.data);
+                        // The 's' property is the symbol (e.g. 'SOLUSDT'), 'c' is the close price
+                        if (data && data.s && data.c) {
+                            const price = parseFloat(data.c);
+                            
+                            setPrices(prev => {
+                                const newPrices = { ...prev };
+                                if (data.s === 'SOLUSDT') newPrices.solana = price;
+                                else if (data.s === 'ETHUSDT') newPrices.ethereum = price;
+                                else if (data.s === 'USDCUSDT') newPrices['usd-coin'] = price;
+                                return newPrices;
+                            });
+                        }
+                    } catch (err) {
+                        console.error('[useTokenPrices] Error parsing websocket data', err);
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    console.warn('[useTokenPrices] WebSocket error observed:', error);
+                };
+
+                ws.onclose = () => {
+                    if (isComponentMounted) {
+                        console.log('[useTokenPrices] WebSocket closed. Reconnecting in 5s...');
+                        // Attempt to reconnect
+                        reconnectTimer = setTimeout(connectWebSocket, 5000);
+                    }
+                };
+            } catch (err) {
+                console.warn('[useTokenPrices] Failed to initialize WebSocket:', err);
+                if (isComponentMounted) {
+                    reconnectTimer = setTimeout(connectWebSocket, 5000);
+                }
+            }
+        };
+
+        connectWebSocket();
+
+        // Optional: fetch initial values via HTTP so we don't wait for the first WS tick
+        const fetchInitialPrices = async () => {
             try {
                 const response = await fetch(
                     'https://min-api.cryptocompare.com/data/pricemulti?fsyms=SOL,ETH,USDT,USDC&tsyms=USD'
                 );
                 if (response.ok) {
                     const data = await response.json();
-                    if (data.SOL?.USD) {
-                        setPrices({
+                    if (data.SOL?.USD && isComponentMounted) {
+                        setPrices(prev => ({
+                            ...prev,
                             solana: data.SOL.USD,
-                            ethereum: data.ETH?.USD || DEFAULT_PRICES.ethereum,
-                            tether: data.USDT?.USD || DEFAULT_PRICES.tether,
-                            'usd-coin': data.USDC?.USD || DEFAULT_PRICES['usd-coin'],
-                        });
+                            ethereum: data.ETH?.USD || prev.ethereum,
+                            tether: data.USDT?.USD || prev.tether,
+                            'usd-coin': data.USDC?.USD || prev['usd-coin'],
+                        }));
                         setIsLoading(false);
-                        return; // Success, exit
                     }
                 }
             } catch (err) {
-                console.warn('[useTokenPrices] CryptoCompare failed, trying fallback...', err);
+                // Ignore fallback errors
             }
+        };
+        fetchInitialPrices();
 
-            // Fallback: CoinGecko
-            try {
-                const response = await fetch(
-                    'https://api.coingecko.com/api/v3/simple/price?ids=solana,ethereum,tether,usd-coin&vs_currencies=usd'
-                );
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.solana?.usd) {
-                        setPrices({
-                            solana: data.solana.usd,
-                            ethereum: data.ethereum?.usd || DEFAULT_PRICES.ethereum,
-                            tether: data.tether?.usd || DEFAULT_PRICES.tether,
-                            'usd-coin': data['usd-coin']?.usd || DEFAULT_PRICES['usd-coin'],
-                        });
-                        setIsLoading(false);
-                        return; // Success, exit
-                    }
-                }
-            } catch (err) {
-                console.warn('[useTokenPrices] CoinGecko fallback failed.', err);
+        return () => {
+            isComponentMounted = false;
+            clearTimeout(reconnectTimer);
+            if (wsRef.current) {
+                wsRef.current.close();
             }
-
-            // If all APIs fail, use last known prices or defaults
-            setIsLoading(false);
-
-        } catch (error) {
-            console.warn('[useTokenPrices] All price fetching methods failed.');
-            setIsLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchPrices();
-        // Refresh every 30 seconds for more real-time feel
-        const interval = setInterval(fetchPrices, 30000);
-        return () => clearInterval(interval);
+        };
     }, []);
 
     return { prices, isLoading };
