@@ -34,7 +34,7 @@ const partners = [
   },
   {
     name: 'Superteam Indonesia',
-    imgUrl: '/images/logo/superteam.png'
+    imgUrl: '/images/logo/superteam.jpg'
   },
   {
     name: 'Solana',
@@ -64,13 +64,13 @@ export function TrustedBy() {
 
                 {partner.icon && <partner.icon className="w-4 h-4 md:w-6 md:h-6 text-theme-muted" />}
                 {partner.imgUrl && (
-                  <img 
-                    src={partner.imgUrl} 
-                    alt={partner.name} 
-                    className={`object-contain h-6 md:h-8 ${partner.name === 'Superteam Indonesia' ? 'dark:invert' : ''}`} 
+                  <img
+                    src={partner.imgUrl}
+                    alt={partner.name}
+                    className="object-contain h-6 md:h-8"
                   />
                 )}
-                
+
                 {(!partner.imgUrl || partner.name === 'Superteam Indonesia') && (
                   <span className="text-xs md:text-sm font-medium text-theme-muted whitespace-nowrap">
                     {partner.name}
@@ -87,13 +87,13 @@ export function TrustedBy() {
 
                 {partner.icon && <partner.icon className="w-4 h-4 md:w-6 md:h-6 text-theme-muted" />}
                 {partner.imgUrl && (
-                  <img 
-                    src={partner.imgUrl} 
-                    alt={partner.name} 
-                    className={`object-contain h-6 md:h-8 ${partner.name === 'Superteam Indonesia' ? 'dark:invert' : ''}`} 
+                  <img
+                    src={partner.imgUrl}
+                    alt={partner.name}
+                    className="object-contain h-6 md:h-8"
                   />
                 )}
-                
+
                 {(!partner.imgUrl || partner.name === 'Superteam Indonesia') && (
                   <span className="text-xs md:text-sm font-medium text-theme-muted whitespace-nowrap">
                     {partner.name}
