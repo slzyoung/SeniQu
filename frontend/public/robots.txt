@@ -1,0 +1,27 @@
+# SeniQu — robots.txt
+# https://seniquapp.netlify.app
+
+User-agent: *
+Allow: /
+Allow: /gallery
+Allow: /collections
+Allow: /marketplace
+Allow: /community
+Allow: /nearby
+Allow: /ai/genre
+Allow: /ai/curation
+Allow: /terms
+Allow: /privacy
+
+# Disallow private/authenticated routes
+Disallow: /dashboard
+Disallow: /dashboard/*
+Disallow: /artist
+Disallow: /artist/*
+Disallow: /admin
+Disallow: /admin/*
+Disallow: /auth/*
+Disallow: /complete-profile
+
+# Sitemap
+Sitemap: https://seniquapp.netlify.app/sitemap.xml

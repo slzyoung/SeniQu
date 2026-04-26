@@ -1,5 +1,6 @@
 import { Twitter, Instagram, Disc, Mail, Send, ArrowUp } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 
 export function Footer() {
   const scrollToTop = () => {
@@ -55,8 +56,8 @@ export function Footer() {
                   window.open('https://solana.com', '_blank'); 
                 }}
               >
-                {/* Spinning silver line */}
-                <div className="absolute inset-[-150%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_0%,transparent_85%,rgba(229,231,235,1)_100%)] opacity-70 group-hover:opacity-100 transition-opacity duration-300" />
+                {/* Spinning solana line */}
+                <div className="absolute inset-[-150%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_0%,transparent_50%,#9945FF_70%,#14F195_100%)] opacity-70 group-hover:opacity-100 transition-opacity duration-300" />
                 
                 {/* Inner container */}
                 <div className="relative z-10 flex h-full w-full items-center justify-center rounded-[5px] bg-theme-bg overflow-hidden">
@@ -69,15 +70,22 @@ export function Footer() {
               </motion.div>
             </div>
             <p className="text-theme-muted text-xs md:text-sm leading-relaxed mb-4 md:mb-6 max-w-xs mx-auto md:mx-0">
-              Indonesia's leading digital cultural heritage infrastructure — bridging museums, galleries, and heritage sites with AI-powered technology.
+              Indonesia's leading digital cultural heritage infrastructure bridging museums, galleries, and heritage sites with AI-powered technology.
             </p>
             <div className="flex gap-3 justify-center md:justify-start">
-              {[Twitter, Instagram, Disc, Mail].map((Icon, i) =>
+              {[
+                { Icon: Twitter, href: 'https://twitter.com', label: 'Twitter' },
+                { Icon: Instagram, href: 'https://instagram.com', label: 'Instagram' },
+                { Icon: Disc, href: 'https://discord.gg', label: 'Discord' },
+                { Icon: Mail, href: 'mailto:hello@seniqu.id', label: 'Email' },
+              ].map(({ Icon, href, label }) =>
                 <a
-                  key={i}
-                  href="#"
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={label}
                   className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-theme-surface flex items-center justify-center text-theme-text hover:bg-gold hover:text-charcoal hover:shadow-[0_0_15px_rgba(201,168,76,0.4)] transition-all">
-
                   <Icon className="w-3.5 h-3.5 md:w-4 md:h-4" />
                 </a>
               )}
@@ -90,14 +98,17 @@ export function Footer() {
               Platform
             </h4>
             <ul className="space-y-3 md:space-y-4 text-xs md:text-sm text-theme-muted">
-              {['Collections', 'Artists', 'Marketplace', 'Roadmap'].map(
-                (item) =>
-                  <li key={item}>
-                    <a href="#" className="hover:text-gold transition-colors">
-                      {item}
-                    </a>
-                  </li>
-
+              {[
+                { label: 'Collections', path: '/collections' },
+                { label: 'Gallery', path: '/gallery' },
+                { label: 'Marketplace', path: '/marketplace' },
+                { label: 'Community', path: '/community' },
+              ].map(({ label, path }) =>
+                <li key={label}>
+                  <Link to={path} className="hover:text-gold transition-colors">
+                    {label}
+                  </Link>
+                </li>
               )}
             </ul>
           </div>
@@ -108,17 +119,19 @@ export function Footer() {
             </h4>
             <ul className="space-y-4 text-sm text-theme-muted">
               {[
-                'Discord Server',
-                'Twitter Updates',
-                'Instagram Gallery',
-                'Blog'].
-                map((item) =>
-                  <li key={item}>
-                    <a href="#" className="hover:text-gold transition-colors">
-                      {item}
-                    </a>
-                  </li>
-                )}
+                { label: 'Discord Server', href: 'https://discord.gg' },
+                { label: 'Twitter Updates', href: 'https://twitter.com' },
+                { label: 'Instagram Gallery', href: 'https://instagram.com' },
+                { label: 'Forum', path: '/community' },
+              ].map(({ label, href, path }) =>
+                <li key={label}>
+                  {path ? (
+                    <Link to={path} className="hover:text-gold transition-colors">{label}</Link>
+                  ) : (
+                    <a href={href} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors">{label}</a>
+                  )}
+                </li>
+              )}
             </ul>
           </div>
 
@@ -128,17 +141,19 @@ export function Footer() {
             </h4>
             <ul className="space-y-3 md:space-y-4 text-xs md:text-sm text-theme-muted">
               {[
-                'Terms of Service',
-                'Privacy Policy',
-                'Cookie Policy',
-                'Support'].
-                map((item) =>
-                  <li key={item}>
-                    <a href="#" className="hover:text-gold transition-colors">
-                      {item}
-                    </a>
-                  </li>
-                )}
+                { label: 'Terms of Service', path: '/terms' },
+                { label: 'Privacy Policy', path: '/privacy' },
+                { label: 'Community Guidelines', path: '/community' },
+                { label: 'Support', href: 'mailto:support@seniqu.id' },
+              ].map(({ label, path, href }) =>
+                <li key={label}>
+                  {path ? (
+                    <Link to={path} className="hover:text-gold transition-colors">{label}</Link>
+                  ) : (
+                    <a href={href} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors">{label}</a>
+                  )}
+                </li>
+              )}
             </ul>
           </div>
         </div>
@@ -153,12 +168,12 @@ export function Footer() {
             >
               Back to Top <ArrowUp className="w-3 h-3 group-hover:-translate-y-0.5 transition-transform" />
             </button>
-            <a href="#" className="hover:text-theme-text hidden md:block">
+            <Link to="/privacy" className="hover:text-theme-text hidden md:block">
               Privacy
-            </a>
-            <a href="#" className="hover:text-theme-text hidden md:block">
+            </Link>
+            <Link to="/terms" className="hover:text-theme-text hidden md:block">
               Terms
-            </a>
+            </Link>
           </div>
         </div>
       </div>

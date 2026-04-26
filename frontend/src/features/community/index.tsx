@@ -6,15 +6,12 @@
 
 import React, { useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { PageContainer } from '../../components/common/DashboardLayout';
-import { Card, CardContent, Button, Badge, Avatar } from '../../components/ui';
+import { Avatar } from '../../components/ui';
 import {
     MessageSquare,
     Search,
     Plus,
     Heart,
-    Eye,
-    Clock,
     Loader2,
     Image as ImageIcon,
     Video,
@@ -24,13 +21,11 @@ import {
     ChevronUp,
     Share2,
     ArrowLeft,
-    TrendingUp,
     Sparkles,
-    Pin,
     MessageCircle,
     Send,
 } from 'lucide-react';
-import { formatDate, extractArray } from '../../lib/utils';
+import { extractArray } from '../../lib/utils';
 import { uploadFile } from '../../lib/api';
 import {
     useForumCategories,
@@ -48,6 +43,7 @@ import {
 } from '../../hooks/useForum';
 import { useToast } from '../../stores/useNotificationStore';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { SEOHead } from '../../components/common/SEOHead';
 
 // ============================================
 // HELPERS
@@ -99,6 +95,11 @@ export function CommunityForum() {
 
     return (
         <div className="max-w-7xl mx-auto px-4 md:px-6 pt-24 pb-12 md:pt-32 md:pb-20">
+            <SEOHead
+                title="Community"
+                description="Join the Indonesian art community. Discuss share artworks and dialogue about the cultural heritage of the archipelago."
+                canonical="/community"
+            />
             {/* ==================== HERO SECTION ==================== */}
             <div className="relative overflow-hidden rounded-2xl mb-8 p-6 sm:p-8" style={{
                 background: 'linear-gradient(135deg, #1a1510 0%, #0d0d0d 50%, #1a1510 100%)',
@@ -170,10 +171,10 @@ export function CommunityForum() {
                             style={{ aspectRatio: '16/9', maxHeight: '280px' }}
                             onClick={() => navigate(`/community/thread/${featuredThread.id}`)}
                         >
-                            {(featuredThread.mediaType || featuredThread.media_type) === 'video' ? (
-                                <video src={featuredThread.mediaUrl || featuredThread.media_url} muted className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                            {(featuredThread.mediaType) === 'video' ? (
+                                <video src={featuredThread.mediaUrl} muted className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                             ) : (
-                                <img src={featuredThread.mediaUrl || featuredThread.media_url} alt={featuredThread.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                                <img src={featuredThread.mediaUrl} alt={featuredThread.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
                             )}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent flex flex-col justify-end p-5">
                                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/90 text-charcoal text-[10px] font-bold uppercase tracking-wider w-fit mb-2">
@@ -184,7 +185,7 @@ export function CommunityForum() {
                                     <Avatar name={featuredThread.author?.displayName || 'User'} src={featuredThread.author?.avatarUrl} size="xs" className="w-5 h-5" />
                                     <span>{featuredThread.author?.displayName || 'Anonymous'}</span>
                                     <span>·</span>
-                                    <span>{formatTimeAgo(featuredThread.createdAt || featuredThread.created_at)}</span>
+                                    <span>{formatTimeAgo(featuredThread.createdAt)}</span>
                                 </div>
                             </div>
                         </div>
@@ -204,8 +205,8 @@ export function CommunityForum() {
                     ) : (
                         <div className="bg-white dark:bg-[#111111] rounded-2xl border border-gray-200/60 dark:border-white/6 overflow-hidden">
                             {regularThreads.map((thread, idx) => {
-                                const mediaUrl = thread.mediaUrl || thread.media_url;
-                                const authorName = thread.author?.displayName || thread.author?.display_name || 'Anonymous';
+                                const mediaUrl = thread.mediaUrl;
+                                const authorName = thread.author?.displayName || 'Anonymous';
                                 return (
                                     <div
                                         key={thread.id}
@@ -214,11 +215,11 @@ export function CommunityForum() {
                                     >
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-1 text-xs text-gray-400 dark:text-gray-500">
-                                                <Avatar name={authorName} src={thread.author?.avatarUrl || thread.author?.avatar_url} size="xs" className="w-5 h-5" />
+                                                <Avatar name={authorName} src={thread.author?.avatarUrl} size="xs" className="w-5 h-5" />
                                                 <span className="font-medium text-gray-600 dark:text-gray-300">{authorName}</span>
                                                 <span>·</span>
-                                                <span>{formatTimeAgo(thread.createdAt || thread.created_at)}</span>
-                                                {(thread.isPinned || thread.is_pinned) && (
+                                                <span>{formatTimeAgo(thread.createdAt)}</span>
+                                                {(thread.isPinned) && (
                                                     <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">Pinned</span>
                                                 )}
                                             </div>
@@ -234,7 +235,7 @@ export function CommunityForum() {
                                         </div>
                                         {mediaUrl && (
                                             <div className="w-20 h-16 sm:w-28 sm:h-20 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100 dark:bg-white/5">
-                                                {(thread.mediaType || thread.media_type) === 'video' ? (
+                                                {(thread.mediaType) === 'video' ? (
                                                     <video src={mediaUrl} muted className="w-full h-full object-cover" />
                                                 ) : (
                                                     <img src={mediaUrl} alt="" className="w-full h-full object-cover" loading="lazy" />

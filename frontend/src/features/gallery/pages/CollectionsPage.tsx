@@ -6,6 +6,7 @@ import { CollectionCard, CollectionData } from '../../../components/CollectionCa
 import { useArtworks } from '../../../hooks/useArtworks';
 import { useScrollAnimation } from '../../../hooks/useScrollAnimation';
 import { Artwork } from '../../../lib/types';
+import { SEOHead } from '../../../components/common/SEOHead';
 
 // Helper to generate consistent gradients
 const getGradient = (index: number) => {
@@ -84,6 +85,11 @@ export default function CollectionsPage() {
 
     return (
         <PageContainer className="max-w-7xl mx-auto pt-20 px-4 sm:px-6">
+            <SEOHead
+                title="Collections"
+                description="Curated collections of Indonesian heritage artworks including paintings sculptures digital art and verified photography."
+                canonical="/collections"
+            />
             {/* Header */}
             <div
                 ref={ref}

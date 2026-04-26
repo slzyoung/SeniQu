@@ -31,7 +31,7 @@ export function CTASection() {
             Begin Your <span className="text-gold italic">Journey</span>
           </h2>
           <p className="text-base md:text-xl text-theme-muted mb-8 md:mb-10 max-w-xl mx-auto">
-            Experience the world's most diverse living civilization — one museum, one gallery, one heritage site at a time.
+            Experience the world's most diverse living civilization, one museum, one gallery, one heritage site at a time.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 md:gap-4">

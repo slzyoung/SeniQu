@@ -22,6 +22,7 @@ import { useAuthModalStore } from '../stores/useAuthModalStore';
 
 import { AboutSection } from '../components/AboutSection';
 import { ArtistsSection } from '../components/ArtistsSection';
+import { SEOHead } from '../components/common/SEOHead';
 
 interface LandingPageProps {
     openAuthModal?: boolean;
@@ -54,6 +55,11 @@ export function LandingPage({ openAuthModal: shouldOpenModal }: LandingPageProps
 
     return (
         <div className="min-h-screen bg-theme-bg text-theme-text selection:bg-gold selection:text-charcoal font-sans transition-colors duration-300 scroll-smooth">
+            <SEOHead
+                title="Home"
+                description="Indonesian cultural heritage digital platform. Explore museums art galleries and historical sites with AI and Solana blockchain technology."
+                canonical="/"
+            />
             <Navbar />
             <main className="pt-20 md:pt-24 pb-20 md:pb-0">
                 <HeroSection />

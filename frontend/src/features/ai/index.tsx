@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useArtworks } from '../../hooks/useArtworks';
 import { Link } from 'react-router-dom';
+import { SEOHead } from '../../components/common/SEOHead';
 
 export function GenreIdentifier() {
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -68,6 +69,11 @@ export function GenreIdentifier() {
             title="AI Genre Identifier"
             subtitle="Upload artwork to identify its genre and style"
         >
+            <SEOHead
+                title="AI Genre Identifier"
+                description="Automatically identify art genres and styles with AI technology. Upload artworks for in-depth analysis."
+                canonical="/ai/genre"
+            />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Upload Section */}
                 <Card variant="elevated">
@@ -208,6 +214,11 @@ export function AICuration() {
                 </Button>
             }
         >
+            <SEOHead
+                title="AI Curation"
+                description="Personalized artwork recommendations using AI technology. Discover artworks that match your taste and artistic interests."
+                canonical="/ai/curation"
+            />
             {/* Personalized For You */}
             <div className="mb-8">
                 <h3 className="text-lg font-semibold text-theme-text mb-4 flex items-center gap-2">

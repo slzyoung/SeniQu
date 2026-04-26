@@ -11,6 +11,7 @@ import { Search, Filter, Grid, List, Heart, Eye, Loader2, Sparkles, AlertCircle 
 import { Link } from 'react-router-dom';
 import { ROUTES } from '../../../lib/constants';
 import { motion, AnimatePresence } from 'framer-motion';
+import { SEOHead } from '../../../components/common/SEOHead';
 
 export default function PublicGallery() {
     // State
@@ -42,6 +43,11 @@ export default function PublicGallery() {
 
     return (
         <div className="max-w-7xl mx-auto px-4 md:px-6 pt-24 pb-12 md:pt-32 md:pb-20">
+            <SEOHead
+                title="Gallery"
+                description="Explore curated collections of digital and physical artworks from across Indonesia with blockchain verification."
+                canonical="/gallery"
+            />
             {/* Custom Header Section */}
             <div className="text-center mb-10 md:mb-14">
                 <motion.div

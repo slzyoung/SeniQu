@@ -608,9 +608,9 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
         {/* Header */}
         <div className="px-8 pt-10 pb-6 text-center">
           <h2 className="text-3xl font-serif font-bold text-theme-text mb-2">
-            Welcome to <span className="text-gold italic">SeniQu</span>
+            Welcome to <span className="text-amber-600 dark:text-gold italic">SeniQu</span>
           </h2>
-          <p className="text-theme-muted text-sm">
+          <p className="text-gray-600 dark:text-gray-400 text-sm">
             Sign in to preserve and collect digital heritage.
           </p>
         </div>
@@ -642,15 +642,12 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
           </button>
 
           {/* Divider */}
-          <div className="relative py-2">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-theme-border/60"></div>
-            </div>
-            <div className="relative flex justify-center text-[11px] uppercase tracking-widest font-semibold">
-              <span className="bg-theme-bg px-3 text-theme-muted">
-                OR
-              </span>
-            </div>
+          <div className="flex items-center gap-3 py-2">
+            <div className="h-px flex-1 bg-theme-border/60"></div>
+            <span className="text-[11px] uppercase tracking-widest font-semibold text-gray-500 dark:text-gray-400">
+              OR
+            </span>
+            <div className="h-px flex-1 bg-theme-border/60"></div>
           </div>
 
           {/* Email Login */}
@@ -667,7 +664,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
           <div className="pt-2 space-y-3">
             <div className="flex items-center gap-2 mb-4">
               <div className="h-px flex-1 bg-gradient-to-r from-transparent via-theme-border to-transparent" />
-              <div className="flex items-center gap-1.5 text-gold/80">
+              <div className="flex items-center gap-1.5 text-amber-600 dark:text-gold/80">
                 <Wallet className="w-3.5 h-3.5" />
                 <span className="text-xs font-medium tracking-wider uppercase">Connect Wallet</span>
               </div>
@@ -720,7 +717,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
                     {/* Wallet Name */}
                     <div className="w-full flex flex-col items-center">
-                      <span className={`font-medium text-xs tracking-tight transition-colors truncate max-w-full ${isActive ? 'text-gold' : 'text-theme-text group-hover:text-theme-text/90'}`}>
+                      <span className={`font-medium text-xs tracking-tight transition-colors truncate max-w-full ${isActive ? 'text-amber-600 dark:text-gold' : 'text-gray-700 dark:text-gray-300 group-hover:text-theme-text'}`}>
                         {wallet.name.replace(' (Reown)', '')}
                       </span>
                     </div>
@@ -1362,13 +1359,13 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
               {/* Footer */}
               <div className="px-8 py-4 bg-theme-elevated/30 border-t border-theme-border text-center backdrop-blur-sm">
-                <p className="text-xs text-theme-muted">
+                <p className="text-xs text-gray-600 dark:text-gray-400">
                   By continuing, you agree to our{' '}
-                  <a href="/terms" className="text-gold hover:underline">
+                  <a href="/terms" className="font-medium text-amber-700 dark:text-gold hover:underline">
                     Terms of Service
                   </a>{' '}
                   and{' '}
-                  <a href="/privacy" className="text-gold hover:underline">
+                  <a href="/privacy" className="font-medium text-amber-700 dark:text-gold hover:underline">
                     Privacy Policy
                   </a>
                   .

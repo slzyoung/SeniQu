@@ -180,9 +180,9 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
                                 e.stopPropagation(); window.open('https://solana.com', '_blank'); 
                             }}
                         >
-                            <div className="absolute inset-[-150%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_0%,transparent_85%,rgba(229,231,235,1)_100%)] opacity-70 group-hover:opacity-100 transition-opacity duration-300" />
+                            <div className="absolute inset-[-150%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_0%,transparent_50%,#9945FF_70%,#14F195_100%)] opacity-70 group-hover:opacity-100 transition-opacity duration-300" />
                             <div className="relative z-10 flex h-full w-full items-center justify-center rounded-[3px] bg-theme-surface overflow-hidden px-1 py-0.5">
-                                <img src="/images/logo/poweredbysol.svg" alt="Powered by Solana" className="h-2 rounded-[3px]" />
+                                <img src="/images/logo/poweredbysol.svg" alt="Powered by Solana" className="h-3.5 rounded-[3px]" />
                             </div>
                         </motion.div>
                     </div>

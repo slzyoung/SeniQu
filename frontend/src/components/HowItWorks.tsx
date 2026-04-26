@@ -19,7 +19,7 @@ export function HowItWorks() {
       number: '02',
       title: 'AI-Powered Insights',
       description:
-        'Get smart summaries, audio guides, and contextual storytelling — personalized to your interests.',
+        'Get smart summaries, audio guides, and contextual storytelling personalized to your interests.',
       delay: 0.15
     },
     {

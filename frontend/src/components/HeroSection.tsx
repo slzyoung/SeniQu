@@ -90,9 +90,9 @@ export function HeroSection() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.45, duration: 0.6 }}
         >
-          A digital sanctuary for Indonesia's heritage — spanning museums,
-          galleries, & historical sites. Verified, digitized, and curated
-          for cultural exploration.
+          A digital sanctuary for Indonesia's heritage spanning museums,
+          galleries, & historical sites. Verified, digitized, and curated for
+          cultural exploration.
         </motion.p>
 
         <motion.div
