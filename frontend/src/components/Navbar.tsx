@@ -46,7 +46,7 @@ export function Navbar() {
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${isScrolled ? 'bg-theme-glass backdrop-blur-xl border-b border-theme-glass-border py-4 shadow-sm' : 'bg-transparent py-6'}`}>
 
         <div className="max-w-7xl mx-auto px-6 md:px-8 flex items-center justify-between">
-          {/* Logo */}
+          {/* Logo Container */}
           <div
             className="flex items-center gap-1.5 group cursor-pointer transition-all duration-300 hover:opacity-90 relative"
             onClick={() => navigate(ROUTES.HOME)}
@@ -60,9 +60,40 @@ export function Navbar() {
                 loading="eager"
               />
             </div>
-            <span className="font-serif text-2xl md:text-3xl font-bold italic tracking-wide text-gold-hologram -ml-1">
-              SeniQu
-            </span>
+            
+            <div className="flex flex-col items-start -ml-1">
+              <span className="font-serif text-2xl md:text-3xl font-bold italic tracking-wide text-gold-hologram">
+                SeniQu
+              </span>
+              <motion.div
+                className="relative mt-1 cursor-pointer overflow-hidden rounded-md p-[1px] group"
+                initial={{ opacity: 0.85 }}
+                whileHover={{ 
+                  opacity: 1, 
+                  y: -2,
+                  scale: 1.05,
+                  filter: "drop-shadow(0 4px 12px rgba(20, 241, 149, 0.3))"
+                }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                onClick={(e: React.MouseEvent) => { 
+                  e.stopPropagation(); 
+                  window.open('https://solana.com', '_blank'); 
+                }}
+              >
+                {/* Spinning silver line */}
+                <div className="absolute inset-[-150%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_0%,transparent_85%,rgba(229,231,235,1)_100%)] opacity-70 group-hover:opacity-100 transition-opacity duration-300" />
+                
+                {/* Inner container */}
+                <div className="relative z-10 flex h-full w-full items-center justify-center rounded-[5px] bg-theme-bg overflow-hidden">
+                  <img 
+                    src="/images/logo/poweredbysol.svg" 
+                    alt="Powered by Solana" 
+                    className="h-4 md:h-5 rounded-[5px]"
+                  />
+                </div>
+              </motion.div>
+            </div>
           </div>
 
           {/* Desktop Navigation */}

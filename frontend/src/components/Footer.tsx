@@ -1,4 +1,5 @@
 import { Twitter, Instagram, Disc, Mail, Send, ArrowUp } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export function Footer() {
   const scrollToTop = () => {
@@ -34,9 +35,39 @@ export function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12 mb-12 md:mb-16">
           {/* Brand Column - Full width on mobile */}
           <div className="col-span-2 md:col-span-1 text-center md:text-left">
-            <span className="font-serif text-2xl md:text-3xl font-bold text-gold italic mb-4 md:mb-6 block">
-              SeniQu
-            </span>
+            <div className="mb-4 md:mb-6 flex flex-col items-center md:items-start">
+              <span className="font-serif text-2xl md:text-3xl font-bold text-gold italic block">
+                SeniQu
+              </span>
+              <motion.div
+                className="hidden md:block relative mt-1.5 cursor-pointer overflow-hidden rounded-md p-[1px] group"
+                initial={{ opacity: 0.85 }}
+                whileHover={{ 
+                  opacity: 1, 
+                  y: -2,
+                  scale: 1.05,
+                  filter: "drop-shadow(0 4px 12px rgba(20, 241, 149, 0.3))"
+                }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  window.open('https://solana.com', '_blank'); 
+                }}
+              >
+                {/* Spinning silver line */}
+                <div className="absolute inset-[-150%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_0%,transparent_85%,rgba(229,231,235,1)_100%)] opacity-70 group-hover:opacity-100 transition-opacity duration-300" />
+                
+                {/* Inner container */}
+                <div className="relative z-10 flex h-full w-full items-center justify-center rounded-[5px] bg-theme-bg overflow-hidden">
+                  <img 
+                    src="/images/logo/poweredbysol.svg" 
+                    alt="Powered by Solana" 
+                    className="h-3.5 rounded-[5px]"
+                  />
+                </div>
+              </motion.div>
+            </div>
             <p className="text-theme-muted text-xs md:text-sm leading-relaxed mb-4 md:mb-6 max-w-xs mx-auto md:mx-0">
               Indonesia's leading digital cultural heritage infrastructure — bridging museums, galleries, and heritage sites with AI-powered technology.
             </p>
