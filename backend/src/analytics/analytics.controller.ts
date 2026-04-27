@@ -4,6 +4,7 @@
 
 import { Controller, Get, Post, Body, Query, UseGuards } from "@nestjs/common"
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from "@nestjs/swagger"
+import { Throttle } from "@nestjs/throttler"
 import { AnalyticsService } from "./analytics.service"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
@@ -78,6 +79,9 @@ export class AnalyticsController {
     // ===========================================
 
     @Post("track")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth("JWT-auth")
+    @Throttle({ default: { limit: 30, ttl: 60000 } })
     @ApiOperation({ summary: "Track an analytics event" })
     async trackEvent(@Body() dto: TrackEventDto) {
         return this.analyticsService.trackEvent(dto)

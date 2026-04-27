@@ -14,6 +14,7 @@ import {
 } from "@aws-sdk/client-s3"
 import { v4 as uuidv4 } from "uuid"
 import { UploadResult } from "./dto/upload-file.dto"
+import { ImageProcessingService } from "./image-processing.service"
 
 // Allowed MIME types
 const ALLOWED_IMAGE_TYPES = [
@@ -45,7 +46,10 @@ export class StorageService implements OnModuleInit {
     private bucketName: string
     private publicUrl: string
 
-    constructor(private readonly configService: ConfigService) {}
+    constructor(
+        private readonly configService: ConfigService,
+        private readonly imageProcessor: ImageProcessingService,
+    ) {}
 
     onModuleInit() {
         const accountId = this.configService.get<string>("r2.accountId")
@@ -83,60 +87,75 @@ export class StorageService implements OnModuleInit {
     ): Promise<UploadResult> {
         this.validateFile(file)
 
+        // ─── Image Processing Pipeline ───────────────────
+        let processedBuffer = file.buffer
+        let processedMimetype = file.mimetype
+        let processedExt = this.getExtension(file.originalname)
+
+        if (this.imageProcessor.canProcess(file.mimetype)) {
+            const processed = await this.imageProcessor.processImage(
+                file.buffer,
+                file.mimetype,
+                folder,
+            )
+            processedBuffer = processed.buffer
+            processedMimetype = processed.contentType
+            processedExt = processed.extension
+        }
+
         // Bypass CDN for avatars and store directly as Base64 in database
         if (folder === "avatars") {
-            const base64Data = file.buffer.toString('base64');
-            const dataUri = `data:${file.mimetype};base64,${base64Data}`;
+            const base64Data = processedBuffer.toString('base64');
+            const dataUri = `data:${processedMimetype};base64,${base64Data}`;
             const key = `avatars/${uuidv4()}`;
             
-            this.logger.log(`Avatar processed as Base64 data URI (${this.formatSize(file.size)})`);
+            this.logger.log(`Avatar processed as Base64 data URI (${this.formatSize(processedBuffer.length)})`);
             
             return {
                 key,
                 url: dataUri,
-                size: file.size,
-                contentType: file.mimetype,
+                size: processedBuffer.length,
+                contentType: processedMimetype,
             };
         }
 
         this.ensureClientReady()
 
-        const ext = this.getExtension(file.originalname)
-        const key = `${folder}/${uuidv4()}${ext}`
+        const key = `${folder}/${uuidv4()}${processedExt}`
 
         try {
             await this.s3Client.send(
                 new PutObjectCommand({
                     Bucket: this.bucketName,
                     Key: key,
-                    Body: file.buffer,
-                    ContentType: file.mimetype,
+                    Body: processedBuffer,
+                    ContentType: processedMimetype,
                     CacheControl: "public, max-age=31536000, immutable",
                 }),
             )
 
             const url = this.buildPublicUrl(key)
 
-            this.logger.log(`Uploaded ${key} (${this.formatSize(file.size)})`)
+            this.logger.log(`Uploaded ${key} (${this.formatSize(processedBuffer.length)})`)
 
             return {
                 key,
                 url,
-                size: file.size,
-                contentType: file.mimetype,
+                size: processedBuffer.length,
+                contentType: processedMimetype,
             }
         } catch (error) {
             this.logger.warn(`R2 CDN Upload failed for ${key}: ${error.message}. Falling back to Base64 database storage!`)
             
             // Fallback: Convert file to Base64 and store directly in DB
-            const base64Data = file.buffer.toString('base64');
-            const dataUri = `data:${file.mimetype};base64,${base64Data}`;
+            const base64Data = processedBuffer.toString('base64');
+            const dataUri = `data:${processedMimetype};base64,${base64Data}`;
             
             return {
                 key,
                 url: dataUri,
-                size: file.size,
-                contentType: file.mimetype,
+                size: processedBuffer.length,
+                contentType: processedMimetype,
             }
         }
     }

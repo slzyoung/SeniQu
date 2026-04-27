@@ -6,7 +6,7 @@
 
 import React, { useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Avatar } from '../../components/ui';
+import { Avatar, Button } from '../../components/ui';
 import {
     MessageSquare,
     Search,
@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { extractArray } from '../../lib/utils';
 import { uploadFile } from '../../lib/api';
+import { compressImage } from '../../lib/imageCompressor';
 import {
     useForumCategories,
     useForumThreads,
@@ -340,7 +341,11 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
 
             if (file) {
                 mediaType = file.type.startsWith('video/') ? 'video' : 'image';
-                const uploadResult = await uploadFile(file, 'general');
+                // Compress image client-side before upload
+                const fileToUpload = mediaType === 'image'
+                    ? await compressImage(file, { maxWidth: 1600, quality: 0.82 })
+                    : file;
+                const uploadResult = await uploadFile(fileToUpload, 'general');
                 mediaUrl = uploadResult.url;
             }
 

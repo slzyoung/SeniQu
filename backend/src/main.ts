@@ -3,6 +3,7 @@ import { ValidationPipe, Logger } from "@nestjs/common"
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger"
 import { ConfigService } from "@nestjs/config"
 import helmet from "helmet"
+import * as compression from "compression"
 import * as cookieParser from "cookie-parser"
 import { AppModule } from "./app.module"
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter"
@@ -50,6 +51,12 @@ async function bootstrap() {
     // Cookie parser (with secret for signed cookies — used by OAuth flow)
     const cookieSecret = configService.get<string>("google.oauthCookieSecret") || "seniqu-dev-oauth-cookie-secret"
     app.use(cookieParser(cookieSecret))
+
+    // Response compression (gzip/brotli) — reduces bandwidth for JSON-heavy endpoints
+    app.use(compression({
+        threshold: 1024, // Only compress responses > 1KB
+        level: 6, // Balanced compression level (1-9)
+    }))
 
     // Trust proxy (required for secure cookies behind reverse proxies like Heroku/Railway/Render)
     const expressApp = app.getHttpAdapter().getInstance();

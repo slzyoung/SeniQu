@@ -49,6 +49,10 @@ function getRequestKey(config: AxiosRequestConfig): string {
 
 let accessToken: string | null = null;
 let refreshPromise: Promise<string> | null = null;
+let failedQueue: Array<{
+    resolve: (token: string) => void;
+    reject: (error: any) => void;
+}> = [];
 
 export function setAccessToken(token: string | null): void {
     accessToken = token;
@@ -74,7 +78,16 @@ async function refreshAccessToken(): Promise<string> {
         .then((response) => {
             const newToken = response.data.accessToken;
             setAccessToken(newToken);
+            // Resolve all queued requests with the new token
+            failedQueue.forEach(({ resolve }) => resolve(newToken));
+            failedQueue = [];
             return newToken;
+        })
+        .catch((err) => {
+            // Reject all queued requests
+            failedQueue.forEach(({ reject }) => reject(err));
+            failedQueue = [];
+            throw err;
         })
         .finally(() => {
             refreshPromise = null;
@@ -103,24 +116,27 @@ api.interceptors.request.use(
             config.headers['X-CSRF-Token'] = csrfToken;
         }
 
-        // Check rate limit
-        const rateLimitKey = `api:${config.url}`;
-        const { allowed, retryAfter } = checkRateLimit(
-            rateLimitKey,
-            RATE_LIMIT.MAX_REQUESTS_PER_MINUTE,
-            60000
-        );
+        // Check rate limit — skip for auth endpoints to prevent blocking token refresh
+        const isAuthPath = config.url?.includes('/auth/');
+        if (!isAuthPath) {
+            const rateLimitKey = `api:${config.url}`;
+            const { allowed, retryAfter } = checkRateLimit(
+                rateLimitKey,
+                RATE_LIMIT.MAX_REQUESTS_PER_MINUTE,
+                60000
+            );
 
-        if (!allowed) {
-            return Promise.reject({
-                response: {
-                    status: 429,
-                    data: {
-                        message: 'Rate limit exceeded',
-                        retryAfter,
+            if (!allowed) {
+                return Promise.reject({
+                    response: {
+                        status: 429,
+                        data: {
+                            message: 'Rate limit exceeded',
+                            retryAfter,
+                        },
                     },
-                },
-            });
+                });
+            }
         }
 
         return config;
@@ -150,6 +166,18 @@ api.interceptors.response.use(
         if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
             originalRequest._retry = true;
 
+            // If a refresh is already in progress, queue this request
+            if (refreshPromise) {
+                return new Promise<string>((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                }).then((newToken) => {
+                    originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                    return api(originalRequest);
+                }).catch((err) => {
+                    return Promise.reject(err);
+                });
+            }
+
             try {
                 const newToken = await refreshAccessToken();
                 originalRequest.headers.Authorization = `Bearer ${newToken}`;
@@ -157,13 +185,22 @@ api.interceptors.response.use(
             } catch (refreshError) {
                 // Refresh failed, clear tokens and redirect to login
                 setAccessToken(null);
-                window.dispatchEvent(new CustomEvent('auth:logout'));
+                // Small delay to debounce multiple simultaneous logout events
+                setTimeout(() => {
+                    window.dispatchEvent(new CustomEvent('auth:logout'));
+                }, 100);
                 return Promise.reject(refreshError);
             }
         }
 
-        // Handle 429 - Rate limited
+        // Handle 429 - Rate limited (with max retry to prevent infinite loops)
         if (error.response?.status === 429) {
+            const retryCount429 = (originalRequest as any)._retryCount429 || 0;
+            if (retryCount429 >= 3) {
+                return Promise.reject(error);
+            }
+            (originalRequest as any)._retryCount429 = retryCount429 + 1;
+
             const retryAfter = error.response.headers['retry-after'];
             const delay = retryAfter ? parseInt(retryAfter) * 1000 : RATE_LIMIT.RETRY_DELAY_MS;
 

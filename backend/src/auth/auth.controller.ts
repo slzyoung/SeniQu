@@ -13,6 +13,7 @@ import {
     Logger,
 } from "@nestjs/common"
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from "@nestjs/swagger"
+import { SkipThrottle } from "@nestjs/throttler"
 import { Response } from "express"
 import { ConfigService } from "@nestjs/config"
 import { AuthService } from "./auth.service"
@@ -253,6 +254,7 @@ export class AuthController {
      */
     @Post("refresh")
     @Public()
+    @SkipThrottle()
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: "Refresh access token" })
     async refreshToken(@Body("refreshToken") refreshToken: string) {

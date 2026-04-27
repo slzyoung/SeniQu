@@ -26,7 +26,7 @@ export class SecurityHeadersInterceptor implements NestInterceptor {
         // Anti-Hacking: Control referrer info leakage
         response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin")
         // Anti-Hacking: Restrict browser features
-        response.setHeader("Permissions-Policy", "geolocation=(self), microphone=(), camera=(), payment=(), usb=()")
+        response.setHeader("Permissions-Policy", "geolocation=(self), microphone=(self), camera=(self), payment=(), usb=()")
         // Anti-Hacking: Prevent cross-domain policy file loading
         response.setHeader("X-Permitted-Cross-Domain-Policies", "none")
         // Anti-Hacking: HSTS — force HTTPS connections

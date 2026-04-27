@@ -5,7 +5,7 @@
  */
 
 import { useState } from 'react';
-import { Card, Button, Badge } from '../../components/ui';
+
 import {
     ChevronLeft,
     MoreHorizontal,

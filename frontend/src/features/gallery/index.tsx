@@ -11,7 +11,6 @@ import { PageContainer } from '../../components/common/DashboardLayout';
 import { Card, CardContent, Button, Badge } from '../../components/ui';
 import {
     Image as ImageIcon,
-    Building2,
     Heart,
     Eye,
     Share2,

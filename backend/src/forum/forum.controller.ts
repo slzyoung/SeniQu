@@ -17,7 +17,7 @@ import {
     HttpStatus,
 } from "@nestjs/common"
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from "@nestjs/swagger"
-import { Throttle } from "@nestjs/throttler"
+import { Throttle, SkipThrottle } from "@nestjs/throttler"
 import { ForumService } from "./forum.service"
 import { CreateThreadDto } from "./dto/create-thread.dto"
 import { CreatePostDto } from "./dto/create-post.dto"
@@ -37,6 +37,7 @@ export class ForumController {
     // ===========================================
 
     @Public()
+    @SkipThrottle()
     @Get("categories")
     @ApiOperation({ summary: "Get all forum categories" })
     async getCategories() {
@@ -44,10 +45,32 @@ export class ForumController {
     }
 
     // ===========================================
+    // TRENDING & FEATURED (must be before :idOrSlug catch-all)
+    // ===========================================
+
+    @Public()
+    @SkipThrottle()
+    @Get("trending")
+    @ApiOperation({ summary: "Get trending threads" })
+    @ApiQuery({ name: "limit", required: false, type: Number })
+    async getTrending(@Query("limit") limit?: number) {
+        return this.forumService.getTrending(limit || 10)
+    }
+
+    @Public()
+    @SkipThrottle()
+    @Get("featured")
+    @ApiOperation({ summary: "Get featured threads" })
+    async getFeatured() {
+        return this.forumService.getFeatured()
+    }
+
+    // ===========================================
     // THREADS
     // ===========================================
 
     @Public()
+    @SkipThrottle()
     @Get("threads")
     @ApiOperation({ summary: "List forum threads" })
     @ApiQuery({ name: "categoryId", required: false })
@@ -64,6 +87,7 @@ export class ForumController {
     }
 
     @Public()
+    @SkipThrottle()
     @Get("threads/:idOrSlug")
     @ApiOperation({ summary: "Get thread by ID or slug" })
     async getThread(@Param("idOrSlug") idOrSlug: string) {
@@ -78,7 +102,7 @@ export class ForumController {
     @Post("threads")
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth("JWT-auth")
-    @Throttle({ default: { limit: 10, ttl: 60000 } })
+    @Throttle({ default: { limit: 15, ttl: 60000 } })
     @ApiOperation({ summary: "Create a new thread" })
     async createThread(
         @Body() dto: CreateThreadDto,
@@ -116,6 +140,7 @@ export class ForumController {
     // ===========================================
 
     @Public()
+    @SkipThrottle()
     @Get("threads/:threadId/posts")
     @ApiOperation({ summary: "Get posts in a thread" })
     async getPosts(
@@ -129,7 +154,7 @@ export class ForumController {
     @Post("threads/:threadId/posts")
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth("JWT-auth")
-    @Throttle({ default: { limit: 20, ttl: 60000 } })
+    @Throttle({ default: { limit: 30, ttl: 60000 } })
     @ApiOperation({ summary: "Reply to a thread" })
     async createPost(
         @Param("threadId", ParseUUIDPipe) threadId: string,

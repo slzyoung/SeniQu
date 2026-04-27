@@ -312,6 +312,83 @@ export class ForumService {
         }
     }
 
+    /**
+     * Get trending threads — sorted by engagement (likes + views) in the last 7 days
+     */
+    async getTrending(limit = 10) {
+        const sevenDaysAgo = new Date()
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+
+        const { data, error } = await this.supabase
+            .from("forum_threads")
+            .select(`
+                id, title, slug, views, likes, reply_count, created_at,
+                category:forum_categories(id, name, slug),
+                author:users(id, display_name, avatar_url, role)
+            `)
+            .gte("created_at", sevenDaysAgo.toISOString())
+            .order("likes", { ascending: false })
+            .order("views", { ascending: false })
+            .limit(limit)
+
+        if (error) {
+            this.logger.warn(`Trending query error: ${error.message}`)
+            // Fallback: return latest threads if trending query fails
+            const fallback = await this.supabase
+                .from("forum_threads")
+                .select(`
+                    id, title, slug, views, likes, reply_count, created_at,
+                    category:forum_categories(id, name, slug),
+                    author:users(id, display_name, avatar_url, role)
+                `)
+                .order("created_at", { ascending: false })
+                .limit(limit)
+
+            return { data: fallback.data || [] }
+        }
+
+        // If no trending in last 7 days, fallback to all-time popular
+        if (!data || data.length === 0) {
+            const { data: allTime } = await this.supabase
+                .from("forum_threads")
+                .select(`
+                    id, title, slug, views, likes, reply_count, created_at,
+                    category:forum_categories(id, name, slug),
+                    author:users(id, display_name, avatar_url, role)
+                `)
+                .order("likes", { ascending: false })
+                .order("views", { ascending: false })
+                .limit(limit)
+
+            return { data: allTime || [] }
+        }
+
+        return { data }
+    }
+
+    /**
+     * Get featured threads — pinned or explicitly featured threads with media
+     */
+    async getFeatured() {
+        const { data, error } = await this.supabase
+            .from("forum_threads")
+            .select(`
+                id, title, slug, content, media_url, media_type, views, likes, reply_count, is_pinned, is_featured, created_at,
+                category:forum_categories(id, name, slug),
+                author:users(id, display_name, avatar_url, role)
+            `)
+            .or("is_featured.eq.true,is_pinned.eq.true")
+            .order("created_at", { ascending: false })
+            .limit(5)
+
+        if (error) {
+            this.logger.warn(`Featured query error: ${error.message}`)
+            return { data: [] }
+        }
+
+        return { data: data || [] }
+    }
+
     private generateSlug(title: string): string {
         return title
             .toLowerCase()

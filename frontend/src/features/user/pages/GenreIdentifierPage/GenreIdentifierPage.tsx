@@ -24,7 +24,8 @@ import {
     Zap,
     Eye,
     History,
-    ChevronDown,
+    RefreshCw,
+    ShieldAlert,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useDetectionHistory } from '../../../../hooks/useAI';
@@ -197,6 +198,7 @@ export function GenreIdentifierPage() {
     const [showResult, setShowResult] = useState(false);
     const [mode, setMode] = useState<'camera' | 'upload'>('camera');
     const [showHistory, setShowHistory] = useState(false);
+    const [cameraError, setCameraError] = useState<string | null>(null);
 
     // Hooks
     const { data: historyData } = useDetectionHistory({ limit: 5 });
@@ -204,7 +206,34 @@ export function GenreIdentifierPage() {
 
     // -------- Camera Functions --------
     const startCamera = useCallback(async () => {
+        setCameraError(null);
+
+        // Check if we're on a secure context (HTTPS or localhost)
+        if (!window.isSecureContext) {
+            setCameraError('Camera requires a secure connection (HTTPS). Please access this page via HTTPS.');
+            return;
+        }
+
+        // Check if getUserMedia is available
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            setCameraError('Camera API is not available on this device or browser. Please try uploading an image instead.');
+            return;
+        }
+
         try {
+            // Check permission status first (if supported)
+            if (navigator.permissions) {
+                try {
+                    const permStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
+                    if (permStatus.state === 'denied') {
+                        setCameraError('Camera permission was denied. Please allow camera access in your browser settings and try again.');
+                        return;
+                    }
+                } catch {
+                    // permissions.query for camera may not be supported in all browsers — continue
+                }
+            }
+
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode,
@@ -221,10 +250,38 @@ export function GenreIdentifierPage() {
                 };
             }
             setCameraActive(true);
-        } catch (err) {
-            console.error('Camera access denied:', err);
-            // Fallback to upload mode
-            setMode('upload');
+            setCameraError(null);
+        } catch (err: any) {
+            console.error('Camera access error:', err);
+
+            // Provide specific, actionable error messages
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                setCameraError('Camera permission was denied. Please allow camera access in your browser settings and reload the page.');
+            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                setCameraError('No camera found on this device. Please try uploading an image instead.');
+            } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                setCameraError('Camera is already in use by another app. Please close other apps using the camera and try again.');
+            } else if (err.name === 'OverconstrainedError') {
+                setCameraError('Camera does not support the requested settings. Trying with default settings...');
+                // Retry with minimal constraints
+                try {
+                    const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    streamRef.current = fallbackStream;
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = fallbackStream;
+                        videoRef.current.onloadedmetadata = () => setCameraReady(true);
+                    }
+                    setCameraActive(true);
+                    setCameraError(null);
+                    return;
+                } catch {
+                    setCameraError('Unable to access camera. Please try uploading an image instead.');
+                }
+            } else if (err.name === 'SecurityError') {
+                setCameraError('Camera access blocked by security policy. This may be a server configuration issue. Please try uploading an image.');
+            } else {
+                setCameraError(`Unable to access camera: ${err.message || 'Unknown error'}. Please try uploading an image.`);
+            }
         }
     }, [facingMode]);
 
@@ -356,8 +413,33 @@ export function GenreIdentifierPage() {
                             />
                             {!cameraActive && (
                                 <div className="gid-camera-placeholder">
-                                    <Camera className="w-12 h-12 text-white/30" />
-                                    <p className="text-white/50 text-sm mt-3">Starting camera...</p>
+                                    {cameraError ? (
+                                        <>
+                                            <ShieldAlert className="w-12 h-12 text-amber-400/60" />
+                                            <p className="text-amber-300/90 text-sm mt-3 text-center px-4 max-w-xs leading-relaxed">{cameraError}</p>
+                                            <div className="flex gap-2 mt-4">
+                                                <button
+                                                    className="gid-control-btn flex items-center gap-1.5 px-4 py-2 text-xs font-medium"
+                                                    onClick={() => { setCameraError(null); startCamera(); }}
+                                                >
+                                                    <RefreshCw className="w-3.5 h-3.5" />
+                                                    Retry
+                                                </button>
+                                                <button
+                                                    className="gid-control-btn flex items-center gap-1.5 px-4 py-2 text-xs font-medium"
+                                                    onClick={() => { setMode('upload'); stopCamera(); }}
+                                                >
+                                                    <Upload className="w-3.5 h-3.5" />
+                                                    Upload Instead
+                                                </button>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Camera className="w-12 h-12 text-white/30" />
+                                            <p className="text-white/50 text-sm mt-3">Starting camera...</p>
+                                        </>
+                                    )}
                                 </div>
                             )}
                         </>

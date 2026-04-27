@@ -94,16 +94,33 @@ export function useForumThread(id: string) {
 export function useTrendingThreads(limit?: number) {
     return useQuery({
         queryKey: forumKeys.trending(),
-        queryFn: () => forumService.getTrending(limit),
+        queryFn: async () => {
+            try {
+                return await forumService.getTrending(limit);
+            } catch {
+                // Graceful degradation — trending is non-critical UI
+                return [];
+            }
+        },
         staleTime: 1000 * 60 * 5, // 5 minutes
+        retry: false, // Don't retry — trending is non-critical
+        refetchOnWindowFocus: false,
     });
 }
 
 export function useFeaturedThreads() {
     return useQuery({
         queryKey: forumKeys.featured(),
-        queryFn: () => forumService.getFeatured(),
+        queryFn: async () => {
+            try {
+                return await forumService.getFeatured();
+            } catch {
+                return [];
+            }
+        },
         staleTime: 1000 * 60 * 10, // 10 minutes
+        retry: false,
+        refetchOnWindowFocus: false,
     });
 }
 

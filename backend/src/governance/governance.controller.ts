@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Param, Body, UseGuards } from "@nestjs/common"
 import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger"
+import { SkipThrottle, Throttle } from "@nestjs/throttler"
 import { GovernanceService } from "./governance.service"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { PermissionsGuard } from "../auth/guards/permissions.guard"
@@ -14,6 +15,7 @@ export class GovernanceController {
 
     @Get("proposals")
     @Public()
+    @SkipThrottle()
     @ApiOperation({ summary: "Get active proposals" })
     async getActiveProposals() {
         return this.governanceService.getActiveProposals()
@@ -23,6 +25,7 @@ export class GovernanceController {
     @UseGuards(JwtAuthGuard, PermissionsGuard)
     @Permissions(Permission.GOVERNANCE_PROPOSE)
     @ApiBearerAuth("JWT-auth")
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
     @ApiOperation({ summary: "Create proposal" })
     async createProposal(
         @Body() dto: { title: string; description: string; duration: number },
@@ -35,6 +38,7 @@ export class GovernanceController {
     @UseGuards(JwtAuthGuard, PermissionsGuard)
     @Permissions(Permission.GOVERNANCE_VOTE)
     @ApiBearerAuth("JWT-auth")
+    @Throttle({ default: { limit: 10, ttl: 60000 } })
     @ApiOperation({ summary: "Vote on proposal" })
     async vote(
         @Param("id") proposalId: string,

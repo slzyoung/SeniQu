@@ -7,6 +7,7 @@ import { apiGet, apiPatch, apiPost, apiDelete, uploadFile } from '../lib/api';
 import { User, Artwork, Collection } from '../lib/types';
 import { z } from 'zod';
 import { sanitizeInput } from '../lib/security';
+import { compressImage } from '../lib/imageCompressor';
 
 // ============================================
 // TYPES
@@ -218,7 +219,13 @@ class UserService {
      * Upload avatar
      */
     async uploadAvatar(file: File): Promise<{ url: string }> {
-        const result = await uploadFile(file, 'avatars');
+        // Compress avatar before upload (small dimensions, medium quality)
+        const compressedFile = await compressImage(file, {
+            maxWidth: 400,
+            maxHeight: 400,
+            quality: 0.75,
+        });
+        const result = await uploadFile(compressedFile, 'avatars');
         return { url: result.url };
     }
 }
