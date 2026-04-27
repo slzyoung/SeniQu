@@ -1,13 +1,16 @@
-import { Injectable, UnauthorizedException, Logger } from "@nestjs/common"
+import { Injectable, UnauthorizedException, BadRequestException, Logger } from "@nestjs/common"
 import { JwtService } from "@nestjs/jwt"
 import { ConfigService } from "@nestjs/config"
 import { UsersService } from "../users/users.service"
 import { PrivyService } from "./privy.service"
 import { WalletService } from "../wallet/wallet.service"
+import { EmailService } from "../email/email.service"
+import { DatabaseService } from "../database/database.service"
 import { LoginDto } from "./dto/login.dto"
 import { RegisterDto } from "./dto/register.dto"
 import { AuthResponseDto, JwtPayload } from "./dto/auth-response.dto"
 import * as bcrypt from "bcryptjs"
+import * as crypto from "crypto"
 import { GoogleService } from "./google.service"
 
 @Injectable()
@@ -21,6 +24,8 @@ export class AuthService {
         private readonly privyService: PrivyService,
         private readonly walletService: WalletService,
         private readonly googleService: GoogleService,
+        private readonly emailService: EmailService,
+        private readonly databaseService: DatabaseService,
     ) { }
 
     /**
@@ -253,9 +258,9 @@ export class AuthService {
     }
 
     /**
-     * Register new user
+     * Register new user — sends verification email, does NOT issue tokens
      */
-    async register(dto: RegisterDto): Promise<AuthResponseDto> {
+    async register(dto: RegisterDto): Promise<any> {
         const existingUser = await this.usersService.findByEmail(dto.email)
 
         if (existingUser) {
@@ -272,21 +277,33 @@ export class AuthService {
             userType: dto.userType || "ART_LOVER",
         })
 
-        // Auto-provision embedded wallet if needed
-        await this.ensureEmbeddedWallet(user)
+        // Generate verification token
+        const token = crypto.randomBytes(32).toString("hex")
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
-        const tokens = await this.generateTokens(user)
+        const db = this.databaseService.getAdminClient()
+        await db.from("email_verifications").insert({
+            user_id: user.id,
+            token,
+            expires_at: expiresAt.toISOString(),
+        })
+
+        // Send verification email
+        await this.emailService.sendVerificationEmail(dto.email, token)
+
+        this.logger.log(`Verification email sent to ${dto.email} for user ${user.id}`)
 
         return {
-            user,
-            ...tokens,
+            message: "Verification email sent. Please check your inbox.",
+            requiresVerification: true,
+            email: dto.email,
         }
     }
 
     /**
-     * Login with email/password
+     * Login with email/password — validates creds, sends OTP, does NOT issue tokens yet
      */
-    async login(dto: LoginDto): Promise<AuthResponseDto> {
+    async login(dto: LoginDto): Promise<any> {
         const user = await this.usersService.findByEmail(dto.email)
 
         if (!user || !user.password) {
@@ -299,19 +316,171 @@ export class AuthService {
             throw new UnauthorizedException("Invalid credentials")
         }
 
-        // Auto-provision embedded wallet if needed
+        // Check email verification
+        if (!user.isEmailVerified) {
+            throw new UnauthorizedException("Email not verified. Please check your inbox for the verification link.")
+        }
+
+        // Generate 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString()
+        const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
+
+        // Store OTP in database
+        const db = this.databaseService.getAdminClient()
+
+        // Delete any existing unused OTPs for this email
+        await db.from("otp_codes").delete().eq("email", dto.email).is("used_at", null)
+
+        await db.from("otp_codes").insert({
+            email: dto.email,
+            code: otp,
+            expires_at: expiresAt.toISOString(),
+        })
+
+        // Send OTP email
+        await this.emailService.sendOtpEmail(dto.email, otp)
+
+        // Mask email for security: u***@example.com
+        const [localPart, domain] = dto.email.split("@")
+        const maskedEmail = `${localPart[0]}${'*'.repeat(Math.max(localPart.length - 1, 2))}@${domain}`
+
+        this.logger.log(`OTP sent to ${dto.email} for login`)
+
+        return {
+            message: "OTP sent to your email.",
+            requiresOtp: true,
+            email: maskedEmail,
+        }
+    }
+
+    /**
+     * Verify email address from registration link
+     */
+    async verifyEmail(token: string): Promise<{ message: string; verified: boolean }> {
+        const db = this.databaseService.getAdminClient()
+
+        // Find the verification token
+        const { data: verification, error } = await db
+            .from("email_verifications")
+            .select("*")
+            .eq("token", token)
+            .is("used_at", null)
+            .single()
+
+        if (error || !verification) {
+            throw new BadRequestException("Invalid or expired verification link.")
+        }
+
+        // Check expiry
+        if (new Date(verification.expires_at) < new Date()) {
+            throw new BadRequestException("Verification link has expired. Please register again.")
+        }
+
+        // Mark as used
+        await db.from("email_verifications")
+            .update({ used_at: new Date().toISOString() })
+            .eq("id", verification.id)
+
+        // Mark user as verified
+        await db.from("users")
+            .update({ is_email_verified: true, updated_at: new Date().toISOString() })
+            .eq("id", verification.user_id)
+
+        this.logger.log(`Email verified for user ${verification.user_id}`)
+
+        return { message: "Email verified successfully! You can now sign in.", verified: true }
+    }
+
+    /**
+     * Verify OTP code and complete login
+     */
+    async verifyOtp(email: string, otp: string): Promise<AuthResponseDto> {
+        const db = this.databaseService.getAdminClient()
+
+        // Find the OTP
+        const { data: otpRecord, error } = await db
+            .from("otp_codes")
+            .select("*")
+            .eq("email", email)
+            .eq("code", otp)
+            .is("used_at", null)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single()
+
+        if (error || !otpRecord) {
+            // Increment attempt counter for rate limiting
+            await db.from("otp_codes")
+                .update({ attempts: (otpRecord?.attempts || 0) + 1 })
+                .eq("email", email)
+                .is("used_at", null)
+
+            throw new UnauthorizedException("Invalid OTP code.")
+        }
+
+        // Check expiry
+        if (new Date(otpRecord.expires_at) < new Date()) {
+            throw new UnauthorizedException("OTP has expired. Please request a new one.")
+        }
+
+        // Check max attempts (5)
+        if (otpRecord.attempts >= 5) {
+            throw new UnauthorizedException("Too many attempts. Please request a new OTP.")
+        }
+
+        // Mark OTP as used
+        await db.from("otp_codes")
+            .update({ used_at: new Date().toISOString() })
+            .eq("id", otpRecord.id)
+
+        // Now complete the actual login
+        const user = await this.usersService.findByEmail(email)
+        if (!user) {
+            throw new UnauthorizedException("User not found.")
+        }
+
+        // Auto-provision embedded wallet
         await this.ensureEmbeddedWallet(user)
 
         const tokens = await this.generateTokens(user)
-
-        // Generate Privy Custom Auth Token for seamless wallet integration
         const privyToken = await this.privyService.getCustomAuthToken(user.id)
+
+        this.logger.log(`OTP verified — login complete for ${email}`)
 
         return {
             user,
             ...tokens,
-            privyToken: privyToken || undefined, // Return the token for frontend hydration
+            privyToken: privyToken || undefined,
         }
+    }
+
+    /**
+     * Resend OTP for login
+     */
+    async resendOtp(email: string): Promise<{ message: string }> {
+        const user = await this.usersService.findByEmail(email)
+        if (!user) {
+            // Don't reveal if user exists
+            return { message: "If the email is registered, a new OTP has been sent." }
+        }
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString()
+        const expiresAt = new Date(Date.now() + 5 * 60 * 1000)
+
+        const db = this.databaseService.getAdminClient()
+
+        // Delete existing unused OTPs
+        await db.from("otp_codes").delete().eq("email", email).is("used_at", null)
+
+        await db.from("otp_codes").insert({
+            email,
+            code: otp,
+            expires_at: expiresAt.toISOString(),
+        })
+
+        await this.emailService.sendOtpEmail(email, otp)
+
+        return { message: "A new OTP has been sent to your email." }
     }
 
     async getPrivyToken(userId: string): Promise<string | null> {

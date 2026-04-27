@@ -23,6 +23,7 @@ export interface User {
     notificationPrefs?: Record<string, boolean>
     isTwoFactorEnabled: boolean
     loginAlertsEnabled: boolean
+    isEmailVerified: boolean
     createdAt: Date
     updatedAt: Date
 }
@@ -328,6 +329,7 @@ export class UsersService {
             notificationPrefs: data.notification_prefs,
             isTwoFactorEnabled: data.is_two_factor_enabled || false,
             loginAlertsEnabled: data.login_alerts_enabled !== false, // Default true
+            isEmailVerified: data.is_email_verified || false,
             createdAt: new Date(data.created_at),
             updatedAt: new Date(data.updated_at),
         }

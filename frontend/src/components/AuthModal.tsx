@@ -7,8 +7,8 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mail, Lock, ArrowLeft, Loader2, Eye, EyeOff, AlertCircle, CheckCircle, Wallet, ShieldCheck } from 'lucide-react';
-import { authService, loginSchema, registerSchema, AuthError } from '../services/authService';
+import { X, Mail, Lock, ArrowLeft, Loader2, Eye, EyeOff, AlertCircle, CheckCircle, Wallet, ShieldCheck, KeyRound, MailCheck } from 'lucide-react';
+import { authService, loginSchema, registerSchema, AuthError, OtpRequiredResponse, VerificationRequiredResponse } from '../services/authService';
 import { useAppKit, useAppKitAccount, useAppKitProvider } from '../lib/reownConfig';
 
 import { useAuthStore } from '../stores/useAuthStore';
@@ -28,7 +28,7 @@ interface AuthModalProps {
   initialView?: AuthView;
 }
 
-type AuthView = 'main' | 'email-login' | 'email-register' | 'wallet-select' | 'wallet-select-account';
+type AuthView = 'main' | 'email-login' | 'email-register' | 'wallet-select' | 'wallet-select-account' | 'otp-input' | 'email-verify-pending';
 
 type WalletType = 'metamask' | 'phantom' | 'solflare' | 'walletconnect';
 
@@ -160,6 +160,13 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // OTP state
+  const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
+  const [otpEmail, setOtpEmail] = useState(''); // real email for API call
+  const [otpMaskedEmail, setOtpMaskedEmail] = useState(''); // masked email for display
+  const [otpResendCooldown, setOtpResendCooldown] = useState(0);
+  const otpInputRefs = React.useRef<(HTMLInputElement | null)[]>([]);
+
   // Track modal open state for async operations
   const isOpenRef = React.useRef(isOpen);
 
@@ -180,6 +187,10 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     setErrors({});
     setShowPassword(false);
     setIsLoading(false);
+    setOtpDigits(['', '', '', '', '', '']);
+    setOtpEmail('');
+    setOtpMaskedEmail('');
+    setOtpResendCooldown(0);
 
     // If we are partly authenticated in Privy but not Backend, Force Logout from Privy
     // This ensures next time user opens modal, they start fresh
@@ -478,37 +489,38 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
 
 
-  // Handle email login
+  // Handle email login — now triggers OTP flow
   const handleEmailLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setErrors({});
 
     try {
-      // Validate with Zod
       const validatedData = loginSchema.parse({ email, password });
-
       const response = await authService.login(validatedData);
 
-      // Update auth store
-      storeLogin(response.user, response.accessToken, response.refreshToken);
+      // Check if OTP is required
+      if ('requiresOtp' in response) {
+        const otpResponse = response as OtpRequiredResponse;
+        setOtpEmail(email); // Store real email for verify-otp API
+        setOtpMaskedEmail(otpResponse.email); // masked email for display
+        setOtpDigits(['', '', '', '', '', '']);
+        setView('otp-input');
+        toast.success('OTP Sent', otpResponse.message);
+        // Start cooldown
+        setOtpResendCooldown(60);
+        return;
+      }
 
-      // AUTOMATIC: Sync Privy Session handled by PrivySyncManager
-      // if ((response as any).privyToken) ...
-
+      // Direct auth response (legacy fallback)
+      const authResponse = response;
+      storeLogin(authResponse.user, authResponse.accessToken, authResponse.refreshToken);
       toast.success('Welcome back!', 'You have successfully signed in.');
 
-      // Check if profile needs completion (missing displayName or username)
       const { needsProfileCompletion } = await import('../lib/authHelpers');
-      const needsCompletion = needsProfileCompletion(response.user);
-
-      // Redirect to profile completion or dashboard
-      const redirectPath = needsCompletion
-        ? '/complete-profile'
-        : getDashboardRoute(response.user.role);
+      const needsCompletion = needsProfileCompletion(authResponse.user);
+      const redirectPath = needsCompletion ? '/complete-profile' : getDashboardRoute(authResponse.user.role);
       navigate(redirectPath);
-
-      // Then close modal
       handleClose();
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -528,14 +540,13 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     }
   }, [email, password, storeLogin, toast, handleClose, navigate]);
 
-  // Handle email registration
+  // Handle email registration — now triggers verification flow
   const handleEmailRegister = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setErrors({});
 
     try {
-      // Validate with Zod
       const validatedData = registerSchema.parse({
         email,
         password,
@@ -545,18 +556,19 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
       const response = await authService.register(validatedData);
 
-      // Update auth store
-      storeLogin(response.user, response.accessToken, response.refreshToken);
+      // Check if verification is required
+      if ('requiresVerification' in response) {
+        setView('email-verify-pending');
+        toast.success('Check Your Email', response.message);
+        return;
+      }
 
-      // AUTOMATIC: Sync Privy Session handled by PrivySyncManager
-
+      // Direct auth response (legacy fallback)
+      const authResponse = response;
+      storeLogin(authResponse.user, authResponse.accessToken, authResponse.refreshToken);
       toast.success('Welcome to SeniQu!', 'Your account has been created successfully.');
-
-      // Redirect to dashboard FIRST (before modal closes)
-      const redirectPath = getDashboardRoute(response.user.role);
+      const redirectPath = getDashboardRoute(authResponse.user.role);
       navigate(redirectPath);
-
-      // Then close modal
       handleClose();
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -575,6 +587,96 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
       setIsLoading(false);
     }
   }, [email, password, displayName, username, storeLogin, toast, handleClose, navigate]);
+
+  // Handle OTP verification
+  const handleVerifyOtp = useCallback(async (otpCode: string) => {
+    if (otpCode.length !== 6) return;
+    setIsLoading(true);
+    setErrors({});
+
+    try {
+      const response = await authService.verifyOtp(otpEmail, otpCode);
+
+      storeLogin(response.user, response.accessToken, response.refreshToken);
+      toast.success('Welcome back!', 'Authentication successful.');
+
+      const { needsProfileCompletion } = await import('../lib/authHelpers');
+      const needsCompletion = needsProfileCompletion(response.user);
+      const redirectPath = needsCompletion ? '/complete-profile' : getDashboardRoute(response.user.role);
+      navigate(redirectPath);
+      handleClose();
+    } catch (error) {
+      const authError = error as AuthError;
+      setErrors({ general: authError.message });
+      toast.error('Invalid OTP', authError.message);
+      // Clear OTP inputs
+      setOtpDigits(['', '', '', '', '', '']);
+      otpInputRefs.current[0]?.focus();
+    } finally {
+      setIsLoading(false);
+    }
+  }, [otpEmail, storeLogin, toast, handleClose, navigate]);
+
+  // Handle OTP resend
+  const handleResendOtp = useCallback(async () => {
+    if (otpResendCooldown > 0) return;
+    try {
+      await authService.resendOtp(otpEmail);
+      toast.success('OTP Resent', 'A new code has been sent to your email.');
+      setOtpResendCooldown(60);
+      setOtpDigits(['', '', '', '', '', '']);
+      otpInputRefs.current[0]?.focus();
+    } catch (error) {
+      const authError = error as AuthError;
+      toast.error('Resend Failed', authError.message);
+    }
+  }, [otpEmail, otpResendCooldown, toast]);
+
+  // OTP resend cooldown timer
+  React.useEffect(() => {
+    if (otpResendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setOtpResendCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [otpResendCooldown]);
+
+  // Handle OTP digit input
+  const handleOtpChange = useCallback((index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return; // Only digits
+    const newDigits = [...otpDigits];
+    newDigits[index] = value.slice(-1);
+    setOtpDigits(newDigits);
+
+    // Auto-focus next input
+    if (value && index < 5) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all 6 digits entered
+    const fullOtp = newDigits.join('');
+    if (fullOtp.length === 6) {
+      handleVerifyOtp(fullOtp);
+    }
+  }, [otpDigits, handleVerifyOtp]);
+
+  // Handle OTP paste
+  const handleOtpPaste = useCallback((e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length === 6) {
+      const digits = pasted.split('');
+      setOtpDigits(digits);
+      handleVerifyOtp(pasted);
+    }
+  }, [handleVerifyOtp]);
+
+  // Handle OTP backspace
+  const handleOtpKeyDown = useCallback((index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
+    }
+  }, [otpDigits]);
 
   // Google Icon SVG
   const GoogleIcon = () => (
@@ -1351,6 +1453,119 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                   {view === 'main' && renderMainView()}
                   {view === 'email-login' && renderEmailLoginView()}
                   {view === 'email-register' && renderEmailRegisterView()}
+                  {view === 'otp-input' && (
+                    <>
+                      {/* OTP Input View */}
+                      <div className="px-8 pt-8 pb-6">
+                        <button
+                          onClick={() => switchView('email-login')}
+                          className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-4"
+                        >
+                          <ArrowLeft className="w-4 h-4" />
+                          <span className="text-sm">Back</span>
+                        </button>
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 flex items-center justify-center border border-amber-500/20">
+                            <KeyRound className="w-6 h-6 text-amber-500" />
+                          </div>
+                          <div>
+                            <h2 className="text-2xl font-serif font-bold text-theme-text">Enter OTP Code</h2>
+                            <p className="text-theme-muted text-sm">Sent to {otpMaskedEmail}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="px-8 pb-10 space-y-6">
+                        {/* Error */}
+                        {errors.general && (
+                          <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+                            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                            <span>{errors.general}</span>
+                          </div>
+                        )}
+
+                        {/* OTP Inputs */}
+                        <div className="flex justify-center gap-3" onPaste={handleOtpPaste}>
+                          {otpDigits.map((digit, index) => (
+                            <input
+                              key={index}
+                              ref={(el) => { otpInputRefs.current[index] = el; }}
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={1}
+                              value={digit}
+                              onChange={(e) => handleOtpChange(index, e.target.value)}
+                              onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                              autoFocus={index === 0}
+                              disabled={isLoading}
+                              className={`w-12 h-14 text-center text-2xl font-bold bg-gray-50 dark:bg-theme-elevated border-2 ${
+                                digit ? 'border-amber-500/60 text-amber-600 dark:text-gold' : 'border-theme-border'
+                              } rounded-xl text-theme-text focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-all`}
+                            />
+                          ))}
+                        </div>
+
+                        {/* Loading indicator */}
+                        {isLoading && (
+                          <div className="flex items-center justify-center gap-2 text-amber-500">
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            <span className="text-sm font-medium">Verifying...</span>
+                          </div>
+                        )}
+
+                        {/* Timer + Resend */}
+                        <div className="text-center">
+                          <p className="text-theme-muted text-sm mb-2">
+                            Code expires in <span className="text-amber-500 font-semibold">5 minutes</span>
+                          </p>
+                          {otpResendCooldown > 0 ? (
+                            <p className="text-theme-muted text-sm">
+                              Resend code in <span className="text-amber-500 font-mono font-semibold">{otpResendCooldown}s</span>
+                            </p>
+                          ) : (
+                            <button
+                              onClick={handleResendOtp}
+                              className="text-amber-600 dark:text-gold hover:underline text-sm font-medium transition-colors"
+                            >
+                              Resend Code
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  {view === 'email-verify-pending' && (
+                    <>
+                      {/* Email Verification Pending View */}
+                      <div className="px-8 py-16 text-center">
+                        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-500/20 to-emerald-500/10 flex items-center justify-center border border-green-500/20 mx-auto mb-6">
+                          <MailCheck className="w-10 h-10 text-green-500" />
+                        </div>
+                        <h2 className="text-2xl font-serif font-bold text-theme-text mb-3">
+                          Check Your Email
+                        </h2>
+                        <p className="text-theme-muted text-sm leading-relaxed mb-2">
+                          We've sent a verification link to:
+                        </p>
+                        <p className="text-amber-600 dark:text-gold font-semibold text-lg mb-6">
+                          {email}
+                        </p>
+                        <p className="text-theme-muted text-sm leading-relaxed mb-8">
+                          Click the link in the email to activate your account.<br />
+                          The link expires in <span className="text-amber-500 font-semibold">24 hours</span>.
+                        </p>
+                        <button
+                          onClick={() => switchView('email-login')}
+                          className="w-full bg-gradient-to-r from-amber-600 to-amber-700 text-white py-3 rounded-xl font-semibold hover:from-amber-700 hover:to-amber-800 transition-all shadow-lg"
+                        >
+                          Back to Sign In
+                        </button>
+                        <p className="text-theme-muted text-xs mt-4">
+                          Didn't receive the email? Check your spam folder.
+                        </p>
+                      </div>
+                    </>
+                  )}
 
                   {view === 'wallet-select' && renderWalletSelectView()}
                   {view === 'wallet-select-account' && renderWalletAccountSelectView()}

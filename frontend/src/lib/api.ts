@@ -161,7 +161,10 @@ api.interceptors.response.use(
         const isAuthEndpoint = originalRequest.url?.includes('/auth/login') ||
             originalRequest.url?.includes('/auth/register') ||
             originalRequest.url?.includes('/auth/refresh') ||
-            originalRequest.url?.includes('/auth/callback');
+            originalRequest.url?.includes('/auth/callback') ||
+            originalRequest.url?.includes('/auth/verify-email') ||
+            originalRequest.url?.includes('/auth/verify-otp') ||
+            originalRequest.url?.includes('/auth/resend-otp');
 
         if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
             originalRequest._retry = true;

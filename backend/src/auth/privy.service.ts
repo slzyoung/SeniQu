@@ -331,8 +331,7 @@ export class PrivyService implements OnModuleInit {
                 notBefore: "-1m",
             })
 
-            this.logger.debug(`Generated custom auth token for ${userId}. Token length: ${token.length}`);
-            this.logger.debug(`Token snippet: ${token.substring(0, 10)}...${token.substring(token.length - 10)}`);
+            this.logger.debug(`Generated custom auth token for user ${userId} (length: ${token.length})`);
             return token;
         } catch (error: any) {
             this.logger.error(`Failed to create custom auth token: ${error.message}`);

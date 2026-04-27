@@ -36,7 +36,7 @@ export const configuration = () => ({
         clientId: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
         callbackUrl: process.env.GOOGLE_CALLBACK_URL || "http://localhost:3001/api/v1/auth/google/callback",
-        oauthCookieSecret: process.env.OAUTH_COOKIE_SECRET || "seniqu-dev-oauth-cookie-secret",
+        oauthCookieSecret: process.env.OAUTH_COOKIE_SECRET,
     },
 
     // Frontend URL (for OAuth redirects)
@@ -69,6 +69,15 @@ export const configuration = () => ({
         corsOrigins: process.env.CORS_ORIGINS?.split(",") || ["http://localhost:3000"],
         rateLimitTtl: parseInt(process.env.RATE_LIMIT_TTL || "60", 10),
         rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX || "100", 10),
+    },
+
+    // SMTP (Brevo)
+    smtp: {
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT || "587", 10),
+        user: process.env.SMTP_USER,
+        key: process.env.SMTP_KEY,
+        from: process.env.EMAIL_FROM || "SeniQu <noreply@seniqu.com>",
     },
 })
 
@@ -108,12 +117,23 @@ export const validationSchema = Joi.object({
     WALLETCONNECT_PROJECT_ID: Joi.string().optional(),
     WALLETCONNECT_SECRET_KEY: Joi.string().optional(),
 
+    // Security
+    OAUTH_COOKIE_SECRET: Joi.string().min(32).required(),
+    SESSION_SECRET: Joi.string().min(32).optional(),
+
     // Cloudflare R2 Storage
     R2_ACCOUNT_ID: Joi.string().optional(),
     R2_ACCESS_KEY_ID: Joi.string().optional(),
     R2_SECRET_ACCESS_KEY: Joi.string().optional(),
     R2_BUCKET_NAME: Joi.string().default("seniqu-assets"),
     R2_PUBLIC_URL: Joi.string().optional(),
+
+    // SMTP
+    SMTP_HOST: Joi.string().optional(),
+    SMTP_PORT: Joi.number().default(587),
+    SMTP_USER: Joi.string().optional(),
+    SMTP_KEY: Joi.string().optional(),
+    EMAIL_FROM: Joi.string().optional(),
 })
 
 export type AppConfiguration = ReturnType<typeof configuration>

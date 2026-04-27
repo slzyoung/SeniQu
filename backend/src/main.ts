@@ -49,7 +49,11 @@ async function bootstrap() {
     }))
 
     // Cookie parser (with secret for signed cookies — used by OAuth flow)
-    const cookieSecret = configService.get<string>("google.oauthCookieSecret") || "seniqu-dev-oauth-cookie-secret"
+    const cookieSecret = configService.get<string>("google.oauthCookieSecret")
+    if (!cookieSecret) {
+        logger.error("OAUTH_COOKIE_SECRET is not set! Aborting for security.")
+        process.exit(1)
+    }
     app.use(cookieParser(cookieSecret))
 
     // Response compression (gzip/brotli) — reduces bandwidth for JSON-heavy endpoints

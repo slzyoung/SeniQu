@@ -20,7 +20,9 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from "@nestjs/swagger"
 import { Throttle, SkipThrottle } from "@nestjs/throttler"
 import { ForumService } from "./forum.service"
 import { CreateThreadDto } from "./dto/create-thread.dto"
+import { UpdateThreadDto } from "./dto/update-thread.dto"
 import { CreatePostDto } from "./dto/create-post.dto"
+import { UpdatePostDto } from "./dto/update-post.dto"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
 import { Roles } from "../auth/decorators/roles.decorator"
@@ -111,6 +113,32 @@ export class ForumController {
         return this.forumService.createThread(dto, userId)
     }
 
+    @Put("threads/:id")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth("JWT-auth")
+    @ApiOperation({ summary: "Update a thread" })
+    async updateThread(
+        @Param("id", ParseUUIDPipe) id: string,
+        @Body() dto: UpdateThreadDto,
+        @GetUser("id") userId: string,
+        @GetUser("role") role: string,
+    ) {
+        return this.forumService.updateThread(id, dto, userId, role)
+    }
+
+    @Delete("threads/:id")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth("JWT-auth")
+    @HttpCode(HttpStatus.NO_CONTENT)
+    @ApiOperation({ summary: "Delete a thread" })
+    async deleteThread(
+        @Param("id", ParseUUIDPipe) id: string,
+        @GetUser("id") userId: string,
+        @GetUser("role") role: string,
+    ) {
+        return this.forumService.deleteThread(id, userId, role)
+    }
+
     @Put("threads/:id/pin")
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles("admin", "super_admin")
@@ -162,6 +190,19 @@ export class ForumController {
         @GetUser("id") userId: string,
     ) {
         return this.forumService.createPost(threadId, dto, userId)
+    }
+
+    @Put("posts/:id")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth("JWT-auth")
+    @ApiOperation({ summary: "Update a post" })
+    async updatePost(
+        @Param("id", ParseUUIDPipe) id: string,
+        @Body() dto: UpdatePostDto,
+        @GetUser("id") userId: string,
+        @GetUser("role") role: string,
+    ) {
+        return this.forumService.updatePost(id, dto, userId, role)
     }
 
     @Delete("posts/:id")

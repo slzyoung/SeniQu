@@ -13,9 +13,9 @@ INSERT INTO users (
     is_verified,
     is_active
 ) VALUES (
-    'siabang35@gmail.com',
-    '$2a$12$tHK5XPtZmclw/rJ.B39H8.N0RyK3VjUEVhypcpo0LFZ2LYM9cpS0a',
-    'Siabang User',
+    'user',
+    'xx',
+    'User',
     'user',
     true,
     true
@@ -33,8 +33,8 @@ INSERT INTO users (
     is_verified,
     is_active
 ) VALUES (
-    'artist@seniqu.com',
-    '$2a$12$tHK5XPtZmclw/rJ.B39H8.N0RyK3VjUEVhypcpo0LFZ2LYM9cpS0a',
+    'artist',
+    'xxxx',
     'Test Artist',
     'artist',
     true,
@@ -53,8 +53,8 @@ INSERT INTO users (
     is_verified,
     is_active
 ) VALUES (
-    'admin@seniqu.com',
-    '$2a$12$tHK5XPtZmclw/rJ.B39H8.N0RyK3VjUEVhypcpo0LFZ2LYM9cpS0a',
+    'admin',
+    '"xx",
     'Test Admin',
     'admin',
     'ADMIN',

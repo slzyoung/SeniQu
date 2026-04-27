@@ -12,7 +12,9 @@ import {
 import { createClient, SupabaseClient } from "@supabase/supabase-js"
 import { ConfigService } from "@nestjs/config"
 import { CreateThreadDto } from "./dto/create-thread.dto"
+import { UpdateThreadDto } from "./dto/update-thread.dto"
 import { CreatePostDto } from "./dto/create-post.dto"
+import { UpdatePostDto } from "./dto/update-post.dto"
 
 @Injectable()
 export class ForumService {
@@ -157,6 +159,71 @@ export class ForumService {
         return { data }
     }
 
+    async updateThread(threadId: string, dto: UpdateThreadDto, userId: string, userRole: string) {
+        const { data: thread } = await this.supabase
+            .from("forum_threads")
+            .select("author_id")
+            .eq("id", threadId)
+            .single()
+
+        if (!thread) {
+            throw new NotFoundException("Thread not found")
+        }
+
+        const isAdmin = ["admin", "super_admin"].includes(userRole)
+        if (thread.author_id !== userId && !isAdmin) {
+            throw new ForbiddenException("You cannot edit this thread")
+        }
+
+        const updates: any = { updated_at: new Date().toISOString() }
+        if (dto.title !== undefined) updates.title = dto.title
+        if (dto.content !== undefined) updates.content = dto.content
+        if (dto.tags !== undefined) updates.tags = dto.tags
+
+        const { data, error } = await this.supabase
+            .from("forum_threads")
+            .update(updates)
+            .eq("id", threadId)
+            .select()
+            .single()
+
+        if (error) {
+            this.logger.error(`Failed to update thread: ${error.message}`)
+            throw error
+        }
+
+        return { data }
+    }
+
+    async deleteThread(threadId: string, userId: string, userRole: string) {
+        const { data: thread } = await this.supabase
+            .from("forum_threads")
+            .select("author_id")
+            .eq("id", threadId)
+            .single()
+
+        if (!thread) {
+            throw new NotFoundException("Thread not found")
+        }
+
+        const isAdmin = ["admin", "super_admin"].includes(userRole)
+        if (thread.author_id !== userId && !isAdmin) {
+            throw new ForbiddenException("You cannot delete this thread")
+        }
+
+        const { error } = await this.supabase
+            .from("forum_threads")
+            .delete()
+            .eq("id", threadId)
+
+        if (error) {
+            this.logger.error(`Failed to delete thread: ${error.message}`)
+            throw error
+        }
+
+        return { success: true }
+    }
+
     async getPosts(threadId: string, page: any = 1, limit: any = 20) {
         let p = parseInt(page, 10);
         let l = parseInt(limit, 10);
@@ -219,6 +286,52 @@ export class ForumService {
 
         if (error) {
             this.logger.error(`Failed to create post: ${error.message}`)
+            throw error
+        }
+
+        return { data }
+    }
+
+    async updatePost(postId: string, dto: UpdatePostDto, userId: string, userRole: string) {
+        const { data: post } = await this.supabase
+            .from("forum_posts")
+            .select("author_id, thread_id")
+            .eq("id", postId)
+            .single()
+
+        if (!post) {
+            throw new NotFoundException("Post not found")
+        }
+
+        // Check if thread is locked
+        const { data: thread } = await this.supabase
+            .from("forum_threads")
+            .select("is_locked")
+            .eq("id", post.thread_id)
+            .single()
+
+        if (thread?.is_locked) {
+            throw new BadRequestException("This thread is locked")
+        }
+
+        const isAdmin = ["admin", "super_admin"].includes(userRole)
+        if (post.author_id !== userId && !isAdmin) {
+            throw new ForbiddenException("You cannot edit this post")
+        }
+
+        const { data, error } = await this.supabase
+            .from("forum_posts")
+            .update({
+                content: dto.content,
+                is_edited: true,
+                updated_at: new Date().toISOString()
+            })
+            .eq("id", postId)
+            .select()
+            .single()
+
+        if (error) {
+            this.logger.error(`Failed to update post: ${error.message}`)
             throw error
         }
 

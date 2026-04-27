@@ -21,6 +21,8 @@ import { PrivyGuard } from "./guards/privy.guard"
 // Other modules
 import { UsersModule } from "../users/users.module"
 import { WalletModule } from "../wallet/wallet.module"
+import { EmailModule } from "../email/email.module"
+import { DatabaseModule } from "../database/database.module"
 
 @Module({
     imports: [
@@ -47,6 +49,8 @@ import { WalletModule } from "../wallet/wallet.module"
         }),
         UsersModule,
         forwardRef(() => WalletModule),
+        EmailModule,
+        DatabaseModule,
     ],
     providers: [
         AuthService,
