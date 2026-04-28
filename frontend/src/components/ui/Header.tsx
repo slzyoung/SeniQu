@@ -95,18 +95,37 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
         }
     }, [menuView, showUserMenu, fetchHistory]);
 
-    // Close menus on outside click
+    // Close menus on outside click — use pointerdown + touchstart for reliable mobile support
     React.useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        const handleClickOutside = (e: PointerEvent | TouchEvent | MouseEvent) => {
+            const target = (e as TouchEvent).touches?.[0]
+                ? document.elementFromPoint(
+                      (e as TouchEvent).touches[0].clientX,
+                      (e as TouchEvent).touches[0].clientY
+                  )
+                : (e.target as Node);
+            if (menuRef.current && target && !menuRef.current.contains(target as Node)) {
                 setShowUserMenu(false);
                 setMenuView('main');
                 setShowNotifications(false);
             }
         };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        // pointerdown covers mouse + touch + pen on modern browsers
+        document.addEventListener('pointerdown', handleClickOutside as EventListener);
+        // touchstart fallback for older mobile browsers that lack Pointer Events
+        document.addEventListener('touchstart', handleClickOutside as EventListener, { passive: true });
+        return () => {
+            document.removeEventListener('pointerdown', handleClickOutside as EventListener);
+            document.removeEventListener('touchstart', handleClickOutside as EventListener);
+        };
     }, []);
+
+    // Auto-close dropdown on route change (e.g., navigating to Settings)
+    React.useEffect(() => {
+        setShowUserMenu(false);
+        setMenuView('main');
+        setShowNotifications(false);
+    }, [location.pathname]);
 
     const handleMobileMenuClick = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -285,13 +304,29 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
                             <AnimatePresence>
                                 {showUserMenu && (
                                     <>
-                                        {/* Mobile Backdrop */}
+                                        {/* Mobile Backdrop — use onPointerDown + onTouchEnd for reliable mobile closing */}
                                         <motion.div
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
                                             exit={{ opacity: 0 }}
-                                            onClick={() => setShowUserMenu(false)}
+                                            onClick={(e: React.MouseEvent) => {
+                                                e.stopPropagation();
+                                                setShowUserMenu(false);
+                                                setMenuView('main');
+                                            }}
+                                            onPointerDown={(e: React.PointerEvent) => {
+                                                e.stopPropagation();
+                                                setShowUserMenu(false);
+                                                setMenuView('main');
+                                            }}
+                                            onTouchEnd={(e: React.TouchEvent) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setShowUserMenu(false);
+                                                setMenuView('main');
+                                            }}
                                             className="md:hidden fixed inset-0 bg-neutral-950/60 z-[60] backdrop-blur-md"
+                                            style={{ touchAction: 'none', WebkitTapHighlightColor: 'transparent' }}
                                         />
 
                                         {/* Menu Content */}
