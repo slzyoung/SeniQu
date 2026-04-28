@@ -71,7 +71,19 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
 
     const [showNotifications, setShowNotifications] = React.useState(false);
     const menuRef = React.useRef<HTMLDivElement>(null);
+    const triggerRef = React.useRef<HTMLButtonElement>(null);
+    const backdropRef = React.useRef<HTMLDivElement>(null);
+    // Track whether a close was already handled by the backdrop/trigger
+    // to prevent the document-level handler from double-processing
+    const closeHandledRef = React.useRef(false);
     const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+
+    // Stable close helper — avoids stale closure issues
+    const closeAllMenus = React.useCallback(() => {
+        setShowUserMenu(false);
+        setMenuView('main');
+        setShowNotifications(false);
+    }, []);
 
     const fetchHistory = React.useCallback(async () => {
         setLoadingHistory(true);
@@ -95,37 +107,43 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
         }
     }, [menuView, showUserMenu, fetchHistory]);
 
-    // Close menus on outside click — use pointerdown + touchstart for reliable mobile support
+    // Close menus on outside click
+    // Only attach listeners when a menu is actually open to avoid unnecessary work
     React.useEffect(() => {
-        const handleClickOutside = (e: PointerEvent | TouchEvent | MouseEvent) => {
-            const target = (e as TouchEvent).touches?.[0]
-                ? document.elementFromPoint(
-                      (e as TouchEvent).touches[0].clientX,
-                      (e as TouchEvent).touches[0].clientY
-                  )
-                : (e.target as Node);
-            if (menuRef.current && target && !menuRef.current.contains(target as Node)) {
-                setShowUserMenu(false);
-                setMenuView('main');
-                setShowNotifications(false);
+        if (!showUserMenu && !showNotifications) return;
+
+        const handleClickOutside = (e: Event) => {
+            // If the close was already handled by the backdrop or trigger, skip
+            if (closeHandledRef.current) {
+                closeHandledRef.current = false;
+                return;
             }
+
+            const target = e.target as Node;
+            if (!target) return;
+
+            // Ignore clicks inside the menu container (includes dropdown content & trigger)
+            if (menuRef.current && menuRef.current.contains(target)) return;
+
+            // Ignore clicks on the backdrop (it has its own close handler)
+            if (backdropRef.current && backdropRef.current.contains(target)) return;
+
+            closeAllMenus();
         };
-        // pointerdown covers mouse + touch + pen on modern browsers
-        document.addEventListener('pointerdown', handleClickOutside as EventListener);
-        // touchstart fallback for older mobile browsers that lack Pointer Events
-        document.addEventListener('touchstart', handleClickOutside as EventListener, { passive: true });
+
+        // Use mousedown for desktop, touchstart for mobile — these fire before click
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('touchstart', handleClickOutside, { passive: true });
         return () => {
-            document.removeEventListener('pointerdown', handleClickOutside as EventListener);
-            document.removeEventListener('touchstart', handleClickOutside as EventListener);
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('touchstart', handleClickOutside);
         };
-    }, []);
+    }, [showUserMenu, showNotifications, closeAllMenus]);
 
     // Auto-close dropdown on route change (e.g., navigating to Settings)
     React.useEffect(() => {
-        setShowUserMenu(false);
-        setMenuView('main');
-        setShowNotifications(false);
-    }, [location.pathname]);
+        closeAllMenus();
+    }, [location.pathname, closeAllMenus]);
 
     const handleMobileMenuClick = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -290,8 +308,19 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
                         {/* User Menu */}
                         <div className="relative">
                             <button
-                                onClick={() => setShowUserMenu(!showUserMenu)}
-                                className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-theme-elevated transition-colors"
+                                ref={triggerRef}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    closeHandledRef.current = true;
+                                    if (showUserMenu) {
+                                        closeAllMenus();
+                                    } else {
+                                        setShowNotifications(false);
+                                        setShowUserMenu(true);
+                                        setMenuView('main');
+                                    }
+                                }}
+                                className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-theme-elevated transition-colors relative z-[80]"
                             >
                                 <Avatar
                                     src={user?.avatar}
@@ -304,26 +333,22 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
                             <AnimatePresence>
                                 {showUserMenu && (
                                     <>
-                                        {/* Mobile Backdrop — use onPointerDown + onTouchEnd for reliable mobile closing */}
+                                        {/* Mobile Backdrop */}
                                         <motion.div
+                                            ref={backdropRef}
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
                                             exit={{ opacity: 0 }}
                                             onClick={(e: React.MouseEvent) => {
                                                 e.stopPropagation();
-                                                setShowUserMenu(false);
-                                                setMenuView('main');
-                                            }}
-                                            onPointerDown={(e: React.PointerEvent) => {
-                                                e.stopPropagation();
-                                                setShowUserMenu(false);
-                                                setMenuView('main');
-                                            }}
-                                            onTouchEnd={(e: React.TouchEvent) => {
                                                 e.preventDefault();
+                                                closeHandledRef.current = true;
+                                                closeAllMenus();
+                                            }}
+                                            onTouchStart={(e: React.TouchEvent) => {
                                                 e.stopPropagation();
-                                                setShowUserMenu(false);
-                                                setMenuView('main');
+                                                closeHandledRef.current = true;
+                                                closeAllMenus();
                                             }}
                                             className="md:hidden fixed inset-0 bg-neutral-950/60 z-[60] backdrop-blur-md"
                                             style={{ touchAction: 'none', WebkitTapHighlightColor: 'transparent' }}
@@ -407,7 +432,7 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
                                                             <motion.button
                                                                 whileTap={{ scale: 0.92 }}
                                                                 onClick={() => {
-                                                                    setShowUserMenu(false);
+                                                                    closeAllMenus();
                                                                     const role = user?.role;
                                                                     if (role === 'admin' || role === 'super_admin') {
                                                                         navigate('/admin/settings');
