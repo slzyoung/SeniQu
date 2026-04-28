@@ -75,7 +75,7 @@ async function bootstrap() {
         "http://localhost:5173",
         "https://seniquapp.netlify.app",
         "https://rpc.ankr.com/solana",
-        "https://seniquwebapp.onrender.com",
+        "https://api.seniqu.art",
         "https://solana-mainnet.rpc.extrnode.com/",
     ]
 
