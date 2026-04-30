@@ -21,6 +21,30 @@ export const ROLES = {
 
 export type UserRole = typeof ROLES[keyof typeof ROLES];
 
+// Enterprise Admin Roles (RBAC)
+export const ADMIN_ROLES = {
+    SUPER_ADMIN: 'SUPER_ADMIN',
+    PLATFORM_ADMIN: 'PLATFORM_ADMIN',
+    MUSEUM_ADMIN: 'MUSEUM_ADMIN',
+    GALLERY_ADMIN: 'GALLERY_ADMIN',
+    HERITAGE_ADMIN: 'HERITAGE_ADMIN',
+    ARTIST_ADMIN: 'ARTIST_ADMIN',
+    CONTENT_MODERATOR: 'CONTENT_MODERATOR',
+} as const;
+
+export type AdminRole = typeof ADMIN_ROLES[keyof typeof ADMIN_ROLES];
+
+// Human-readable labels for admin roles
+export const ADMIN_ROLE_LABELS: Record<string, string> = {
+    SUPER_ADMIN: 'Super Admin',
+    PLATFORM_ADMIN: 'Platform Admin',
+    MUSEUM_ADMIN: 'Museum Admin',
+    GALLERY_ADMIN: 'Gallery Admin',
+    HERITAGE_ADMIN: 'Heritage Admin',
+    ARTIST_ADMIN: 'Artist Admin',
+    CONTENT_MODERATOR: 'Content Moderator',
+};
+
 // Route Paths
 export const ROUTES = {
     // Public Routes
@@ -87,6 +111,8 @@ export const ROUTES = {
     ADMIN_PARTNERSHIPS: '/admin/partnerships',
     ADMIN_ALERTS: '/admin/alerts',
     ADMIN_PROFILE: '/admin/profile',
+    ADMIN_MY_WALLET: '/admin/my-wallet',
+    ADMIN_WALLETS: '/admin/wallets',
 
     // AI Features
     AI_GENRE: '/ai/genre',

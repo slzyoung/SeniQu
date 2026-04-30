@@ -287,7 +287,7 @@ function CreateThreadModal({
                                     type="text"
                                     value={tags}
                                     onChange={(e) => setTags(e.target.value)}
-                                    placeholder="art, digital, nft"
+                                    placeholder="art, digital, classic"
                                     className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-white/[0.04] border border-gray-200 dark:border-white/[0.08] text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:border-amber-500 dark:focus:border-gold focus:ring-1 focus:ring-amber-500/20 transition-all text-sm outline-none"
                                 />
                             </div>

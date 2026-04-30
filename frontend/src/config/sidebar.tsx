@@ -203,6 +203,12 @@ export const adminSidebarSections: SidebarSection[] = [
                 path: ROUTES.ADMIN_PREMIUM,
             },
             {
+                id: 'wallets',
+                label: 'Wallet & Finance',
+                icon: <Wallet className="w-5 h-5" />,
+                path: ROUTES.ADMIN_WALLETS,
+            },
+            {
                 id: 'partnerships',
                 label: 'Partnerships',
                 icon: <Handshake className="w-5 h-5" />,
@@ -262,8 +268,15 @@ export const adminSidebarSections: SidebarSection[] = [
         title: 'Account',
         items: [
             {
+                id: 'my-wallet',
+                label: 'My Wallet',
+                icon: <Wallet className="w-5 h-5" />,
+                path: ROUTES.ADMIN_MY_WALLET,
+            },
+            {
                 id: 'settings',
                 label: 'Global Settings',
+
                 icon: <Settings className="w-5 h-5" />,
                 path: ROUTES.ADMIN_SETTINGS,
             },

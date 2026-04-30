@@ -119,14 +119,30 @@ export function extractPagination(data: unknown): { total: number; page: number;
 
     const obj = data as Record<string, unknown>;
 
-    // Check for meta object
+    // Handle double-nested data from backend TransformInterceptor wrapper
+    if (obj.data && typeof obj.data === 'object' && !Array.isArray(obj.data)) {
+        const inner = obj.data as Record<string, unknown>;
+        if (inner.meta && typeof inner.meta === 'object') {
+            const innerMeta = inner.meta as Record<string, unknown>;
+            return {
+                total: (innerMeta.total as number) || (innerMeta.totalCount as number) || 0,
+                page: (innerMeta.page as number) || (innerMeta.currentPage as number) || 1,
+                totalPages: (innerMeta.totalPages as number) || (innerMeta.pages as number) || 1,
+            };
+        }
+    }
+
+    // Check for standard meta object
     if (obj.meta && typeof obj.meta === 'object') {
         const meta = obj.meta as Record<string, unknown>;
-        return {
-            total: (meta.total as number) || (meta.totalCount as number) || 0,
-            page: (meta.page as number) || (meta.currentPage as number) || 1,
-            totalPages: (meta.totalPages as number) || (meta.pages as number) || 1,
-        };
+        // If the meta only has timestamp/method/path (interceptor meta), ignore it and check flat properties later
+        if (meta.total !== undefined || meta.page !== undefined || meta.totalPages !== undefined) {
+            return {
+                total: (meta.total as number) || (meta.totalCount as number) || 0,
+                page: (meta.page as number) || (meta.currentPage as number) || 1,
+                totalPages: (meta.totalPages as number) || (meta.pages as number) || 1,
+            };
+        }
     }
 
     // Check for flat pagination properties

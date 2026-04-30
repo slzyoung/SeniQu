@@ -12,7 +12,7 @@ import { useAuthStore } from '../../stores/useAuthStore';
 import { useToast } from '../../stores/useNotificationStore';
 import { ROUTES } from '../../lib/constants';
 import { getDashboardRoute } from '../../lib/utils';
-import { authService, loginSchema, AuthError } from '../../services/authService';
+import { authService, loginSchema, AuthError, AuthResponse } from '../../services/authService';
 import { needsProfileCompletion } from '../../lib/authHelpers';
 import { z } from 'zod';
 
@@ -27,6 +27,8 @@ export function Login() {
     const toast = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [otpMode, setOtpMode] = useState(false);
+    const [otpCode, setOtpCode] = useState('');
     const [formData, setFormData] = useState({
         email: '',
         password: '',
@@ -45,14 +47,20 @@ export function Login() {
             // Call auth service
             const response = await authService.login(validatedData);
 
+            if ('requiresOtp' in response && response.requiresOtp) {
+                setOtpMode(true);
+                toast.success('OTP Sent', 'Please check your email for the 6-digit code.');
+                return;
+            }
+
+            const authResponse = response as AuthResponse;
             // Update store
-            storeLogin(response.user, response.accessToken, response.refreshToken);
+            storeLogin(authResponse.user, authResponse.accessToken, authResponse.refreshToken);
 
             toast.success('Welcome back!', 'You have successfully signed in.');
 
-
             // Determine redirect path based on role
-            const redirectPath = getDashboardRoute(response.user.role);
+            const redirectPath = getDashboardRoute(authResponse.user.role);
 
             const from = (location.state as { from?: Location })?.from?.pathname || redirectPath;
             navigate(from, { replace: true });
@@ -69,6 +77,27 @@ export function Login() {
                 setErrors({ general: authError.message });
                 toast.error('Login failed', authError.message);
             }
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleOtpSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setErrors({});
+
+        try {
+            const response = await authService.verifyOtp(formData.email, otpCode);
+            storeLogin(response.user, response.accessToken, response.refreshToken);
+            toast.success('Welcome back!', 'You have successfully signed in.');
+            const redirectPath = getDashboardRoute(response.user.role);
+            const from = (location.state as { from?: Location })?.from?.pathname || redirectPath;
+            navigate(from, { replace: true });
+        } catch (error) {
+            const authError = error as AuthError;
+            setErrors({ general: authError.message });
+            toast.error('Invalid OTP', authError.message);
         } finally {
             setIsLoading(false);
         }
@@ -100,64 +129,111 @@ export function Login() {
                 </div>
 
                 <Card variant="elevated" padding="lg">
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        {/* General Error */}
-                        {errors.general && (
-                            <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
-                                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                                <span>{errors.general}</span>
+                    {otpMode ? (
+                        <form onSubmit={handleOtpSubmit} className="space-y-4">
+                            {errors.general && (
+                                <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+                                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                                    <span>{errors.general}</span>
+                                </div>
+                            )}
+                            <div className="text-center mb-6">
+                                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gold/10 text-gold mb-3">
+                                    <Mail className="w-6 h-6" />
+                                </div>
+                                <h2 className="text-lg font-bold text-theme-text">Check your email</h2>
+                                <p className="text-sm text-theme-muted mt-1">We sent a 6-digit verification code to<br/><strong className="text-theme-text">{formData.email}</strong></p>
                             </div>
-                        )}
+                            
+                            <Input
+                                label="Verification Code"
+                                type="text"
+                                value={otpCode}
+                                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                placeholder="000000"
+                                className="text-center tracking-widest text-lg font-mono"
+                                required
+                            />
 
-                        <Input
-                            label="Email"
-                            type="email"
-                            value={formData.email}
-                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                            placeholder="you@example.com"
-                            leftIcon={<Mail className="w-4 h-4" />}
-                            error={errors.email}
-                            required
-                        />
+                            <Button
+                                type="submit"
+                                variant="gold"
+                                fullWidth
+                                isLoading={isLoading}
+                                rightIcon={!isLoading && <ArrowRight className="w-4 h-4" />}
+                                disabled={otpCode.length !== 6}
+                            >
+                                {isLoading ? 'Verifying...' : 'Verify Code'}
+                            </Button>
+                            
+                            <button 
+                                type="button" 
+                                onClick={() => setOtpMode(false)}
+                                className="w-full text-center text-sm text-theme-muted hover:text-gold mt-4 transition-colors"
+                            >
+                                Back to login
+                            </button>
+                        </form>
+                    ) : (
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            {/* General Error */}
+                            {errors.general && (
+                                <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+                                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                                    <span>{errors.general}</span>
+                                </div>
+                            )}
 
-                        <Input
-                            label="Password"
-                            type={showPassword ? 'text' : 'password'}
-                            value={formData.password}
-                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                            placeholder="••••••••"
-                            leftIcon={<Lock className="w-4 h-4" />}
-                            rightIcon={
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="focus:outline-none"
-                                >
-                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                </button>
-                            }
-                            error={errors.password}
-                            required
-                        />
+                            <Input
+                                label="Email"
+                                type="email"
+                                value={formData.email}
+                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                placeholder="you@example.com"
+                                leftIcon={<Mail className="w-4 h-4" />}
+                                error={errors.email}
+                                required
+                            />
 
-                        <div className="flex items-center justify-between text-sm">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" className="rounded border-theme-border" />
-                                <span className="text-theme-muted">Remember me</span>
-                            </label>
-                            <a href="#" className="text-gold hover:underline">Forgot password?</a>
-                        </div>
+                            <Input
+                                label="Password"
+                                type={showPassword ? 'text' : 'password'}
+                                value={formData.password}
+                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                placeholder="••••••••"
+                                leftIcon={<Lock className="w-4 h-4" />}
+                                rightIcon={
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="focus:outline-none"
+                                    >
+                                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                }
+                                error={errors.password}
+                                required
+                            />
 
-                        <Button
-                            type="submit"
-                            variant="gold"
-                            fullWidth
-                            isLoading={isLoading}
-                            rightIcon={!isLoading && <ArrowRight className="w-4 h-4" />}
-                        >
-                            {isLoading ? 'Signing in...' : 'Sign In'}
-                        </Button>
-                    </form>
+                            <div className="flex items-center justify-between text-sm">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" className="rounded border-theme-border" />
+                                    <span className="text-theme-muted">Remember me</span>
+                                </label>
+                                <a href="#" className="text-gold hover:underline">Forgot password?</a>
+                            </div>
+
+                            <Button
+                                type="submit"
+                                variant="gold"
+                                fullWidth
+                                isLoading={isLoading}
+                                rightIcon={!isLoading && <ArrowRight className="w-4 h-4" />}
+                            >
+                                {isLoading ? 'Signing in...' : 'Sign In'}
+                            </Button>
+                        </form>
+                    )}
 
                     <div className="mt-6 pt-6 border-t border-theme-border text-center">
                         <p className="text-theme-muted text-sm">

@@ -59,7 +59,7 @@ export function SecurityCenter() {
 }
 
 export function ArtsOversight() {
-    return <PlaceholderPage title="NFT Marketplace Oversight" description="Monitor and manage NFT transactions" icon={ShoppingBag} />;
+    return <PlaceholderPage title="Arts Marketplace Oversight" description="Monitor and manage art transactions" icon={ShoppingBag} />;
 }
 
 export function PremiumManagement() {

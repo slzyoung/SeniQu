@@ -48,14 +48,23 @@ export class PermissionsGuard implements CanActivate {
     private getUserPermissions(user: any): Permission[] {
         const permissions: Set<Permission> = new Set()
 
-        if (user.adminRole === "super_admin") {
-            return Object.values(Permission)
+        // Normalize admin role (handle both UPPER and lower case from DB)
+        const adminRole = user.adminRole || user.adminRoleTyped
+        if (adminRole) {
+            const normalizedRole = adminRole.toUpperCase()
+            if (normalizedRole === "SUPER_ADMIN") {
+                return Object.values(Permission)
+            }
+            // Check both casing variants in the ROLE_PERMISSIONS map
+            if (ROLE_PERMISSIONS[normalizedRole]) {
+                ROLE_PERMISSIONS[normalizedRole].forEach((p) => permissions.add(p))
+            }
+            if (ROLE_PERMISSIONS[adminRole]) {
+                ROLE_PERMISSIONS[adminRole].forEach((p) => permissions.add(p))
+            }
         }
 
-        if (user.adminRole && ROLE_PERMISSIONS[user.adminRole]) {
-            ROLE_PERMISSIONS[user.adminRole].forEach((p) => permissions.add(p))
-        }
-
+        // Fall back to user type permissions
         if (user.userType) {
             const userTypeLower = user.userType.toLowerCase()
             if (ROLE_PERMISSIONS[userTypeLower]) {

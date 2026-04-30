@@ -5,6 +5,8 @@
 
 import { Injectable, Logger, NotFoundException } from "@nestjs/common"
 import { DatabaseService } from "../database/database.service"
+import { EmailService } from "../email/email.service"
+import * as bcrypt from "bcryptjs"
 
 export interface DashboardStats {
     totalUsers: number
@@ -41,16 +43,19 @@ export interface InstitutionWithOwner {
 export class AdminService {
     private readonly logger = new Logger(AdminService.name)
 
-    constructor(private readonly db: DatabaseService) { }
+    constructor(
+        private readonly db: DatabaseService,
+        private readonly emailService: EmailService
+    ) { }
 
     // ============================================
     // DASHBOARD STATS
     // ============================================
 
     async getDashboardStats(): Promise<DashboardStats> {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
 
-        const [users, artworks, institutions, nfts, pendingInstitutions] = await Promise.all([
+        const [users, artworks, institutions, arts, pendingInstitutions] = await Promise.all([
             client.from("users").select("*", { count: "exact", head: true }),
             client.from("artworks").select("*", { count: "exact", head: true }),
             client.from("institutions").select("*", { count: "exact", head: true }),
@@ -70,7 +75,7 @@ export class AdminService {
             totalUsers: users.count || 0,
             totalArtworks: artworks.count || 0,
             totalInstitutions: institutions.count || 0,
-            totalArts: nfts.count || 0,
+            totalArts: arts.count || 0,
             totalRevenue: 0, // TODO: Calculate from subscriptions/transactions
             activeUsers: Math.floor((users.count || 0) * 0.3), // Placeholder
             newUsersToday: newUsersToday || 0,
@@ -78,12 +83,39 @@ export class AdminService {
         }
     }
 
+    async getDomainDashboardStats(adminRole: string): Promise<any> {
+        const client = this.db.getAdminClient()
+        let viewName = ''
+        
+        // Map role to correct view
+        switch(adminRole?.toUpperCase()) {
+            case 'MUSEUM_ADMIN': viewName = 'admin_museum_dashboard_stats'; break;
+            case 'GALLERY_ADMIN': viewName = 'admin_gallery_dashboard_stats'; break;
+            case 'HERITAGE_ADMIN': viewName = 'admin_heritage_dashboard_stats'; break;
+            case 'ARTIST_ADMIN': viewName = 'admin_artist_dashboard_stats'; break;
+            case 'SUPER_ADMIN':
+            case 'PLATFORM_ADMIN':
+                return this.getDashboardStats();
+            default:
+                // Fallback for generic admin or unknown
+                return this.getDashboardStats();
+        }
+
+        const { data, error } = await client.from(viewName).select('*').single()
+        if (error) {
+            this.logger.error(`Error fetching domain stats for ${adminRole}: ${error.message}`)
+            // Fallback to empty stats if view fails
+            return {}
+        }
+        return data
+    }
+
     // ============================================
     // USER MANAGEMENT
     // ============================================
 
     async getUsers(page = 1, limit = 20, filters?: { role?: string; status?: string }) {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
         const safeLimit = Math.min(Math.max(limit, 1), 100)
         const offset = (page - 1) * safeLimit
 
@@ -150,17 +182,126 @@ export class AdminService {
         this.logger.log(`User activated: ${userId} by admin: ${adminId}`)
     }
 
+    async createAdminUser(dto: any, adminId: string) {
+        const client = this.db.getAdminClient()
+        let scopeId = dto.scopeId;
+
+        // If domain admin and no scopeId is provided, create the institution on the fly
+        if (['MUSEUM_ADMIN', 'GALLERY_ADMIN', 'HERITAGE_ADMIN'].includes(dto.adminRoleTyped) && !scopeId) {
+            if (!dto.institutionName || !dto.city || !dto.category) {
+                throw new Error("Institution name, city, and category are required to provision a new domain admin.");
+            }
+            
+            const slug = dto.institutionName.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Math.floor(Math.random() * 1000);
+            
+            // 1. Create institution with Super Admin as temporary owner
+            const { data: instData, error: instError } = await client
+                .from('institutions')
+                .insert({
+                    name: dto.institutionName,
+                    slug: slug,
+                    type: dto.category,
+                    city: dto.city,
+                    owner_id: adminId // temporary owner
+                })
+                .select('id')
+                .single();
+                
+            if (instError) throw new Error(`Failed to provision institution: ${instError.message}`);
+            scopeId = instData.id;
+        }
+
+        // Generate a random 8-character password
+        const plainPassword = Math.random().toString(36).slice(-8);
+        const hashedPassword = await bcrypt.hash(plainPassword, 12);
+        
+        const { data, error } = await client.from('users').insert({
+            email: dto.email,
+            password_hash: hashedPassword,
+            username: dto.username,
+            display_name: dto.displayName,
+            role: dto.role,
+            admin_role_typed: dto.adminRoleTyped || null,
+            admin_scope_id: scopeId || null,
+            is_verified: true,
+            is_active: true
+        }).select('id').single();
+
+        if (error) {
+            this.logger.error(`Failed to create admin user: ${error.message}`)
+            throw new Error(`Failed to create admin user: ${error.message}`)
+        }
+
+        const newUserId = data.id;
+
+        // 3. Update the institution owner to the newly created user
+        if (['MUSEUM_ADMIN', 'GALLERY_ADMIN', 'HERITAGE_ADMIN'].includes(dto.adminRoleTyped) && scopeId) {
+            await client.from('institutions').update({ owner_id: newUserId }).eq('id', scopeId);
+        }
+
+        // 4. Handle Artist category
+        if (dto.role === 'artist' && dto.category) {
+            await client.from('users').update({ bio: `Artist Category: ${dto.category}` }).eq('id', newUserId);
+        }
+
+        // 5. Send Welcome Email
+        this.emailService.sendWelcomeAdminEmail(
+            dto.email,
+            plainPassword,
+            dto.adminRoleTyped ? dto.adminRoleTyped.replace('_', ' ') : 'Artist',
+            dto.institutionName || null
+        ).catch(err => this.logger.warn(`Failed to send welcome email to ${dto.email}: ${err.message}`));
+
+        return { id: newUserId }
+    }
+
+    /**
+     * Update user role
+     */
+    async updateUserRole(userId: string, newRole: string, adminId: string) {
+        const client = this.db.getAdminClient();
+
+        const { error } = await client.from("users")
+            .update({ role: newRole })
+            .eq("id", userId);
+
+        if (error) {
+            throw new Error(`Failed to update user role: ${error.message}`);
+        }
+
+        this.logAudit(adminId, "UPDATE_USER_ROLE", "users", userId, { newRole }).catch(console.error);
+        return { success: true };
+    }
+
+    /**
+     * Delete user
+     */
+    async deleteUser(userId: string, adminId: string) {
+        const client = this.db.getAdminClient();
+        
+        const { error } = await client.from("users")
+            .delete()
+            .eq("id", userId);
+
+        if (error) {
+            throw new Error(`Failed to delete user: ${error.message}`);
+        }
+
+        this.logAudit(adminId, "DELETE_USER", "users", userId).catch(console.error);
+        return { success: true };
+    }
+
     // ============================================
     // INSTITUTION MANAGEMENT
     // ============================================
 
     async getAllInstitutions(page = 1, limit = 20, filters?: { verified?: boolean; type?: string; city?: string }) {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
         const offset = (page - 1) * limit
 
         let query = client
             .from("institutions")
-            .select("*, owner:users(id, display_name, email)", { count: "exact" })
+            .select("*, owner:users!institutions_owner_id_fkey(id, display_name, email)", { count: "exact" })
 
         if (filters?.verified !== undefined) {
             query = query.eq("is_verified", filters.verified)
@@ -190,11 +331,11 @@ export class AdminService {
     }
 
     async getPendingInstitutions(): Promise<InstitutionWithOwner[]> {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
 
         const { data, error } = await client
             .from("institutions")
-            .select("*, owner:users(id, display_name, email)")
+            .select("*, owner:users!institutions_owner_id_fkey(id, display_name, email)")
             .eq("is_verified", false)
             .order("created_at", { ascending: false })
 
@@ -209,7 +350,7 @@ export class AdminService {
             .from("institutions")
             .update({ is_verified: verified })
             .eq("id", id)
-            .select("*, owner:users(id, display_name, email)")
+            .select("*, owner:users!institutions_owner_id_fkey(id, display_name, email)")
             .single()
 
         if (error) throw error
@@ -240,7 +381,7 @@ export class AdminService {
     // ============================================
 
     async getSystemLogs(page = 1, limit = 50, filters?: { level?: string; source?: string; startDate?: string; endDate?: string }) {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
         const offset = (page - 1) * limit
 
         let query = client
@@ -278,7 +419,7 @@ export class AdminService {
     }
 
     async getAuditLogs(page = 1, limit = 50, filters?: { userId?: string; action?: string; resourceType?: string }) {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
         const offset = (page - 1) * limit
 
         let query = client
@@ -317,7 +458,7 @@ export class AdminService {
     // ============================================
 
     async getSystemAlerts(activeOnly = true) {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
 
         let query = client
             .from("system_alerts")
@@ -395,7 +536,7 @@ export class AdminService {
     // ============================================
 
     async getReports(page = 1, limit = 20, status?: string) {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
         const offset = (page - 1) * limit
 
         let query = client
@@ -447,7 +588,7 @@ export class AdminService {
     // ============================================
 
     async getPartnerships(page = 1, limit = 20) {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
         const offset = (page - 1) * limit
 
         const { data, error, count } = await client
@@ -487,7 +628,7 @@ export class AdminService {
     // ============================================
 
     async getDatabaseStats() {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
 
         const tables = ["users", "artworks", "institutions", "arts", "forum_threads", "notifications"]
         const tableStats = await Promise.all(

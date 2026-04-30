@@ -321,7 +321,7 @@ export class UsersService {
             bio: data.bio,
             avatar: data.avatar_url,
             userType: this.mapRoleToUserType(data.role),
-            adminRole: data.admin_role,
+            adminRole: data.admin_role_typed || data.admin_role,
             adminLevel: data.admin_level,
             privyId: data.privy_id,
             googleId: data.google_id,
