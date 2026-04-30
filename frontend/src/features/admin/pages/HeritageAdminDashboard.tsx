@@ -80,11 +80,18 @@ export function HeritageAdminDashboard() {
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.5, ease: "easeOut" }}
-                className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-600 via-orange-500 to-red-500 p-8 sm:p-10 mb-8 shadow-2xl shadow-orange-500/20"
+                className="relative overflow-hidden rounded-3xl p-8 sm:p-10 mb-8 shadow-2xl"
             >
+                {/* Mockup Background Image */}
+                <div 
+                    className="absolute inset-0 bg-cover bg-center z-0"
+                    style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1555845941-86a01d51edfc?q=80&w=2000&auto=format&fit=crop")' }}
+                />
+                <div className="absolute inset-0 bg-orange-900/60 backdrop-blur-[2px] z-0 mix-blend-multiply" />
+
                 {/* Decorative Elements */}
-                <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-white opacity-10 rounded-full blur-3xl mix-blend-overlay pointer-events-none" />
-                <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-60 h-60 bg-yellow-300 opacity-20 rounded-full blur-2xl mix-blend-overlay pointer-events-none" />
+                <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-white opacity-10 rounded-full blur-3xl mix-blend-overlay pointer-events-none z-10" />
+                <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-60 h-60 bg-yellow-300 opacity-20 rounded-full blur-2xl mix-blend-overlay pointer-events-none z-10" />
                 
                 <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                     <div className="flex items-center gap-6">
@@ -131,9 +138,9 @@ export function HeritageAdminDashboard() {
                             variant="primary"
                             className="bg-white text-orange-600 hover:bg-gray-50 border-none shadow-lg hover:shadow-xl transition-all font-bold px-6 py-2.5 rounded-xl"
                             leftIcon={<Plus className="w-5 h-5" />}
-                            onClick={() => navigate('/admin/institutions')}
+                            onClick={() => navigate('/admin/artworks')}
                         >
-                            Add Site
+                            Add Artifact
                         </Button>
                     </motion.div>
                 </div>
@@ -250,12 +257,13 @@ export function HeritageAdminDashboard() {
                         
                         <div className="space-y-4">
                             {[
-                                { label: 'Upload Artifact Record', icon: BookOpen, color: 'text-orange-600', bg: 'bg-orange-50', hover: 'hover:bg-orange-100 border-orange-100' },
-                                { label: 'Configure Virtual Tour', icon: Globe2, color: 'text-amber-600', bg: 'bg-amber-50', hover: 'hover:bg-amber-100 border-amber-100' },
-                                { label: 'Review Site Analytics', icon: Eye, color: 'text-emerald-600', bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100 border-emerald-100' },
+                                { label: 'Upload Artifact Record', icon: BookOpen, color: 'text-orange-600', bg: 'bg-orange-50', hover: 'hover:bg-orange-100 border-orange-100', path: '/admin/artworks' },
+                                { label: 'Configure Virtual Tour', icon: Globe2, color: 'text-amber-600', bg: 'bg-amber-50', hover: 'hover:bg-amber-100 border-amber-100', path: '/admin/banners' },
+                                { label: 'Review Site Analytics', icon: Eye, color: 'text-emerald-600', bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100 border-emerald-100', path: '/admin/dashboard' },
                             ].map((action, i) => (
                                 <button
                                     key={i}
+                                    onClick={() => navigate(action.path)}
                                     className={`w-full flex items-center gap-4 p-4 rounded-2xl bg-white border border-gray-100 ${action.hover} transition-all duration-300 group/btn`}
                                 >
                                     <div className={`p-3 rounded-xl ${action.bg} ${action.color} group-hover/btn:scale-110 transition-transform`}>

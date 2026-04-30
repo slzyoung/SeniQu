@@ -224,6 +224,7 @@ export class AdminService {
             admin_role_typed: dto.adminRoleTyped || null,
             admin_scope_id: scopeId || null,
             is_verified: true,
+            is_email_verified: true,
             is_active: true
         }).select('id').single();
 
@@ -269,7 +270,7 @@ export class AdminService {
             throw new Error(`Failed to update user role: ${error.message}`);
         }
 
-        this.logAudit(adminId, "UPDATE_USER_ROLE", "users", userId, { newRole }).catch(console.error);
+        this.logAudit("UPDATE_USER_ROLE", "users", userId, { newRole }, adminId).catch(console.error);
         return { success: true };
     }
 
@@ -287,7 +288,7 @@ export class AdminService {
             throw new Error(`Failed to delete user: ${error.message}`);
         }
 
-        this.logAudit(adminId, "DELETE_USER", "users", userId).catch(console.error);
+        this.logAudit("DELETE_USER", "users", userId, undefined, adminId).catch(console.error);
         return { success: true };
     }
 

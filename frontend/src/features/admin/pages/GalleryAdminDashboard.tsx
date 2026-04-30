@@ -107,11 +107,18 @@ export function GalleryAdminDashboard() {
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.5, ease: "easeOut" }}
-                className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-fuchsia-600 p-8 sm:p-10 mb-8 shadow-2xl shadow-purple-500/20"
+                className="relative overflow-hidden rounded-3xl p-8 sm:p-10 mb-8 shadow-2xl"
             >
+                {/* Mockup Background Image */}
+                <div 
+                    className="absolute inset-0 bg-cover bg-center z-0"
+                    style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1536924940846-227afb31e2a5?q=80&w=2000&auto=format&fit=crop")' }}
+                />
+                <div className="absolute inset-0 bg-purple-900/60 backdrop-blur-[2px] z-0 mix-blend-multiply" />
+                
                 {/* Decorative Elements */}
-                <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-white opacity-10 rounded-full blur-3xl mix-blend-overlay pointer-events-none" />
-                <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-60 h-60 bg-pink-400 opacity-20 rounded-full blur-2xl mix-blend-overlay pointer-events-none" />
+                <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-white opacity-10 rounded-full blur-3xl mix-blend-overlay pointer-events-none z-10" />
+                <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-60 h-60 bg-pink-400 opacity-20 rounded-full blur-2xl mix-blend-overlay pointer-events-none z-10" />
                 
                 <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                     <div className="flex items-center gap-6">
@@ -158,7 +165,7 @@ export function GalleryAdminDashboard() {
                             variant="primary"
                             className="bg-white text-purple-700 hover:bg-gray-50 border-none shadow-lg hover:shadow-xl transition-all font-bold px-6 py-2.5 rounded-xl"
                             leftIcon={<Plus className="w-5 h-5" />}
-                            onClick={() => navigate('/admin/institutions')}
+                            onClick={() => navigate('/admin/artworks')}
                         >
                             New Collection
                         </Button>
@@ -283,12 +290,13 @@ export function GalleryAdminDashboard() {
                         
                         <div className="space-y-4 relative z-10">
                             {[
-                                { label: 'Manage Featured Artists', icon: Users, color: 'text-pink-400', bg: 'bg-pink-400/10' },
-                                { label: 'Create New Promotion', icon: Award, color: 'text-amber-400', bg: 'bg-amber-400/10' },
-                                { label: 'Review Art Submissions', icon: Eye, color: 'text-indigo-400', bg: 'bg-indigo-400/10' },
+                                { label: 'Manage Featured Artists', icon: Users, color: 'text-pink-400', bg: 'bg-pink-400/10', path: '/admin/promotions' },
+                                { label: 'Create New Promotion', icon: Award, color: 'text-amber-400', bg: 'bg-amber-400/10', path: '/admin/promotions' },
+                                { label: 'Review Art Submissions', icon: Eye, color: 'text-indigo-400', bg: 'bg-indigo-400/10', path: '/admin/artworks' },
                             ].map((action, i) => (
                                 <button
                                     key={i}
+                                    onClick={() => navigate(action.path)}
                                     className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 transition-all duration-300 group/btn"
                                 >
                                     <div className={`p-3 rounded-xl ${action.bg} ${action.color} group-hover/btn:scale-110 transition-transform`}>

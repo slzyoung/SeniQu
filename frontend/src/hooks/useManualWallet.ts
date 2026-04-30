@@ -689,7 +689,7 @@ export function useManualWallet() {
             // walletStore.setConnected(address, chain, 'walletconnect'); 
 
             toast.success('Welcome!', 'Connected via WalletConnect');
-            const redirectPath = getDashboardRoute(authResponse.user.role);
+            const redirectPath = getDashboardRoute(authResponse.user);
             navigate(redirectPath);
 
             return authResponse;
@@ -928,7 +928,7 @@ export function useManualWallet() {
                     : walletType === 'metamask' ? 'MetaMask'
                         : 'WalletConnect';
             toast.success('Welcome!', `Connected with ${walletLabel}`);
-            const redirectPath = getDashboardRoute(authResponse.user.role);
+            const redirectPath = getDashboardRoute(authResponse.user);
             navigate(redirectPath);
 
             return authResponse;

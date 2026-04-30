@@ -65,6 +65,7 @@ const ArtistDashboard = lazyWithRetry(() => import('../features/artist/pages/Art
 const MyArtworks = lazyWithRetry(() => import('../features/artist/pages/MyArtworks'));
 const UploadArtwork = lazyWithRetry(() => import('../features/artist/pages/UploadArtwork'));
 const ArtistAnalytics = lazyWithRetry(() => import('../features/artist/pages/Analytics'));
+const ArtistMarketplace = lazyWithRetry(() => import('../features/artist/pages/ArtistMarketplace'));
 const ArtistPerformance = lazyWithRetry(() => import('../features/artist/pages/Performance'));
 const ArtistEngagement = lazyWithRetry(() => import('../features/artist/pages/Engagement'));
 const InstitutionProfile = lazyWithRetry(() => import('../features/artist/pages/InstitutionProfile'));
@@ -88,6 +89,14 @@ const SystemAlerts = lazyWithRetry(() => import('../features/admin/pages/SystemA
 const AdminAlerts = lazyWithRetry(() => import('../features/admin/pages/SystemAlerts'));
 const AdminProfile = lazyWithRetry(() => import('../features/admin/pages/AdminProfile'));
 const AdminWalletPage = lazyWithRetry(() => import('../features/admin/pages/AdminWalletPage'));
+
+// Domain Admin Pages
+const AdminArtworks = lazyWithRetry(() => import('../features/admin/pages/placeholders').then(m => ({ default: m.AdminArtworks })));
+const AdminTickets = lazyWithRetry(() => import('../features/admin/pages/placeholders').then(m => ({ default: m.AdminTickets })));
+const AdminPromotions = lazyWithRetry(() => import('../features/admin/pages/placeholders').then(m => ({ default: m.AdminPromotions })));
+const AdminBanners = lazyWithRetry(() => import('../features/admin/pages/placeholders').then(m => ({ default: m.AdminBanners })));
+const GalleryMarketplace = lazyWithRetry(() => import('../features/admin/pages/GalleryMarketplace'));
+
 // Lazy load layouts
 const UserLayout = lazyWithRetry(() => import('../features/user/UserLayout'));
 const ArtistLayout = lazyWithRetry(() => import('../features/artist/ArtistLayout'));
@@ -178,12 +187,14 @@ const router = createBrowserRouter(
 
             {/* Artist/Institution Dashboard Routes */}
             <Route element={
-                <ProtectedRoute roles={[ROLES.ARTIST, ROLES.INSTITUTION]}>
+                <ProtectedRoute roles={[ROLES.ARTIST, ROLES.INSTITUTION, ROLES.ADMIN]}>
                     <ArtistLayout />
                 </ProtectedRoute>
             }>
                 <Route path={ROUTES.ARTIST_DASHBOARD} element={<ArtistDashboard />} />
                 <Route path={ROUTES.ARTIST_ARTWORKS} element={<MyArtworks />} />
+                <Route path="/artist/marketplace" element={<ArtistMarketplace />} />
+                <Route path="/artist/wallet" element={<UserWallet />} />
                 <Route path={ROUTES.ARTIST_UPLOAD} element={<UploadArtwork />} />
                 <Route path={ROUTES.ARTIST_ANALYTICS} element={<ArtistAnalytics />} />
                 <Route path={ROUTES.ARTIST_PERFORMANCE} element={<ArtistPerformance />} />
@@ -215,6 +226,13 @@ const router = createBrowserRouter(
                 <Route path={ROUTES.ADMIN_PROFILE} element={<AdminProfile />} />
                 <Route path={ROUTES.ADMIN_MY_WALLET} element={<UserWallet />} />
                 <Route path={ROUTES.ADMIN_WALLETS} element={<AdminWalletPage />} />
+                
+                {/* Domain Admin Routes */}
+                <Route path="/admin/artworks" element={<AdminArtworks />} />
+                <Route path="/admin/marketplace" element={<GalleryMarketplace />} />
+                <Route path="/admin/tickets" element={<AdminTickets />} />
+                <Route path="/admin/promotions" element={<AdminPromotions />} />
+                <Route path="/admin/banners" element={<AdminBanners />} />
             </Route>
         </Route>
     ),

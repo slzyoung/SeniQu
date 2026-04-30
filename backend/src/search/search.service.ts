@@ -40,7 +40,7 @@ export class SearchService {
         if (type === "all" || type === "artworks") {
             const { data: artworks } = await this.supabase
                 .from("artworks")
-                .select("id, title, slug, primary_image_url, artist:users(display_name)")
+                .select("id, title, slug, primary_image_url, artist:users!artist_id(display_name)")
                 .eq("status", "published")
                 .or(`title.ilike.${searchTerm},description.ilike.${searchTerm}`)
                 .limit(limit)
@@ -86,7 +86,7 @@ export class SearchService {
             .from("artworks")
             .select(`
                 *,
-                artist:users(id, display_name, avatar_url, is_verified),
+                artist:users!artist_id(id, display_name, avatar_url, is_verified),
                 institution:institutions(id, name, slug)
             `, { count: "exact" })
             .eq("status", "published")

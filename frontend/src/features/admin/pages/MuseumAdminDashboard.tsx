@@ -107,11 +107,18 @@ export function MuseumAdminDashboard() {
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.5, ease: "easeOut" }}
-                className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-500 p-8 sm:p-10 mb-8 shadow-2xl shadow-blue-500/20"
+                className="relative overflow-hidden rounded-3xl p-8 sm:p-10 mb-8 shadow-2xl"
             >
+                {/* Mockup Background Image */}
+                <div 
+                    className="absolute inset-0 bg-cover bg-center z-0"
+                    style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1518998053401-a41c6e4e8927?q=80&w=2000&auto=format&fit=crop")' }}
+                />
+                <div className="absolute inset-0 bg-blue-900/60 backdrop-blur-[2px] z-0 mix-blend-multiply" />
+                
                 {/* Decorative Elements */}
-                <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-white opacity-10 rounded-full blur-3xl mix-blend-overlay pointer-events-none" />
-                <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-60 h-60 bg-cyan-300 opacity-20 rounded-full blur-2xl mix-blend-overlay pointer-events-none" />
+                <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-white opacity-10 rounded-full blur-3xl mix-blend-overlay pointer-events-none z-10" />
+                <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-60 h-60 bg-cyan-300 opacity-20 rounded-full blur-2xl mix-blend-overlay pointer-events-none z-10" />
                 
                 <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                     <div className="flex items-center gap-6">
@@ -158,14 +165,14 @@ export function MuseumAdminDashboard() {
                             variant="primary"
                             className="bg-white text-blue-600 hover:bg-gray-50 border-none shadow-lg hover:shadow-xl transition-all font-bold px-6 py-2.5 rounded-xl"
                             leftIcon={<Plus className="w-5 h-5" />}
-                            onClick={() => navigate('/admin/institutions')}
+                            onClick={() => navigate('/admin/promotions')}
                         >
                             New Exhibition
                         </Button>
                         <Button
                             variant="secondary"
                             className="!bg-white/15 !text-white !border-white/20 hover:!bg-white/25 backdrop-blur-sm font-bold px-6 py-2.5 rounded-xl"
-                            onClick={() => navigate('/admin/institutions')}
+                            onClick={() => navigate('/admin/profile')}
                         >
                             Manage Profile
                         </Button>
@@ -238,13 +245,14 @@ export function MuseumAdminDashboard() {
                         <h3 className="text-xl font-bold text-gray-900 mb-6">Quick Actions</h3>
                         <div className="space-y-4">
                             {[
-                                { label: 'Create Exhibition', desc: 'Set up a new exhibition', icon: Calendar, color: 'text-blue-600', bg: 'bg-blue-50', hover: 'hover:bg-blue-100 border-blue-100' },
-                                { label: 'Upload Artwork', desc: 'Add artworks to collection', icon: ImageIcon, color: 'text-purple-600', bg: 'bg-purple-50', hover: 'hover:bg-purple-100 border-purple-100' },
-                                { label: 'Ticketing Setup', desc: 'Configure ticket sales', icon: Ticket, color: 'text-emerald-600', bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100 border-emerald-100' },
-                                { label: 'Visitor Reports', desc: 'View analytics & insights', icon: BarChart3, color: 'text-amber-600', bg: 'bg-amber-50', hover: 'hover:bg-amber-100 border-amber-100' },
+                                { label: 'Create Exhibition', desc: 'Set up a new exhibition', icon: Calendar, color: 'text-blue-600', bg: 'bg-blue-50', hover: 'hover:bg-blue-100 border-blue-100', path: '/admin/promotions' },
+                                { label: 'Upload Artwork', desc: 'Add artworks to collection', icon: ImageIcon, color: 'text-purple-600', bg: 'bg-purple-50', hover: 'hover:bg-purple-100 border-purple-100', path: '/admin/artworks' },
+                                { label: 'Ticketing Setup', desc: 'Configure ticket sales', icon: Ticket, color: 'text-emerald-600', bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100 border-emerald-100', path: '/admin/tickets' },
+                                { label: 'Banner Setup', desc: 'Manage profile banners', icon: BarChart3, color: 'text-amber-600', bg: 'bg-amber-50', hover: 'hover:bg-amber-100 border-amber-100', path: '/admin/banners' },
                             ].map((action) => (
                                 <button
                                     key={action.label}
+                                    onClick={() => navigate(action.path)}
                                     className={`w-full flex items-center gap-4 p-4 rounded-2xl bg-white border border-gray-100 ${action.hover} transition-all duration-300 group/btn`}
                                 >
                                     <div className={`p-3 rounded-xl ${action.bg} ${action.color} group-hover/btn:scale-110 transition-transform`}>
@@ -276,11 +284,11 @@ export function MuseumAdminDashboard() {
                             </div>
                         </div>
                         <div className="space-y-3">
-                            <Button variant="primary" className="w-full justify-center py-6 text-base font-bold rounded-xl shadow-lg shadow-blue-500/20">
+                            <Button variant="primary" className="w-full justify-center py-6 text-base font-bold rounded-xl shadow-lg shadow-blue-500/20" onClick={() => navigate('/admin/promotions')}>
                                 <Plus className="w-5 h-5 mr-2" /> Create New Exhibition
                             </Button>
-                            <Button variant="ghost" className="w-full justify-center py-6 text-base font-bold text-gray-600 hover:bg-gray-50 rounded-xl">
-                                <Eye className="w-5 h-5 mr-2" /> View All Exhibitions
+                            <Button variant="ghost" className="w-full justify-center py-6 text-base font-bold text-gray-600 hover:bg-gray-50 rounded-xl" onClick={() => navigate('/admin/artworks')}>
+                                <Eye className="w-5 h-5 mr-2" /> View Collections
                             </Button>
                         </div>
                     </div>
@@ -298,11 +306,11 @@ export function MuseumAdminDashboard() {
                             </div>
                         </div>
                         <div className="space-y-3">
-                            <Button variant="secondary" className="w-full justify-center py-6 text-base font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none rounded-xl">
+                            <Button variant="secondary" className="w-full justify-center py-6 text-base font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none rounded-xl" onClick={() => navigate('/admin/tickets')}>
                                 <Ticket className="w-5 h-5 mr-2" /> Ticketing Setup
                             </Button>
-                            <Button variant="ghost" className="w-full justify-center py-6 text-base font-bold text-gray-600 hover:bg-gray-50 rounded-xl">
-                                <BarChart3 className="w-5 h-5 mr-2" /> Visitor Reports
+                            <Button variant="ghost" className="w-full justify-center py-6 text-base font-bold text-gray-600 hover:bg-gray-50 rounded-xl" onClick={() => navigate('/admin/dashboard')}>
+                                <BarChart3 className="w-5 h-5 mr-2" /> Dashboard Stats
                             </Button>
                         </div>
                     </div>

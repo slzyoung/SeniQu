@@ -483,6 +483,96 @@ export class AuthService {
         return { message: "A new OTP has been sent to your email." }
     }
 
+    /**
+     * Request password change (Step 1: Verify current, send OTP)
+     */
+    async requestPasswordChange(userId: string, currentPassword: string): Promise<{ message: string; requiresOtp: boolean; email: string }> {
+        const user = await this.usersService.findById(userId)
+        if (!user || !user.email) {
+            throw new UnauthorizedException("User not found or missing email")
+        }
+
+        if (!user.password) {
+            throw new BadRequestException("Your account uses social/wallet login. Set a password via email registration first.")
+        }
+
+        const isCurrentValid = await bcrypt.compare(currentPassword, user.password)
+        if (!isCurrentValid) {
+            throw new UnauthorizedException("Current password is incorrect")
+        }
+
+        // Generate 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString()
+        const expiresAt = new Date(Date.now() + 5 * 60 * 1000)
+
+        const db = this.databaseService.getAdminClient()
+        await db.from("otp_codes").delete().eq("email", user.email).is("used_at", null)
+        await db.from("otp_codes").insert({
+            email: user.email,
+            code: otp,
+            expires_at: expiresAt.toISOString(),
+        })
+
+        await this.emailService.sendOtpEmail(user.email, otp, "change-password")
+        
+        const [localPart, domain] = user.email.split("@")
+        const maskedEmail = `${localPart[0]}${'*'.repeat(Math.max(localPart.length - 1, 2))}@${domain}`
+
+        this.logger.log(`Password change requested, OTP sent to ${user.email} for user ${userId}`)
+        return { message: "OTP sent to your email", requiresOtp: true, email: maskedEmail }
+    }
+
+    /**
+     * Verify password change (Step 2: Verify OTP, update password)
+     */
+    async verifyPasswordChange(userId: string, otp: string, newPassword: string): Promise<{ message: string }> {
+        const user = await this.usersService.findById(userId)
+        if (!user || !user.email) {
+            throw new UnauthorizedException("User not found")
+        }
+
+        const db = this.databaseService.getAdminClient()
+        const { data: otpRecord, error } = await db
+            .from("otp_codes")
+            .select("*")
+            .eq("email", user.email)
+            .eq("code", otp)
+            .is("used_at", null)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single()
+
+        if (error || !otpRecord) {
+            await db.from("otp_codes").update({ attempts: (otpRecord?.attempts || 0) + 1 }).eq("email", user.email).is("used_at", null)
+            throw new UnauthorizedException("Invalid OTP code.")
+        }
+
+        if (new Date(otpRecord.expires_at) < new Date()) {
+            throw new UnauthorizedException("OTP has expired.")
+        }
+
+        if (otpRecord.attempts >= 5) {
+            throw new UnauthorizedException("Too many attempts. Please request a new OTP.")
+        }
+
+        if (newPassword.length < 8) {
+            throw new BadRequestException("New password must be at least 8 characters")
+        }
+
+        await db.from("otp_codes").update({ used_at: new Date().toISOString() }).eq("id", otpRecord.id)
+
+        const hashedNew = await bcrypt.hash(newPassword, 12)
+        const { error: updateError } = await db.from("users").update({ password_hash: hashedNew, updated_at: new Date().toISOString() }).eq("id", userId)
+
+        if (updateError) {
+            this.logger.error(`Failed to update password for user ${userId}: ${updateError.message}`)
+            throw new BadRequestException("Failed to update password")
+        }
+
+        this.logger.log(`Password successfully changed for user ${userId}`)
+        return { message: "Password changed successfully" }
+    }
+
     async getPrivyToken(userId: string): Promise<string | null> {
         return this.privyService.getCustomAuthToken(userId)
     }

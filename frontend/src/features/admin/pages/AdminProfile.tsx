@@ -21,7 +21,9 @@ export function AdminProfile() {
             <div className="max-w-2xl mx-auto">
                 <div className="mb-8 text-center">
                     <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 font-bold px-3 py-1 mb-3">Account</Badge>
-                    <h1 className="text-4xl font-bold text-gray-900 font-serif tracking-tight">Admin Profile</h1>
+                    <h1 className="text-4xl font-bold text-gray-900 font-serif tracking-tight">
+                        {user?.role === 'super_admin' ? 'Super Admin Profile' : 'Institution Profile'}
+                    </h1>
                 </div>
 
                 <div className="bg-white rounded-[24px] border border-gray-100 p-8 text-center mb-6">
@@ -29,7 +31,7 @@ export function AdminProfile() {
                     <h2 className="text-2xl font-bold text-gray-900">{user?.displayName || user?.username}</h2>
                     <p className="text-gray-500 font-medium mt-1">{user?.email}</p>
                     <span className="inline-flex items-center gap-1.5 mt-3 px-4 py-1.5 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-full text-sm font-bold shadow-lg shadow-indigo-500/20">
-                        <Shield className="w-4 h-4" /> {(user?.role || 'admin').toUpperCase()}
+                        <Shield className="w-4 h-4" /> {(user?.adminRole || user?.role || 'admin').toUpperCase().replace('_', ' ')}
                     </span>
                 </div>
 
@@ -45,7 +47,8 @@ export function AdminProfile() {
                     ))}
                 </div>
 
-                {/* Seamless Wallet Card */}
+                {/* Seamless Wallet Card (Super Admin Only) */}
+                {user?.role === 'super_admin' && (
                 <div className="bg-white rounded-[24px] border border-gray-100 p-8 mb-6 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl opacity-50 group-hover:opacity-100 transition-opacity duration-500" />
                     
@@ -99,6 +102,7 @@ export function AdminProfile() {
                         )}
                     </div>
                 </div>
+                )}
             </div>
         </PageContainer>
     );

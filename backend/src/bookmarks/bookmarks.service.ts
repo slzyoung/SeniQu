@@ -28,7 +28,7 @@ export class BookmarksService {
                 created_at,
                 artwork:artworks(
                     id, title, slug, primary_image_url, price, is_art,
-                    artist:users(id, display_name, avatar_url)
+                    artist:users!artist_id(id, display_name, avatar_url)
                 )
             `, { count: "exact" })
             .eq("user_id", userId)

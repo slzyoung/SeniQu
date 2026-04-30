@@ -41,7 +41,8 @@ import { Button, Avatar, Badge, Skeleton } from '../../../components/ui';
 import { useSystemStats, usePendingInstitutions, useDashboardStats } from '../../../hooks/useAdmin';
 import { useCurrentUser } from '../../../hooks/useUser';
 import { adminService } from '../../../services/adminService';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
+import { ROUTES } from '../../../lib/constants';
 import MuseumAdminDashboard from './MuseumAdminDashboard';
 import GalleryAdminDashboard from './GalleryAdminDashboard';
 import HeritageAdminDashboard from './HeritageAdminDashboard';
@@ -416,7 +417,7 @@ function PendingApprovalsList({ items, navigate, isLoading }: { items: any[], na
 // ============================================
 // MAIN: SUPER ADMIN DASHBOARD
 // ============================================
-export function AdminDashboard() {
+export function SuperAdminDashboard() {
     const { data: user } = useCurrentUser();
     const { data: stats, isLoading: statsLoading } = useSystemStats();
     const { data: dashStats } = useDashboardStats();
@@ -427,12 +428,6 @@ export function AdminDashboard() {
         queryKey: ['admin', 'alerts'],
         queryFn: () => adminService.getSystemAlerts(),
     });
-
-    // Role Delegation
-    const adminRoleTyped = (user as any)?.adminRole || (user as any)?.admin_role_typed || (user as any)?.adminRoleTyped;
-    if (adminRoleTyped === 'MUSEUM_ADMIN') return <MuseumAdminDashboard />;
-    if (adminRoleTyped === 'GALLERY_ADMIN') return <GalleryAdminDashboard />;
-    if (adminRoleTyped === 'HERITAGE_ADMIN') return <HeritageAdminDashboard />;
 
     // Mock chart data (uses real stats to scale)
     const chartData = useMemo(() => {
@@ -454,6 +449,8 @@ export function AdminDashboard() {
         artworks: stats?.totalArtworks || dashStats?.totalArtworks || 0,
         revenue: stats?.totalRevenue || dashStats?.totalRevenue || 0,
     };
+
+
 
     return (
         <PageContainer className="bg-[#FAFAFA] min-h-screen pb-12 overflow-x-hidden">
@@ -568,6 +565,37 @@ export function AdminDashboard() {
             </motion.div>
         </PageContainer>
     );
+}
+
+// ============================================
+// DASHBOARD ROUTER DELEGATE
+// ============================================
+export function AdminDashboard() {
+    const { data: user, isLoading } = useCurrentUser();
+    
+    if (isLoading) {
+        return (
+            <div className="flex h-screen w-full items-center justify-center bg-gray-50">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
+
+    const adminRoleTyped = (user as any)?.adminRole || (user as any)?.admin_role_typed || (user as any)?.adminRoleTyped;
+    
+    if (adminRoleTyped === 'MUSEUM_ADMIN') return <MuseumAdminDashboard />;
+    if (adminRoleTyped === 'GALLERY_ADMIN') return <GalleryAdminDashboard />;
+    if (adminRoleTyped === 'HERITAGE_ADMIN') return <HeritageAdminDashboard />;
+    
+    if (adminRoleTyped === 'ARTIST_ADMIN' || (user as any)?.role === 'artist') {
+        return <Navigate to={ROUTES.ARTIST_DASHBOARD} replace />;
+    }
+    
+    if ((user as any)?.role === 'institution' || (user as any)?.role === 'admin_museum') {
+        return <MuseumAdminDashboard />;
+    }
+
+    return <SuperAdminDashboard />;
 }
 
 export default AdminDashboard;

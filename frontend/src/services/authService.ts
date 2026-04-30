@@ -798,6 +798,34 @@ class AuthService {
             throw sanitizeError(error);
         }
     }
+
+    /**
+     * Request password change (Step 1)
+     */
+    async requestPasswordChange(currentPassword: string): Promise<{ message: string; requiresOtp: boolean; email: string }> {
+        try {
+            const rawResponse = await apiPost<any>('/auth/change-password/request', { currentPassword }, {
+                headers: getSecurityHeaders(),
+            });
+            return rawResponse?.data || rawResponse;
+        } catch (error) {
+            throw sanitizeError(error);
+        }
+    }
+
+    /**
+     * Verify password change (Step 2)
+     */
+    async verifyPasswordChange(otp: string, newPassword: string): Promise<{ message: string }> {
+        try {
+            const rawResponse = await apiPost<any>('/auth/change-password/verify', { otp, newPassword }, {
+                headers: getSecurityHeaders(),
+            });
+            return rawResponse?.data || rawResponse;
+        } catch (error) {
+            throw sanitizeError(error);
+        }
+    }
 }
 
 // Export singleton instance

@@ -37,9 +37,17 @@ export function isWalletInAppBrowser(): boolean {
 }
 
 /**
- * Get dashboard route based on user role
+ * Get dashboard route based on user role or user object
  */
-export function getDashboardRoute(role: string | UserRole): string {
+export function getDashboardRoute(userOrRole: any): string {
+    const role = typeof userOrRole === 'string' ? userOrRole : (userOrRole?.role || 'user');
+    const adminRole = typeof userOrRole === 'object' 
+        ? (userOrRole?.adminRole || userOrRole?.admin_role_typed || userOrRole?.adminRoleTyped) 
+        : null;
+        
+    // Prevent redirect bounce for Artist Admins
+    if (adminRole === 'ARTIST_ADMIN') return ROUTES.ARTIST_DASHBOARD;
+
     switch (role) {
         case ROLES.ADMIN:
         case ROLES.SUPER_ADMIN:
@@ -67,12 +75,15 @@ export function formatCurrency(value: number, currency = 'ETH'): string {
 /**
  * Format date
  */
-export function formatDate(date: string | Date): string {
+export function formatDate(date: string | Date | null | undefined): string {
+    if (!date) return 'N/A';
+    const parsedDate = new Date(date);
+    if (isNaN(parsedDate.getTime())) return 'N/A';
     return new Intl.DateTimeFormat('en-US', {
         month: 'long',
         day: 'numeric',
         year: 'numeric'
-    }).format(new Date(date));
+    }).format(parsedDate);
 }
 
 /**

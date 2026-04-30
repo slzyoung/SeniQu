@@ -34,6 +34,8 @@ import { useTheme } from '../../../../hooks/useTheme';
 import { useToast } from '../../../../stores/useNotificationStore';
 import { useAuthStore } from '../../../../stores/useAuthStore';
 import { userService } from '../../../../services/userService';
+import { authService } from '../../../../services/authService';
+import { Modal, Input, Button } from '../../../../components/ui';
 import './Settings.css';
 
 // ── Zod Schema ──
@@ -198,6 +200,18 @@ export function Settings() {
     const [activeTab, setActiveTab] = useState('general');
     const [showEmail, setShowEmail] = useState(false);
 
+    // Password Change Modal State
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const [passwordStep, setPasswordStep] = useState<'request' | 'verify'>('request');
+    const [maskedOtpEmail, setMaskedOtpEmail] = useState('');
+    const [passwordForm, setPasswordForm] = useState({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+        otp: ''
+    });
+    const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
+
     // Form State
     const [formState, setFormState] = useState<SettingsFormValues>({
         isDark: isDark,
@@ -269,6 +283,55 @@ export function Settings() {
         const newState = { ...formState, [key]: value };
         setFormState(newState);
         await saveToApi(newState);
+    };
+
+    const handlePasswordChange = async (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        if (passwordStep === 'request') {
+            if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+                toast.error('Error', 'New passwords do not match');
+                return;
+            }
+
+            if (passwordForm.newPassword.length < 8) {
+                toast.error('Error', 'New password must be at least 8 characters');
+                return;
+            }
+
+            setIsSubmittingPassword(true);
+            try {
+                const res = await authService.requestPasswordChange(passwordForm.currentPassword);
+                if (res.requiresOtp) {
+                    setPasswordStep('verify');
+                    setMaskedOtpEmail(res.email);
+                    toast.success('Check Email', res.message);
+                }
+            } catch (error: any) {
+                toast.error('Request Failed', error.message || 'Could not initiate password change');
+            } finally {
+                setIsSubmittingPassword(false);
+            }
+        } else {
+            // Verify step
+            if (!passwordForm.otp || passwordForm.otp.length !== 6) {
+                toast.error('Error', 'Please enter a valid 6-digit OTP');
+                return;
+            }
+
+            setIsSubmittingPassword(true);
+            try {
+                await authService.verifyPasswordChange(passwordForm.otp, passwordForm.newPassword);
+                toast.success('Success', 'Password changed successfully');
+                setIsPasswordModalOpen(false);
+                setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '', otp: '' });
+                setPasswordStep('request');
+            } catch (error: any) {
+                toast.error('Verification Failed', error.message || 'Could not verify OTP');
+            } finally {
+                setIsSubmittingPassword(false);
+            }
+        }
     };
 
     // Derived user info
@@ -513,7 +576,7 @@ export function Settings() {
                                     action={
                                         <button
                                             type="button"
-                                            onClick={() => toast.info('Info', 'Password change flow not implemented yet.')}
+                                            onClick={() => setIsPasswordModalOpen(true)}
                                             className="stg-pill-btn"
                                         >
                                             Change
@@ -594,6 +657,92 @@ export function Settings() {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Password Change Modal */}
+            <Modal
+                isOpen={isPasswordModalOpen}
+                onClose={() => {
+                    setIsPasswordModalOpen(false);
+                    setPasswordStep('request');
+                    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '', otp: '' });
+                }}
+                title="Change Password"
+                description={passwordStep === 'request' 
+                    ? "Enter your current password and a new secure password."
+                    : `We've sent a 6-digit code to ${maskedOtpEmail}. Enter it below to verify.`}
+            >
+                <form onSubmit={handlePasswordChange} className="space-y-4 pt-4">
+                    {passwordStep === 'request' ? (
+                        <>
+                            <Input
+                                label="Current Password"
+                                type="password"
+                                isPassword
+                                required
+                                value={passwordForm.currentPassword}
+                                onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                                placeholder="••••••••"
+                            />
+                            <Input
+                                label="New Password"
+                                type="password"
+                                isPassword
+                                required
+                                value={passwordForm.newPassword}
+                                onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                                placeholder="••••••••"
+                                hint="Must be at least 8 characters"
+                            />
+                            <Input
+                                label="Confirm New Password"
+                                type="password"
+                                isPassword
+                                required
+                                value={passwordForm.confirmPassword}
+                                onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                                placeholder="••••••••"
+                            />
+                        </>
+                    ) : (
+                        <div className="space-y-4">
+                            <Input
+                                label="Verification Code (OTP)"
+                                type="text"
+                                required
+                                value={passwordForm.otp}
+                                onChange={(e) => setPasswordForm({ ...passwordForm, otp: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+                                placeholder="123456"
+                                className="text-center tracking-widest text-lg font-mono"
+                            />
+                        </div>
+                    )}
+                    
+                    <div className="flex justify-end gap-3 mt-6">
+                        <Button 
+                            variant="outline" 
+                            onClick={() => {
+                                setIsPasswordModalOpen(false);
+                                setPasswordStep('request');
+                                setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '', otp: '' });
+                            }}
+                            type="button"
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            type="submit" 
+                            isLoading={isSubmittingPassword}
+                            disabled={
+                                passwordStep === 'request' 
+                                    ? !passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword
+                                    : !passwordForm.otp || passwordForm.otp.length !== 6
+                            }
+                        >
+                            {passwordStep === 'request' ? 'Next' : 'Verify & Update'}
+                        </Button>
+                    </div>
+                </form>
+            </Modal>
         </div>
     );
 }

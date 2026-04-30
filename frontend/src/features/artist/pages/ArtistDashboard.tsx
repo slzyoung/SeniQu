@@ -175,11 +175,18 @@ export function ArtistDashboard() {
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.5, ease: "easeOut" }}
-                className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 p-8 sm:p-10 mb-8 shadow-2xl shadow-blue-500/20"
+                className="relative overflow-hidden rounded-3xl p-8 sm:p-10 mb-8 shadow-2xl"
             >
+                {/* Mockup Background Image */}
+                <div 
+                    className="absolute inset-0 bg-cover bg-center z-0"
+                    style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?q=80&w=2000&auto=format&fit=crop")' }}
+                />
+                <div className="absolute inset-0 bg-indigo-900/60 backdrop-blur-[2px] z-0 mix-blend-multiply" />
+                
                 {/* Decorative Elements */}
-                <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-white opacity-10 rounded-full blur-3xl mix-blend-overlay pointer-events-none" />
-                <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-60 h-60 bg-cyan-400 opacity-20 rounded-full blur-2xl mix-blend-overlay pointer-events-none" />
+                <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-white opacity-10 rounded-full blur-3xl mix-blend-overlay pointer-events-none z-10" />
+                <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-60 h-60 bg-cyan-400 opacity-20 rounded-full blur-2xl mix-blend-overlay pointer-events-none z-10" />
                 
                 <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                     <div className="flex items-center gap-6">

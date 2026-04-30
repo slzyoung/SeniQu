@@ -29,7 +29,10 @@ import {
     TrendingUp,
     Image as ImageIcon,
     Palette,
-    Wand2
+    Wand2,
+    Ticket,
+    Megaphone,
+    Images
 } from 'lucide-react';
 import { SidebarSection } from '../components/ui/Sidebar';
 import { ROUTES } from '../lib/constants';
@@ -290,6 +293,125 @@ export const adminSidebarSections: SidebarSection[] = [
     },
 ];
 
+// ============================================
+// MUSEUM ADMIN SIDEBAR
+// ============================================
+export const museumSidebarSections: SidebarSection[] = [
+    {
+        title: 'Overview',
+        items: [
+            { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: ROUTES.ADMIN_DASHBOARD },
+        ],
+    },
+    {
+        title: 'Museum Management',
+        items: [
+            { id: 'artworks', label: 'Collection & Arts', icon: <FolderHeart className="w-5 h-5" />, path: '/admin/artworks' },
+            { id: 'tickets', label: 'Ticketing & Pricing', icon: <Ticket className="w-5 h-5" />, path: '/admin/tickets' },
+            { id: 'promotions', label: 'Exhibitions & Events', icon: <Megaphone className="w-5 h-5" />, path: '/admin/promotions' },
+            { id: 'banners', label: 'Banner & Branding', icon: <Images className="w-5 h-5" />, path: '/admin/banners' },
+        ],
+    },
+    {
+        title: 'Insights',
+        items: [
+            { id: 'visitors', label: 'Visitor Analytics', icon: <BarChart3 className="w-5 h-5" />, path: '/admin/analytics' },
+        ],
+    },
+    {
+        title: 'Account',
+        items: [
+            { id: 'my-wallet', label: 'My Wallet', icon: <Wallet className="w-5 h-5" />, path: ROUTES.ADMIN_MY_WALLET },
+            { id: 'profile', label: 'Museum Profile', icon: <Building2 className="w-5 h-5" />, path: ROUTES.ADMIN_PROFILE },
+            { id: 'settings', label: 'Settings', icon: <Settings className="w-5 h-5" />, path: ROUTES.ADMIN_SETTINGS },
+        ],
+    },
+];
+
+// ============================================
+// GALLERY ADMIN SIDEBAR
+// ============================================
+export const gallerySidebarSections: SidebarSection[] = [
+    {
+        title: 'Overview',
+        items: [
+            { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: ROUTES.ADMIN_DASHBOARD },
+        ],
+    },
+    {
+        title: 'Gallery Management',
+        items: [
+            { id: 'artworks', label: 'Art Submissions', icon: <FolderHeart className="w-5 h-5" />, path: '/admin/artworks' },
+            { id: 'marketplace', label: 'Gallery Marketplace', icon: <ShoppingBag className="w-5 h-5" />, path: '/admin/marketplace' },
+            { id: 'promotions', label: 'Featured & Promos', icon: <Megaphone className="w-5 h-5" />, path: '/admin/promotions' },
+            { id: 'banners', label: 'Gallery Branding', icon: <Images className="w-5 h-5" />, path: '/admin/banners' },
+        ],
+    },
+    {
+        title: 'Insights',
+        items: [
+            { id: 'analytics', label: 'Sales Analytics', icon: <BarChart3 className="w-5 h-5" />, path: '/admin/analytics' },
+        ],
+    },
+    {
+        title: 'Account',
+        items: [
+            { id: 'my-wallet', label: 'My Wallet', icon: <Wallet className="w-5 h-5" />, path: ROUTES.ADMIN_MY_WALLET },
+            { id: 'profile', label: 'Gallery Profile', icon: <Building2 className="w-5 h-5" />, path: ROUTES.ADMIN_PROFILE },
+            { id: 'settings', label: 'Settings', icon: <Settings className="w-5 h-5" />, path: ROUTES.ADMIN_SETTINGS },
+        ],
+    },
+];
+
+// ============================================
+// HERITAGE / SITES ADMIN SIDEBAR
+// ============================================
+export const heritageSidebarSections: SidebarSection[] = [
+    {
+        title: 'Overview',
+        items: [
+            { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: ROUTES.ADMIN_DASHBOARD },
+        ],
+    },
+    {
+        title: 'Heritage Management',
+        items: [
+            { id: 'artifacts', label: 'Artifacts & Records', icon: <FolderHeart className="w-5 h-5" />, path: '/admin/artworks' },
+            { id: 'tours', label: 'Virtual Tours', icon: <MapPin className="w-5 h-5" />, path: '/admin/banners' },
+            { id: 'tickets', label: 'Site Admission', icon: <Ticket className="w-5 h-5" />, path: '/admin/tickets' },
+        ],
+    },
+    {
+        title: 'Insights',
+        items: [
+            { id: 'analytics', label: 'Site Analytics', icon: <BarChart3 className="w-5 h-5" />, path: '/admin/analytics' },
+        ],
+    },
+    {
+        title: 'Account',
+        items: [
+            { id: 'my-wallet', label: 'My Wallet', icon: <Wallet className="w-5 h-5" />, path: ROUTES.ADMIN_MY_WALLET },
+            { id: 'profile', label: 'Heritage Profile', icon: <Building2 className="w-5 h-5" />, path: ROUTES.ADMIN_PROFILE },
+            { id: 'settings', label: 'Settings', icon: <Settings className="w-5 h-5" />, path: ROUTES.ADMIN_SETTINGS },
+        ],
+    },
+];
+
+// ============================================
+// HELPER: Get institution sidebar by admin role
+// ============================================
+export function getInstitutionSidebar(adminRole?: string): SidebarSection[] {
+    switch (adminRole) {
+        case 'MUSEUM_ADMIN': return museumSidebarSections;
+        case 'GALLERY_ADMIN': return gallerySidebarSections;
+        case 'HERITAGE_ADMIN': return heritageSidebarSections;
+        default: return museumSidebarSections; // Fallback
+    }
+}
+
+// Legacy alias for backward compatibility
+export const institutionSidebarSections = museumSidebarSections;
+
 export const getArtistSidebarSections = (isInstitution: boolean): SidebarSection[] => [
     {
         title: 'Overview',
@@ -319,9 +441,9 @@ export const getArtistSidebarSections = (isInstitution: boolean): SidebarSection
             },
             {
                 id: 'marketplace',
-                label: 'Arts Marketplace',
-                icon: <Palette className="w-5 h-5" />,
-                path: ROUTES.MARKETPLACE,
+                label: 'Artist Marketplace',
+                icon: <ShoppingBag className="w-5 h-5" />,
+                path: '/artist/marketplace',
             },
         ],
     },
@@ -357,6 +479,12 @@ export const getArtistSidebarSections = (isInstitution: boolean): SidebarSection
                 icon: <Building2 className="w-5 h-5" />,
                 path: ROUTES.ARTIST_INSTITUTION,
             }] : []),
+            {
+                id: 'wallet',
+                label: 'My Wallet',
+                icon: <Wallet className="w-5 h-5" />,
+                path: '/artist/wallet',
+            },
             {
                 id: 'settings',
                 label: 'Settings',

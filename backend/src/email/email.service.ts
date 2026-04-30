@@ -74,9 +74,19 @@ export class EmailService {
     }
 
     /**
-     * Send OTP code for login verification
+     * Send OTP code for login or password change verification
      */
-    async sendOtpEmail(email: string, otp: string): Promise<boolean> {
+    async sendOtpEmail(email: string, otp: string, context: "login" | "change-password" = "login"): Promise<boolean> {
+        const isLogin = context === "login";
+        const headerText = isLogin ? "SECURE LOGIN" : "SECURITY ALERT";
+        const titleText = isLogin ? "Your Login Code" : "Password Change Request";
+        const instructionText = isLogin 
+            ? "Enter this code to complete your sign-in:" 
+            : "Enter this code to authorize changing your account password:";
+        const subjectText = isLogin 
+            ? `${otp} — Your SeniQu Login Code`
+            : `${otp} — SeniQu Password Change Verification`;
+
         const html = `
 <!DOCTYPE html>
 <html>
@@ -86,13 +96,13 @@ export class EmailService {
     <!-- Header -->
     <div style="background:linear-gradient(135deg,#b8860b,#daa520);padding:32px 24px;text-align:center;">
       <h1 style="margin:0;color:#000;font-size:28px;font-weight:700;letter-spacing:1px;">SeniQu</h1>
-      <p style="margin:8px 0 0;color:rgba(0,0,0,0.7);font-size:13px;letter-spacing:2px;">SECURE LOGIN</p>
+      <p style="margin:8px 0 0;color:rgba(0,0,0,0.7);font-size:13px;letter-spacing:2px;">${headerText}</p>
     </div>
     <!-- Body -->
     <div style="padding:40px 32px;text-align:center;">
-      <h2 style="color:#fff;font-size:22px;margin:0 0 16px;">Your Login Code</h2>
+      <h2 style="color:#fff;font-size:22px;margin:0 0 16px;">${titleText}</h2>
       <p style="color:#a0a0a0;font-size:15px;line-height:1.6;margin:0 0 28px;">
-        Enter this code to complete your sign-in:
+        ${instructionText}
       </p>
       <!-- OTP Code -->
       <div style="background:rgba(0,0,0,0.4);border:2px solid rgba(218,165,32,0.4);border-radius:16px;padding:24px;margin:20px auto;max-width:280px;">
@@ -113,7 +123,7 @@ export class EmailService {
 </body>
 </html>`
 
-        return this.sendMail(email, `${otp} — Your SeniQu Login Code`, html)
+        return this.sendMail(email, subjectText, html)
     }
 
     /**

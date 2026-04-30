@@ -26,6 +26,7 @@ import { JwtAuthGuard } from "./guards/jwt-auth.guard"
 import { PrivyGuard } from "./guards/privy.guard"
 import { GetUser } from "./decorators/get-user.decorator"
 import { Public } from "./decorators/public.decorator"
+import { BypassSecurity } from "../common/decorators/bypass-security.decorator"
 import { WalletLoginDto } from "./dto/wallet-login.dto"
 
 @ApiTags("Auth")
@@ -241,7 +242,8 @@ export class AuthController {
      */
     @Post("register")
     @Public()
-    @ApiOperation({ summary: "Register new user (sends verification email)" })
+    @BypassSecurity()
+    @ApiOperation({ summary: "Register a new user" })
     @ApiResponse({ status: 201, description: "Verification email sent" })
     async register(@Body() dto: RegisterDto) {
         return this.authService.register(dto)
@@ -252,6 +254,7 @@ export class AuthController {
      */
     @Post("login")
     @Public()
+    @BypassSecurity()
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: "Login with email/password (sends OTP)" })
     @ApiResponse({ status: 200, description: "OTP sent to email" })
@@ -374,5 +377,37 @@ export class AuthController {
     @ApiOperation({ summary: "Get current user profile" })
     async getProfile(@GetUser() user: any) {
         return user
+    }
+
+    /**
+     * Request password change (Step 1: verify current password, send OTP)
+     */
+    @Post("change-password/request")
+    @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
+    @ApiBearerAuth("JWT-auth")
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: "Request user password change" })
+    async requestPasswordChange(
+        @GetUser("id") userId: string,
+        @Body() body: { currentPassword: string },
+    ) {
+        return this.authService.requestPasswordChange(userId, body.currentPassword)
+    }
+
+    /**
+     * Verify password change (Step 2: verify OTP, set new password)
+     */
+    @Post("change-password/verify")
+    @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
+    @ApiBearerAuth("JWT-auth")
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: "Verify and set new password" })
+    async verifyPasswordChange(
+        @GetUser("id") userId: string,
+        @Body() body: { otp: string; newPassword: string },
+    ) {
+        return this.authService.verifyPasswordChange(userId, body.otp, body.newPassword)
     }
 }

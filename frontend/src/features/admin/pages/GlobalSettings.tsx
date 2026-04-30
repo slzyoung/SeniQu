@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Save, Globe, Shield, Database, Mail, Server, CreditCard, AlertTriangle, Settings } from 'lucide-react';
+import { Save, Globe, Shield, Database, Mail, Server, CreditCard, AlertTriangle, Settings, Building2, Bell } from 'lucide-react';
 import { PageContainer } from '../../../components/common/DashboardLayout';
 import { Button, Badge } from '../../../components/ui';
 import { useToast } from '../../../stores/useNotificationStore';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuthStore } from '../../../stores/useAuthStore';
 
 function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (value: boolean) => void }) {
     return (
@@ -61,14 +62,33 @@ export function GlobalSettings() {
         { id: 'system', label: 'System', icon: Server },
     ];
 
+    const { user } = useAuthStore();
+    const isSuperAdmin = user?.role === 'super_admin';
+
+    const visibleTabs = isSuperAdmin 
+        ? tabs 
+        : [
+            { id: 'general', label: 'Institution Settings', icon: Building2 },
+            { id: 'notifications', label: 'Notifications', icon: Bell },
+          ];
+
+    // If non-super admin and tries to access a hidden tab, reset to general
+    if (!isSuperAdmin && !['general', 'notifications'].includes(activeTab)) {
+        setActiveTab('general');
+    }
+
     return (
         <PageContainer className="bg-[#FAFAFA] min-h-screen pb-12">
             <div className="max-w-4xl mx-auto">
                 <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
                     <div>
                         <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 font-bold px-3 py-1 mb-3">Configuration</Badge>
-                        <h1 className="text-4xl font-bold text-gray-900 font-serif tracking-tight">Global Settings</h1>
-                        <p className="text-gray-500 mt-2 font-medium">Manage core platform behavior and features.</p>
+                        <h1 className="text-4xl font-bold text-gray-900 font-serif tracking-tight">
+                            {isSuperAdmin ? 'Global Settings' : 'Institution Settings'}
+                        </h1>
+                        <p className="text-gray-500 mt-2 font-medium">
+                            {isSuperAdmin ? 'Manage core platform behavior and features.' : 'Configure your institution preferences.'}
+                        </p>
                     </div>
                     <Button className="!rounded-xl !px-6 !py-2.5 !bg-indigo-600 hover:!bg-indigo-700 !text-white shadow-lg font-bold" leftIcon={<Save className="w-4 h-4" />}>
                         Save Changes
@@ -78,7 +98,7 @@ export function GlobalSettings() {
                 <div className="bg-white rounded-[24px] border border-gray-100 shadow-sm overflow-hidden flex flex-col md:flex-row min-h-[500px]">
                     {/* Sidebar Tabs */}
                     <div className="w-full md:w-64 bg-gray-50/50 border-b md:border-b-0 md:border-r border-gray-100 p-4 flex flex-row md:flex-col gap-2 overflow-x-auto">
-                        {tabs.map(t => (
+                        {visibleTabs.map(t => (
                             <button
                                 key={t.id}
                                 onClick={() => setActiveTab(t.id)}
@@ -99,7 +119,7 @@ export function GlobalSettings() {
                                 exit={{ opacity: 0, y: -10 }}
                                 transition={{ duration: 0.2 }}
                             >
-                                {activeTab === 'general' && (
+                                {activeTab === 'general' && isSuperAdmin && (
                                     <div className="space-y-2">
                                         <div className="mb-6">
                                             <h3 className="text-lg font-bold text-gray-900">Platform Controls</h3>
@@ -110,7 +130,28 @@ export function GlobalSettings() {
                                     </div>
                                 )}
 
-                                {activeTab === 'security' && (
+                                {activeTab === 'general' && !isSuperAdmin && (
+                                    <div className="space-y-2">
+                                        <div className="mb-6">
+                                            <h3 className="text-lg font-bold text-gray-900">Institution Configuration</h3>
+                                            <p className="text-sm text-gray-500">Manage visibility and access to your institutional profile.</p>
+                                        </div>
+                                        <SettingRow icon={Globe} title="Public Profile" description="Allow your institution to be discovered by the public." action={<Toggle enabled={true} onChange={() => {}} />} />
+                                        <SettingRow icon={Mail} title="Contact Form" description="Enable public users to send inquiries to your institution." action={<Toggle enabled={true} onChange={() => {}} />} />
+                                    </div>
+                                )}
+
+                                {activeTab === 'notifications' && !isSuperAdmin && (
+                                    <div className="space-y-2">
+                                        <div className="mb-6">
+                                            <h3 className="text-lg font-bold text-gray-900">Notification Preferences</h3>
+                                            <p className="text-sm text-gray-500">Configure how you receive alerts.</p>
+                                        </div>
+                                        <SettingRow icon={Bell} title="Email Alerts" description="Receive emails for new ticket purchases or bookings." action={<Toggle enabled={true} onChange={() => {}} />} />
+                                    </div>
+                                )}
+
+                                {activeTab === 'security' && isSuperAdmin && (
                                     <div className="space-y-2">
                                         <div className="mb-6">
                                             <h3 className="text-lg font-bold text-gray-900">Access Control</h3>
@@ -120,7 +161,7 @@ export function GlobalSettings() {
                                     </div>
                                 )}
 
-                                {activeTab === 'features' && (
+                                {activeTab === 'features' && isSuperAdmin && (
                                     <div className="space-y-2">
                                         <div className="mb-6">
                                             <h3 className="text-lg font-bold text-gray-900">Feature Management</h3>
@@ -131,7 +172,7 @@ export function GlobalSettings() {
                                     </div>
                                 )}
 
-                                {activeTab === 'system' && (
+                                {activeTab === 'system' && isSuperAdmin && (
                                     <div className="space-y-2">
                                         <div className="mb-6">
                                             <h3 className="text-lg font-bold text-gray-900">System Configuration</h3>

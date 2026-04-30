@@ -8,7 +8,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Mail, Lock, ArrowLeft, Loader2, Eye, EyeOff, AlertCircle, CheckCircle, Wallet, ShieldCheck, KeyRound, MailCheck } from 'lucide-react';
-import { authService, loginSchema, registerSchema, AuthError, OtpRequiredResponse, VerificationRequiredResponse } from '../services/authService';
+import { authService, loginSchema, registerSchema, AuthError, OtpRequiredResponse } from '../services/authService';
 import { useAppKit, useAppKitAccount, useAppKitProvider } from '../lib/reownConfig';
 
 import { useAuthStore } from '../stores/useAuthStore';
@@ -466,7 +466,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
             // Redirect to profile completion or dashboard
             const redirectPath = needsCompletion
               ? '/complete-profile'
-              : getDashboardRoute(response.user.role);
+              : getDashboardRoute(response.user);
 
             navigate(redirectPath);
           }
@@ -519,7 +519,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
       const { needsProfileCompletion } = await import('../lib/authHelpers');
       const needsCompletion = needsProfileCompletion(authResponse.user);
-      const redirectPath = needsCompletion ? '/complete-profile' : getDashboardRoute(authResponse.user.role);
+      const redirectPath = needsCompletion ? '/complete-profile' : getDashboardRoute(authResponse.user);
       navigate(redirectPath);
       handleClose();
     } catch (error) {
@@ -567,7 +567,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
       const authResponse = response;
       storeLogin(authResponse.user, authResponse.accessToken, authResponse.refreshToken);
       toast.success('Welcome to SeniQu!', 'Your account has been created successfully.');
-      const redirectPath = getDashboardRoute(authResponse.user.role);
+      const redirectPath = getDashboardRoute(authResponse.user);
       navigate(redirectPath);
       handleClose();
     } catch (error) {
@@ -602,7 +602,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
       const { needsProfileCompletion } = await import('../lib/authHelpers');
       const needsCompletion = needsProfileCompletion(response.user);
-      const redirectPath = needsCompletion ? '/complete-profile' : getDashboardRoute(response.user.role);
+      const redirectPath = needsCompletion ? '/complete-profile' : getDashboardRoute(response.user);
       navigate(redirectPath);
       handleClose();
     } catch (error) {

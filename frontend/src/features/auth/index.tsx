@@ -60,7 +60,7 @@ export function Login() {
             toast.success('Welcome back!', 'You have successfully signed in.');
 
             // Determine redirect path based on role
-            const redirectPath = getDashboardRoute(authResponse.user.role);
+            const redirectPath = getDashboardRoute(authResponse.user);
 
             const from = (location.state as { from?: Location })?.from?.pathname || redirectPath;
             navigate(from, { replace: true });
@@ -91,7 +91,7 @@ export function Login() {
             const response = await authService.verifyOtp(formData.email, otpCode);
             storeLogin(response.user, response.accessToken, response.refreshToken);
             toast.success('Welcome back!', 'You have successfully signed in.');
-            const redirectPath = getDashboardRoute(response.user.role);
+            const redirectPath = getDashboardRoute(response.user);
             const from = (location.state as { from?: Location })?.from?.pathname || redirectPath;
             navigate(from, { replace: true });
         } catch (error) {
@@ -330,7 +330,7 @@ export function AuthCallback() {
 
                 const redirectPath = needsCompletion
                     ? '/complete-profile'
-                    : getDashboardRoute(response.user.role);
+                    : getDashboardRoute(response.user);
 
                 // Small delay to let the success state show briefly
                 setTimeout(() => navigate(redirectPath, { replace: true }), 1000);
