@@ -18,6 +18,8 @@
 | 8 | [API Reference](./08-API-Reference.md) | REST endpoints, request/response schemas, authentication requirements, Swagger |
 | 9 | [Wallet Integration](./09-Wallet-Integration.md) | Hybrid wallet strategy: Privy embedded + manual (Phantom/Solflare/MetaMask), backend sync |
 | 10 | [Cloudflare R2 Integration](./10-Cloudflare-R2-Integration.md) | S3-compatible storage, signed upload URLs, geo-distributed CDN asset delivery |
+| 11 | [Security Incident Response](./11-Security-Incident-Response.md) | Incident procedures, key rotation, and forensic auditing guidelines |
+| 12 | [Enterprise Admin Architecture](./12-Enterprise-Admin-Architecture.md) | Unified UI/UX, RBAC enhancements, and admin dashboard modernization |
 
 ---
 

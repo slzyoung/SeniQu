@@ -37,7 +37,7 @@ export class MuseumsService {
 
         let queryBuilder = this.supabase
             .from("institutions")
-            .select("*, owner:users(id, display_name, avatar_url)", { count: "exact" })
+            .select("*, owner:users!institutions_owner_id_fkey(id, display_name, avatar_url)", { count: "exact" })
 
         // Filters
         if (city) {
@@ -105,7 +105,7 @@ export class MuseumsService {
         // Build query
         const { data, error } = await this.supabase
             .from("institutions")
-            .select("*, owner:users(id, display_name, avatar_url)")
+            .select("*, owner:users!institutions_owner_id_fkey(id, display_name, avatar_url)")
             .eq("is_verified", false)
             .order("created_at", { ascending: false })
 
@@ -123,7 +123,7 @@ export class MuseumsService {
     async findBySlug(slug: string) {
         const { data, error } = await this.supabase
             .from("institutions")
-            .select("*, owner:users(id, display_name, avatar_url, is_verified)")
+            .select("*, owner:users!institutions_owner_id_fkey(id, display_name, avatar_url, is_verified)")
             .eq("slug", slug)
             .single()
 
@@ -148,7 +148,7 @@ export class MuseumsService {
 
         const { data, error, count } = await this.supabase
             .from("artworks")
-            .select("*, artist:users(id, display_name, avatar_url)", { count: "exact" })
+            .select("*, artist:users!artworks_artist_id_fkey(id, display_name, avatar_url)", { count: "exact" })
             .eq("institution_id", museumId)
             .eq("status", "published")
             .order("created_at", { ascending: false })

@@ -1,84 +1,43 @@
-/**
- * Admin Global Settings Page
- * Manage platform-wide configurations
- */
-
 import React, { useState } from 'react';
-import {
-    Save,
-    Globe,
-    Shield,
-    Database,
-    Mail,
-    Server,
-    CreditCard,
-    AlertTriangle
-} from 'lucide-react';
+import { Save, Globe, Shield, Database, Mail, Server, CreditCard, AlertTriangle, Settings, Building2, Bell } from 'lucide-react';
 import { PageContainer } from '../../../components/common/DashboardLayout';
-import { Card, CardHeader, CardContent, Button, Tabs, TabPanel } from '../../../components/ui';
+import { Button, Badge } from '../../../components/ui';
 import { useToast } from '../../../stores/useNotificationStore';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useAuthStore } from '../../../stores/useAuthStore';
 
-// Toggle switch component (reused locally for now)
 function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (value: boolean) => void }) {
     return (
         <button
             onClick={() => onChange(!enabled)}
-            className={`
-                relative w-12 h-7 md:w-14 md:h-8 rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-gold/50
-                ${enabled ? 'bg-gold' : 'bg-theme-border'}
-            `}
-            aria-checked={enabled}
-            role="switch"
+            className={`relative w-12 h-6 rounded-full transition-colors duration-300 ease-in-out focus:outline-none ${enabled ? 'bg-indigo-500' : 'bg-gray-200'}`}
         >
-            <span className="sr-only">Toggle setting</span>
-            <div
-                className={`
-                    absolute top-1 left-1 w-5 h-5 md:w-6 md:h-6 bg-white rounded-full 
-                    transition-transform duration-200 ease-in-out shadow-sm
-                    ${enabled ? 'translate-x-5 md:translate-x-6' : 'translate-x-0'}
-                `}
-            />
+            <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-300 shadow-sm ${enabled ? 'translate-x-6' : 'translate-x-0'}`} />
         </button>
     );
 }
 
-// Setting Row component
-function SettingRow({
-    icon: Icon,
-    title,
-    description,
-    action,
-    destructive = false
-}: {
-    icon: React.ElementType;
-    title: string;
-    description: string;
-    action: React.ReactNode;
-    destructive?: boolean;
-}) {
+function SettingRow({ icon: Icon, title, description, action, destructive = false }: { icon: React.ElementType, title: string, description: string, action: React.ReactNode, destructive?: boolean }) {
     return (
-        <div className="flex flex-col md:flex-row md:items-center justify-between py-5 border-b border-theme-border last:border-b-0 gap-4 md:gap-0">
-            <div className="flex items-start gap-4">
-                <div className={`p-2.5 rounded-xl shrink-0 ${destructive ? 'bg-red-500/10 text-red-500' : 'bg-theme-elevated text-gold'}`}>
+        <div className="flex items-center justify-between py-4 border-b border-gray-50 last:border-0 hover:bg-gray-50/50 transition-colors px-4 -mx-4 rounded-xl">
+            <div className="flex items-center gap-4">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${destructive ? 'bg-red-50 text-red-500' : 'bg-indigo-50 text-indigo-600'}`}>
                     <Icon className="w-5 h-5" />
                 </div>
-                <div className="flex-1">
-                    <p className={`font-medium text-base ${destructive ? 'text-red-500' : 'text-theme-text'}`}>{title}</p>
-                    <p className="text-sm text-theme-muted mt-0.5 leading-relaxed">{description}</p>
+                <div>
+                    <p className="font-bold text-gray-900 text-sm">{title}</p>
+                    <p className="text-xs font-medium text-gray-500 mt-0.5">{description}</p>
                 </div>
             </div>
-            <div className="flex items-center justify-end md:justify-start pl-[3.25rem] md:pl-0">
-                {action}
-            </div>
+            <div>{action}</div>
         </div>
     );
 }
 
-export default function GlobalSettings() {
+export function GlobalSettings() {
     const toast = useToast();
     const [activeTab, setActiveTab] = useState('general');
 
-    // MOCK STATE (In real app, fetch from backend)
     const [settings, setSettings] = useState({
         maintenanceMode: false,
         registrationEnabled: true,
@@ -91,144 +50,144 @@ export default function GlobalSettings() {
     const handleToggle = (key: keyof typeof settings) => {
         setSettings(prev => {
             const next = { ...prev, [key]: !prev[key] };
-            toast.success('Setting Updated', `${key} has been ${next[key] ? 'enabled' : 'disabled'}`);
+            toast.success('Settings Updated', `${key} has been ${next[key] ? 'enabled' : 'disabled'}`);
             return next;
         });
     };
 
     const tabs = [
-        { id: 'general', label: 'General', icon: <Globe className="w-4 h-4" /> },
-        { id: 'security', label: 'Security', icon: <Shield className="w-4 h-4" /> },
-        { id: 'features', label: 'Features', icon: <Database className="w-4 h-4" /> },
-        { id: 'system', label: 'System', icon: <Server className="w-4 h-4" /> },
+        { id: 'general', label: 'General', icon: Globe },
+        { id: 'security', label: 'Security', icon: Shield },
+        { id: 'features', label: 'Features', icon: Database },
+        { id: 'system', label: 'System', icon: Server },
     ];
 
+    const { user } = useAuthStore();
+    const isSuperAdmin = user?.role === 'super_admin';
+
+    const visibleTabs = isSuperAdmin 
+        ? tabs 
+        : [
+            { id: 'general', label: 'Institution Settings', icon: Building2 },
+            { id: 'notifications', label: 'Notifications', icon: Bell },
+          ];
+
+    // If non-super admin and tries to access a hidden tab, reset to general
+    if (!isSuperAdmin && !['general', 'notifications'].includes(activeTab)) {
+        setActiveTab('general');
+    }
+
     return (
-        <PageContainer
-            title="Global Settings"
-            subtitle="Configure platform-wide parameters and features"
-            actions={
-                <Button leftIcon={<Save className="w-4 h-4" />}>
-                    Save Changes
-                </Button>
-            }
-        >
-            <div className="max-w-4xl mx-auto pb-20">
-                <div className="sticky top-0 z-10 bg-theme-bg/95 backdrop-blur-sm -mx-4 px-4 md:mx-0 md:px-0 pt-2 pb-4 overflow-x-auto no-scrollbar">
-                    <Tabs
-                        tabs={tabs}
-                        activeTab={activeTab}
-                        onChange={setActiveTab}
-                        variant="pills"
-                        className="min-w-max"
-                    />
+        <PageContainer className="bg-[#FAFAFA] min-h-screen pb-12">
+            <div className="max-w-4xl mx-auto">
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+                    <div>
+                        <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 font-bold px-3 py-1 mb-3">Configuration</Badge>
+                        <h1 className="text-4xl font-bold text-gray-900 font-serif tracking-tight">
+                            {isSuperAdmin ? 'Global Settings' : 'Institution Settings'}
+                        </h1>
+                        <p className="text-gray-500 mt-2 font-medium">
+                            {isSuperAdmin ? 'Manage core platform behavior and features.' : 'Configure your institution preferences.'}
+                        </p>
+                    </div>
+                    <Button className="!rounded-xl !px-6 !py-2.5 !bg-indigo-600 hover:!bg-indigo-700 !text-white shadow-lg font-bold" leftIcon={<Save className="w-4 h-4" />}>
+                        Save Changes
+                    </Button>
                 </div>
 
-                <div className="mt-4">
-                    {/* General Settings */}
-                    <TabPanel value="general" activeTab={activeTab}>
-                        <Card variant="elevated">
-                            <CardHeader title="Platform Controls" subtitle="Operational settings for Seniqu" />
-                            <CardContent>
-                                <SettingRow
-                                    icon={Globe}
-                                    title="Maintenance Mode"
-                                    description="Put the site in maintenance mode. Only admins can access."
-                                    destructive
-                                    action={
-                                        <Toggle
-                                            enabled={settings.maintenanceMode}
-                                            onChange={() => handleToggle('maintenanceMode')}
-                                        />
-                                    }
-                                />
-                                <SettingRow
-                                    icon={Server}
-                                    title="User Registration"
-                                    description="Allow new users to sign up"
-                                    action={
-                                        <Toggle
-                                            enabled={settings.registrationEnabled}
-                                            onChange={() => handleToggle('registrationEnabled')}
-                                        />
-                                    }
-                                />
-                            </CardContent>
-                        </Card>
-                    </TabPanel>
+                <div className="bg-white rounded-[24px] border border-gray-100 shadow-sm overflow-hidden flex flex-col md:flex-row min-h-[500px]">
+                    {/* Sidebar Tabs */}
+                    <div className="w-full md:w-64 bg-gray-50/50 border-b md:border-b-0 md:border-r border-gray-100 p-4 flex flex-row md:flex-col gap-2 overflow-x-auto">
+                        {visibleTabs.map(t => (
+                            <button
+                                key={t.id}
+                                onClick={() => setActiveTab(t.id)}
+                                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === t.id ? 'bg-white text-indigo-600 shadow-sm border border-gray-100' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
+                            >
+                                <t.icon className={`w-4 h-4 ${activeTab === t.id ? 'text-indigo-600' : 'text-gray-400'}`} /> {t.label}
+                            </button>
+                        ))}
+                    </div>
 
-                    {/* Security Settings */}
-                    <TabPanel value="security" activeTab={activeTab}>
-                        <Card variant="elevated">
-                            <CardHeader title="Access Control" subtitle="Security and verification policies" />
-                            <CardContent>
-                                <SettingRow
-                                    icon={Mail}
-                                    title="Require Email Verification"
-                                    description="Users must verify email before accessing features"
-                                    action={
-                                        <Toggle
-                                            enabled={settings.requireEmailVerification}
-                                            onChange={() => handleToggle('requireEmailVerification')}
-                                        />
-                                    }
-                                />
-                            </CardContent>
-                        </Card>
-                    </TabPanel>
+                    {/* Content */}
+                    <div className="flex-1 p-8">
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={activeTab}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                transition={{ duration: 0.2 }}
+                            >
+                                {activeTab === 'general' && isSuperAdmin && (
+                                    <div className="space-y-2">
+                                        <div className="mb-6">
+                                            <h3 className="text-lg font-bold text-gray-900">Platform Controls</h3>
+                                            <p className="text-sm text-gray-500">Operational settings for the entire platform.</p>
+                                        </div>
+                                        <SettingRow icon={Globe} title="Maintenance Mode" description="Put site in maintenance mode. Only admins can access." destructive action={<Toggle enabled={settings.maintenanceMode} onChange={() => handleToggle('maintenanceMode')} />} />
+                                        <SettingRow icon={Server} title="User Registration" description="Allow new users to sign up via public registration." action={<Toggle enabled={settings.registrationEnabled} onChange={() => handleToggle('registrationEnabled')} />} />
+                                    </div>
+                                )}
 
-                    {/* Feature Flags */}
-                    <TabPanel value="features" activeTab={activeTab}>
-                        <Card variant="elevated">
-                            <CardHeader title="Feature Management" subtitle="Enable or disable specific modules" />
-                            <CardContent>
-                                <SettingRow
-                                    icon={CreditCard}
-                                    title="Art Marketplace"
-                                    description="Enable Art trading and minting features"
-                                    action={
-                                        <Toggle
-                                            enabled={settings.enableArtMarketplace}
-                                            onChange={() => handleToggle('enableArtMarketplace')}
-                                        />
-                                    }
-                                />
-                                <SettingRow
-                                    icon={Database}
-                                    title="Community Forums"
-                                    description="Enable public discussion forums"
-                                    action={
-                                        <Toggle
-                                            enabled={settings.enableForums}
-                                            onChange={() => handleToggle('enableForums')}
-                                        />
-                                    }
-                                />
-                            </CardContent>
-                        </Card>
-                    </TabPanel>
+                                {activeTab === 'general' && !isSuperAdmin && (
+                                    <div className="space-y-2">
+                                        <div className="mb-6">
+                                            <h3 className="text-lg font-bold text-gray-900">Institution Configuration</h3>
+                                            <p className="text-sm text-gray-500">Manage visibility and access to your institutional profile.</p>
+                                        </div>
+                                        <SettingRow icon={Globe} title="Public Profile" description="Allow your institution to be discovered by the public." action={<Toggle enabled={true} onChange={() => {}} />} />
+                                        <SettingRow icon={Mail} title="Contact Form" description="Enable public users to send inquiries to your institution." action={<Toggle enabled={true} onChange={() => {}} />} />
+                                    </div>
+                                )}
 
-                    {/* System Settings */}
-                    <TabPanel value="system" activeTab={activeTab}>
-                        <Card variant="elevated">
-                            <CardHeader title="System Configuration" />
-                            <CardContent>
-                                <SettingRow
-                                    icon={AlertTriangle}
-                                    title="Debug Mode"
-                                    description="Enable verbose logging (Performance impact)"
-                                    action={
-                                        <Toggle
-                                            enabled={settings.debugMode}
-                                            onChange={() => handleToggle('debugMode')}
-                                        />
-                                    }
-                                />
-                            </CardContent>
-                        </Card>
-                    </TabPanel>
+                                {activeTab === 'notifications' && !isSuperAdmin && (
+                                    <div className="space-y-2">
+                                        <div className="mb-6">
+                                            <h3 className="text-lg font-bold text-gray-900">Notification Preferences</h3>
+                                            <p className="text-sm text-gray-500">Configure how you receive alerts.</p>
+                                        </div>
+                                        <SettingRow icon={Bell} title="Email Alerts" description="Receive emails for new ticket purchases or bookings." action={<Toggle enabled={true} onChange={() => {}} />} />
+                                    </div>
+                                )}
+
+                                {activeTab === 'security' && isSuperAdmin && (
+                                    <div className="space-y-2">
+                                        <div className="mb-6">
+                                            <h3 className="text-lg font-bold text-gray-900">Access Control</h3>
+                                            <p className="text-sm text-gray-500">Security and verification policies.</p>
+                                        </div>
+                                        <SettingRow icon={Mail} title="Require Email Verification" description="Users must verify their email address before accessing features." action={<Toggle enabled={settings.requireEmailVerification} onChange={() => handleToggle('requireEmailVerification')} />} />
+                                    </div>
+                                )}
+
+                                {activeTab === 'features' && isSuperAdmin && (
+                                    <div className="space-y-2">
+                                        <div className="mb-6">
+                                            <h3 className="text-lg font-bold text-gray-900">Feature Management</h3>
+                                            <p className="text-sm text-gray-500">Enable or disable specific platform modules.</p>
+                                        </div>
+                                        <SettingRow icon={CreditCard} title="Art Marketplace" description="Enable Art trading, minting, and wallet features." action={<Toggle enabled={settings.enableArtMarketplace} onChange={() => handleToggle('enableArtMarketplace')} />} />
+                                        <SettingRow icon={Database} title="Community Forums" description="Enable public discussion forums and topics." action={<Toggle enabled={settings.enableForums} onChange={() => handleToggle('enableForums')} />} />
+                                    </div>
+                                )}
+
+                                {activeTab === 'system' && isSuperAdmin && (
+                                    <div className="space-y-2">
+                                        <div className="mb-6">
+                                            <h3 className="text-lg font-bold text-gray-900">System Configuration</h3>
+                                            <p className="text-sm text-gray-500">Advanced settings and debugging.</p>
+                                        </div>
+                                        <SettingRow icon={AlertTriangle} title="Debug Mode" description="Enable verbose logging across the platform. (Affects performance)" destructive action={<Toggle enabled={settings.debugMode} onChange={() => handleToggle('debugMode')} />} />
+                                    </div>
+                                )}
+                            </motion.div>
+                        </AnimatePresence>
+                    </div>
                 </div>
             </div>
         </PageContainer>
     );
 }
+
+export default GlobalSettings;

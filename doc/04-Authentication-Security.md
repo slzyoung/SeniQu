@@ -204,7 +204,47 @@ sequenceDiagram
 | **Verification Badges** | Green "Verified by Seniqu" badge only appears if address matches DB record. |
 | **RPC Standardization** | All wallet operations forced to Mainnet (or Env RPC) to prevent "Devnet Scams" where users are tricked into sending real funds to devnet addresses. |
 
-### 1.8 Token Configuration
+### 1.9 Email Verification & OTP Login (Brevo Integration)
+
+Seniqu uses Brevo SMTP for transactional emails, including Registration Verification and One-Time Passwords (OTP) for login. The architecture ensures that email delivery is reliable and that the verification process is secure against brute-force and throttling attacks.
+
+#### 1.9.1 Registration Verification Flow
+1. **Initiation**: User registers via email/password.
+2. **Token Generation**: A cryptographically secure random 6-digit OTP is generated.
+3. **Storage**: The OTP is hashed (using bcrypt) and stored in the database (`verification_token` column) along with an expiration timestamp (`verification_expires`, typically 15 minutes).
+4. **Email Dispatch**: The plaintext OTP is sent to the user via Brevo SMTP.
+5. **Verification**: The user submits the OTP. The system verifies it against the hashed token. If successful, `is_verified` becomes `true` and the token is cleared.
+
+#### 1.9.2 OTP Login Flow
+For passwordless authentication or as a fallback:
+1. User requests OTP login.
+2. System verifies the email exists.
+3. Generates, hashes, and stores a 6-digit OTP (valid for 5 minutes).
+4. Sends email via Brevo.
+5. User submits OTP -> System verifies -> Issues JWT.
+
+#### 1.9.3 Anti-Throttling & Anti-Hacking Measures for Email
+
+| Threat | Mitigation Strategy |
+|--------|---------------------|
+| **Brute Force (OTP Guessing)** | OTPs are 6 digits. After 3 failed attempts, the OTP is invalidated, and the user must request a new one. |
+| **Spam / Throttling** | The API limits OTP request endpoints (`/auth/request-otp`, `/auth/resend-verification`) to 1 request per 60 seconds per IP/Email. |
+| **Timing Attacks** | Constant-time comparison is used when verifying hashed tokens. |
+| **Database Leaks** | Tokens are stored as bcrypt hashes. A compromised database does not reveal active plaintext OTPs. |
+
+### 1.10 Key Management & Incident Response (Key Leaks)
+
+Seniqu enforces a strict policy of **Zero Hardcoded Secrets**. All API keys (Brevo, Privy, Supabase) must be injected via environment variables and accessed strictly through NestJS's `ConfigService`.
+
+**Past Incident (Privy Key Leak)**:
+During development, a Privy App Secret was pushed to the git repository. The incident was handled by:
+1. **Immediate Revocation**: The leaked key was revoked in the Privy Developer Dashboard.
+2. **Key Rotation**: New keys were generated and injected via `.env`.
+3. **Codebase Cleanup**: The `privy.service.ts` was refactored to use `ConfigService`.
+
+For a comprehensive guide on handling Key Leaks, refer to the dedicated [Security Incident Response Document](./11-Security-Incident-Response.md).
+
+### 1.11 Token Configuration
 
 ```typescript
 JWT_SECRET=your-super-secret-jwt-key-min-32-chars

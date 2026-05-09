@@ -97,7 +97,7 @@ export const PrivyAuthenticationLogic = () => {
                 const needsCompletion = needsProfileCompletion(response.user);
                 const dashboardRoute = needsCompletion
                     ? '/complete-profile'
-                    : getDashboardRoute(response.user.role);
+                    : getDashboardRoute(response.user);
                 navigate(dashboardRoute, { replace: true });
             }
 

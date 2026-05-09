@@ -3,6 +3,7 @@ import { ValidationPipe, Logger } from "@nestjs/common"
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger"
 import { ConfigService } from "@nestjs/config"
 import helmet from "helmet"
+import * as compression from "compression"
 import * as cookieParser from "cookie-parser"
 import { AppModule } from "./app.module"
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter"
@@ -26,7 +27,7 @@ async function bootstrap() {
     // SECURITY MIDDLEWARE
     // ===========================================
 
-    // Helmet for security headers
+    // Helmet for security headers (OWASP)
     app.use(helmet({
         contentSecurityPolicy: {
             directives: {
@@ -37,11 +38,29 @@ async function bootstrap() {
             },
         },
         crossOriginEmbedderPolicy: false,
+        // Anti-Hacking: Force HTTPS via HSTS
+        strictTransportSecurity: {
+            maxAge: 31536000, // 1 year
+            includeSubDomains: true,
+            preload: true,
+        },
+        // Anti-Hacking: Prevent server fingerprinting
+        hidePoweredBy: true,
     }))
 
     // Cookie parser (with secret for signed cookies — used by OAuth flow)
-    const cookieSecret = configService.get<string>("google.oauthCookieSecret") || "seniqu-dev-oauth-cookie-secret"
+    const cookieSecret = configService.get<string>("google.oauthCookieSecret")
+    if (!cookieSecret) {
+        logger.error("OAUTH_COOKIE_SECRET is not set! Aborting for security.")
+        process.exit(1)
+    }
     app.use(cookieParser(cookieSecret))
+
+    // Response compression (gzip/brotli) — reduces bandwidth for JSON-heavy endpoints
+    app.use(compression({
+        threshold: 1024, // Only compress responses > 1KB
+        level: 6, // Balanced compression level (1-9)
+    }))
 
     // Trust proxy (required for secure cookies behind reverse proxies like Heroku/Railway/Render)
     const expressApp = app.getHttpAdapter().getInstance();
@@ -56,7 +75,7 @@ async function bootstrap() {
         "http://localhost:5173",
         "https://seniquapp.netlify.app",
         "https://rpc.ankr.com/solana",
-        "https://seniquwebapp.onrender.com",
+        "https://api.seniqu.art",
         "https://solana-mainnet.rpc.extrnode.com/",
     ]
 
@@ -119,48 +138,56 @@ async function bootstrap() {
     })
 
     // ===========================================
-    // SWAGGER DOCUMENTATION
+    // SWAGGER DOCUMENTATION (Development/Staging only)
     // ===========================================
 
-    const swaggerConfig = new DocumentBuilder()
-        .setTitle("SeniQu API")
-        .setDescription("Indonesian Art Heritage Platform - Enterprise API")
-        .setVersion("1.0.0")
-        .addBearerAuth(
-            {
-                type: "http",
-                scheme: "bearer",
-                bearerFormat: "JWT",
-                name: "Authorization",
-                description: "Enter JWT token",
-                in: "header",
-            },
-            "JWT-auth",
-        )
-        .addApiKey(
-            {
-                type: "apiKey",
-                name: "X-Privy-Token",
-                in: "header",
-                description: "Privy authentication token",
-            },
-            "Privy-auth",
-        )
-        .addTag("Health", "Health check endpoints")
-        .addTag("Auth", "Authentication & Authorization")
-        .addTag("Users", "User management")
-        .addTag("Artworks", "Artwork management")
-        .addTag("Arts", "Digital art minting & management")
-        .addTag("Collections", "Collection management")
-        .addTag("Governance", "DAO & Governance")
-        .addTag("Admin", "Admin dashboard")
-        .build()
+    const nodeEnv = configService.get("NODE_ENV") || "development"
 
-    const document = SwaggerModule.createDocument(app, swaggerConfig)
-    SwaggerModule.setup("api/docs", app, document, {
-        customSiteTitle: "SeniQu API Documentation",
-        customCss: ".swagger-ui .topbar { display: none }",
-    })
+    if (nodeEnv !== "production") {
+        const swaggerConfig = new DocumentBuilder()
+            .setTitle("SeniQu API")
+            .setDescription("Indonesian Art Heritage Platform - Enterprise API")
+            .setVersion("1.0.0")
+            .addBearerAuth(
+                {
+                    type: "http",
+                    scheme: "bearer",
+                    bearerFormat: "JWT",
+                    name: "Authorization",
+                    description: "Enter JWT token",
+                    in: "header",
+                },
+                "JWT-auth",
+            )
+            .addApiKey(
+                {
+                    type: "apiKey",
+                    name: "X-Privy-Token",
+                    in: "header",
+                    description: "Privy authentication token",
+                },
+                "Privy-auth",
+            )
+            .addTag("Health", "Health check endpoints")
+            .addTag("Auth", "Authentication & Authorization")
+            .addTag("Users", "User management")
+            .addTag("Artworks", "Artwork management")
+            .addTag("Arts", "Digital art minting & management")
+            .addTag("Collections", "Collection management")
+            .addTag("Governance", "DAO & Governance")
+            .addTag("Admin", "Admin dashboard")
+            .build()
+
+        const document = SwaggerModule.createDocument(app, swaggerConfig)
+        SwaggerModule.setup("api/docs", app, document, {
+            customSiteTitle: "SeniQu API Documentation",
+            customCss: ".swagger-ui .topbar { display: none }",
+        })
+
+        logger.log("📖 Swagger API docs available at /api/docs")
+    } else {
+        logger.log("🔒 Swagger API docs disabled in production")
+    }
 
     // ===========================================
     // START SERVER

@@ -13,16 +13,20 @@ import {
     Logger,
 } from "@nestjs/common"
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from "@nestjs/swagger"
+import { SkipThrottle } from "@nestjs/throttler"
 import { Response } from "express"
 import { ConfigService } from "@nestjs/config"
 import { AuthService } from "./auth.service"
 import { LoginDto } from "./dto/login.dto"
 import { RegisterDto } from "./dto/register.dto"
 import { AuthResponseDto } from "./dto/auth-response.dto"
+import { VerifyEmailDto } from "./dto/verify-email.dto"
+import { VerifyOtpDto, ResendOtpDto } from "./dto/verify-otp.dto"
 import { JwtAuthGuard } from "./guards/jwt-auth.guard"
 import { PrivyGuard } from "./guards/privy.guard"
 import { GetUser } from "./decorators/get-user.decorator"
 import { Public } from "./decorators/public.decorator"
+import { BypassSecurity } from "../common/decorators/bypass-security.decorator"
 import { WalletLoginDto } from "./dto/wallet-login.dto"
 
 @ApiTags("Auth")
@@ -82,7 +86,11 @@ export class AuthController {
     async initiateGoogleOAuth(
         @Res() res: Response,
     ) {
-        const cookieSecret = this.configService.get<string>("google.oauthCookieSecret") || "fallback-secret"
+        const cookieSecret = this.configService.get<string>("google.oauthCookieSecret")
+        if (!cookieSecret) {
+            this.logger.error("OAUTH_COOKIE_SECRET not configured")
+            return res.status(500).json({ error: "Server configuration error" })
+        }
         const callbackUrl = this.configService.get<string>("google.callbackUrl") || ""
 
         // Generate security parameters
@@ -131,7 +139,11 @@ export class AuthController {
         @Res() res: Response,
     ) {
         const frontendUrl = this.configService.get<string>("frontendUrl") || "https://seniquapp.netlify.app"
-        const cookieSecret = this.configService.get<string>("google.oauthCookieSecret") || "fallback-secret"
+        const cookieSecret = this.configService.get<string>("google.oauthCookieSecret")
+        if (!cookieSecret) {
+            this.logger.error("OAUTH_COOKIE_SECRET not configured")
+            return res.redirect(`${frontendUrl}/auth/callback#error=server_error`)
+        }
 
         // Always clear the OAuth cookie after use
         const clearCookie = () => {
@@ -226,26 +238,62 @@ export class AuthController {
     }
 
     /**
-     * Register new user
+     * Register new user (sends verification email)
      */
     @Post("register")
     @Public()
-    @ApiOperation({ summary: "Register new user" })
-    @ApiResponse({ status: 201, type: AuthResponseDto })
-    async register(@Body() dto: RegisterDto): Promise<AuthResponseDto> {
+    @BypassSecurity()
+    @ApiOperation({ summary: "Register a new user" })
+    @ApiResponse({ status: 201, description: "Verification email sent" })
+    async register(@Body() dto: RegisterDto) {
         return this.authService.register(dto)
     }
 
     /**
-     * Login with email/password
+     * Login with email/password (sends OTP)
      */
     @Post("login")
     @Public()
+    @BypassSecurity()
     @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: "Login with email/password" })
-    @ApiResponse({ status: 200, type: AuthResponseDto })
-    async login(@Body() dto: LoginDto): Promise<AuthResponseDto> {
+    @ApiOperation({ summary: "Login with email/password (sends OTP)" })
+    @ApiResponse({ status: 200, description: "OTP sent to email" })
+    async login(@Body() dto: LoginDto) {
         return this.authService.login(dto)
+    }
+
+    /**
+     * Verify email from registration link
+     */
+    @Post("verify-email")
+    @Public()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: "Verify email address" })
+    async verifyEmail(@Body() dto: VerifyEmailDto) {
+        return this.authService.verifyEmail(dto.token)
+    }
+
+    /**
+     * Verify OTP and complete login
+     */
+    @Post("verify-otp")
+    @Public()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: "Verify OTP code and complete login" })
+    @ApiResponse({ status: 200, type: AuthResponseDto })
+    async verifyOtp(@Body() dto: VerifyOtpDto): Promise<AuthResponseDto> {
+        return this.authService.verifyOtp(dto.email, dto.otp)
+    }
+
+    /**
+     * Resend OTP code
+     */
+    @Post("resend-otp")
+    @Public()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: "Resend OTP code" })
+    async resendOtp(@Body() dto: ResendOtpDto) {
+        return this.authService.resendOtp(dto.email)
     }
 
     /**
@@ -253,6 +301,7 @@ export class AuthController {
      */
     @Post("refresh")
     @Public()
+    @SkipThrottle()
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: "Refresh access token" })
     async refreshToken(@Body("refreshToken") refreshToken: string) {
@@ -328,5 +377,37 @@ export class AuthController {
     @ApiOperation({ summary: "Get current user profile" })
     async getProfile(@GetUser() user: any) {
         return user
+    }
+
+    /**
+     * Request password change (Step 1: verify current password, send OTP)
+     */
+    @Post("change-password/request")
+    @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
+    @ApiBearerAuth("JWT-auth")
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: "Request user password change" })
+    async requestPasswordChange(
+        @GetUser("id") userId: string,
+        @Body() body: { currentPassword: string },
+    ) {
+        return this.authService.requestPasswordChange(userId, body.currentPassword)
+    }
+
+    /**
+     * Verify password change (Step 2: verify OTP, set new password)
+     */
+    @Post("change-password/verify")
+    @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
+    @ApiBearerAuth("JWT-auth")
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: "Verify and set new password" })
+    async verifyPasswordChange(
+        @GetUser("id") userId: string,
+        @Body() body: { otp: string; newPassword: string },
+    ) {
+        return this.authService.verifyPasswordChange(userId, body.otp, body.newPassword)
     }
 }

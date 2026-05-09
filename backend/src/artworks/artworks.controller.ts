@@ -2,6 +2,7 @@ import {
     Controller, Get, Post, Put, Param, Body, Query, UseGuards
 } from "@nestjs/common"
 import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger"
+import { SkipThrottle } from "@nestjs/throttler"
 import { ArtworksService } from "./artworks.service"
 import { CreateArtworkDto } from "./dto/create-artwork.dto"
 import { UpdateArtworkDto } from "./dto/update-artwork.dto"
@@ -18,6 +19,7 @@ export class ArtworksController {
 
     @Get()
     @Public()
+    @SkipThrottle()
     @ApiOperation({ summary: "Get all published artworks" })
     async findAll(
         @Query("page") page = 1,
@@ -32,6 +34,7 @@ export class ArtworksController {
 
     @Get(":id")
     @Public()
+    @SkipThrottle()
     @ApiOperation({ summary: "Get artwork by ID" })
     async findOne(@Param("id") id: string) {
         return this.artworksService.findById(id)

@@ -1,3 +1,47 @@
+# ============================================
+# SeniQu — Netlify Security Headers (OWASP)
+# ============================================
+
 /*
+  # Anti-Hacking: Prevent clickjacking
   X-Frame-Options: SAMEORIGIN
-  Content-Security-Policy: frame-ancestors 'self' https://auth.privy.io https://seniquapp.netlify.app;
+
+  # Anti-Hacking: CSP — allow Privy auth iframe + essential resources
+  Content-Security-Policy: frame-ancestors 'self' https://auth.privy.io https://seniquapp.netlify.app https://seniqu.art https://seniqu.com; default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://auth.privy.io; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https: http:; font-src 'self' https://fonts.gstatic.com data:; media-src 'self' blob:; connect-src 'self' https://api.seniqu.art https://auth.privy.io https://*.privy.io https://rpc.ankr.com https://api.devnet.solana.com https://*.solana.com https://images.unsplash.com https://*.unsplash.com https://upload.wikimedia.org https://fonts.googleapis.com https://fonts.gstatic.com wss://*.walletconnect.com wss://*.walletconnect.org https://*.walletconnect.com https://*.walletconnect.org https://*.reown.com https://api.web3modal.org https://min-api.cryptocompare.com https://api.coingecko.com wss://stream.binance.com; frame-src 'self' https://auth.privy.io https://*.privy.io; object-src 'none'; base-uri 'self'; form-action 'self';
+
+  # Anti-Hacking: Prevent MIME type sniffing
+  X-Content-Type-Options: nosniff
+
+  # Anti-Hacking: XSS protection (legacy browsers)
+  X-XSS-Protection: 1; mode=block
+
+  # Anti-Hacking: HSTS — force HTTPS for 1 year
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+
+  # Anti-Hacking: Control referrer info leakage
+  Referrer-Policy: strict-origin-when-cross-origin
+
+  # Anti-Hacking: Restrict browser features
+  Permissions-Policy: camera=(self), microphone=(self), geolocation=(self), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()
+
+  # Anti-Hacking: Prevent cross-domain policies
+  X-Permitted-Cross-Domain-Policies: none
+
+  # Anti-Hacking: Prevent download sniffing in IE
+  X-Download-Options: noopen
+
+# ============================================
+# Static Asset Caching (Anti-Chunking / Performance)
+# ============================================
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.css
+  Cache-Control: public, max-age=31536000, immutable
+
+/images/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800

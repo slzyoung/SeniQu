@@ -68,7 +68,7 @@ export default function CompleteProfilePage() {
                 // Check local state first for immediate feedback
                 // Determine redirect target
                 const locationState = location.state as { from?: { pathname: string } } | null;
-                const redirectPath = locationState?.from?.pathname || getDashboardRoute(user.role);
+                const redirectPath = locationState?.from?.pathname || getDashboardRoute(user);
 
                 if (!needsProfileCompletion(user)) {
                     console.log('[CompleteProfile] Profile already complete (Local). Hard Redirecting to:', redirectPath);
@@ -81,7 +81,7 @@ export default function CompleteProfilePage() {
                 try {
                     const freshUser = await userService.getMyProfile();
                     if (!needsProfileCompletion(freshUser)) {
-                        const freshRedirectPath = locationState?.from?.pathname || getDashboardRoute(freshUser.role);
+                        const freshRedirectPath = locationState?.from?.pathname || getDashboardRoute(freshUser);
                         console.log('[CompleteProfile] Profile already complete (Backend). Syncing & Hard Redirecting to:', freshRedirectPath);
                         setUser(freshUser);
                         // FORCE RELOAD to ensure ProtectedRoute sees fresh state
@@ -182,7 +182,7 @@ export default function CompleteProfilePage() {
 
                 // Determine redirect target
                 const locationState = location.state as { from?: { pathname: string } } | null;
-                const redirectPath = locationState?.from?.pathname || getDashboardRoute(finalUser.role);
+                const redirectPath = locationState?.from?.pathname || getDashboardRoute(finalUser);
 
                 console.log('[CompleteProfile] Redirecting to:', redirectPath);
 

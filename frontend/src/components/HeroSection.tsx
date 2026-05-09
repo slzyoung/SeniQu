@@ -1,264 +1,131 @@
-import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
-import { ArrowRight, Play, ChevronDown } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowRight, Compass, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { ParticleField } from './ParticleField';
+import { useAuthModalStore } from '../stores/useAuthModalStore';
+import './LandingPage.css';
 
-const artworks = [
+const heroSlides = [
   {
-    id: 1,
-    image: '/images/museum/museumnasionalindonesia.png',
-    alt: 'Museum Nasional Indonesia'
+    id: 'bromo',
+    image: 'https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?w=1800&q=85',
+    alt: 'Mount Bromo — East Java',
   },
   {
-    id: 2,
-    image: '/images/museum/museumpasifikabali.jpg',
-    alt: 'Museum Pasifika Bali'
+    id: 'borobudur',
+    image: 'https://images.unsplash.com/photo-1596402184320-417e7178b2cd?w=1800&q=85',
+    alt: 'Borobudur Temple — Central Java',
   },
   {
-    id: 3,
-    image: '/images/museum/Museumullensentalu.jpg',
-    alt: 'Ullen Sentalu Museum'
+    id: 'bali',
+    image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=1800&q=85',
+    alt: 'Ulun Danu Beratan — Bali',
   },
   {
-    id: 4,
-    image: '/images/gallery/galerinasionalindonesia.jpg',
-    alt: 'Galeri Nasional Indonesia'
+    id: 'bandung',
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Gedung_Sate_Oktober_2024_-_Rahmatdenas.jpg/1280px-Gedung_Sate_Oktober_2024_-_Rahmatdenas.jpg',
+    alt: 'Gedung Sate — Bandung',
   },
   {
-    id: 5,
-    image: '/images/gallery/galerigajahjogja.jpg',
-    alt: 'Galeri Gajah Jogja'
+    id: 'jakarta',
+    image: 'https://images.unsplash.com/photo-1555899434-94d1368aa7af?w=1800&q=85',
+    alt: 'Jakarta Old Town',
   },
-  {
-    id: 6,
-    image: '/images/gallery/galerijogja.jpg',
-    alt: 'Galeri Jogja'
-  },
-  {
-    id: 7,
-    image: '/images/museum/museumaffandi.jpg',
-    alt: 'Museum Affandi'
-  },
-  {
-    id: 8,
-    image: '/images/museum/museumbasoekiabdullah.png',
-    alt: 'Museum Basoeki Abdullah'
-  },
-  {
-    id: 9,
-    image: '/images/museum/museummacan.jpg',
-    alt: 'Museum MACAN'
-  },
-  {
-    id: 10,
-    image: '/images/museum/pekalonganbatikmuseum.jpeg',
-    alt: 'Pekalongan Batik Museum'
-  }
 ];
 
 export function HeroSection() {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  // Anti-throttling: Use MotionValues instead of React state for continuous updates
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
-
-  // Smooth spring animation for the tilt effect
-  const springConfig = { damping: 25, stiffness: 150 };
-  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [5, -5]), springConfig);
-  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-5, 5]), springConfig);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoaded(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
+  const { openAuthModal } = useAuthModalStore();
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % artworks.length);
-    }, 5000); // Increased to 5s for better UX
+      setCurrentIndex((prev) => (prev + 1) % heroSlides.length);
+    }, 6000);
     return () => clearInterval(interval);
   }, []);
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!window.matchMedia('(pointer: fine)').matches) return;
-    const { clientX, clientY, currentTarget } = e;
-    const { width, height, left, top } = currentTarget.getBoundingClientRect();
-    const x = (clientX - left) / width - 0.5;
-    const y = (clientY - top) / height - 0.5;
-
-    mouseX.set(x);
-    mouseY.set(y);
-  };
-
-  const handleMouseLeave = () => {
-    mouseX.set(0);
-    mouseY.set(0);
-  };
-
   return (
-    <section className="relative min-h-screen w-full overflow-hidden bg-cream dark:bg-charcoal transition-colors duration-500 flex items-center justify-center">
-      {/* Background Texture */}
-      <div className="absolute inset-0 opacity-5 dark:opacity-20 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] pointer-events-none transition-opacity duration-500"></div>
-      <ParticleField />
-
-      {/* Main Content Container */}
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center pt-32 sm:pt-36 lg:pt-24 pb-32 lg:pb-24">
-
-        {/* Left Column: Text Content */}
-        <motion.div
-          initial={{ opacity: 0, x: -30 }}
-          animate={{ opacity: isLoaded ? 1 : 0, x: isLoaded ? 0 : -30 }}
-          transition={{ duration: 1, delay: 0.5 }}
-          className="flex flex-col text-center lg:text-left order-2 lg:order-1"
-        >
-          <div className="mb-6">
-            <div className="inline-flex items-center gap-2 py-1 px-3 border border-gold/30 rounded-full bg-gold/5 backdrop-blur-sm mb-4 mx-auto lg:mx-0">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-              </span>
-              <span className="text-gold-dim dark:text-gold text-[10px] md:text-xs tracking-[0.15em] uppercase font-medium">
-                Digital Museum & Gallery
-              </span>
-            </div>
-
-            <h1 className="text-4xl sm:text-5xl md:text-7xl font-serif font-bold text-charcoal dark:text-cream mb-4 tracking-tight leading-[1.15] drop-shadow-sm dark:drop-shadow-lg transition-colors duration-500">
-              Preserving <br />
-              <span className="text-gold italic relative inline-block">
-                Nusantara's Soul
-                <span className="absolute -bottom-2 left-0 right-0 h-[4px] bg-gold/20 blur-sm rounded-full w-full" />
-              </span>
-              <br />
-              <span className="text-3xl sm:text-4xl md:text-6xl text-charcoal/80 dark:text-cream transition-colors duration-500">
-                The Masterpiece
-              </span>
-            </h1>
-
-            <p className="text-lg sm:text-xl md:text-2xl text-charcoal-light/80 dark:text-cream-muted font-light mb-8 tracking-wide max-w-xl mx-auto lg:mx-0 transition-colors duration-500">
-              A digital sanctuary for Indonesia’s heritage spanning museums, galleries, & historical sites where assets are verified, digitized, which supported for long-term conservation to enable accessible cultural exploration for Tourism Guidance.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 sm:gap-6">
-            <Link to="/collections" className="w-full sm:w-auto px-8 py-4 bg-gold text-charcoal font-bold rounded-sm hover:bg-gold-light transition-all duration-300 transform hover:scale-105 shadow-[0_0_20px_rgba(201,168,76,0.2)] dark:shadow-[0_0_20px_rgba(201,168,76,0.3)] flex items-center justify-center gap-2 group">
-              Explore Collections
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </Link>
-
-            <button className="w-full sm:w-auto px-8 py-4 bg-transparent border border-charcoal/20 dark:border-cream-muted text-charcoal/70 dark:text-cream-muted font-medium rounded-sm hover:bg-charcoal/5 dark:hover:bg-cream-muted/10 transition-all duration-300 flex items-center justify-center gap-2">
-              <Play className="w-4 h-4 fill-current" />
-              Watch Process
-            </button>
-          </div>
-        </motion.div>
-
-        {/* Right Column: The Grand Arch / Gate */}
-        <motion.div
-          className="relative w-full max-w-sm sm:max-w-md md:max-w-lg mx-auto lg:mr-0 lg:ml-auto order-1 lg:order-2 perspective-1000"
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
-          initial={{ opacity: 0, scale: 0.9 }}
+    <section className="landing-hero" id="hero">
+      {/* Background Image Carousel */}
+      <AnimatePresence mode="wait">
+        <motion.img
+          key={heroSlides[currentIndex].id}
+          src={heroSlides[currentIndex].image}
+          alt={heroSlides[currentIndex].alt}
+          className="landing-hero__bg"
+          initial={{ opacity: 0, scale: 1.08 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 1 }}
-          style={{
-            rotateX,
-            rotateY,
-            transformStyle: "preserve-3d"
-          }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 1.5, ease: 'easeOut' }}
+          loading={currentIndex === 0 ? 'eager' : 'lazy'}
+        />
+      </AnimatePresence>
+
+      {/* Gradient Overlay */}
+      <div className="landing-hero__overlay" />
+
+      {/* Content */}
+      <div className="landing-hero__content">
+        <motion.span
+          className="landing-hero__label"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.5 }}
         >
-          <div className="relative aspect-[4/5] w-full transform-gpu">
-            {/* Ornamental Gold Flourishes around Arch */}
-            <div
-              className="absolute -top-8 left-1/2 -translate-x-1/2 w-48 h-16 bg-contain bg-no-repeat bg-center opacity-80 z-20 pointer-events-none"
-              style={{
-                backgroundImage:
-                  "url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMjUiPjxwYXRoIGQ9Ik01MCwwIEMyNSwxMCAwLDI1IDAsMjUgTTEwMCwyNSBDMTAwLDI1IDc1LDEwIDUwLDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0M5QTg0QyIgc3Ryb2tlLXdpZHRoPSIyIi8+PC9zdmc+')"
-              }}
-            />
+          <Sparkles /> SeniQu Gallery
+        </motion.span>
 
-            {/* The Gate Doors (Opening Animation) */}
-            <div className="absolute inset-0 z-30 pointer-events-none flex overflow-hidden rounded-t-[10rem] border-4 border-gold shadow-[0_10px_30px_rgba(0,0,0,0.1)] dark:shadow-[0_0_50px_rgba(201,168,76,0.2)] transition-shadow duration-500">
-              {/* Left Door */}
-              <motion.div
-                className="w-1/2 h-full bg-seniqu-burgundy border-r-2 border-gold relative"
-                initial={{ x: 0 }}
-                animate={{ x: isLoaded ? '-100%' : 0 }}
-                transition={{ duration: 2.5, ease: 'easeInOut', delay: 0.2 }}
-                style={{ willChange: 'transform' }}
-              >
-                <div className="absolute inset-0 opacity-60 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')]"></div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-16 h-16 border-4 border-gold/30 rounded-full"></div>
-                </div>
-              </motion.div>
+        <motion.h1
+          className="landing-hero__title"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.6 }}
+        >
+          Preserving{'\n'}Nusantara's Soul
+        </motion.h1>
 
-              {/* Right Door */}
-              <motion.div
-                className="w-1/2 h-full bg-seniqu-burgundy border-l-2 border-gold relative"
-                initial={{ x: 0 }}
-                animate={{ x: isLoaded ? '100%' : 0 }}
-                transition={{ duration: 2.5, ease: 'easeInOut', delay: 0.2 }}
-                style={{ willChange: 'transform' }}
-              >
-                <div className="absolute inset-0 opacity-60 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')]"></div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-16 h-16 border-4 border-gold/30 rounded-full"></div>
-                </div>
-              </motion.div>
-            </div>
+        <motion.p
+          className="landing-hero__subtitle"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45, duration: 0.6 }}
+        >
+          A digital sanctuary for Indonesia's heritage spanning museums,
+          galleries, & historical sites. Verified, digitized, and curated for
+          cultural exploration.
+        </motion.p>
 
-            {/* Arch Frame Container */}
-            <div className="relative w-full h-full overflow-hidden rounded-t-[10rem] bg-gray-200 dark:bg-charcoal transition-colors duration-500">
-              <AnimatePresence mode="wait">
-                <motion.img
-                  key={artworks[currentIndex].id}
-                  src={artworks[currentIndex].image}
-                  alt={artworks[currentIndex].alt}
-                  className="absolute inset-0 w-full h-full object-cover"
-                  initial={{ opacity: 0, scale: 1.1 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 1.2 }}
-                  loading={currentIndex === 0 ? "eager" : "lazy"}
-                />
-              </AnimatePresence>
-
-              {/* Overlay Gradient */}
-              <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent opacity-60 dark:opacity-90 transition-opacity duration-500"></div>
-
-              {/* Content inside Arch */}
-              <div className="absolute bottom-0 left-0 right-0 p-6 text-center z-10">
-                <motion.p
-                  key={`caption-${currentIndex}`}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-white/95 dark:text-cream/90 font-serif italic text-lg drop-shadow-md"
-                >
-                  {artworks[currentIndex].alt}
-                </motion.p>
-              </div>
-            </div>
-
-            {/* Ambient Glow behind Gate */}
-            <div className="absolute inset-0 -z-10 bg-gold/20 dark:bg-gold/10 blur-[60px] dark:blur-[80px] rounded-full scale-90 transition-all duration-500"></div>
-          </div>
+        <motion.div
+          className="landing-hero__actions"
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6, duration: 0.5 }}
+        >
+          <Link to="/collections" className="landing-hero__cta">
+            <Compass style={{ width: 16, height: 16 }} />
+            Explore Collections
+          </Link>
+          <button
+            onClick={() => openAuthModal()}
+            className="landing-hero__cta-secondary"
+          >
+            Sign In
+            <ArrowRight style={{ width: 16, height: 16 }} />
+          </button>
         </motion.div>
       </div>
 
-      {/* Scroll Indicator */}
-      <motion.div
-        animate={{ y: [0, 10, 0], opacity: [0.5, 1, 0.5] }}
-        className="absolute bottom-10 lg:bottom-14 left-0 right-0 mx-auto w-fit flex flex-col items-center gap-3 cursor-pointer z-20 group"
-        onClick={() => document.getElementById('artists')?.scrollIntoView({ behavior: 'smooth' })}
-      >
-        <span className="text-[10px] sm:text-xs uppercase tracking-[0.35em] text-charcoal/60 dark:text-cream/60 group-hover:text-gold transition-all duration-500 font-medium drop-shadow-sm group-hover:drop-shadow-[0_0_8px_rgba(201,168,76,0.5)]">Scroll</span>
-        <div className="p-2 rounded-full group-hover:bg-gold/5 transition-all duration-500">
-          <ChevronDown className="w-6 h-6 text-charcoal/60 dark:text-cream/60 group-hover:text-gold transition-colors duration-500 group-hover:scale-110" strokeWidth={1.5} />
-        </div>
-      </motion.div>
+      {/* Carousel Dots */}
+      <div className="landing-hero__dots">
+        {heroSlides.map((slide, index) => (
+          <button
+            key={slide.id}
+            className={`landing-hero__dot ${index === currentIndex ? 'landing-hero__dot--active' : ''}`}
+            onClick={() => setCurrentIndex(index)}
+            aria-label={`Go to slide ${index + 1}`}
+          />
+        ))}
+      </div>
     </section>
   );
 }

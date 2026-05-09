@@ -21,7 +21,7 @@ export const userKeys = {
     activity: () => [...userKeys.all, 'me', 'activity'] as const,
     bookmarks: (page: number, limit: number) => [...userKeys.all, 'me', 'bookmarks', page, limit] as const,
     collections: (page: number, limit: number) => [...userKeys.all, 'me', 'collections', page, limit] as const,
-    nfts: (page: number, limit: number) => [...userKeys.all, 'me', 'nfts', page, limit] as const,
+    arts: (page: number, limit: number) => [...userKeys.all, 'me', 'arts', page, limit] as const,
     byId: (id: string) => [...userKeys.all, id] as const,
 };
 
@@ -102,7 +102,7 @@ export function useUserStats() {
             bookmarksCount: 0,
             collectionsCount: 0,
             viewsCount: 0,
-            nftCount: 0,
+            artworksCount: 0,
             likesCount: 0,
         } as UserStats,
     });
@@ -218,12 +218,12 @@ export function useAddToCollection() {
 // NFTs
 // ============================================
 
-export function useOwnedNFTs(page = 1, limit = 20) {
+export function useOwnedArtworks(page = 1, limit = 20) {
     const { isAuthenticated } = useAuthStore();
 
     return useQuery({
-        queryKey: userKeys.nfts(page, limit),
-        queryFn: () => userService.getOwnedNFTs(page, limit),
+        queryKey: userKeys.arts(page, limit),
+        queryFn: () => userService.getOwnedArtworks(page, limit),
         // Only fetch when token is actually in memory
         enabled: (isAuthenticated && isAuthTokenReady()) || (authService.isAuthenticated() && isAuthTokenReady()),
         placeholderData: (prev) => prev,

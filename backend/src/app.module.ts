@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common"
 import { ConfigModule, ConfigService } from "@nestjs/config"
 import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler"
 import { APP_GUARD } from "@nestjs/core"
+import { SqlInjectionGuard } from "./common/guards/sql-injection.guard"
 import { configuration, validationSchema } from "./config/configuration"
 import { JwksController } from "./auth/jwks.controller"
 import { AppController } from "./app.controller"
@@ -105,10 +106,15 @@ import { AiModule } from "./modules/ai/ai.module"
     controllers: [AppController, JwksController],
     providers: [
         AppService,
-        // Global rate limiting guard
+        // Global rate limiting guard (Anti-Throttling)
         {
             provide: APP_GUARD,
             useClass: ThrottlerGuard,
+        },
+        // Global SQL injection prevention guard (Anti-Hacking)
+        {
+            provide: APP_GUARD,
+            useClass: SqlInjectionGuard,
         },
     ],
 })

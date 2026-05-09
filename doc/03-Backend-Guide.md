@@ -169,7 +169,7 @@ JWT_REFRESH_EXPIRES_IN=30d
 # OAuth
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_CALLBACK_URL=https://seniquwebapp.onrender.com/api/v1/auth/google/callback
+GOOGLE_CALLBACK_URL=https://api.seniqu.art/api/v1/auth/google/callback
 
 # Frontend URL (for OAuth redirects back to frontend)
 FRONTEND_URL=https://seniquapp.netlify.app

@@ -27,26 +27,23 @@ const MOCK_REGIONS: Record<string, any[]> = {
 export function CityRegions() {
     const { id = '' } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    
+
     // Normalize city ID for mapping
     const cityId = id.toLowerCase();
     const regions = MOCK_REGIONS[cityId] || [];
     const cityName = id.charAt(0).toUpperCase() + id.slice(1);
 
     return (
-        <PageContainer 
-            title={`Explore ${cityName}`}
-            subtitle="Discover cultural heritage through district curation"
-        >
+        <PageContainer>
             <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <button 
-                    onClick={() => navigate(-1)} 
+                <button
+                    onClick={() => navigate(-1)}
                     className="inline-flex items-center text-sm font-medium text-theme-muted hover:text-gold transition-colors mb-8 bg-theme-surface/50 px-4 py-2 rounded-full border border-theme-border/50 backdrop-blur-sm self-start"
                 >
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     Back to Dashboard
                 </button>
-                
+
                 {regions.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {regions.map((region, i) => (
@@ -59,9 +56,9 @@ export function CityRegions() {
                                 onClick={() => navigate(`/gallery/region/${region.id}`)}
                             >
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
-                                <img 
-                                    src={region.image} 
-                                    alt={region.name} 
+                                <img
+                                    src={region.image}
+                                    alt={region.name}
                                     className="w-full h-64 object-cover group-hover:scale-110 transition-transform duration-700"
                                 />
                                 <div className="absolute inset-x-0 bottom-0 p-6 z-20">
@@ -79,7 +76,7 @@ export function CityRegions() {
                         <Compass className="w-16 h-16 text-theme-muted mb-4 opacity-50" />
                         <h3 className="text-xl font-bold text-theme-text mb-2">No Regions Found</h3>
                         <p className="text-theme-muted mb-6">We're still mapping the cultural districts of {cityName}.</p>
-                        <button 
+                        <button
                             onClick={() => navigate('/dashboard')}
                             className="px-6 py-2 rounded-full bg-gold/10 text-gold hover:bg-gold/20 font-medium transition-colors"
                         >

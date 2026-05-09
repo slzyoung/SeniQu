@@ -6,15 +6,12 @@
 
 import React, { useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { PageContainer } from '../../components/common/DashboardLayout';
-import { Card, CardContent, Button, Badge, Avatar } from '../../components/ui';
+import { Avatar, Button } from '../../components/ui';
 import {
     MessageSquare,
     Search,
     Plus,
     Heart,
-    Eye,
-    Clock,
     Loader2,
     Image as ImageIcon,
     Video,
@@ -24,14 +21,13 @@ import {
     ChevronUp,
     Share2,
     ArrowLeft,
-    TrendingUp,
     Sparkles,
-    Pin,
     MessageCircle,
     Send,
 } from 'lucide-react';
-import { formatDate, extractArray } from '../../lib/utils';
+import { extractArray } from '../../lib/utils';
 import { uploadFile } from '../../lib/api';
+import { compressImage } from '../../lib/imageCompressor';
 import {
     useForumCategories,
     useForumThreads,
@@ -43,11 +39,14 @@ import {
     useUnlikeThread,
     useLikePost,
     useUnlikePost,
+    useUpdateThread,
+    useUpdatePost,
     useDeleteThread,
     useDeletePost
 } from '../../hooks/useForum';
 import { useToast } from '../../stores/useNotificationStore';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { SEOHead } from '../../components/common/SEOHead';
 
 // ============================================
 // HELPERS
@@ -99,6 +98,11 @@ export function CommunityForum() {
 
     return (
         <div className="max-w-7xl mx-auto px-4 md:px-6 pt-24 pb-12 md:pt-32 md:pb-20">
+            <SEOHead
+                title="Community"
+                description="Join the Indonesian art community. Discuss share artworks and dialogue about the cultural heritage of the archipelago."
+                canonical="/community"
+            />
             {/* ==================== HERO SECTION ==================== */}
             <div className="relative overflow-hidden rounded-2xl mb-8 p-6 sm:p-8" style={{
                 background: 'linear-gradient(135deg, #1a1510 0%, #0d0d0d 50%, #1a1510 100%)',
@@ -170,10 +174,10 @@ export function CommunityForum() {
                             style={{ aspectRatio: '16/9', maxHeight: '280px' }}
                             onClick={() => navigate(`/community/thread/${featuredThread.id}`)}
                         >
-                            {(featuredThread.mediaType || featuredThread.media_type) === 'video' ? (
-                                <video src={featuredThread.mediaUrl || featuredThread.media_url} muted className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                            {(featuredThread.mediaType) === 'video' ? (
+                                <video src={featuredThread.mediaUrl} muted className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                             ) : (
-                                <img src={featuredThread.mediaUrl || featuredThread.media_url} alt={featuredThread.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                                <img src={featuredThread.mediaUrl} alt={featuredThread.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
                             )}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent flex flex-col justify-end p-5">
                                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/90 text-charcoal text-[10px] font-bold uppercase tracking-wider w-fit mb-2">
@@ -184,7 +188,7 @@ export function CommunityForum() {
                                     <Avatar name={featuredThread.author?.displayName || 'User'} src={featuredThread.author?.avatarUrl} size="xs" className="w-5 h-5" />
                                     <span>{featuredThread.author?.displayName || 'Anonymous'}</span>
                                     <span>·</span>
-                                    <span>{formatTimeAgo(featuredThread.createdAt || featuredThread.created_at)}</span>
+                                    <span>{formatTimeAgo(featuredThread.createdAt)}</span>
                                 </div>
                             </div>
                         </div>
@@ -204,8 +208,8 @@ export function CommunityForum() {
                     ) : (
                         <div className="bg-white dark:bg-[#111111] rounded-2xl border border-gray-200/60 dark:border-white/6 overflow-hidden">
                             {regularThreads.map((thread, idx) => {
-                                const mediaUrl = thread.mediaUrl || thread.media_url;
-                                const authorName = thread.author?.displayName || thread.author?.display_name || 'Anonymous';
+                                const mediaUrl = thread.mediaUrl;
+                                const authorName = thread.author?.displayName || 'Anonymous';
                                 return (
                                     <div
                                         key={thread.id}
@@ -214,11 +218,11 @@ export function CommunityForum() {
                                     >
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-1 text-xs text-gray-400 dark:text-gray-500">
-                                                <Avatar name={authorName} src={thread.author?.avatarUrl || thread.author?.avatar_url} size="xs" className="w-5 h-5" />
+                                                <Avatar name={authorName} src={thread.author?.avatarUrl} size="xs" className="w-5 h-5" />
                                                 <span className="font-medium text-gray-600 dark:text-gray-300">{authorName}</span>
                                                 <span>·</span>
-                                                <span>{formatTimeAgo(thread.createdAt || thread.created_at)}</span>
-                                                {(thread.isPinned || thread.is_pinned) && (
+                                                <span>{formatTimeAgo(thread.createdAt)}</span>
+                                                {(thread.isPinned) && (
                                                     <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">Pinned</span>
                                                 )}
                                             </div>
@@ -234,7 +238,7 @@ export function CommunityForum() {
                                         </div>
                                         {mediaUrl && (
                                             <div className="w-20 h-16 sm:w-28 sm:h-20 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100 dark:bg-white/5">
-                                                {(thread.mediaType || thread.media_type) === 'video' ? (
+                                                {(thread.mediaType) === 'video' ? (
                                                     <video src={mediaUrl} muted className="w-full h-full object-cover" />
                                                 ) : (
                                                     <img src={mediaUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
@@ -339,7 +343,11 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
 
             if (file) {
                 mediaType = file.type.startsWith('video/') ? 'video' : 'image';
-                const uploadResult = await uploadFile(file, 'general');
+                // Compress image client-side before upload
+                const fileToUpload = mediaType === 'image'
+                    ? await compressImage(file, { maxWidth: 1600, quality: 0.82 })
+                    : file;
+                const uploadResult = await uploadFile(fileToUpload, 'general');
                 mediaUrl = uploadResult.url;
             }
 
@@ -424,6 +432,73 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
 }
 
 // ============================================
+// PUBLIC EDIT THREAD MODAL
+// ============================================
+
+function EditThreadModalPublic({ onClose, thread }: { onClose: () => void, thread: any }) {
+    const [title, setTitle] = useState(thread.title || '');
+    const [content, setContent] = useState(thread.content || '');
+    const updateThread = useUpdateThread();
+    const toast = useToast();
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!title || !content) {
+            toast.error('Required Fields', 'Please fill in title and content.');
+            return;
+        }
+
+        try {
+            await updateThread.mutateAsync({
+                id: thread.id,
+                data: {
+                    title,
+                    content
+                }
+            });
+            onClose();
+        } catch (error: any) {
+            console.error('Thread update error:', error);
+            toast.error('Update Failed', error.message || 'Could not update thread.');
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+            <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white dark:bg-[#111111] border border-gray-200/60 dark:border-white/10 shadow-2xl rounded-2xl relative">
+                <button onClick={onClose} className="absolute top-5 right-5 p-2 rounded-full bg-gray-100 dark:bg-white/5 text-gray-400 hover:text-gray-700 dark:hover:text-white transition-all z-10">
+                    <X className="w-5 h-5" />
+                </button>
+                <form onSubmit={handleSubmit} className="p-6 sm:p-8">
+                    <h2 className="text-2xl font-serif font-bold text-gray-900 dark:text-white mb-1">Edit Discussion</h2>
+                    
+                    <div className="space-y-5 mt-6">
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">Title *</label>
+                            <input type="text" value={title} onChange={e => setTitle(e.target.value)}
+                                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:border-amber-500 dark:focus:border-gold text-sm"
+                                maxLength={255} required />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">Content *</label>
+                            <textarea value={content} onChange={e => setContent(e.target.value)}
+                                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white h-32 resize-none focus:outline-none focus:border-amber-500 dark:focus:border-gold text-sm" required />
+                        </div>
+                    </div>
+
+                    <div className="mt-8 flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-white/5">
+                        <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5 transition-all">Cancel</button>
+                        <Button type="submit" variant="gold" isLoading={updateThread.isPending} className="rounded-xl px-6">
+                            Save Changes
+                        </Button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+// ============================================
 // THREAD VIEW — DETAIL PAGE
 // ============================================
 
@@ -451,6 +526,10 @@ export function ThreadView() {
     const [replyContent, setReplyContent] = useState('');
     const [isReplying, setIsReplying] = useState(false);
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+    const [isEditingThread, setIsEditingThread] = useState(false);
+    const [editingPostId, setEditingPostId] = useState<string | null>(null);
+    const [editPostContent, setEditPostContent] = useState('');
+    const updatePost = useUpdatePost();
 
     // Nested replies
     const [activeReplyId, setActiveReplyId] = useState<string | null>(null);
@@ -484,6 +563,16 @@ export function ThreadView() {
             setConfirmDeleteId(null);
         } catch (error) {
             toast.error('Error', 'Failed to delete reply');
+        }
+    };
+
+    const handleUpdatePost = async (postId: string) => {
+        if (!editPostContent.trim()) return;
+        try {
+            await updatePost.mutateAsync({ id: postId, content: editPostContent });
+            setEditingPostId(null);
+        } catch (error) {
+            toast.error('Error', 'Failed to update reply');
         }
     };
 
@@ -616,7 +705,32 @@ export function ThreadView() {
                                 </button>
                             )}
                         </div>
-                        <p className="text-gray-700 dark:text-gray-300 text-[13px] sm:text-sm whitespace-pre-wrap break-words leading-relaxed">{item.content}</p>
+                        {editingPostId === item.id ? (
+                            <div className="mt-2">
+                                <textarea
+                                    autoFocus
+                                    value={editPostContent}
+                                    onChange={e => setEditPostContent(e.target.value)}
+                                    rows={3}
+                                    className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:border-amber-500 dark:focus:border-gold focus:ring-1 focus:ring-amber-500/20 focus:outline-none resize-none text-[13px] sm:text-sm transition-all"
+                                />
+                                <div className="mt-2 flex justify-end gap-1.5">
+                                    <button onClick={() => setEditingPostId(null)}
+                                        className="px-3 py-1.5 rounded-full text-xs font-medium text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5 transition-all">
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={() => handleUpdatePost(item.id)}
+                                        disabled={!editPostContent.trim() || updatePost.isPending}
+                                        className="px-4 py-1.5 rounded-full text-xs font-bold bg-amber-500 dark:bg-gold text-charcoal hover:bg-amber-600 dark:hover:bg-amber-500 disabled:opacity-50 transition-all"
+                                    >
+                                        {updatePost.isPending ? 'Saving...' : 'Save'}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-gray-700 dark:text-gray-300 text-[13px] sm:text-sm whitespace-pre-wrap break-words leading-relaxed">{item.content}</p>
+                        )}
 
                         {/* Action Bar */}
                         <div className="mt-1.5 flex items-center gap-0.5 -ml-1.5">
@@ -736,6 +850,7 @@ export function ThreadView() {
                         <div className="flex items-center gap-1.5">
                             {isThreadOwner && (
                                 <button
+                                    onClick={() => setIsEditingThread(true)}
                                     className="px-2.5 py-1 rounded-lg text-xs font-medium text-amber-600 dark:text-gold hover:bg-amber-50 dark:hover:bg-gold/10 transition-all flex items-center gap-1"
                                 >
                                     ✏️ Edit
@@ -886,6 +1001,13 @@ export function ThreadView() {
                     </div>
                 )}
             </div>
+            )}
+
+            {isEditingThread && (
+                <EditThreadModalPublic 
+                    onClose={() => setIsEditingThread(false)} 
+                    thread={thread} 
+                />
             )}
         </div>
     );

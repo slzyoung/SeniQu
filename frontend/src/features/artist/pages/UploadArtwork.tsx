@@ -17,6 +17,7 @@ import { PageContainer } from '../../../components/common/DashboardLayout';
 import { Card, CardHeader, CardContent, Button, Input, Textarea, Select, Badge } from '../../../components/ui';
 import { useToast } from '../../../stores/useNotificationStore';
 import { uploadFile } from '../../../lib/api';
+import { compressImage } from '../../../lib/imageCompressor';
 import { useCreateArtwork } from '../../../hooks/useArtist';
 import { validateUploadFile, sanitizeString } from '../../../lib/sanitize';
 
@@ -104,8 +105,13 @@ export function UploadArtwork() {
         }
 
         try {
+            // Compress image client-side before upload (artworks get higher quality)
+            const compressedFile = await compressImage(uploadedFile, {
+                maxWidth: 2048,
+                quality: 0.88,
+            });
             // Upload file to R2 CDN first
-            const uploadResult = await uploadFile(uploadedFile, 'artworks');
+            const uploadResult = await uploadFile(compressedFile, 'artworks');
 
             const artworkData = {
                 title: sanitizeString(formData.title),

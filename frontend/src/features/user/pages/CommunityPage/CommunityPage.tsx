@@ -4,7 +4,7 @@
  * Mobile-first, iOS/Android safe, Light/Dark mode
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
     Search,
     MessageSquare,
@@ -16,21 +16,21 @@ import {
     MessageCircle,
     Loader2,
     Pin,
-    Award,
     Image as ImageIcon,
     Video,
     X,
-    Share2,
     Sparkles,
 } from 'lucide-react';
 import { PageContainer } from '../../../../components/common/DashboardLayout';
-import { Card, CardContent, Button, Input, Badge, Avatar } from '../../../../components/ui';
+import { Button, Avatar } from '../../../../components/ui';
 import { useNavigate } from 'react-router-dom';
 import { useForumCategories, useForumThreads, useTrendingThreads, useCreateThread } from '../../../../hooks/useForum';
 import { useAuthStore } from '../../../../stores/useAuthStore';
 import { extractArray } from '../../../../lib/utils';
 import { uploadFile } from '../../../../lib/api';
+import { compressImage } from '../../../../lib/imageCompressor';
 import { useToast } from '../../../../stores/useNotificationStore';
+import { useDebounce } from '../../../../hooks/useDebounce';
 import './CommunityPage.css';
 
 // ============================================
@@ -201,7 +201,11 @@ function CreateThreadModal({
 
             if (file) {
                 mediaType = file.type.startsWith('video/') ? 'video' : 'image';
-                const uploadResult = await uploadFile(file, 'general');
+                // Compress image client-side before upload (faster transfer)
+                const fileToUpload = mediaType === 'image'
+                    ? await compressImage(file, { maxWidth: 1600, quality: 0.82 })
+                    : file;
+                const uploadResult = await uploadFile(fileToUpload, 'general');
                 mediaUrl = uploadResult.url;
             }
 
@@ -283,7 +287,7 @@ function CreateThreadModal({
                                     type="text"
                                     value={tags}
                                     onChange={(e) => setTags(e.target.value)}
-                                    placeholder="art, digital, nft"
+                                    placeholder="art, digital, classic"
                                     className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-white/[0.04] border border-gray-200 dark:border-white/[0.08] text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:border-amber-500 dark:focus:border-gold focus:ring-1 focus:ring-amber-500/20 transition-all text-sm outline-none"
                                 />
                             </div>
@@ -389,7 +393,7 @@ export function CommunityPage() {
     });
 
     // Queries
-    const { data: categoriesData, isLoading: categoriesLoading } = useForumCategories();
+    const { data: categoriesData } = useForumCategories();
     const { data: threadsData, isLoading: threadsLoading } = useForumThreads({
         ...filters,
         sortBy,
@@ -411,9 +415,24 @@ export function CommunityPage() {
 
     const categories = fetchedCategories.length > 0 ? fetchedCategories : defaultCategories;
 
-    // Find featured thread (first one with media)
-    const featuredThread = threads.find((t: any) => t.media_url || t.mediaUrl || t.is_featured || t.isFeatured);
-    const regularThreads = threads.filter((t: any) => t !== featuredThread);
+    // Apply anti-throttling (debounce) to search query
+    const debouncedSearch = useDebounce(searchQuery, 300);
+
+    // Filter and compute featured/regular threads efficiently
+    const { featuredThread, regularThreads } = useMemo<{ featuredThread: any | null, regularThreads: any[] }>(() => {
+        // First filter all threads based on search
+        const filteredThreads = threads.filter((thread: any) => 
+            !debouncedSearch || 
+            (thread.title && thread.title.toLowerCase().includes(debouncedSearch.toLowerCase())) ||
+            (thread.content && thread.content.toLowerCase().includes(debouncedSearch.toLowerCase()))
+        );
+
+        // Find featured thread (first one with media)
+        const featured = filteredThreads.find((t: any) => t.media_url || t.mediaUrl || t.is_featured || t.isFeatured) || null;
+        const regular = filteredThreads.filter((t: any) => t !== featured);
+
+        return { featuredThread: featured, regularThreads: regular };
+    }, [threads, debouncedSearch]);
 
     // Sort tabs config
     const sortTabs = [

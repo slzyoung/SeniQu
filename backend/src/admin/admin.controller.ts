@@ -26,6 +26,8 @@ import {
     CreatePartnershipDto,
     SuspendUserDto,
     UpdateReportStatusDto,
+    CreateAdminUserDto,
+    UpdateUserRoleDto,
 } from "./admin.dto"
 
 @ApiTags("Admin")
@@ -44,6 +46,16 @@ export class AdminController {
     @ApiOperation({ summary: "Get admin dashboard stats" })
     async getDashboard() {
         return this.adminService.getDashboardStats()
+    }
+
+    @Get("domain-dashboard")
+    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Throttle({ short: { ttl: 1000, limit: 10 } })
+    @ApiOperation({ summary: "Get domain specific dashboard stats" })
+    async getDomainDashboard(@Req() req: any) {
+        // Use adminRole from JWT payload
+        const adminRole = req.user?.adminRole || req.user?.admin_role_typed;
+        return this.adminService.getDomainDashboardStats(adminRole);
     }
 
     @Get("analytics")
@@ -66,7 +78,7 @@ export class AdminController {
     // ============================================
 
     @Get("users")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.ADMIN_USERS)
     @ApiOperation({ summary: "Get all users with pagination" })
     @ApiQuery({ name: "page", required: false })
     @ApiQuery({ name: "limit", required: false })
@@ -81,8 +93,19 @@ export class AdminController {
         return this.adminService.getUsers(+page, Math.min(+limit, 100), { role, status })
     }
 
+    @Post("users")
+    @Permissions(Permission.ADMIN_USERS)
+    @Throttle({ short: { ttl: 1000, limit: 3 } })
+    @ApiOperation({ summary: "Create a new admin or artist user" })
+    async createAdminUser(
+        @Body() dto: CreateAdminUserDto,
+        @Req() req: any
+    ) {
+        return this.adminService.createAdminUser(dto, req.user?.id)
+    }
+
     @Post("users/:id/suspend")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.ADMIN_USERS)
     @Throttle({ short: { ttl: 1000, limit: 3 } })
     @ApiOperation({ summary: "Suspend a user" })
     async suspendUser(
@@ -95,7 +118,7 @@ export class AdminController {
     }
 
     @Post("users/:id/activate")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.ADMIN_USERS)
     @Throttle({ short: { ttl: 1000, limit: 3 } })
     @ApiOperation({ summary: "Activate a user" })
     async activateUser(
@@ -106,12 +129,35 @@ export class AdminController {
         return { success: true, message: "User activated" }
     }
 
+    @Patch("users/:id/role")
+    @Permissions(Permission.ADMIN_USERS)
+    @Throttle({ short: { ttl: 1000, limit: 3 } })
+    @ApiOperation({ summary: "Update user role" })
+    async updateUserRole(
+        @Param("id", ParseUUIDPipe) id: string,
+        @Body() dto: UpdateUserRoleDto,
+        @Req() req: any
+    ) {
+        return this.adminService.updateUserRole(id, dto.role, req.user?.id)
+    }
+
+    @Delete("users/:id")
+    @Permissions(Permission.ADMIN_USERS)
+    @Throttle({ short: { ttl: 1000, limit: 3 } })
+    @ApiOperation({ summary: "Delete a user" })
+    async deleteUser(
+        @Param("id", ParseUUIDPipe) id: string,
+        @Req() req: any
+    ) {
+        return this.adminService.deleteUser(id, req.user?.id)
+    }
+
     // ============================================
     // INSTITUTION MANAGEMENT
     // ============================================
 
     @Get("institutions")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.INSTITUTION_READ)
     @ApiOperation({ summary: "Get all institutions" })
     async getAllInstitutions(
         @Query("page") page = 1,
@@ -128,7 +174,7 @@ export class AdminController {
     }
 
     @Get("institutions/pending")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.INSTITUTION_VERIFY)
     @ApiOperation({ summary: "Get pending institutions" })
     async getPendingInstitutions() {
         return this.adminService.getPendingInstitutions()
@@ -146,7 +192,7 @@ export class AdminController {
     }
 
     @Patch("institutions/:id/feature")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.INSTITUTION_UPDATE)
     @ApiOperation({ summary: "Feature/unfeature institution" })
     async featureInstitution(
         @Param("id", ParseUUIDPipe) id: string,
@@ -160,7 +206,7 @@ export class AdminController {
     // ============================================
 
     @Get("logs")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.ADMIN_LOGS)
     @ApiOperation({ summary: "Get system logs" })
     async getSystemLogs(
         @Query("page") page = 1,
@@ -174,7 +220,7 @@ export class AdminController {
     }
 
     @Get("audit-logs")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.ADMIN_LOGS)
     @ApiOperation({ summary: "Get audit logs" })
     async getAuditLogs(
         @Query("page") page = 1,
@@ -191,25 +237,23 @@ export class AdminController {
     // ============================================
 
     @Get("alerts")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.ADMIN_ALERTS)
     @ApiOperation({ summary: "Get system alerts" })
     async getSystemAlerts(@Query("activeOnly") activeOnly = "true") {
         return this.adminService.getSystemAlerts(activeOnly === "true")
     }
 
     @Post("alerts")
-    @Permissions(Permission.ADMIN_SETTINGS)
-    @SkipThrottle()
-    @BypassSecurity()
+    @Permissions(Permission.ADMIN_ALERTS)
+    @Throttle({ short: { ttl: 1000, limit: 5 } })
     @ApiOperation({ summary: "Create system alert" })
     async createSystemAlert(@Body() dto: CreateSystemAlertDto, @Req() req: any) {
         return this.adminService.createSystemAlert(dto, req.user.id)
     }
 
     @Put("alerts/:id")
-    @Permissions(Permission.ADMIN_SETTINGS)
-    @SkipThrottle()
-    @BypassSecurity()
+    @Permissions(Permission.ADMIN_ALERTS)
+    @Throttle({ short: { ttl: 1000, limit: 5 } })
     @ApiOperation({ summary: "Update system alert" })
     async updateSystemAlert(
         @Param("id", ParseUUIDPipe) id: string,
@@ -219,7 +263,7 @@ export class AdminController {
     }
 
     @Delete("alerts/:id")
-    @Permissions(Permission.ADMIN_SETTINGS)
+    @Permissions(Permission.ADMIN_ALERTS)
     @Throttle({ short: { ttl: 1000, limit: 3 } })
     @ApiOperation({ summary: "Delete system alert" })
     async deleteSystemAlert(@Param("id", ParseUUIDPipe) id: string) {
@@ -232,7 +276,7 @@ export class AdminController {
     // ============================================
 
     @Get("reports")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.ADMIN_REPORTS)
     @ApiOperation({ summary: "Get content reports" })
     async getReports(
         @Query("page") page = 1,
@@ -243,9 +287,8 @@ export class AdminController {
     }
 
     @Patch("reports/:id")
-    @Permissions(Permission.ADMIN_DASHBOARD)
-    @SkipThrottle()
-    @BypassSecurity()
+    @Permissions(Permission.ADMIN_REPORTS)
+    @Throttle({ short: { ttl: 1000, limit: 5 } })
     @ApiOperation({ summary: "Update report status" })
     async updateReportStatus(
         @Param("id", ParseUUIDPipe) id: string,
@@ -260,16 +303,15 @@ export class AdminController {
     // ============================================
 
     @Get("partnerships")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.ADMIN_PARTNERSHIPS)
     @ApiOperation({ summary: "Get partnerships" })
     async getPartnerships(@Query("page") page = 1, @Query("limit") limit = 20) {
         return this.adminService.getPartnerships(+page, Math.min(+limit, 100))
     }
 
     @Post("partnerships")
-    @Permissions(Permission.ADMIN_SETTINGS)
-    @SkipThrottle()
-    @BypassSecurity()
+    @Permissions(Permission.ADMIN_PARTNERSHIPS)
+    @Throttle({ short: { ttl: 1000, limit: 5 } })
     @ApiOperation({ summary: "Create partnership" })
     async createPartnership(@Body() dto: CreatePartnershipDto) {
         return this.adminService.createPartnership(dto)
@@ -280,7 +322,7 @@ export class AdminController {
     // ============================================
 
     @Get("database/stats")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.ADMIN_DATABASE)
     @ApiOperation({ summary: "Get database statistics" })
     async getDatabaseStats() {
         return this.adminService.getDatabaseStats()
@@ -291,7 +333,7 @@ export class AdminController {
     // ============================================
 
     @Get("health")
-    @Permissions(Permission.ADMIN_DASHBOARD)
+    @Permissions(Permission.ADMIN_HEALTH)
     @ApiOperation({ summary: "Get system health status" })
     async getSystemHealth() {
         return {

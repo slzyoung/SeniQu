@@ -11,22 +11,22 @@ export function AboutSection() {
         {
             icon: Landmark,
             title: 'Centralized Platform',
-            description: 'Museums, galleries & heritage sites — unified in one digital ecosystem.'
+            description: 'Unified ecosystem for heritage sites.'
         },
         {
             icon: Smartphone,
             title: 'Immersive Experience',
-            description: 'Mobile-first interfaces with smart navigation and interactive digital tools.'
+            description: 'Smart navigation & interactive tools.'
         },
         {
             icon: Brain,
             title: 'AI-Enhanced',
-            description: 'Auto-generated summaries, audio guides, multilingual translations & more.'
+            description: 'Automated insights & multilingual guides.'
         },
         {
             icon: Globe2,
             title: 'Tourism Optimized',
-            description: 'Smart cultural routes, personalized recommendations & event discovery.'
+            description: 'Personalized routes & recommendations.'
         }
     ];
 
@@ -47,7 +47,7 @@ export function AboutSection() {
                 >
                     <div className="flex items-center justify-center gap-2 mb-4">
                         <span className="h-px w-8 bg-gold/50" />
-                        <span className="text-gold text-xs uppercase tracking-widest font-medium">Why SeniQu</span>
+                        <span className="text-gold text-xs uppercase tracking-[0.2em] font-medium">Why SeniQu</span>
                         <span className="h-px w-8 bg-gold/50" />
                     </div>
 
@@ -55,14 +55,14 @@ export function AboutSection() {
                         Bridging <span className="text-gold italic">Culture</span> & <span className="text-gold italic">Technology</span>
                     </h2>
 
-                    <p className="text-theme-muted text-lg leading-relaxed">
+                    <p className="text-theme-muted text-base md:text-lg leading-relaxed max-w-xl mx-auto">
                         Only 54–68% of Indonesia's cultural assets are digitally structured.
                         SeniQu transforms that gap into opportunity.
                     </p>
                 </motion.div>
 
                 {/* Features Grid — 4 cards */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
                     {features.map((feature, index) => (
                         <motion.div
                             key={index}
@@ -71,12 +71,12 @@ export function AboutSection() {
                             viewport={{ once: true }}
                             transition={{ duration: 0.5, delay: index * 0.1 }}
                         >
-                            <GlowCard className="h-full rounded-xl md:rounded-2xl p-5 md:p-6 text-center" hover={true}>
-                                <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-theme-bg border border-gold/20 flex items-center justify-center mx-auto mb-4 shadow-sm">
-                                    <feature.icon className="w-5 h-5 md:w-6 md:h-6 text-gold" />
+                            <GlowCard className="h-full rounded-2xl p-4 md:p-8 text-center flex flex-col items-center justify-start bg-theme-bg/40 backdrop-blur-sm border border-gold/10 hover:border-gold/30 transition-all duration-300 group" hover={true}>
+                                <div className="mt-2 md:mt-0 w-10 h-10 md:w-14 md:h-14 rounded-xl bg-gradient-to-br from-gold/10 to-transparent border border-gold/20 flex items-center justify-center mx-auto mb-4 md:mb-6 shadow-inner group-hover:scale-110 transition-transform duration-300">
+                                    <feature.icon className="w-4 h-4 md:w-6 md:h-6 text-gold drop-shadow-sm" />
                                 </div>
-                                <h4 className="font-serif font-bold text-theme-text mb-2 text-sm md:text-base">{feature.title}</h4>
-                                <p className="text-xs md:text-sm text-theme-muted leading-relaxed">{feature.description}</p>
+                                <h4 className="font-serif font-semibold text-theme-text mb-1.5 md:mb-3 text-[13px] md:text-lg tracking-wide">{feature.title}</h4>
+                                <p className="text-[11px] md:text-[14px] text-theme-muted/80 leading-relaxed font-light">{feature.description}</p>
                             </GlowCard>
                         </motion.div>
                     ))}

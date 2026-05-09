@@ -35,6 +35,10 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 4000, // Increased to accommodate combined Web3 chunk
+    sourcemap: false, // Disable sourcemaps in production for smaller bundles
+    target: 'esnext', // Modern browsers — enables smaller output
+    cssCodeSplit: true, // Split CSS per chunk for better caching
+    minify: 'esbuild', // Fastest minification
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -62,6 +66,11 @@ export default defineConfig({
           // Other heavy data libs
           if (id.includes('node_modules/axios') || id.includes('node_modules/zod')) {
             return 'vendor-libs';
+          }
+
+          // Security & validation libs
+          if (id.includes('node_modules/dompurify')) {
+            return 'vendor-security';
           }
 
           // Web3 & Auth - Let Vite handle these completely

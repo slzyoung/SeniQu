@@ -1,25 +1,21 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-    Wallet,
     Copy,
     ExternalLink,
     Send,
     QrCode,
     RefreshCw,
     ArrowDownLeft,
-    Shield,
-    CheckCircle,
     Loader2,
     ArrowUpRight,
-    TrendingUp,
     ArrowRightLeft,
     Eye,
     EyeOff
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import QRCode from 'react-qr-code';
 import { QrReader } from 'react-qr-reader';
-import { PageContainer } from '../../../../components/common/DashboardLayout';
-import { Card, Button, Badge, Input, Modal } from '../../../../components/ui';
+import { Button, Input, Modal } from '../../../../components/ui';
 import { usePrivyWallet } from '../../../../hooks/usePrivyWallet';
 import { useToast } from '../../../../stores/useNotificationStore';
 import { useCurrentUser } from '../../../../hooks/useUser';
@@ -27,6 +23,7 @@ import { useWalletTransactions } from '../../../../hooks/useWalletData';
 import { useTokenPrices } from '../../../../hooks/useTokenPrices';
 import { useAuthStore } from '../../../../stores/useAuthStore';
 import api from '../../../../lib/api';
+import './WalletPage.css';
 
 import { Connection, PublicKey, LAMPORTS_PER_SOL, clusterApiUrl, Transaction, SystemProgram } from '@solana/web3.js';
 
@@ -680,464 +677,367 @@ export function WalletPage() {
     const assets = getAssets();
     const totalPortfolioValue = assets.reduce((acc, curr) => acc + curr.value, 0);
 
+    // Chain switcher ref for sliding indicator
+    const solBtnRef = useRef<HTMLButtonElement>(null);
+    const ethBtnRef = useRef<HTMLButtonElement>(null);
+    const switcherRef = useRef<HTMLDivElement>(null);
+
+    const getIndicatorStyle = () => {
+        const activeBtn = activeChain === 'solana' ? solBtnRef.current : ethBtnRef.current;
+        if (!activeBtn || !switcherRef.current) return { left: 4, width: 80 };
+        const parentRect = switcherRef.current.getBoundingClientRect();
+        const btnRect = activeBtn.getBoundingClientRect();
+        return {
+            left: btnRect.left - parentRect.left,
+            width: btnRect.width,
+        };
+    };
+
     // 7. Render
     if (!ready || isUserLoading) {
         return (
-            <PageContainer title="My Wallet" subtitle="Manage your assets securely">
-                <div className="flex items-center justify-center min-h-[400px]">
+            <div className="wlt-page">
+                <div className="wlt-loading">
                     <Loader2 className="w-8 h-8 text-gold animate-spin" />
                 </div>
-            </PageContainer>
+            </div>
         );
     }
 
+    const indicatorStyle = getIndicatorStyle();
+
     return (
-        <PageContainer
-            title="Seniqu Wallet"
-            subtitle="Secure, multi-chain embedded wallet"
+        <motion.div
+            className="wlt-page"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
         >
-            {/* Header / Network Toggle */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                {/* Network Switcher */}
-                <div className="flex bg-theme-elevated p-1 rounded-xl border border-theme-border self-start">
+            {/* ── Chain Switcher Bar ── */}
+            <div className="wlt-chain-bar">
+                <div className="wlt-chain-switcher" ref={switcherRef}>
+                    <div
+                        className="wlt-chain-indicator"
+                        style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
+                    />
                     <button
+                        ref={solBtnRef}
+                        className={`wlt-chain-btn ${activeChain === 'solana' ? 'active' : ''}`}
                         onClick={() => setActiveChain('solana')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeChain === 'solana'
-                            ? 'bg-gold text-black shadow-lg shadow-gold/20'
-                            : 'text-theme-muted hover:text-theme-text'
-                            }`}
                     >
-                        <div className="flex items-center gap-2">
-                            <img src={ICONS.solana} alt="Solana" className="w-4 h-4" />
-                            Solana
-                        </div>
+                        <img src={ICONS.solana} alt="SOL" />
+                        <span>Solana</span>
                     </button>
                     <button
+                        ref={ethBtnRef}
+                        className={`wlt-chain-btn ${activeChain === 'ethereum' ? 'active' : ''}`}
                         onClick={() => setActiveChain('ethereum')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeChain === 'ethereum'
-                            ? 'bg-gold text-black shadow-lg shadow-gold/20'
-                            : 'text-theme-muted hover:text-theme-text'
-                            }`}
                     >
-                        <div className="flex items-center gap-2">
-                            <img src={ICONS.ethereum} alt="Ethereum" className="w-4 h-4" />
-                            Ethereum
-                        </div>
+                        <img src={ICONS.ethereum} alt="ETH" />
+                        <span>Ethereum</span>
                     </button>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <Badge variant={activeChain === 'solana' ? 'gold' : 'default'} className="hidden sm:flex">
-                        {activeChain === 'solana' ? 'Mainnet' : 'Mainnet'}
-                    </Badge>
-                    <Button
-                        variant="ghost"
-                        size="sm"
+                <div className="wlt-chain-actions">
+                    <button
+                        className="wlt-icon-btn"
                         onClick={() => setIsBalanceHidden(!isBalanceHidden)}
-                        className="text-theme-muted hover:text-gold"
-                        title={isBalanceHidden ? "Show Balance" : "Hide Balance"}
+                        title={isBalanceHidden ? 'Show Balance' : 'Hide Balance'}
                     >
-                        {isBalanceHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </Button>
+                        {isBalanceHidden ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                 </div>
             </div>
 
-            {/* Wallet Overview */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                {/* Main Balance Card */}
-                <Card variant="elevated" className="col-span-1 lg:col-span-2 relative overflow-hidden border-gold/20 shadow-xl shadow-black/40">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-gold/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
+            {/* ── Balance Hero Card ── */}
+            <motion.div
+                className="wlt-balance-card"
+                key={activeChain}
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.35 }}
+            >
+                <div className="wlt-balance-orb" />
 
-                    <div className="relative z-10 flex flex-col justify-between h-full min-h-[220px]">
-                        <div>
-                            <div className="flex items-center gap-3 mb-6">
-                                <div className="p-3 bg-gradient-to-br from-gold/20 to-gold/5 rounded-2xl border border-gold/10 shadow-inner backdrop-blur-md">
-                                    <Wallet className="w-6 h-6 text-gold" />
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-medium text-theme-muted uppercase tracking-wider">Total Balance</h3>
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="default" className="text-[10px] text-theme-muted border-theme-border/50 bg-black/20">
-                                            {activeChain} Network
-                                        </Badge>
-                                        <Badge variant={isCurrentVerified ? "success" : "warning"} className="text-[10px] flex items-center gap-1">
-                                            {isCurrentVerified ? <Shield className="w-3 h-3" /> : <Loader2 className="w-3 h-3 animate-spin" />}
-                                            {isCurrentVerified ? "Secured & Verified" : "Syncing..."}
-                                        </Badge>
-                                    </div>
-                                </div>
-                            </div>
+                <div className="wlt-balance-top">
+                    <div className="wlt-chain-badge">
+                        <img src={ICONS[activeChain]} alt={activeChain} />
+                        {activeChain === 'solana' ? 'SOL' : 'ETH'}
+                    </div>
+                    <div
+                        className={`wlt-verified-dot ${isCurrentVerified ? '' : 'syncing'}`}
+                        title={isCurrentVerified ? 'Verified' : 'Syncing...'}
+                    />
+                </div>
 
-                            <div className="mb-8">
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-3xl md:text-5xl font-bold text-theme-text font-mono tracking-tight">
-                                        {isBalanceHidden ? '••••••' : `$${totalPortfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                                    </span>
-                                    {!isBalanceHidden && <span className="text-lg font-medium text-theme-muted">USD</span>}
-                                </div>
-                            </div>
-                        </div>
+                <div className="wlt-balance-amount">
+                    {isBalanceHidden ? (
+                        <span className="wlt-balance-hidden">••••••</span>
+                    ) : (
+                        <span className="wlt-balance-value">
+                            ${totalPortfolioValue.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                            })}
+                            <span className="wlt-currency">USD</span>
+                        </span>
+                    )}
+                </div>
 
-                        {/* Address Bar */}
-                        <div className="bg-black/30 rounded-xl p-3 border border-white/5 backdrop-blur-md flex items-center justify-between">
-                            <div className="flex flex-col">
-                                <span className="text-[10px] text-theme-muted uppercase tracking-wider font-semibold mb-1">
-                                    Your {activeChain === 'solana' ? 'Solana' : 'Ethereum'} Address
-                                </span>
-                                {currentAddress ? (
-                                    <div className="flex flex-col gap-1">
-                                        <div className="flex items-center gap-2">
-                                            <code className={`text-xs md:text-sm font-mono truncate max-w-[150px] md:max-w-xs text-theme-text`}>
-                                                {currentAddress}
-                                            </code>
-                                            <button
-                                                onClick={() => {
-                                                    if (currentAddress) {
-                                                        navigator.clipboard.writeText(currentAddress);
-                                                        toast.success('Copied', 'Address copied');
-                                                    }
-                                                }}
-                                                className="text-theme-muted hover:text-gold transition-colors"
-                                            >
-                                                <Copy className="w-3 h-3" />
-                                            </button>
-                                        </div>
-                                        {isCurrentVerified ? (
-                                            <div className="flex items-center gap-1 text-[10px] text-green-400 font-medium">
-                                                <Shield className="w-3 h-3" />
-                                                <span>Secured by Seniqu</span>
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center gap-1 text-[10px] text-yellow-500 font-medium">
-                                                <Loader2 className="w-3 h-3 animate-spin" />
-                                                <span>Syncing to backend...</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-2 text-xs text-theme-muted italic">
-                                        {!ready ? (
-                                            <>
-                                                <Loader2 className="w-3 h-3 animate-spin" />
-                                                <span>Syncing secured address...</span>
-                                            </>
-                                        ) : (
-                                            <span className="text-theme-muted/50">
-                                                {(activeChain === 'solana' && (embeddedSolanaWallet || embeddedWallet)) ||
-                                                    (activeChain === 'ethereum' && (embeddedEthereumWallet || embeddedWallet))
-                                                    ? "Verifying secure address..."
-                                                    : "Syncing wallet..."}
-                                            </span>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                            <div className="flex gap-2">
-                                <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => setShowReceiveModal(true)}
-                                    className="h-8 w-8 p-0 rounded-lg bg-white/5 hover:bg-white/10 text-theme-text"
-                                    title="Show QR"
+                {/* Address Row */}
+                <div className="wlt-address-row">
+                    {currentAddress ? (
+                        <>
+                            <span className="wlt-address-text">{currentAddress}</span>
+                            <div className="wlt-address-actions">
+                                <button
+                                    className="wlt-addr-btn"
+                                    onClick={() => {
+                                        if (currentAddress) {
+                                            navigator.clipboard.writeText(currentAddress);
+                                            toast.success('Copied', 'Address copied');
+                                        }
+                                    }}
+                                    title="Copy"
                                 >
-                                    <QrCode className="w-4 h-4" />
-                                </Button>
+                                    <Copy size={14} />
+                                </button>
+                                <button
+                                    className="wlt-addr-btn"
+                                    onClick={() => setShowReceiveModal(true)}
+                                    title="QR Code"
+                                >
+                                    <QrCode size={14} />
+                                </button>
                             </div>
-                        </div>
+                        </>
+                    ) : (
+                        <span className="wlt-address-empty">
+                            <Loader2 size={12} className="animate-spin" />
+                            {ready ? 'Syncing wallet...' : 'Connecting...'}
+                        </span>
+                    )}
+                </div>
+            </motion.div>
+
+            {/* ── Quick Actions ── */}
+            <motion.div
+                className="wlt-actions-row"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.1 }}
+            >
+                <motion.div className="wlt-action-item" onClick={handleCreateOrDeposit} whileTap={{ scale: 0.95 }}>
+                    <motion.button 
+                        className={`wlt-action-circle deposit ${isCreating ? 'disabled' : ''}`}
+                        whileHover={{ y: -3, boxShadow: '0 8px 30px rgba(201, 168, 76, 0.4)' }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                    >
+                        {isCreating ? <Loader2 size={20} className="animate-spin" /> : <ArrowDownLeft size={20} />}
+                    </motion.button>
+                    <span className="wlt-action-label">Deposit</span>
+                </motion.div>
+
+                <motion.div className="wlt-action-item" onClick={currentAddress ? handleWithdrawClick : undefined} whileTap={{ scale: 0.95 }}>
+                    <motion.button 
+                        className={`wlt-action-circle withdraw ${!currentAddress ? 'disabled' : ''}`}
+                        whileHover={{ y: -3, boxShadow: '0 8px 20px var(--shadow-color)' }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                    >
+                        <Send size={20} />
+                    </motion.button>
+                    <span className="wlt-action-label">Withdraw</span>
+                </motion.div>
+
+
+                <motion.div className="wlt-action-item" onClick={handleRefresh} whileTap={{ scale: 0.95 }}>
+                    <motion.button 
+                        className={`wlt-action-circle refresh ${isRefreshing ? 'disabled' : ''}`}
+                        whileHover={{ y: -3, boxShadow: '0 8px 20px var(--shadow-color)' }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                    >
+                        <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+                    </motion.button>
+                    <span className="wlt-action-label">Refresh</span>
+                </motion.div>
+            </motion.div>
+
+            {/* ── Content Grid (Assets + History) ── */}
+            <div className="wlt-content-grid">
+                {/* Assets */}
+                <div>
+                    <div className="wlt-section-header">
+                        <span className="wlt-section-title">Assets</span>
                     </div>
-                </Card>
-
-                {/* Quick Actions Panel */}
-                <div className="col-span-1 flex flex-col gap-4">
-                    <Card variant="default" className="flex-1 flex flex-col justify-center gap-3 p-5 border-theme-border/60 bg-theme-elevated/30">
-                        <h4 className="text-sm font-bold text-theme-text mb-1 flex items-center gap-2">
-                            <TrendingUp className="w-4 h-4 text-gold" />
-                            Quick Actions
-                        </h4>
-
-                        <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
-                            <Button
-                                variant="gold"
-                                className="w-full justify-center lg:justify-start h-12 text-sm font-bold shadow-gold/10 hover:shadow-gold/20 transition-all"
-                                onClick={handleCreateOrDeposit}
-                                isLoading={isCreating}
-                                leftIcon={<ArrowDownLeft className="w-4 h-4" />}
+                    <div className="wlt-list-container">
+                        {assets.map((asset, i) => (
+                            <motion.div
+                                key={asset.symbol}
+                                className="wlt-asset-row"
+                                initial={{ opacity: 0, y: 15 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.4, delay: i * 0.08, type: 'spring', stiffness: 300, damping: 24 }}
+                                whileHover={{ scale: 1.01, y: -2 }}
                             >
-                                Deposit
-                            </Button>
-                            <Button
-                                variant="secondary"
-                                className={`w-full justify-center lg:justify-start h-12 text-sm font-bold border-theme-border bg-theme-bg transition-all
-                                    ${currentAddress
-                                        ? 'bg-gradient-to-r from-white to-gray-200 !text-black hover:from-gray-100 hover:to-gray-300 border-white/20 shadow-lg shadow-white/5'
-                                        : 'text-theme-muted opacity-50 cursor-not-allowed'}
-                                `}
-                                onClick={handleWithdrawClick}
-                                disabled={!currentAddress}
-                                leftIcon={<Send className={`w-4 h-4 ${currentAddress ? 'text-black' : 'text-theme-muted'}`} />}
-                            >
-                                Withdraw
-                            </Button>
-                        </div>
-                    </Card>
-
-                    {/* Mini Security Card (Mobile Compact) */}
-                    <div className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-xl p-4 border border-blue-500/10 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
-                                <Shield className="w-4 h-4" />
-                            </div>
-                            <div>
-                                <p className="text-xs font-bold text-blue-100">Bank-Grade Security</p>
-                                <p className="text-[10px] text-blue-200/60">Non-custodial & Encrypted</p>
-                            </div>
-                        </div>
-                        <CheckCircle className="w-4 h-4 text-green-500 opacity-80" />
+                                <div className="wlt-asset-left">
+                                    <div className="wlt-asset-icon">
+                                        <img src={asset.icon} alt={asset.name} />
+                                    </div>
+                                    <div>
+                                        <p className="wlt-asset-name">{asset.symbol}</p>
+                                        <p className="wlt-asset-sub">
+                                            {asset.name} &bull; ${asset.price.toLocaleString()}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="wlt-asset-right">
+                                    <p className="wlt-asset-bal">
+                                        {isBalanceHidden ? '••••' : asset.balance.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                                    </p>
+                                    <p className="wlt-asset-val">
+                                        {isBalanceHidden ? '••••' : `$${asset.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                    </p>
+                                </div>
+                            </motion.div>
+                        ))}
                     </div>
                 </div>
-            </div>
 
-            {/* Assets & Activity Tabs (or Split View) */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Left Column: Assets & History */}
-                <div className="lg:col-span-2 space-y-8">
-                    {/* Assets List */}
-                    <div>
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold text-theme-text flex items-center gap-2">
-                                Your Assets
-                            </h3>
-                            <button onClick={handleRefresh} disabled={isRefreshing} className="p-1.5 rounded-lg hover:bg-theme-elevated text-theme-muted hover:text-gold transition-colors">
-                                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                            </button>
+                {/* Transactions */}
+                <div>
+                    <div className="wlt-section-header">
+                        <span className="wlt-section-title">History</span>
+                        <button
+                            className="wlt-section-action"
+                            onClick={() =>
+                                window.open(
+                                    activeChain === 'solana'
+                                        ? `https://solscan.io/account/${activeWallet?.address}`
+                                        : `https://etherscan.io/address/${activeWallet?.address}`,
+                                    '_blank'
+                                )
+                            }
+                        >
+                            Explorer <ExternalLink size={12} />
+                        </button>
+                    </div>
+
+                    {txLoading ? (
+                        <div className="wlt-empty">
+                            <Loader2 size={20} className="animate-spin" />
+                            <span>Syncing...</span>
                         </div>
-
-                        <div className="grid grid-cols-1 gap-3">
-                            {assets.map((asset) => (
-                                <div key={asset.symbol} className="flex items-center justify-between p-4 rounded-xl bg-theme-elevated/40 border border-theme-border hover:border-gold/30 hover:bg-theme-elevated/60 transition-all group cursor-default">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-theme-bg p-2 border border-theme-border group-hover:border-gold/20 transition-colors">
-                                            <img src={asset.icon} alt={asset.name} className="w-full h-full object-contain" />
+                    ) : transactions.length === 0 ? (
+                        <div className="wlt-empty">
+                            <ArrowRightLeft size={24} />
+                            <span>No recent transactions</span>
+                        </div>
+                    ) : (
+                        <div className="wlt-list-container">
+                            {transactions.map((tx: any, i: number) => (
+                                <motion.div
+                                    key={tx.id}
+                                    className="wlt-tx-row"
+                                    initial={{ opacity: 0, x: -8 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ duration: 0.25, delay: i * 0.04 }}
+                                >
+                                    <div className="wlt-tx-left">
+                                        <div className={`wlt-tx-icon ${tx.tx_type === 'deposit' ? 'deposit' : 'withdraw'}`}>
+                                            {tx.tx_type === 'deposit' ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
                                         </div>
                                         <div>
-                                            <p className="font-bold text-theme-text">{asset.symbol}</p>
-                                            <p className="text-xs text-theme-muted flex items-center gap-1">
-                                                {asset.name}
-                                                <span className="w-0.5 h-0.5 rounded-full bg-theme-muted/50" />
-                                                ${asset.price.toLocaleString()}
-                                            </p>
+                                            <p className="wlt-tx-type">{tx.tx_type} {tx.token_symbol}</p>
+                                            <p className="wlt-tx-date">{new Date(tx.created_at).toLocaleDateString()}</p>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="font-bold text-theme-text">
-                                            {isBalanceHidden ? '••••' : asset.balance.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                                    <div className="wlt-tx-right">
+                                        <p className={`wlt-tx-amount ${tx.tx_type === 'deposit' ? 'positive' : 'negative'}`}>
+                                            {isBalanceHidden ? '••••' : `${tx.tx_type === 'deposit' ? '+' : '-'}${tx.amount} ${tx.token_symbol}`}
                                         </p>
-                                        <p className="text-xs text-theme-muted">
-                                            {isBalanceHidden ? '••••' : `$${asset.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                                        </p>
+                                        <span className={`wlt-tx-status ${tx.status}`}>{tx.status}</span>
                                     </div>
-                                </div>
+                                </motion.div>
                             ))}
                         </div>
-                    </div>
-                    {/* 7. Render */}
-                    {(!ready || isUserLoading) && (
-                        <PageContainer title="My Wallet" subtitle="Manage your assets securely">
-                            <div className="flex items-center justify-center min-h-[400px]">
-                                <Loader2 className="w-8 h-8 text-gold animate-spin" />
-                            </div>
-                        </PageContainer>
                     )}
-                    {/* Transactions */}
-                    <div>
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold text-theme-text flex items-center gap-2">
-                                History
-                            </h3>
-                            <Button variant="ghost" size="sm" className="text-xs text-theme-muted hover:text-gold" onClick={() => window.open(activeChain === 'solana' ? `https://solscan.io/account/${activeWallet?.address}` : `https://etherscan.io/address/${activeWallet?.address}`, '_blank')}>
-                                View Explorer <ExternalLink className="w-3 h-3 ml-1" />
-                            </Button>
-                        </div>
-                        <Card variant="elevated" className="overflow-hidden min-h-[150px] border-theme-border/50">
-                            {txLoading ? (
-                                <div className="flex flex-col items-center justify-center py-12 text-theme-muted">
-                                    <Loader2 className="w-5 h-5 animate-spin mb-2 opacity-50" />
-                                    <span className="text-xs">Syncing history...</span>
-                                </div>
-                            ) : transactions.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-12 text-theme-muted/40">
-                                    <ArrowRightLeft className="w-8 h-8 mb-2 opacity-50" />
-                                    <span className="text-sm">No recent transactions</span>
-                                </div>
-                            ) : (
-                                <div className="divide-y divide-theme-border/50">
-                                    {transactions.map((tx: any) => (
-                                        <div key={tx.id} className="p-4 flex items-center justify-between hover:bg-theme-elevated/30 transition-colors">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`p-2 rounded-lg ${tx.tx_type === 'deposit' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
-                                                    {tx.tx_type === 'deposit' ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-medium text-theme-text capitalize">{tx.tx_type} {tx.token_symbol}</p>
-                                                    <p className="text-[10px] text-theme-muted">{new Date(tx.created_at).toLocaleDateString()}</p>
-                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className={`text-sm font-bold ${tx.tx_type === 'deposit' ? 'text-green-400' : 'text-theme-text'}`}>
-                                                    {isBalanceHidden ? '••••' : `${tx.tx_type === 'deposit' ? '+' : '-'}${tx.amount} ${tx.token_symbol}`}
-                                                </p>
-                                                <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded-full ${tx.status === 'confirmed' ? 'bg-green-500/10 text-green-400' :
-                                                    tx.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'
-                                                    }`}>
-                                                    {tx.status}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </Card>
-                    </div>
-                </div>
-
-                {/* Right Column: Info & Tips (Mobile: Bottom) */}
-                <div className="space-y-4">
-                    <div className="p-5 rounded-2xl bg-gradient-to-br from-theme-elevated to-theme-bg border border-theme-border/50">
-                        <h4 className="text-sm font-bold text-theme-text mb-3">Wallet Features</h4>
-                        <ul className="space-y-3">
-                            <li className="flex items-start gap-3 text-xs text-theme-muted">
-                                <Shield className="w-4 h-4 text-gold shrink-0 mt-0.5" />
-                                <span>
-                                    <strong className="text-theme-text">Non-Custodial:</strong> You own your keys. Encrypted locally on your device properly.
-                                </span>
-                            </li>
-                            <li className="flex items-start gap-3 text-xs text-theme-muted">
-                                <RefreshCw className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                                <span>
-                                    <strong className="text-theme-text">Auto-Sync:</strong> Transactions update in real-time across devices.
-                                </span>
-                            </li>
-                        </ul>
-                    </div>
-
-                    <Card variant="default" className="p-4 border-theme-border/30 bg-theme-bg/30">
-                        <p className="text-xs text-theme-muted text-center italic">
-                            "Secure navigation is our priority. Always check the URL before connecting."
-                        </p>
-                    </Card>
                 </div>
             </div>
 
-            {/* DEPOSIT MODAL */}
+            {/* ── DEPOSIT MODAL ── */}
             <Modal
                 isOpen={showReceiveModal}
                 onClose={() => setShowReceiveModal(false)}
-                title={`Deposit ${activeChain === 'solana' ? 'Solana' : 'Ethereum'} Assets`}
-                description={`Scan to deposit funds into your selected network`}
+                title={`Deposit ${activeChain === 'solana' ? 'SOL' : 'ETH'}`}
+                description="Scan or copy your address"
                 size="sm"
             >
                 {(() => {
-                    // SECURE DISPLAY LOGIC (Same as main view)
-                    // We prioritize the address stored in our backend DB over the raw Privy wallet.
-                    // This ensures what the user sees is what our system recognizes.
                     let displayAddress: string | undefined;
-
-                    if (backendUser && backendUser.wallets && Array.isArray(backendUser.wallets)) {
-                        const exactMatch = backendUser.wallets.find((w: any) => {
+                    if (backendUser?.wallets?.length) {
+                        const exactMatch = (backendUser.wallets as any[]).find((w: any) => {
                             const wChain = (w.chainType || w.chain_type || '').toLowerCase();
                             return wChain === activeChain.toLowerCase();
                         });
-                        if (exactMatch) {
-                            displayAddress = exactMatch.address || (exactMatch as any).wallet_address;
-                        }
+                        if (exactMatch) displayAddress = exactMatch.address || exactMatch.wallet_address;
                     }
-
-                    // Fallback to local state if not found in backend
                     if (!displayAddress) {
-                        if (activeChain === 'solana') {
-                            if (embeddedSolanaWallet?.address) displayAddress = embeddedSolanaWallet.address;
-                        } else if (activeChain === 'ethereum') {
-                            if (embeddedEthereumWallet?.address) displayAddress = embeddedEthereumWallet.address;
-                        }
+                        if (activeChain === 'solana' && embeddedSolanaWallet?.address) displayAddress = embeddedSolanaWallet.address;
+                        else if (activeChain === 'ethereum' && embeddedEthereumWallet?.address) displayAddress = embeddedEthereumWallet.address;
                     }
-
                     return (
                         <div className="flex flex-col items-center">
                             {displayAddress ? (
-                                <div className="p-4 bg-white rounded-2xl mb-6 shadow-xl shadow-gold/5 border-2 border-gold/10 relative group">
-                                    <QRCode
-                                        value={displayAddress}
-                                        size={200}
-                                        level="M"
-                                        viewBox={`0 0 256 256`}
-                                    />
-                                    {/* Logo Overlay */}
+                                <div className="p-4 bg-white rounded-2xl mb-6 shadow-xl border-2 border-gold/10 relative">
+                                    <QRCode value={displayAddress} size={200} level="M" viewBox="0 0 256 256" />
                                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                         <div className="bg-white p-1 rounded-full shadow-lg">
-                                            <img
-                                                src={activeChain === 'solana' ? ICONS.solana : ICONS.ethereum}
-                                                alt="Chain"
-                                                className="w-8 h-8"
-                                            />
+                                            <img src={ICONS[activeChain]} alt="Chain" className="w-8 h-8" />
                                         </div>
                                     </div>
                                 </div>
                             ) : (
                                 <div className="w-[200px] h-[200px] flex flex-col items-center justify-center bg-theme-elevated rounded-2xl mb-6 border border-theme-border/50 animate-pulse">
                                     <Loader2 className="w-8 h-8 text-gold animate-spin mb-2" />
-                                    <span className="text-xs text-theme-muted">Generating Address...</span>
+                                    <span className="text-xs text-theme-muted">Generating...</span>
                                 </div>
                             )}
-
-                            <div className="w-full bg-theme-elevated p-4 rounded-xl mb-6 text-center border border-theme-border group hover:border-gold/30 transition-colors">
-                                <p className="text-xs text-theme-muted mb-2 uppercase tracking-wide">Your {activeChain} Address</p>
+                            <div className="w-full bg-theme-elevated p-4 rounded-xl mb-6 text-center border border-theme-border">
                                 {displayAddress ? (
-                                    <p className="text-sm font-mono text-theme-text break-all select-all">
-                                        {displayAddress}
-                                    </p>
+                                    <p className="text-sm font-mono text-theme-text break-all select-all">{displayAddress}</p>
                                 ) : (
                                     <div className="h-5 w-3/4 mx-auto bg-theme-bg/50 rounded animate-pulse" />
                                 )}
                             </div>
-
                             <div className="flex justify-center gap-2 mb-6">
-                                {/* Supported Tokens Icons */}
-                                <img src={ICONS[activeChain]} alt="Native" className="w-6 h-6 grayscale hover:grayscale-0 transition-all opacity-50 hover:opacity-100" title={`Native ${activeChain}`} />
-                                <img src={ICONS.usdt} alt="USDT" className="w-6 h-6 grayscale hover:grayscale-0 transition-all opacity-50 hover:opacity-100" title="USDT" />
-                                <img src={ICONS.usdc} alt="USDC" className="w-6 h-6 grayscale hover:grayscale-0 transition-all opacity-50 hover:opacity-100" title="USDC" />
+                                <img src={ICONS[activeChain]} alt="Native" className="w-6 h-6 grayscale hover:grayscale-0 transition-all opacity-50 hover:opacity-100" />
+                                <img src={ICONS.usdt} alt="USDT" className="w-6 h-6 grayscale hover:grayscale-0 transition-all opacity-50 hover:opacity-100" />
+                                <img src={ICONS.usdc} alt="USDC" className="w-6 h-6 grayscale hover:grayscale-0 transition-all opacity-50 hover:opacity-100" />
                             </div>
-
                             <Button className="w-full" variant="gold" onClick={() => {
                                 if (displayAddress) {
                                     navigator.clipboard.writeText(displayAddress);
                                     toast.success('Copied', 'Address copied to clipboard');
                                 }
                             }} disabled={!displayAddress}>
-                                <Copy className="w-4 h-4 mr-2" />
-                                Copy Address
+                                <Copy className="w-4 h-4 mr-2" /> Copy Address
                             </Button>
                         </div>
                     );
                 })()}
             </Modal>
 
-            {/* WITHDRAW MODAL */}
+            {/* ── WITHDRAW MODAL ── */}
             <Modal
                 isOpen={showSendModal}
-                onClose={() => {
-                    setShowSendModal(false);
-                    // Full Reset on Close
-                    setShowScanModal(false);
-                    setSendAddress('');
-                    setSendAmount('');
-                }}
+                onClose={() => { setShowSendModal(false); setShowScanModal(false); setSendAddress(''); setSendAmount(''); }}
                 title={`Withdraw ${activeChain === 'solana' ? 'SOL' : 'ETH'}`}
-                description="Send funds to another wallet"
+                description="Send to another wallet"
                 size="sm"
             >
                 {activeChain === 'ethereum' ? (
                     <div className="text-center py-8">
-                        <p className="text-theme-muted">Ethereum withdrawals are currently disabled for maintenance.</p>
+                        <p className="text-theme-muted">ETH withdrawals coming soon.</p>
                     </div>
                 ) : (
                     <div className="space-y-5">
@@ -1148,7 +1048,6 @@ export function WalletPage() {
                                 </Button>
                             </div>
                         )}
-
                         {showScanModal ? (
                             <div className="relative overflow-hidden rounded-xl bg-black aspect-square">
                                 <QrReader
@@ -1162,61 +1061,33 @@ export function WalletPage() {
                                     }}
                                     className="w-full h-full object-cover"
                                 />
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10"
-                                    onClick={() => setShowScanModal(false)}
-                                >
-                                    Cancel Scan
+                                <Button variant="secondary" size="sm" className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10" onClick={() => setShowScanModal(false)}>
+                                    Cancel
                                 </Button>
                             </div>
                         ) : (
                             <>
-                                <Input
-                                    label="Recipient Address"
-                                    value={sendAddress}
-                                    onChange={(e) => setSendAddress(e.target.value)}
-                                    placeholder="Enter Solana address..."
-                                />
-
+                                <Input label="Recipient" value={sendAddress} onChange={(e) => setSendAddress(e.target.value)} placeholder="Solana address..." />
                                 <div>
-                                    <Input
-                                        label="Amount"
-                                        type="number"
-                                        value={sendAmount}
-                                        onChange={(e) => setSendAmount(e.target.value)}
-                                        placeholder="0.00"
-                                    />
+                                    <Input label="Amount" type="number" value={sendAmount} onChange={(e) => setSendAmount(e.target.value)} placeholder="0.00" />
                                     <div className="flex justify-between items-center mt-2 px-1">
-                                        <span className="text-xs text-theme-muted">Available: {(solBalance || 0).toFixed(4)} SOL</span>
-                                        <button
-                                            onClick={() => setSendAmount(solBalance ? (solBalance - 0.0001).toFixed(4) : '0')}
-                                            className="text-xs text-gold hover:underline font-medium"
-                                        >
-                                            Max
-                                        </button>
+                                        <span className="text-xs text-theme-muted">{(solBalance || 0).toFixed(4)} SOL available</span>
+                                        <button onClick={() => setSendAmount(solBalance ? (solBalance - 0.0001).toFixed(4) : '0')} className="text-xs text-gold hover:underline font-medium">Max</button>
                                     </div>
                                 </div>
                             </>
                         )}
-
                         <div className="pt-4">
-                            <Button
-                                variant="primary"
-                                className="w-full h-12 text-base"
-                                onClick={handleSend}
-                                disabled={!sendAddress || !sendAmount || isSending}
-                                isLoading={isSending}
-                            >
-                                {isSending ? 'Processing...' : 'Confirm Withdrawal'}
+                            <Button variant="primary" className="w-full h-12 text-base" onClick={handleSend} disabled={!sendAddress || !sendAmount || isSending} isLoading={isSending}>
+                                {isSending ? 'Processing...' : 'Confirm'}
                             </Button>
                         </div>
                     </div>
                 )}
             </Modal>
-        </PageContainer>
+        </motion.div>
     );
 }
 
 export default WalletPage;
+

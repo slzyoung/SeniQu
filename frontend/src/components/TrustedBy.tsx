@@ -31,7 +31,16 @@ const partners = [
   {
     name: 'Telkom Indonesia',
     icon: Radio
-  }];
+  },
+  {
+    name: 'Superteam Indonesia',
+    imgUrl: '/images/logo/superteam.jpg'
+  },
+  {
+    name: 'Solana',
+    imgUrl: '/images/logo/poweredbysol.svg'
+  }
+];
 
 export function TrustedBy() {
   return (
@@ -51,12 +60,22 @@ export function TrustedBy() {
             {partners.map((partner, index) =>
               <div
                 key={index}
-                className="flex items-center gap-2 md:gap-3 opacity-50 cursor-default">
+                className={`flex items-center ${partner.name === 'Superteam Indonesia' ? 'gap-1.5 md:gap-2' : 'gap-2 md:gap-3'} opacity-50 hover:opacity-100 transition-opacity duration-300 cursor-default grayscale hover:grayscale-0`}>
 
-                <partner.icon className="w-4 h-4 md:w-6 md:h-6 text-theme-muted" />
-                <span className="text-xs md:text-sm font-medium text-theme-muted whitespace-nowrap">
-                  {partner.name}
-                </span>
+                {partner.icon && <partner.icon className="w-4 h-4 md:w-6 md:h-6 text-theme-muted" />}
+                {partner.imgUrl && (
+                  <img
+                    src={partner.imgUrl}
+                    alt={partner.name}
+                    className="object-contain h-6 md:h-8"
+                  />
+                )}
+
+                {(!partner.imgUrl || partner.name === 'Superteam Indonesia') && (
+                  <span className="text-xs md:text-sm font-medium text-theme-muted whitespace-nowrap">
+                    {partner.name}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -64,12 +83,22 @@ export function TrustedBy() {
             {partners.map((partner, index) =>
               <div
                 key={`dup-${index}`}
-                className="flex items-center gap-2 md:gap-3 opacity-50 cursor-default">
+                className={`flex items-center ${partner.name === 'Superteam Indonesia' ? 'gap-1.5 md:gap-2' : 'gap-2 md:gap-3'} opacity-50 hover:opacity-100 transition-opacity duration-300 cursor-default grayscale hover:grayscale-0`}>
 
-                <partner.icon className="w-4 h-4 md:w-6 md:h-6 text-theme-muted" />
-                <span className="text-xs md:text-sm font-medium text-theme-muted whitespace-nowrap">
-                  {partner.name}
-                </span>
+                {partner.icon && <partner.icon className="w-4 h-4 md:w-6 md:h-6 text-theme-muted" />}
+                {partner.imgUrl && (
+                  <img
+                    src={partner.imgUrl}
+                    alt={partner.name}
+                    className="object-contain h-6 md:h-8"
+                  />
+                )}
+
+                {(!partner.imgUrl || partner.name === 'Superteam Indonesia') && (
+                  <span className="text-xs md:text-sm font-medium text-theme-muted whitespace-nowrap">
+                    {partner.name}
+                  </span>
+                )}
               </div>
             )}
           </div>

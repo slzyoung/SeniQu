@@ -552,7 +552,7 @@ export class WalletService {
      * Get all connected wallets for a user
      */
     async getConnectedWallets(userId: string): Promise<any[]> {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
 
         const { data, error } = await client
             .from("wallet_connections")
@@ -844,7 +844,7 @@ export class WalletService {
      * Check if user already has an active wallet
      */
     private async hasExistingWallet(userId: string): Promise<boolean> {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
         const { count } = await client
             .from("wallet_connections")
             .select("*", { count: "exact", head: true })
@@ -1004,7 +1004,7 @@ export class WalletService {
      * Get transaction history (Local + On-Chain)
      */
     async getTransactions(userId: string): Promise<any[]> {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
 
         // 1. Fetch Local Transactions (Withdrawals)
         const { data: localTx, error } = await client

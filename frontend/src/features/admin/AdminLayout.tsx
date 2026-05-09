@@ -11,12 +11,17 @@ import { ErrorBoundary } from '../../components/common/ErrorBoundary';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { Avatar, Badge } from '../../components/ui';
 import { ROUTES } from '../../lib/constants';
-import { adminSidebarSections } from '../../config/sidebar';
+import { adminSidebarSections, getInstitutionSidebar } from '../../config/sidebar';
 import { useLogout } from '../../hooks/useLogout';
 
 function SidebarFooter() {
     const { user } = useAuthStore();
     const handleLogout = useLogout();
+
+    const adminRole = (user as any)?.adminRole || (user as any)?.admin_role_typed || '';
+    const roleLabel = adminRole
+        ? adminRole.replace('_', ' ').replace('ADMIN', 'Admin').trim()
+        : (user?.role || 'admin').replace('_', ' ');
 
     return (
         <div className="flex flex-col md:flex-row items-center justify-center md:justify-start gap-4 md:gap-3 p-2 rounded-xl md:hover:bg-theme-elevated transition-colors w-full">
@@ -34,9 +39,11 @@ function SidebarFooter() {
                     <p className="text-sm font-medium text-theme-text truncate">
                         {user?.displayName || user?.username}
                     </p>
-                    <Badge variant="danger" size="sm">Admin</Badge>
+                    <Badge variant={user?.role === 'super_admin' ? 'danger' : 'primary'} size="sm">
+                        {user?.role === 'super_admin' ? 'Super' : 'Admin'}
+                    </Badge>
                 </div>
-                <p className="text-xs text-theme-muted">Super Admin</p>
+                <p className="text-xs text-theme-muted capitalize">{roleLabel}</p>
             </div>
 
             <button
@@ -51,10 +58,16 @@ function SidebarFooter() {
 }
 
 export function AdminLayout() {
+    const { user } = useAuthStore();
+    const adminRole = (user as any)?.adminRole || (user as any)?.admin_role_typed || '';
+    const sections = user?.role === 'super_admin'
+        ? adminSidebarSections
+        : getInstitutionSidebar(adminRole);
+
     return (
         <ErrorBoundary>
             <DashboardLayout
-                sections={adminSidebarSections}
+                sections={sections}
                 footer={<SidebarFooter />}
             />
         </ErrorBoundary>

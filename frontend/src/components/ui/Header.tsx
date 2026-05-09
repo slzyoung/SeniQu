@@ -71,7 +71,19 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
 
     const [showNotifications, setShowNotifications] = React.useState(false);
     const menuRef = React.useRef<HTMLDivElement>(null);
+    const triggerRef = React.useRef<HTMLButtonElement>(null);
+    const backdropRef = React.useRef<HTMLDivElement>(null);
+    // Track whether a close was already handled by the backdrop/trigger
+    // to prevent the document-level handler from double-processing
+    const closeHandledRef = React.useRef(false);
     const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+
+    // Stable close helper — avoids stale closure issues
+    const closeAllMenus = React.useCallback(() => {
+        setShowUserMenu(false);
+        setMenuView('main');
+        setShowNotifications(false);
+    }, []);
 
     const fetchHistory = React.useCallback(async () => {
         setLoadingHistory(true);
@@ -96,17 +108,42 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
     }, [menuView, showUserMenu, fetchHistory]);
 
     // Close menus on outside click
+    // Only attach listeners when a menu is actually open to avoid unnecessary work
     React.useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-                setShowUserMenu(false);
-                setMenuView('main');
-                setShowNotifications(false);
+        if (!showUserMenu && !showNotifications) return;
+
+        const handleClickOutside = (e: Event) => {
+            // If the close was already handled by the backdrop or trigger, skip
+            if (closeHandledRef.current) {
+                closeHandledRef.current = false;
+                return;
             }
+
+            const target = e.target as Node;
+            if (!target) return;
+
+            // Ignore clicks inside the menu container (includes dropdown content & trigger)
+            if (menuRef.current && menuRef.current.contains(target)) return;
+
+            // Ignore clicks on the backdrop (it has its own close handler)
+            if (backdropRef.current && backdropRef.current.contains(target)) return;
+
+            closeAllMenus();
         };
+
+        // Use mousedown for desktop, touchstart for mobile — these fire before click
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+        document.addEventListener('touchstart', handleClickOutside, { passive: true });
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('touchstart', handleClickOutside);
+        };
+    }, [showUserMenu, showNotifications, closeAllMenus]);
+
+    // Auto-close dropdown on route change (e.g., navigating to Settings)
+    React.useEffect(() => {
+        closeAllMenus();
+    }, [location.pathname, closeAllMenus]);
 
     const handleMobileMenuClick = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -271,8 +308,19 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
                         {/* User Menu */}
                         <div className="relative">
                             <button
-                                onClick={() => setShowUserMenu(!showUserMenu)}
-                                className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-theme-elevated transition-colors"
+                                ref={triggerRef}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    closeHandledRef.current = true;
+                                    if (showUserMenu) {
+                                        closeAllMenus();
+                                    } else {
+                                        setShowNotifications(false);
+                                        setShowUserMenu(true);
+                                        setMenuView('main');
+                                    }
+                                }}
+                                className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-theme-elevated transition-colors relative z-[80]"
                             >
                                 <Avatar
                                     src={user?.avatar}
@@ -287,11 +335,23 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
                                     <>
                                         {/* Mobile Backdrop */}
                                         <motion.div
+                                            ref={backdropRef}
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
                                             exit={{ opacity: 0 }}
-                                            onClick={() => setShowUserMenu(false)}
+                                            onClick={(e: React.MouseEvent) => {
+                                                e.stopPropagation();
+                                                e.preventDefault();
+                                                closeHandledRef.current = true;
+                                                closeAllMenus();
+                                            }}
+                                            onTouchStart={(e: React.TouchEvent) => {
+                                                e.stopPropagation();
+                                                closeHandledRef.current = true;
+                                                closeAllMenus();
+                                            }}
                                             className="md:hidden fixed inset-0 bg-neutral-950/60 z-[60] backdrop-blur-md"
+                                            style={{ touchAction: 'none', WebkitTapHighlightColor: 'transparent' }}
                                         />
 
                                         {/* Menu Content */}
@@ -301,92 +361,101 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
                                             exit={{ opacity: 0, y: 8, scale: 0.96 }}
                                             transition={{ duration: 0.15, ease: 'easeOut' }}
                                             className={`
-                                                z-[70] bg-white dark:bg-neutral-900 border border-theme-border shadow-2xl overflow-hidden
+                                                z-[70] bg-white/95 dark:bg-[#1a1a1a]/95 backdrop-blur-3xl
+                                                border border-black/5 dark:border-white/10 
+                                                shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] dark:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)]
+                                                overflow-hidden
                                                 
-                                                /* Unified Dropdown Styles */
-                                                absolute top-full right-0 mt-2 
-                                                w-72 rounded-2xl ring-1 ring-black/5
+                                                fixed right-4 top-[76px] w-[260px]
+                                                md:absolute md:top-full md:right-0 md:mt-3 md:w-[280px]
+                                                rounded-[24px] ring-1 ring-black/5 dark:ring-white/5
                                             `}
                                         >
 
                                             {/* VIEW: MAIN MENU */}
                                             {menuView === 'main' && (
                                                 <div className="flex flex-col max-h-[80vh] overflow-y-auto">
-                                                    <div className="px-5 pb-5 pt-5 md:p-4 border-b border-theme-border/50">
-                                                        <div className="flex items-center gap-3">
-                                                            <div>
+                                                    <div className="p-5 border-b border-black/5 dark:border-white/5 bg-gradient-to-b from-black/5 to-transparent dark:from-white/[0.02]">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="relative shrink-0">
                                                                 <Avatar
                                                                     src={user?.avatar}
                                                                     name={user?.displayName || user?.username || 'User'}
                                                                     size="md"
                                                                 />
+                                                                <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white dark:border-[#1a1a1a]"></div>
                                                             </div>
                                                             <div className="min-w-0 flex-1">
-                                                                <p className="font-bold text-theme-text truncate text-sm">
+                                                                <p className="font-bold text-theme-text truncate text-[16px]">
                                                                     {user?.displayName || user?.username}
                                                                 </p>
-                                                                <p className="text-xs text-theme-muted truncate">{user?.email}</p>
+                                                                <p className="text-[13px] text-theme-muted truncate">{user?.email}</p>
                                                             </div>
                                                         </div>
-                                                    </div>
 
-                                                    <div className="p-1.5 space-y-0.5 flex-1">
-                                                        <button
-                                                            onClick={() => setMenuView('chain-select')}
-                                                            className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-theme-elevated transition-colors group text-left"
-                                                        >
-                                                            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gold/10 text-gold group-hover:scale-110 transition-transform">
-                                                                <Wallet className="w-3.5 h-3.5" />
-                                                            </div>
-                                                            <span className="flex-1 text-sm font-medium text-theme-text">Deposit Funds</span>
-                                                        </button>
+                                                        {/* Compact Quick Actions Row */}
+                                                        <div className="flex items-center gap-1 mt-5">
+                                                            <motion.button
+                                                                whileTap={{ scale: 0.92 }}
+                                                                onClick={() => setMenuView('chain-select')}
+                                                                className="flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-[14px] hover:bg-black/5 dark:hover:bg-white/5 transition-all group"
+                                                            >
+                                                                <div className="w-11 h-11 rounded-full flex items-center justify-center mb-2 transition-all duration-300
+                                                                    bg-gradient-to-b from-[#FFD700] to-[#F59E0B] 
+                                                                    text-white
+                                                                    shadow-[0_6px_12px_rgba(245,158,11,0.25),inset_0_3px_4px_rgba(255,255,255,0.6),inset_0_-3px_4px_rgba(0,0,0,0.2)]
+                                                                    group-hover:-translate-y-1 group-hover:shadow-[0_10px_16px_rgba(245,158,11,0.35),inset_0_3px_4px_rgba(255,255,255,0.6),inset_0_-3px_4px_rgba(0,0,0,0.2)]
+                                                                    ring-1 ring-yellow-400/50
+                                                                ">
+                                                                    <Wallet className="w-4 h-4 drop-shadow-[0_2px_2px_rgba(0,0,0,0.3)]" strokeWidth={2.5} />
+                                                                </div>
+                                                                <span className="text-[11px] font-bold text-theme-text opacity-80 group-hover:opacity-100 transition-opacity">Deposit</span>
+                                                            </motion.button>
 
-                                                        <button
-                                                            onClick={() => setMenuView('history')}
-                                                            className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-theme-elevated transition-colors group text-left"
-                                                        >
-                                                            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-blue-500/10 text-blue-500 group-hover:scale-110 transition-transform">
-                                                                <HistoryIcon className="w-3.5 h-3.5" />
-                                                            </div>
-                                                            <span className="flex-1 text-sm font-medium text-theme-text">History</span>
-                                                        </button>
+                                                            <motion.button
+                                                                whileTap={{ scale: 0.92 }}
+                                                                onClick={() => setMenuView('history')}
+                                                                className="flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-[14px] hover:bg-black/5 dark:hover:bg-white/5 transition-all group"
+                                                            >
+                                                                <div className="w-11 h-11 rounded-full flex items-center justify-center mb-2 transition-all duration-300
+                                                                    bg-gradient-to-b from-[#60A5FA] to-[#3B82F6] 
+                                                                    text-white
+                                                                    shadow-[0_6px_12px_rgba(59,130,246,0.25),inset_0_3px_4px_rgba(255,255,255,0.5),inset_0_-3px_4px_rgba(0,0,0,0.2)]
+                                                                    group-hover:-translate-y-1 group-hover:shadow-[0_10px_16px_rgba(59,130,246,0.35),inset_0_3px_4px_rgba(255,255,255,0.5),inset_0_-3px_4px_rgba(0,0,0,0.2)]
+                                                                    ring-1 ring-blue-400/50
+                                                                ">
+                                                                    <HistoryIcon className="w-4 h-4 drop-shadow-[0_2px_2px_rgba(0,0,0,0.3)]" strokeWidth={2.5} />
+                                                                </div>
+                                                                <span className="text-[11px] font-bold text-theme-text opacity-80 group-hover:opacity-100 transition-opacity">History</span>
+                                                            </motion.button>
 
-                                                        <button
-                                                            onClick={() => {
-                                                                setShowUserMenu(false);
-                                                                const role = user?.role;
-                                                                if (role === 'admin' || role === 'super_admin') {
-                                                                    navigate('/admin/settings');
-                                                                } else if (role === 'artist' || role === 'institution') {
-                                                                    navigate('/artist/settings');
-                                                                } else {
-                                                                    navigate('/dashboard/settings');
-                                                                }
-                                                            }}
-                                                            className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-theme-elevated transition-colors group text-left"
-                                                        >
-                                                            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-theme-elevated border border-theme-border/50 text-theme-muted group-hover:text-theme-text transition-colors">
-                                                                <Settings className="w-3.5 h-3.5" />
-                                                            </div>
-                                                            <span className="flex-1 text-sm font-medium text-theme-text">Settings</span>
-                                                        </button>
-                                                    </div>
-
-                                                    <div className="p-2 mt-auto border-t border-theme-border/50 flex justify-end">
-                                                        <button
-                                                            onClick={logout}
-                                                            className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-red-500/5 transition-all group relative overflow-hidden"
-                                                        >
-                                                            <div className="flex items-center justify-center w-6 h-6 rounded-md bg-red-500/10 text-red-500 group-hover:scale-110 transition-transform">
-                                                                <motion.div
-                                                                    whileHover={{ x: 3 }}
-                                                                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                                                                >
-                                                                    <LogOut className="w-3 h-3" />
-                                                                </motion.div>
-                                                            </div>
-                                                            <span className="text-xs font-bold text-red-500 group-hover:text-red-600 transition-colors">Sign out</span>
-                                                        </button>
+                                                            <motion.button
+                                                                whileTap={{ scale: 0.92 }}
+                                                                onClick={() => {
+                                                                    closeAllMenus();
+                                                                    const role = user?.role;
+                                                                    if (role === 'admin' || role === 'super_admin') {
+                                                                        navigate('/admin/settings');
+                                                                    } else if (role === 'artist' || role === 'institution') {
+                                                                        navigate('/artist/settings');
+                                                                    } else {
+                                                                        navigate('/dashboard/settings');
+                                                                    }
+                                                                }}
+                                                                className="flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-[14px] hover:bg-black/5 dark:hover:bg-white/5 transition-all group"
+                                                            >
+                                                                <div className="w-11 h-11 rounded-full flex items-center justify-center mb-2 transition-all duration-300
+                                                                    bg-gradient-to-b from-[#9CA3AF] to-[#6B7280] dark:from-[#4B5563] dark:to-[#374151]
+                                                                    text-white
+                                                                    shadow-[0_6px_12px_rgba(0,0,0,0.12),inset_0_3px_4px_rgba(255,255,255,0.4),inset_0_-3px_4px_rgba(0,0,0,0.2)]
+                                                                    group-hover:-translate-y-1 group-hover:shadow-[0_10px_16px_rgba(0,0,0,0.18),inset_0_3px_4px_rgba(255,255,255,0.4),inset_0_-3px_4px_rgba(0,0,0,0.2)]
+                                                                    ring-1 ring-gray-400/30
+                                                                ">
+                                                                    <Settings className="w-4 h-4 drop-shadow-[0_2px_2px_rgba(0,0,0,0.3)]" strokeWidth={2.5} />
+                                                                </div>
+                                                                <span className="text-[11px] font-bold text-theme-text opacity-80 group-hover:opacity-100 transition-opacity">Settings</span>
+                                                            </motion.button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             )}

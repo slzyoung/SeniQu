@@ -78,6 +78,19 @@ export interface AuthResponse {
     privyToken?: string;
 }
 
+// New: OTP/Verification step responses
+export interface OtpRequiredResponse {
+    message: string;
+    requiresOtp: true;
+    email: string; // masked email
+}
+
+export interface VerificationRequiredResponse {
+    message: string;
+    requiresVerification: true;
+    email: string;
+}
+
 export interface LoginCredentials {
     email: string;
     password: string;
@@ -274,9 +287,9 @@ class AuthService {
     }
 
     /**
-     * Login with email and password
+     * Login with email and password — now returns OTP step first
      */
-    async login(credentials: LoginCredentials): Promise<AuthResponse> {
+    async login(credentials: LoginCredentials): Promise<AuthResponse | OtpRequiredResponse> {
         // Rate limit check
         const rateLimit = checkAuthRateLimit('login', credentials.email);
         if (!rateLimit.allowed) {
@@ -295,57 +308,33 @@ class AuthService {
         const validatedData = validationResult.data;
 
         try {
-            // Call API
             console.log('[AuthService] Calling login API...');
             const rawResponse = await apiPost<any>(API_ENDPOINTS.AUTH_LOGIN, validatedData, {
                 headers: getSecurityHeaders(),
             });
 
-            // Backend wraps responses in {success, data, meta} envelope
-            // Extract the actual data from the envelope
             const response = rawResponse?.data || rawResponse;
 
-            console.log('[AuthService] Login API response received:', {
-                hasUser: !!response?.user,
-                hasAccessToken: !!response?.accessToken,
-                hasRefreshToken: !!response?.refreshToken,
-                responseKeys: response ? Object.keys(response) : 'null'
-            });
-
-            // Validate response integrity
-            if (!validateResponseIntegrity(response)) {
-                console.error('[AuthService] Response integrity check failed');
-                throw { message: 'Invalid server response', code: 'RESPONSE_INTEGRITY_ERROR' };
+            // Check if OTP step is required
+            if (response?.requiresOtp) {
+                console.log('[AuthService] OTP required, email:', response.email);
+                return response as OtpRequiredResponse;
             }
 
-            // Check required fields
-            if (!response.user) {
-                console.error('[AuthService] Response missing user object');
-                throw { message: 'Server response missing user data', code: 'INVALID_RESPONSE' };
+            // Full auth response (shouldn't happen in new flow, but keep for safety)
+            if (!response.user || !response.accessToken || !response.refreshToken) {
+                throw { message: 'Server response missing required data', code: 'INVALID_RESPONSE' };
             }
 
-            if (!response.accessToken || !response.refreshToken) {
-                console.error('[AuthService] Response missing tokens');
-                throw { message: 'Server response missing authentication tokens', code: 'INVALID_RESPONSE' };
-            }
-
-            // Map user
             const mappedUser = this.mapBackendUserToFrontend(response.user);
-            console.log('[AuthService] User mapped successfully:', { id: mappedUser.id, role: mappedUser.role });
-
             const authResponse: AuthResponse = {
                 user: mappedUser,
                 accessToken: response.accessToken,
                 refreshToken: response.refreshToken
             };
 
-            // Store tokens securely
             this.storeAuthTokens(authResponse.accessToken, authResponse.refreshToken);
-
-            // Reset rate limit on successful login
             resetRateLimit(`auth:login:${credentials.email}`);
-
-            console.log('[AuthService] Login successful, returning response');
             return authResponse;
         } catch (error) {
             console.error('[AuthService] Login error:', error);
@@ -354,9 +343,9 @@ class AuthService {
     }
 
     /**
-     * Register new user
+     * Register new user — now returns verification step
      */
-    async register(credentials: RegisterCredentials): Promise<AuthResponse> {
+    async register(credentials: RegisterCredentials): Promise<AuthResponse | VerificationRequiredResponse> {
         // Rate limit check
         const rateLimit = checkAuthRateLimit('register', credentials.email);
         if (!rateLimit.allowed) {
@@ -375,33 +364,32 @@ class AuthService {
         const validatedData = validationResult.data;
 
         try {
-            // Call API
             const rawResponse = await apiPost<any>(API_ENDPOINTS.AUTH_REGISTER, validatedData, {
                 headers: getSecurityHeaders(),
             });
 
-            // Backend wraps responses in {success, data, meta} envelope
-            // Extract the actual data from the envelope
             const response = rawResponse?.data || rawResponse;
 
-            // Validate response integrity
-            if (!validateResponseIntegrity(response)) {
-                throw { message: 'Invalid server response', code: 'RESPONSE_INTEGRITY_ERROR' };
+            // Check if verification step is required
+            if (response?.requiresVerification) {
+                console.log('[AuthService] Email verification required');
+                resetRateLimit(`auth:register:${credentials.email}`);
+                return response as VerificationRequiredResponse;
             }
 
-            // Map user
+            // Full auth response (shouldn't happen in new flow)
+            if (!response.user || !response.accessToken) {
+                throw { message: 'Invalid server response', code: 'INVALID_RESPONSE' };
+            }
+
             const authResponse: AuthResponse = {
                 user: this.mapBackendUserToFrontend(response.user),
                 accessToken: response.accessToken,
                 refreshToken: response.refreshToken
             };
 
-            // Store tokens securely
             this.storeAuthTokens(authResponse.accessToken, authResponse.refreshToken);
-
-            // Reset rate limit on successful registration
             resetRateLimit(`auth:register:${credentials.email}`);
-
             return authResponse;
         } catch (error) {
             throw sanitizeError(error);
@@ -753,6 +741,90 @@ class AuthService {
             return true;
         }
         return false;
+    }
+    /**
+     * Verify OTP code and complete login
+     */
+    async verifyOtp(email: string, otp: string): Promise<AuthResponse> {
+        try {
+            const rawResponse = await apiPost<any>('/auth/verify-otp', { email, otp }, {
+                headers: getSecurityHeaders(),
+            });
+
+            const response = rawResponse?.data || rawResponse;
+
+            if (!response.user || !response.accessToken || !response.refreshToken) {
+                throw { message: 'Invalid server response', code: 'INVALID_RESPONSE' };
+            }
+
+            const authResponse: AuthResponse = {
+                user: this.mapBackendUserToFrontend(response.user),
+                accessToken: response.accessToken,
+                refreshToken: response.refreshToken,
+                privyToken: response.privyToken,
+            };
+
+            this.storeAuthTokens(authResponse.accessToken, authResponse.refreshToken);
+            return authResponse;
+        } catch (error) {
+            throw sanitizeError(error);
+        }
+    }
+
+    /**
+     * Verify email address from registration link
+     */
+    async verifyEmail(token: string): Promise<{ message: string; verified: boolean }> {
+        try {
+            const rawResponse = await apiPost<any>('/auth/verify-email', { token }, {
+                headers: getSecurityHeaders(),
+            });
+            return rawResponse?.data || rawResponse;
+        } catch (error) {
+            throw sanitizeError(error);
+        }
+    }
+
+    /**
+     * Resend OTP code
+     */
+    async resendOtp(email: string): Promise<{ message: string }> {
+        try {
+            const rawResponse = await apiPost<any>('/auth/resend-otp', { email }, {
+                headers: getSecurityHeaders(),
+            });
+            return rawResponse?.data || rawResponse;
+        } catch (error) {
+            throw sanitizeError(error);
+        }
+    }
+
+    /**
+     * Request password change (Step 1)
+     */
+    async requestPasswordChange(currentPassword: string): Promise<{ message: string; requiresOtp: boolean; email: string }> {
+        try {
+            const rawResponse = await apiPost<any>('/auth/change-password/request', { currentPassword }, {
+                headers: getSecurityHeaders(),
+            });
+            return rawResponse?.data || rawResponse;
+        } catch (error) {
+            throw sanitizeError(error);
+        }
+    }
+
+    /**
+     * Verify password change (Step 2)
+     */
+    async verifyPasswordChange(otp: string, newPassword: string): Promise<{ message: string }> {
+        try {
+            const rawResponse = await apiPost<any>('/auth/change-password/verify', { otp, newPassword }, {
+                headers: getSecurityHeaders(),
+            });
+            return rawResponse?.data || rawResponse;
+        } catch (error) {
+            throw sanitizeError(error);
+        }
     }
 }
 

@@ -39,7 +39,7 @@ const MOCKUP_ARTS = {
     }
 };
 
-export function NFTMarketplacePage() {
+export function ArtsMarketplacePage() {
     const navigate = useNavigate();
     const [activeCategory, setActiveCategory] = useState('All');
     
@@ -182,4 +182,4 @@ export function NFTMarketplacePage() {
     );
 }
 
-export default NFTMarketplacePage;
+export default ArtsMarketplacePage;

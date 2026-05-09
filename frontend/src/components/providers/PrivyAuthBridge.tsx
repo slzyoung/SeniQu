@@ -141,7 +141,7 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
                 const needsCompletion = needsProfileCompletion(response.user);
                 const dashboardRoute = needsCompletion
                     ? '/complete-profile'
-                    : getDashboardRoute(response.user.role);
+                    : getDashboardRoute(response.user);
                 navigate(dashboardRoute, { replace: true });
             }
         } catch (err: any) {
@@ -217,20 +217,18 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
     /**
      * HYDRATION: Backend -> Privy
      * If user is logged in to backend, fetch custom token and log in to Privy
-     */
-    // Track hydration attempt to prevent retries
-    const hasAttemptedHydrationRef = useRef(false);
-
     const getExternalJwt = useCallback(async () => {
         try {
             if (isCustomAuthDisabled) return undefined;
-            if (hasAttemptedHydrationRef.current) return undefined; // One shot only
+            // @ts-ignore
+            if (window.__HAS_ATTEMPTED_PRIVY_HYDRATION) return undefined; // One shot only
 
             // Only fetch if backend says we are authenticated
             if (!backendAuthenticated) return undefined;
 
             console.log("[PrivyAuthBridge] Fetching custom token for hydration...");
-            hasAttemptedHydrationRef.current = true; // Mark as attempted
+            // @ts-ignore
+            window.__HAS_ATTEMPTED_PRIVY_HYDRATION = true; // Mark as attempted
 
             const { privyToken } = await authService.getPrivySyncToken();
 

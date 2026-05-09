@@ -9,12 +9,13 @@ This document provides a comprehensive overview of the **Cloudflare R2** integra
 ### Previous State
 Initially, artwork uploads and image data across the platform relied on encoding files into base64 Data URIs, which were sent to the database as plain strings (`imageUrl`). This resulted in very large payload constraints and significant DB storage overhead.
 
-### Current State (R2 Implementation)
-With the R2 CDN integration:
-1. **Frontend**: Sends a multipart HTTP POST request containing binary file data securely to the backend.
-2. **Backend (Storage Module)**: Validates the file (MIME type, size limit), maps it to a unique UUID key, and uploads it to Cloudflare R2 using S3 protocol.
-3. **Storage Endpoint**: Returns the generated CDN URL (Public R2 URL).
-4. **Database**: Saves only the lightweight URL string. The images are then served directly from the CDN edge.
+### Current State (R2 Implementation + Optimization Pipeline)
+With the R2 CDN integration and the new End-to-End Image Processing Pipeline:
+1. **Frontend (Pre-compression)**: Images selected by the user are intercepted by a client-side `ImageCompressor` (using `OffscreenCanvas`) to resize and compress to WebP before hitting the network, ensuring ultra-fast uploads even on mobile data.
+2. **Backend (Server-side Processing)**: The `ImageProcessingService` intercepts the binary payload. Using the high-performance `sharp` library, it strips EXIF metadata (for privacy) and applies strict responsive resizing presets (Avatars: 400px, Artworks: 2048px). It forces final conversion to WebP format.
+3. **Storage Upload**: The highly optimized binary is uploaded to Cloudflare R2 securely.
+4. **Storage Endpoint**: Returns the generated CDN URL (Public R2 URL).
+5. **Database**: Saves only the lightweight URL string. The optimized WebP images are then served directly from the CDN edge.
 
 ---
 
@@ -64,9 +65,19 @@ The `StorageService` provides standard AWS-S3 compatible directives (`PutObjectC
 - **Initialization**: Bootstraps the `S3Client` mapping the generic region `"auto"` to Cloudflare's regional domains.
 - **Categorization**: Accommodates optional bucket folders string: `folder=avatars`, `artworks`, `videos`.
 - **Validation Gates**: Prevents non-image/non-video files (or executables) from bypassing to object storage.
-- **Max Limits Check**: Validates `10MB` for standard images and `100MB` for videos.
+- **Image Processing Hook**: It injects the `ImageProcessingService` automatically for incoming image streams before pushing to R2. If R2 fails, it gracefully falls back to Base64 database encoding.
 
-### 3.2. `StorageController` (`storage.controller.ts`)
+### 3.2. `ImageProcessingService` (`image-processing.service.ts`)
+A dedicated service utilizing `sharp` for enterprise-grade media manipulation.
+- **WebP Conversion**: All valid raster images (JPEG, PNG, etc.) are converted to highly optimized WebP format (70-80% size reduction).
+- **Responsive Presets**: 
+  - `avatars`: aggressive scaling (max 400x400) at 75% quality.
+  - `artworks`: high-fidelity scaling (max 2048x2048) at 85% quality to preserve artistic details.
+  - `general`: standard scaling (max 1600x1600) at 80% quality.
+- **Privacy Enforcement**: Strips all EXIF metadata (GPS coordinates, device models) to protect user anonymity.
+- **Graceful Skipping**: Safely ignores PDFs, SVGs, and GIFs (to preserve animations).
+
+### 3.3. `StorageController` (`storage.controller.ts`)
 Creates two crucial guarded endpoints:
 
 1. **`POST /api/v1/storage/upload`**
@@ -98,12 +109,17 @@ export async function uploadFile(
 
 #### **Upload Artwork (`UploadArtwork.tsx`)**
 - Allows Drag-and-Drop or direct file selection.
+- Intercepts file with client-side `compressImage(file, { maxWidth: 2048, quality: 0.88 })`.
 - Resolves file into the centralized `uploadFile(file, 'artworks')`.
 - Returns the URL injected natively to `imageUrl` in the standard Artwork DB schema mutation logic (`createArtwork.mutateAsync`).
 
 #### **Avatar Images (`userService.ts`)**
+- Intercepts file with client-side `compressImage(file, { maxWidth: 400, quality: 0.8 })`.
 - Calling `userService.uploadAvatar(file)` invokes the CDN flow `uploadFile(file, 'avatars')`.
-- Updates profile avatar with minimal request cost instead of transmitting raw binary to user microservices.
+- Updates profile avatar with minimal request cost.
+
+#### **Community Forum (`CommunityPage.tsx`)**
+- Forum attachments are pre-compressed locally before hitting the `createThread` APIs. This prevents payload throttling during high-concurrency periods.
 
 #### **AI Image Generation/Detection (`aiService.ts`)**
 - Pre-requisite step for querying robust AI detection endpoints requires edge-storing the artifact safely.
@@ -122,6 +138,5 @@ export async function uploadFile(
 
 ## 6. Next Steps & Recommended Scalability Measures
 
-* **Image Optimization Pipeline**: Consider invoking an event webhook locally where uploading heavy .PNG formats transforms inherently to optimized `.webp` or `.avif`.
 * **Clean-up Cron-jobs**: Orphaned uploads (where the file succeeds CDN transmission but the DB hook fails) ought to be scrubbed via scheduled bucket reconciliations.
 * **Batch Operations**: Support `/storage/upload-batch` parameter architectures once multi-item galleries are standardized.

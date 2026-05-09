@@ -39,7 +39,9 @@ export function ArtistLayout() {
                             <Badge variant="primary" size="sm">✓</Badge>
                         )}
                     </div>
-                    <p className="text-xs text-theme-muted capitalize">{user?.role}</p>
+                    <p className="text-xs text-theme-muted capitalize">
+                        {(user?.adminRole || user?.role || 'artist').replace('_', ' ')}
+                    </p>
                 </div>
 
                 <button

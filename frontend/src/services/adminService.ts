@@ -3,7 +3,7 @@
  * Comprehensive admin data operations with OWASP security compliance
  */
 
-import { apiGet, apiPost, apiPut, apiDelete, apiPatch } from '../lib/api';
+import api, { apiGet, apiPost, apiPut, apiDelete, apiPatch } from '../lib/api';
 import { PaginatedResponse, SystemAlert, SystemHealth, SystemLog, User } from '../lib/types';
 
 // ============================================
@@ -88,6 +88,11 @@ class AdminService {
             AdminService.instance = new AdminService();
         }
         return AdminService.instance;
+    }
+
+    /** Expose raw axios instance for advanced queries */
+    get api() {
+        return api;
     }
 
     // ============================================

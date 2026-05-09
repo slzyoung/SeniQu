@@ -30,6 +30,7 @@ export class SearchController {
 
     @Public()
     @Get("artworks")
+    @SkipThrottle({ default: true })
     @ApiOperation({ summary: "Search artworks with filters" })
     @ApiQuery({ name: "q", required: false })
     @ApiQuery({ name: "genre", required: false })
@@ -63,6 +64,7 @@ export class SearchController {
 
     @Public()
     @Get("nearby")
+    @SkipThrottle({ default: true })
     @ApiOperation({ summary: "Search nearby museums/galleries" })
     @ApiQuery({ name: "lat", required: true })
     @ApiQuery({ name: "lng", required: true })
@@ -77,6 +79,7 @@ export class SearchController {
 
     @Public()
     @Get("suggestions")
+    @SkipThrottle({ default: true })
     @ApiOperation({ summary: "Get search suggestions (autocomplete)" })
     @ApiQuery({ name: "q", required: true })
     async getSuggestions(@Query("q") query: string) {

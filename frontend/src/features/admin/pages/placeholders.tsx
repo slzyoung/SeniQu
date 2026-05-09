@@ -8,8 +8,9 @@ import { Card } from '../../../components/ui';
 import {
     Building2, Users, BarChart3, Database, FileText,
     Shield, ShoppingBag, Crown, Settings, Activity,
-    Flag, Handshake, Bell, User
+    Flag, Handshake, Bell, User, Ticket, Megaphone, Images, FolderHeart
 } from 'lucide-react';
+import { useAuthStore } from '../../../stores/useAuthStore';
 
 // Generic placeholder component
 function PlaceholderPage({
@@ -59,7 +60,7 @@ export function SecurityCenter() {
 }
 
 export function ArtsOversight() {
-    return <PlaceholderPage title="NFT Marketplace Oversight" description="Monitor and manage NFT transactions" icon={ShoppingBag} />;
+    return <PlaceholderPage title="Arts Marketplace Oversight" description="Monitor and manage art transactions" icon={ShoppingBag} />;
 }
 
 export function PremiumManagement() {
@@ -90,19 +91,62 @@ export function AdminProfile() {
     return <PlaceholderPage title="Admin Profile" description="Manage your admin profile settings" icon={User} />;
 }
 
+export function AdminArtworks() {
+    const { user } = useAuthStore();
+    const role = (user as any)?.adminRole || '';
+    let title = "Collection & Arts";
+    let desc = "Manage artworks and institutional collections";
+    if (role === 'MUSEUM_ADMIN') { title = "Museum Collection"; desc = "Manage your museum's permanent collection and incoming loans."; }
+    if (role === 'GALLERY_ADMIN') { title = "Art Submissions"; desc = "Review and manage artwork submissions from artists."; }
+    if (role === 'HERITAGE_ADMIN') { title = "Artifact Records"; desc = "Manage historical artifacts and preservation records."; }
+
+    return <PlaceholderPage title={title} description={desc} icon={FolderHeart} />;
+}
+
+export function AdminTickets() {
+    const { user } = useAuthStore();
+    const role = (user as any)?.adminRole || '';
+    let title = "Ticketing (Harga Tiket)";
+    let desc = "Manage ticket prices and admissions";
+    if (role === 'HERITAGE_ADMIN') { title = "Site Admission"; desc = "Manage visitor access and guided tour passes."; }
+
+    return <PlaceholderPage title={title} description={desc} icon={Ticket} />;
+}
+
+export function AdminPromotions() {
+    const { user } = useAuthStore();
+    const role = (user as any)?.adminRole || '';
+    let title = "Promotions & Events";
+    let desc = "Manage institutional promotions and events";
+    if (role === 'MUSEUM_ADMIN') { title = "Exhibitions"; desc = "Plan and publish upcoming museum exhibitions."; }
+    if (role === 'GALLERY_ADMIN') { title = "Featured Artists"; desc = "Manage featured artist campaigns and gallery promos."; }
+
+    return <PlaceholderPage title={title} description={desc} icon={Megaphone} />;
+}
+
+export function AdminBanners() {
+    const { user } = useAuthStore();
+    const role = (user as any)?.adminRole || '';
+    let title = "Banner & Branding";
+    let desc = "Manage institutional banners and visual branding";
+    if (role === 'HERITAGE_ADMIN') { title = "Virtual Tours"; desc = "Configure 3D virtual tours and site photography."; }
+
+    return <PlaceholderPage title={title} description={desc} icon={Images} />;
+}
+
 export default {
-    InstitutionManagement,
-    AdminManagement,
-    SystemAnalytics,
-    DatabaseManagement,
-    SystemLogs,
-    SecurityCenter,
-    ArtsOversight,
-    PremiumManagement,
-    GlobalSettings,
-    SystemHealth,
-    ReportsIssues,
-    PartnershipManagement,
-    SystemAlerts,
-    AdminProfile,
-};
+        InstitutionManagement,
+        AdminManagement,
+        SystemAnalytics,
+        DatabaseManagement,
+        SystemLogs,
+        SecurityCenter,
+        ArtsOversight,
+        PremiumManagement,
+        GlobalSettings,
+        SystemHealth,
+        ReportsIssues,
+        PartnershipManagement,
+        SystemAlerts,
+        AdminProfile,
+    };

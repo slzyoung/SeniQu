@@ -14,6 +14,7 @@ import { useToast } from '../stores/useNotificationStore';
 export const adminKeys = {
     all: ['admin'] as const,
     dashboard: () => [...adminKeys.all, 'dashboard'] as const,
+    domainDashboard: () => [...adminKeys.all, 'domainDashboard'] as const,
     stats: (period: string) => [...adminKeys.all, 'stats', period] as const,
     users: (page: number, limit: number, filters?: object) => [...adminKeys.all, 'users', page, limit, filters] as const,
     institutions: (page: number, limit: number, filters?: object) => [...adminKeys.all, 'institutions', page, limit, filters] as const,
@@ -46,6 +47,17 @@ export function useDashboardStats() {
             newUsersToday: 0,
             pendingVerifications: 0,
         } as DashboardStats,
+    });
+}
+
+export function useDomainDashboardStats() {
+    return useQuery({
+        queryKey: adminKeys.domainDashboard(),
+        queryFn: async () => {
+            const { data } = await adminService.api.get('/admin/domain-dashboard');
+            return data;
+        },
+        staleTime: 1000 * 60 * 2, // 2 min
     });
 }
 
@@ -86,6 +98,23 @@ export function useSuspendUser() {
     });
 }
 
+export function useCreateAdminUser() {
+    const queryClient = useQueryClient();
+    const toast = useToast();
+
+    return useMutation({
+        mutationFn: (data: { email: string; username: string; displayName: string; role: string; adminRoleTyped?: string; scopeId?: string; institutionName?: string; city?: string; category?: string; }) =>
+            adminService.api.post('/admin/users', data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: adminKeys.all });
+            toast.success('Admin Created', 'New admin account has been created successfully.');
+        },
+        onError: (error: any) => {
+            toast.error('Creation Failed', error?.response?.data?.message || 'Could not create admin user.');
+        },
+    });
+}
+
 export function useActivateUser() {
     const queryClient = useQueryClient();
     const toast = useToast();
@@ -98,6 +127,38 @@ export function useActivateUser() {
         },
         onError: () => {
             toast.error('Action Failed', 'Could not activate the user.');
+        },
+    });
+}
+
+export function useUpdateUserRole() {
+    const queryClient = useQueryClient();
+    const toast = useToast();
+
+    return useMutation({
+        mutationFn: ({ userId, role }: { userId: string; role: string }) => adminService.updateUserRole(userId, role),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: adminKeys.all });
+            toast.success('Role Updated', 'User role has been updated successfully.');
+        },
+        onError: () => {
+            toast.error('Action Failed', 'Could not update the user role.');
+        },
+    });
+}
+
+export function useDeleteUser() {
+    const queryClient = useQueryClient();
+    const toast = useToast();
+
+    return useMutation({
+        mutationFn: (userId: string) => adminService.deleteUser(userId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: adminKeys.all });
+            toast.success('User Deleted', 'The user account has been permanently removed.');
+        },
+        onError: () => {
+            toast.error('Action Failed', 'Could not delete the user.');
         },
     });
 }

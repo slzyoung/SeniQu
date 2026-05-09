@@ -497,7 +497,7 @@ export function Profile() {
                                             <p className="pv2-stat-label">Collections</p>
                                         </div>
                                         <div className="pv2-stat">
-                                            <p className="pv2-stat-value">{stats?.nftCount || 0}</p>
+                                            <p className="pv2-stat-value">{stats?.artworksCount || 0}</p>
                                             <p className="pv2-stat-label">Arts</p>
                                         </div>
                                     </div>
@@ -534,11 +534,11 @@ export function Profile() {
                             <div className="pv2-tokens-card">
                                 <div className="pv2-tokens-info">
                                     <h3>My Arts</h3>
-                                    <p>{stats?.nftCount || 0} Art Objects</p>
+                                    <p>{stats?.artworksCount || 0} Art Objects</p>
                                     <div className="pv2-tokens-balance">
                                         <div className="pv2-sol-icon">◎</div>
                                         <span className="pv2-tokens-amount">
-                                            {stats?.nftCount || 0} Artworks
+                                            {stats?.artworksCount || 0} Artworks
                                         </span>
                                     </div>
                                 </div>

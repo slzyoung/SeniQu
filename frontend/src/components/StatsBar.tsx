@@ -80,7 +80,7 @@ function StatItem({ value, label, icon: Icon, delay }: StatItemProps) {
 
 export function StatsBar() {
   return (
-    <section className="w-full bg-theme-bg relative z-20 -mt-6 md:-mt-10 px-4 md:px-6 pb-8 md:pb-12">
+    <section className="w-full bg-theme-bg relative z-20 pt-16 md:pt-24 px-4 md:px-6 pb-8 md:pb-12">
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
           <StatItem value="4,859+" label="Cultural Sites" icon={Landmark} delay={0} />

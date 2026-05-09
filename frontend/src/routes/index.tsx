@@ -3,6 +3,7 @@
  */
 
 import { lazy } from 'react';
+import { lazyWithRetry } from '../utils/lazyImport';
 import {
     createBrowserRouter,
     createRoutesFromElements,
@@ -17,88 +18,99 @@ import { ErrorBoundary } from '../components/common/ErrorBoundary';
 import { LandingPage } from './LandingPage';
 
 // Lazy load dashboard pages
-const UserDashboard = lazy(() => import('../features/user/pages/UserDashboard'));
-const UserProfile = lazy(() => import('../features/user/pages/Profile'));
-const UserBookmarks = lazy(() => import('../features/user/pages/Bookmarks'));
-const UserCollections = lazy(() => import('../features/user/pages/MyCollectionsPage'));
-const UserSettings = lazy(() => import('../features/user/pages/Settings'));
+const UserDashboard = lazyWithRetry(() => import('../features/user/pages/UserDashboard'));
+const UserProfile = lazyWithRetry(() => import('../features/user/pages/Profile'));
+const UserBookmarks = lazyWithRetry(() => import('../features/user/pages/Bookmarks'));
+const UserCollections = lazyWithRetry(() => import('../features/user/pages/MyCollectionsPage'));
+const UserSettings = lazyWithRetry(() => import('../features/user/pages/Settings'));
 // New User Dashboard Pages
-const UserGallery = lazy(() => import('../features/user/pages/GalleryPage'));
-const UserNearby = lazy(() => import('../features/user/pages/NearbyMuseumsPage'));
-const UserGenreIdentifier = lazy(() => import('../features/user/pages/GenreIdentifierPage'));
-const UserAICuration = lazy(() => import('../features/user/pages/AICurationPage'));
-const UserMarketplace = lazy(() => import('../features/user/pages/ArtsMarketplacePage'));
-const UserMyArts = lazy(() => import('../features/user/pages/MyArtsPage'));
-const UserWallet = lazy(() => import('../features/user/pages/WalletPage'));
-const UserCommunity = lazy(() => import('../features/user/pages/CommunityPage'));
+const UserGallery = lazyWithRetry(() => import('../features/user/pages/GalleryPage'));
+const UserNearby = lazyWithRetry(() => import('../features/user/pages/NearbyMuseumsPage'));
+const UserGenreIdentifier = lazyWithRetry(() => import('../features/user/pages/GenreIdentifierPage'));
+const UserAICuration = lazyWithRetry(() => import('../features/user/pages/AICurationPage'));
+const UserMarketplace = lazyWithRetry(() => import('../features/user/pages/ArtsMarketplacePage'));
+const UserMyArts = lazyWithRetry(() => import('../features/user/pages/MyArtsPage'));
+const UserWallet = lazyWithRetry(() => import('../features/user/pages/WalletPage'));
+const UserCommunity = lazyWithRetry(() => import('../features/user/pages/CommunityPage'));
 
 // Lazy load gallery pages
 // Lazy load collections page
-const CollectionsPage = lazy(() => import('../features/gallery/pages/CollectionsPage'));
+const CollectionsPage = lazyWithRetry(() => import('../features/gallery/pages/CollectionsPage'));
 
 // ... (in routes)
 
-const PublicGallery = lazy(() => import('../features/gallery/pages/PublicGallery'));
-const MuseumDetail = lazy(() => import('../features/gallery/pages/MuseumDetail'));
-const ArtworkView = lazy(() => import('../features/gallery/pages/ArtworkView'));
-const NearbyMuseums = lazy(() => import('../features/gallery/pages/NearbyMuseums'));
-const PublicNearbyPage = lazy(() => import('../features/gallery/pages/PublicNearbyPage'));
-const CityRegions = lazy(() => import('../features/gallery/pages/CityRegions'));
-const RegionMuseums = lazy(() => import('../features/gallery/pages/RegionMuseums'));
+const PublicGallery = lazyWithRetry(() => import('../features/gallery/pages/PublicGallery'));
+const MuseumDetail = lazyWithRetry(() => import('../features/gallery/pages/MuseumDetail'));
+const ArtworkView = lazyWithRetry(() => import('../features/gallery/pages/ArtworkView'));
+const NearbyMuseums = lazyWithRetry(() => import('../features/gallery/pages/NearbyMuseums'));
+const PublicNearbyPage = lazyWithRetry(() => import('../features/gallery/pages/PublicNearbyPage'));
+const CityRegions = lazyWithRetry(() => import('../features/gallery/pages/CityRegions'));
+const RegionMuseums = lazyWithRetry(() => import('../features/gallery/pages/RegionMuseums'));
 
 // Lazy load marketplace pages
-const Marketplace = lazy(() => import('../features/marketplace/pages/Marketplace'));
-const ArtDetail = lazy(() => import('../features/marketplace/pages/ArtDetail'));
+const Marketplace = lazyWithRetry(() => import('../features/marketplace/pages/Marketplace'));
+const ArtDetail = lazyWithRetry(() => import('../features/marketplace/pages/ArtDetail'));
 
 // Lazy load community pages
-const CommunityForum = lazy(() => import('../features/community/pages/CommunityForum'));
-const ThreadView = lazy(() => import('../features/community/pages/ThreadView'));
+const CommunityForum = lazyWithRetry(() => import('../features/community/pages/CommunityForum'));
+const ThreadView = lazyWithRetry(() => import('../features/community/pages/ThreadView'));
 
 // Lazy load AI pages
-const GenreIdentifier = lazy(() => import('../features/ai/pages/GenreIdentifier'));
-const AICuration = lazy(() => import('../features/ai/pages/AICuration'));
-const AIDashboardPage = lazy(() => import('../features/ai/pages/AIDashboardPage'));
+const GenreIdentifier = lazyWithRetry(() => import('../features/ai/pages/GenreIdentifier'));
+const AICuration = lazyWithRetry(() => import('../features/ai/pages/AICuration'));
+const AIDashboardPage = lazyWithRetry(() => import('../features/ai/pages/AIDashboardPage'));
 
 // Lazy load artist pages
-const ArtistDashboard = lazy(() => import('../features/artist/pages/ArtistDashboard'));
-const MyArtworks = lazy(() => import('../features/artist/pages/MyArtworks'));
-const UploadArtwork = lazy(() => import('../features/artist/pages/UploadArtwork'));
-const ArtistAnalytics = lazy(() => import('../features/artist/pages/Analytics'));
-const ArtistPerformance = lazy(() => import('../features/artist/pages/Performance'));
-const ArtistEngagement = lazy(() => import('../features/artist/pages/Engagement'));
-const InstitutionProfile = lazy(() => import('../features/artist/pages/InstitutionProfile'));
-const ArtistSettings = lazy(() => import('../features/artist/pages/ArtistSettings'));
+const ArtistDashboard = lazyWithRetry(() => import('../features/artist/pages/ArtistDashboard'));
+const MyArtworks = lazyWithRetry(() => import('../features/artist/pages/MyArtworks'));
+const UploadArtwork = lazyWithRetry(() => import('../features/artist/pages/UploadArtwork'));
+const ArtistAnalytics = lazyWithRetry(() => import('../features/artist/pages/Analytics'));
+const ArtistMarketplace = lazyWithRetry(() => import('../features/artist/pages/ArtistMarketplace'));
+const ArtistPerformance = lazyWithRetry(() => import('../features/artist/pages/Performance'));
+const ArtistEngagement = lazyWithRetry(() => import('../features/artist/pages/Engagement'));
+const InstitutionProfile = lazyWithRetry(() => import('../features/artist/pages/InstitutionProfile'));
+const ArtistSettings = lazyWithRetry(() => import('../features/artist/pages/ArtistSettings'));
 
 // Lazy load admin pages
-const AdminDashboard = lazy(() => import('../features/admin/pages/AdminDashboard'));
-const InstitutionManagement = lazy(() => import('../features/admin/pages/InstitutionManagement'));
-const AdminManagement = lazy(() => import('../features/admin/pages/AdminManagement'));
-const SystemAnalytics = lazy(() => import('../features/admin/pages/SystemAnalytics'));
-const DatabaseManagement = lazy(() => import('../features/admin/pages/DatabaseManagement'));
-const SystemLogs = lazy(() => import('../features/admin/pages/SystemLogs'));
-const SecurityCenter = lazy(() => import('../features/admin/pages/SecurityCenter'));
-const ArtsOversight = lazy(() => import('../features/admin/pages/ArtsOversight'));
-const PremiumManagement = lazy(() => import('../features/admin/pages/PremiumManagement'));
-const GlobalSettings = lazy(() => import('../features/admin/pages/GlobalSettings'));
-const SystemHealth = lazy(() => import('../features/admin/pages/SystemHealth'));
-const ReportsIssues = lazy(() => import('../features/admin/pages/ReportsIssues'));
-const PartnershipManagement = lazy(() => import('../features/admin/pages/PartnershipManagement'));
-const SystemAlerts = lazy(() => import('../features/admin/pages/SystemAlerts'));
-const AdminProfile = lazy(() => import('../features/admin/pages/AdminProfile'));
+const AdminDashboard = lazyWithRetry(() => import('../features/admin/pages/AdminDashboard'));
+const InstitutionManagement = lazyWithRetry(() => import('../features/admin/pages/InstitutionManagement'));
+const AdminManagement = lazyWithRetry(() => import('../features/admin/pages/AdminManagement'));
+const SystemAnalytics = lazyWithRetry(() => import('../features/admin/pages/SystemAnalytics'));
+const DatabaseManagement = lazyWithRetry(() => import('../features/admin/pages/DatabaseManagement'));
+const SystemLogs = lazyWithRetry(() => import('../features/admin/pages/SystemLogs'));
+const SecurityCenter = lazyWithRetry(() => import('../features/admin/pages/SecurityCenter'));
+const ArtsOversight = lazyWithRetry(() => import('../features/admin/pages/ArtsOversight'));
+const PremiumManagement = lazyWithRetry(() => import('../features/admin/pages/PremiumManagement'));
+const GlobalSettings = lazyWithRetry(() => import('../features/admin/pages/GlobalSettings'));
+const SystemHealth = lazyWithRetry(() => import('../features/admin/pages/SystemHealth'));
+const ReportsIssues = lazyWithRetry(() => import('../features/admin/pages/ReportsIssues'));
+const PartnershipManagement = lazyWithRetry(() => import('../features/admin/pages/PartnershipManagement'));
+const SystemAlerts = lazyWithRetry(() => import('../features/admin/pages/SystemAlerts'));
+const AdminAlerts = lazyWithRetry(() => import('../features/admin/pages/SystemAlerts'));
+const AdminProfile = lazyWithRetry(() => import('../features/admin/pages/AdminProfile'));
+const AdminWalletPage = lazyWithRetry(() => import('../features/admin/pages/AdminWalletPage'));
+
+// Domain Admin Pages
+const AdminArtworks = lazyWithRetry(() => import('../features/admin/pages/placeholders').then(m => ({ default: m.AdminArtworks })));
+const AdminTickets = lazyWithRetry(() => import('../features/admin/pages/placeholders').then(m => ({ default: m.AdminTickets })));
+const AdminPromotions = lazyWithRetry(() => import('../features/admin/pages/placeholders').then(m => ({ default: m.AdminPromotions })));
+const AdminBanners = lazyWithRetry(() => import('../features/admin/pages/placeholders').then(m => ({ default: m.AdminBanners })));
+const GalleryMarketplace = lazyWithRetry(() => import('../features/admin/pages/GalleryMarketplace'));
 
 // Lazy load layouts
-const UserLayout = lazy(() => import('../features/user/UserLayout'));
-const ArtistLayout = lazy(() => import('../features/artist/ArtistLayout'));
-const AdminLayout = lazy(() => import('../features/admin/AdminLayout'));
+const UserLayout = lazyWithRetry(() => import('../features/user/UserLayout'));
+const ArtistLayout = lazyWithRetry(() => import('../features/artist/ArtistLayout'));
+const AdminLayout = lazyWithRetry(() => import('../features/admin/AdminLayout'));
 
 // Legal Pages
-const TermsOfService = lazy(() => import('../components/common/Legal').then(module => ({ default: module.TermsOfService })));
-const PrivacyPolicy = lazy(() => import('../components/common/Legal').then(module => ({ default: module.PrivacyPolicy })));
+const TermsOfService = lazyWithRetry(() => import('../components/common/Legal').then(module => ({ default: module.TermsOfService })));
+const PrivacyPolicy = lazyWithRetry(() => import('../components/common/Legal').then(module => ({ default: module.PrivacyPolicy })));
 
 
 // Auth callback (still needed for OAuth)
-const AuthCallback = lazy(() => import('../features/auth/pages/AuthCallback'));
-const CompleteProfilePage = lazy(() => import('../features/auth/pages/CompleteProfilePage'));
+const AuthCallback = lazyWithRetry(() => import('../features/auth/pages/AuthCallback'));
+const CompleteProfilePage = lazyWithRetry(() => import('../features/auth/pages/CompleteProfilePage'));
+const VerifyEmailPage = lazyWithRetry(() => import('../pages/VerifyEmailPage'));
 
 import { GlobalLayout } from '../components/common/GlobalLayout';
 import { PublicLayout } from '../components/common/PublicLayout';
@@ -119,6 +131,7 @@ const router = createBrowserRouter(
             <Route path={ROUTES.REGISTER} element={<LandingPage openAuthModal />} />
             <Route path={ROUTES.CALLBACK} element={<AuthCallback />} />
             <Route path="/complete-profile" element={<CompleteProfilePage />} />
+            <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
 
             {/* Public Layout Routes - Marketplace, Community, AI, Gallery */}
             <Route element={<PublicLayout />}>
@@ -174,12 +187,14 @@ const router = createBrowserRouter(
 
             {/* Artist/Institution Dashboard Routes */}
             <Route element={
-                <ProtectedRoute roles={[ROLES.ARTIST, ROLES.INSTITUTION]}>
+                <ProtectedRoute roles={[ROLES.ARTIST, ROLES.INSTITUTION, ROLES.ADMIN]}>
                     <ArtistLayout />
                 </ProtectedRoute>
             }>
                 <Route path={ROUTES.ARTIST_DASHBOARD} element={<ArtistDashboard />} />
                 <Route path={ROUTES.ARTIST_ARTWORKS} element={<MyArtworks />} />
+                <Route path="/artist/marketplace" element={<ArtistMarketplace />} />
+                <Route path="/artist/wallet" element={<UserWallet />} />
                 <Route path={ROUTES.ARTIST_UPLOAD} element={<UploadArtwork />} />
                 <Route path={ROUTES.ARTIST_ANALYTICS} element={<ArtistAnalytics />} />
                 <Route path={ROUTES.ARTIST_PERFORMANCE} element={<ArtistPerformance />} />
@@ -209,6 +224,15 @@ const router = createBrowserRouter(
                 <Route path={ROUTES.ADMIN_PARTNERSHIPS} element={<PartnershipManagement />} />
                 <Route path={ROUTES.ADMIN_ALERTS} element={<SystemAlerts />} />
                 <Route path={ROUTES.ADMIN_PROFILE} element={<AdminProfile />} />
+                <Route path={ROUTES.ADMIN_MY_WALLET} element={<UserWallet />} />
+                <Route path={ROUTES.ADMIN_WALLETS} element={<AdminWalletPage />} />
+                
+                {/* Domain Admin Routes */}
+                <Route path="/admin/artworks" element={<AdminArtworks />} />
+                <Route path="/admin/marketplace" element={<GalleryMarketplace />} />
+                <Route path="/admin/tickets" element={<AdminTickets />} />
+                <Route path="/admin/promotions" element={<AdminPromotions />} />
+                <Route path="/admin/banners" element={<AdminBanners />} />
             </Route>
         </Route>
     ),

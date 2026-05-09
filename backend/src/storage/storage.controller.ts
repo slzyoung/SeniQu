@@ -10,6 +10,7 @@ import {
 } from "@nestjs/common"
 import { FileInterceptor } from "@nestjs/platform-express"
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from "@nestjs/swagger"
+import { Throttle } from "@nestjs/throttler"
 import { StorageService } from "./storage.service"
 import { UploadFileDto } from "./dto/upload-file.dto"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
@@ -23,6 +24,7 @@ export class StorageController {
     @Post("upload")
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth("JWT-auth")
+    @Throttle({ default: { limit: 10, ttl: 60000 } })
     @ApiOperation({ summary: "Upload a file to R2 CDN" })
     @ApiConsumes("multipart/form-data")
     @ApiBody({
@@ -42,6 +44,19 @@ export class StorageController {
     @UseInterceptors(FileInterceptor("file", {
         storage: memoryStorage(),
         limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB hard limit
+        fileFilter: (_req, file, callback) => {
+            // Anti-Hacking: Only allow safe file types
+            const allowedMimes = [
+                'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/avif',
+                'video/mp4', 'video/webm', 'video/quicktime',
+                'application/pdf',
+            ]
+            if (allowedMimes.includes(file.mimetype)) {
+                callback(null, true)
+            } else {
+                callback(new Error(`File type ${file.mimetype} is not allowed. Accepted: images, videos, PDF.`), false)
+            }
+        },
     }))
     async upload(
         @UploadedFile() file: Express.Multer.File,

@@ -77,7 +77,7 @@ export class ArtworksService {
     }
 
     async findById(id: string): Promise<Artwork | null> {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
 
         const { data, error } = await client
             .from("artworks")
@@ -100,7 +100,7 @@ export class ArtworksService {
         status?: string
     }): Promise<{ artworks: Artwork[]; total: number }> {
         const { page = 1, limit = 20, category, region, status } = options
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
         const offset = (page - 1) * limit
 
         let query = client.from("artworks").select("*, artist:users!artist_id(id, display_name, avatar_url)", { count: "exact" })

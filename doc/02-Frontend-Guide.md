@@ -73,7 +73,13 @@ When creating a new feature:
 Our frontend utilizes specialized patterns for stability and security:
 - **Error Boundaries**: Core layouts (`AdminLayout`, `ArtistLayout`) are wrapped in an `ErrorBoundary` component to gracefully catch rendering errors and offer a "Retry" mechanism rather than a blank screen.
 - **Input Sanitization**: We use `src/lib/sanitize.ts` to strip XSS attack vectors from user forms (like `UploadArtwork`) before API transmission. 
-- **Anti-Chunking (Debounce)**: API-heavy inputs (like search bars in `MyArtworks`) use debounced state updates to prevent excessive requests. Mutation events use state locks to prevent double-submissions.
+- **Anti-Throttling (Debounce & Memoization)**: API-heavy or UI-heavy inputs (like search bars in `CommunityPage` and `MyArtworks`) use custom `useDebounce` hooks combined with `useMemo` to prevent excessive React re-renders and backend requests.
+- **Anti-Chunking (Bundle Optimization)**: Unused UI imports, dead icons, and obsolete functions are strictly cleaned up (Tree-Shaking). This drastically reduces the JavaScript chunk sizes, ensuring the application loads rapidly even on slow networks.
+
+### 2.8 Image Optimization (Client-Side)
+To ensure the application remains fast and doesn't throttle user data, we employ a pre-compression pipeline before sending images to the server.
+- **ImageCompressor (`lib/imageCompressor.ts`)**: Utilizes `OffscreenCanvas` to intercept user uploads. It resizes massively large photos (e.g. 4K camera photos) down to a manageable size (e.g., max 2048px for Artworks, 400px for Avatars) and converts them to `image/webp`. 
+- **Benefits**: Reduces bandwidth consumption by up to 80% per upload, significantly preventing upload lag and server throttling during peak times.
 
 ## 3. Key Libraries
 

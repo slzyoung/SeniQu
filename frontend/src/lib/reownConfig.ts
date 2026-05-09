@@ -36,8 +36,8 @@ export const appKit = createAppKit({
     metadata: {
         name: 'Seniqu',
         description: 'Preserve and collect digital heritage.',
-        url: 'https://seniqu.com',
-        icons: ['https://seniqu.com/logo.png'],
+        url: typeof window !== 'undefined' ? window.location.origin : 'https://seniqu.art',
+        icons: ['https://seniqu.art/seniqu.png'],
     },
     features: {
         analytics: true,

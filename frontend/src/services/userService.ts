@@ -7,6 +7,7 @@ import { apiGet, apiPatch, apiPost, apiDelete, uploadFile } from '../lib/api';
 import { User, Artwork, Collection } from '../lib/types';
 import { z } from 'zod';
 import { sanitizeInput } from '../lib/security';
+import { compressImage } from '../lib/imageCompressor';
 
 // ============================================
 // TYPES
@@ -16,13 +17,13 @@ export interface UserStats {
     viewsCount: number;
     bookmarksCount: number;
     collectionsCount: number;
-    nftCount: number;
+    artworksCount: number;
     likesCount: number;
 }
 
 export interface RecentActivity {
     id: string;
-    type: 'view' | 'bookmark' | 'collection' | 'nft_purchase' | 'like';
+    type: 'view' | 'bookmark' | 'collection' | 'art_purchase' | 'like';
     title: string;
     description: string;
     timestamp: string;
@@ -208,17 +209,23 @@ class UserService {
     }
 
     /**
-     * Get user's owned NFTs
+     * Get user's owned artworks
      */
-    async getOwnedNFTs(page = 1, limit = 20): Promise<{ data: any[]; total: number }> {
-        return apiGet('/users/me/nfts', { params: { page, limit } });
+    async getOwnedArtworks(page = 1, limit = 20): Promise<{ data: any[]; total: number }> {
+        return apiGet('/users/me/artworks', { params: { page, limit } });
     }
 
     /**
      * Upload avatar
      */
     async uploadAvatar(file: File): Promise<{ url: string }> {
-        const result = await uploadFile(file, 'avatars');
+        // Compress avatar before upload (small dimensions, medium quality)
+        const compressedFile = await compressImage(file, {
+            maxWidth: 400,
+            maxHeight: 400,
+            quality: 0.75,
+        });
+        const result = await uploadFile(compressedFile, 'avatars');
         return { url: result.url };
     }
 }

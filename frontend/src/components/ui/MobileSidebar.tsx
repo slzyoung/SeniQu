@@ -22,6 +22,7 @@
  */
 
 import React, { useEffect, useRef, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { NavLink, useLocation } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { useUIStore } from '../../stores/useUIStore';
@@ -164,7 +165,27 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
                         <ChevronLeft className="w-6 h-6 pointer-events-none" />
                     </button>
 
-                    {/* Optional: Small label or brand mark could go here */}
+                    {/* Brand Mark with Solana */}
+                    <div className="mt-6 flex flex-col items-center gap-1.5 cursor-pointer" onClick={() => window.location.href = '/'}>
+                        <img src="/images/logo/seniqu.png" alt="SeniQu" className="w-9 h-9 object-contain drop-shadow-md" />
+                        <motion.div
+                            className="relative cursor-pointer overflow-hidden rounded-[4px] p-[1px] group"
+                            initial={{ opacity: 0.85 }}
+                            whileHover={{ 
+                                opacity: 1, y: -2, scale: 1.05,
+                                filter: "drop-shadow(0 4px 12px rgba(20, 241, 149, 0.3))"
+                            }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={(e: React.MouseEvent) => { 
+                                e.stopPropagation(); window.open('https://solana.com', '_blank'); 
+                            }}
+                        >
+                            <div className="absolute inset-[-150%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_0%,transparent_50%,#9945FF_70%,#14F195_100%)] opacity-70 group-hover:opacity-100 transition-opacity duration-300" />
+                            <div className="relative z-10 flex h-full w-full items-center justify-center rounded-[3px] bg-theme-surface overflow-hidden px-1 py-0.5">
+                                <img src="/images/logo/poweredbysol.svg" alt="Powered by Solana" className="h-3.5 rounded-[3px]" />
+                            </div>
+                        </motion.div>
+                    </div>
                 </div>
 
                 {/* ── Separator ── */}

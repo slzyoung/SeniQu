@@ -277,10 +277,12 @@ export class PrivyService implements OnModuleInit {
             const envKey = this.configService.get<string>("PRIVY_SIGNING_KEY")
 
             if (envKey) {
+                // Remove surrounding quotes if they exist
+                let key = envKey.replace(/^"|"$/g, '');
                 // Handle both literal newlines and escaped "\n" strings
-                privateKey = envKey.includes("\\n")
-                    ? envKey.replace(/\\n/g, "\n")
-                    : envKey;
+                privateKey = key.includes("\\n")
+                    ? key.replace(/\\n/g, "\n")
+                    : key;
             } else {
                 try {
                     const privateKeyPath = process.cwd() + "/private.pem"
@@ -329,8 +331,7 @@ export class PrivyService implements OnModuleInit {
                 notBefore: "-1m",
             })
 
-            this.logger.debug(`Generated custom auth token for ${userId}. Token length: ${token.length}`);
-            this.logger.debug(`Token snippet: ${token.substring(0, 10)}...${token.substring(token.length - 10)}`);
+            this.logger.debug(`Generated custom auth token for user ${userId} (length: ${token.length})`);
             return token;
         } catch (error: any) {
             this.logger.error(`Failed to create custom auth token: ${error.message}`);

@@ -17,6 +17,64 @@ import {
 } from "class-validator"
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
 
+export enum AdminRoleType {
+    SUPER_ADMIN = "SUPER_ADMIN",
+    PLATFORM_ADMIN = "PLATFORM_ADMIN",
+    MUSEUM_ADMIN = "MUSEUM_ADMIN",
+    GALLERY_ADMIN = "GALLERY_ADMIN",
+    HERITAGE_ADMIN = "HERITAGE_ADMIN",
+    ARTIST_ADMIN = "ARTIST_ADMIN",
+    CONTENT_MODERATOR = "CONTENT_MODERATOR"
+}
+
+export class CreateAdminUserDto {
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty()
+    email: string
+
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty()
+    username: string
+
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty()
+    displayName: string
+
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty()
+    role: string
+
+    @ApiPropertyOptional({ enum: AdminRoleType })
+    @IsEnum(AdminRoleType)
+    @IsOptional()
+    adminRoleTyped?: AdminRoleType
+
+    @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    scopeId?: string
+
+    @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    institutionName?: string
+
+    @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    city?: string
+
+    @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    category?: string
+}
+
+
 // ============================================
 // SYSTEM ALERT DTOs
 // ============================================
@@ -162,4 +220,10 @@ export class UpdateReportStatusDto {
     @IsString()
     @MaxLength(1000)
     resolutionNotes?: string
+}
+export class UpdateUserRoleDto {
+    @ApiProperty({ description: 'New role for the user' })
+    @IsString()
+    @IsNotEmpty()
+    role: string;
 }

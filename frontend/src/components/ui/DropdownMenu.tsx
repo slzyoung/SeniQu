@@ -73,21 +73,27 @@ export function DropdownMenuContent({ children, align = 'start', className }: Dr
     const { isOpen, setIsOpen } = useDropdown();
     const contentRef = useRef<HTMLDivElement>(null);
 
-    // Close on click outside
+    // Close on click outside — use pointerdown + touchstart for reliable mobile support
     useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (isOpen && contentRef.current && !contentRef.current.contains(event.target as Node)) {
-                // Also check if valid trigger click (which is handled by bubbling usually, but safe to close if outside content)
-                // We depend on trigger's stopPropagation to prevent immediate re-closing if clicking trigger again
+        const handleClickOutside = (event: PointerEvent | TouchEvent | MouseEvent) => {
+            const target = (event as TouchEvent).touches?.[0]
+                ? document.elementFromPoint(
+                      (event as TouchEvent).touches[0].clientX,
+                      (event as TouchEvent).touches[0].clientY
+                  )
+                : (event.target as Node);
+            if (isOpen && contentRef.current && target && !contentRef.current.contains(target as Node)) {
                 setIsOpen(false);
             }
         };
 
         if (isOpen) {
-            document.addEventListener('mousedown', handleClickOutside);
+            document.addEventListener('pointerdown', handleClickOutside as EventListener);
+            document.addEventListener('touchstart', handleClickOutside as EventListener, { passive: true });
         }
         return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('pointerdown', handleClickOutside as EventListener);
+            document.removeEventListener('touchstart', handleClickOutside as EventListener);
         };
     }, [isOpen, setIsOpen]);
 

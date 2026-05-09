@@ -6,20 +6,20 @@ import { PageContainer } from '../../../components/common/DashboardLayout';
 
 const MOCK_MUSEUMS: Record<string, any[]> = {
     'jakarta-barat': [
-        { 
-            id: 'museum-nasional', 
-            name: 'Museum Nasional Indonesia', 
-            type: 'Heritage Museum', 
-            description: 'The pride of the nation. A comprehensive overview of Indonesia\'s historical and cultural heritage.', 
+        {
+            id: 'museum-nasional',
+            name: 'Museum Nasional Indonesia',
+            type: 'Heritage Museum',
+            description: 'The pride of the nation. A comprehensive overview of Indonesia\'s historical and cultural heritage.',
             image: 'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?w=800&q=80',
-            featured: true 
+            featured: true
         },
-        { 
-            id: 'museum-fatahillah', 
-            name: 'Jakarta History Museum', 
-            type: 'Historical Building', 
-            description: 'Housed in the former Stadhuis, detailing the long history of Batavia.', 
-            image: 'https://images.unsplash.com/photo-1555899434-94d1368aa7af?w=800&q=80' 
+        {
+            id: 'museum-fatahillah',
+            name: 'Jakarta History Museum',
+            type: 'Historical Building',
+            description: 'Housed in the former Stadhuis, detailing the long history of Batavia.',
+            image: 'https://images.unsplash.com/photo-1555899434-94d1368aa7af?w=800&q=80'
         },
         { id: 'museum-wayang', name: 'Museum Wayang', type: 'Puppetry Museum', description: 'Dedicated to traditional Javanese puppetry and storytelling arts.', image: 'https://images.unsplash.com/photo-1579541592065-da8a1fbfa40a?w=800&q=80' }
     ],
@@ -51,25 +51,22 @@ function formatRegionName(id: string): string {
 export function RegionMuseums() {
     const { id = '' } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    
+
     const regionId = id.toLowerCase();
     const museums = MOCK_MUSEUMS[regionId] || [];
     const regionName = formatRegionName(regionId);
 
     return (
-        <PageContainer 
-            title={regionName}
-            subtitle="Explore galleries, museums, and historical buildings"
-        >
+        <PageContainer>
             <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <button 
-                    onClick={() => navigate(-1)} 
+                <button
+                    onClick={() => navigate(-1)}
                     className="inline-flex items-center text-sm font-medium text-theme-muted hover:text-gold transition-colors mb-8 bg-theme-surface/50 px-4 py-2 rounded-full border border-theme-border/50 backdrop-blur-sm self-start"
                 >
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     Back to Regions
                 </button>
-                
+
                 {museums.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {museums.map((museum, i) => (
@@ -82,9 +79,9 @@ export function RegionMuseums() {
                                 onClick={() => navigate(`/gallery/museum/${museum.id}`)}
                             >
                                 <div className="h-48 overflow-hidden relative">
-                                    <img 
-                                        src={museum.image} 
-                                        alt={museum.name} 
+                                    <img
+                                        src={museum.image}
+                                        alt={museum.name}
                                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                                     />
                                     {museum.featured && (
@@ -109,7 +106,7 @@ export function RegionMuseums() {
                         <MapPin className="w-16 h-16 text-theme-muted mb-4 opacity-50" />
                         <h3 className="text-xl font-bold text-theme-text mb-2">No Destinations Found</h3>
                         <p className="text-theme-muted mb-6">We're still curating the cultural spots for {regionName}.</p>
-                        <button 
+                        <button
                             onClick={() => navigate(-1)}
                             className="px-6 py-2 rounded-full bg-gold/10 text-gold hover:bg-gold/20 font-medium transition-colors"
                         >

@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Param, Body, UseGuards } from "@nestjs/common"
 import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger"
+import { SkipThrottle } from "@nestjs/throttler"
 import { ArtsService } from "./arts.service"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { PermissionsGuard } from "../auth/guards/permissions.guard"
@@ -26,6 +27,7 @@ export class ArtsController {
 
     @Get("artwork/:artworkId")
     @Public()
+    @SkipThrottle()
     @ApiOperation({ summary: "Get Art by artwork ID" })
     async findByArtwork(@Param("artworkId") artworkId: string) {
         return this.artsService.findByArtwork(artworkId)
@@ -33,6 +35,7 @@ export class ArtsController {
 
     @Get("owner/:address")
     @Public()
+    @SkipThrottle()
     @ApiOperation({ summary: "Get Arts by owner wallet" })
     async findByOwner(@Param("address") address: string) {
         return this.artsService.findByOwner(address)
@@ -40,6 +43,7 @@ export class ArtsController {
 
     @Get(":id/history")
     @Public()
+    @SkipThrottle()
     @ApiOperation({ summary: "Get Art ownership history (provenance)" })
     async getHistory(@Param("id") id: string) {
         return this.artsService.getOwnershipHistory(id)

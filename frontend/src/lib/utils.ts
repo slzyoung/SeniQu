@@ -37,9 +37,17 @@ export function isWalletInAppBrowser(): boolean {
 }
 
 /**
- * Get dashboard route based on user role
+ * Get dashboard route based on user role or user object
  */
-export function getDashboardRoute(role: string | UserRole): string {
+export function getDashboardRoute(userOrRole: any): string {
+    const role = typeof userOrRole === 'string' ? userOrRole : (userOrRole?.role || 'user');
+    const adminRole = typeof userOrRole === 'object' 
+        ? (userOrRole?.adminRole || userOrRole?.admin_role_typed || userOrRole?.adminRoleTyped) 
+        : null;
+        
+    // Prevent redirect bounce for Artist Admins
+    if (adminRole === 'ARTIST_ADMIN') return ROUTES.ARTIST_DASHBOARD;
+
     switch (role) {
         case ROLES.ADMIN:
         case ROLES.SUPER_ADMIN:
@@ -67,12 +75,15 @@ export function formatCurrency(value: number, currency = 'ETH'): string {
 /**
  * Format date
  */
-export function formatDate(date: string | Date): string {
+export function formatDate(date: string | Date | null | undefined): string {
+    if (!date) return 'N/A';
+    const parsedDate = new Date(date);
+    if (isNaN(parsedDate.getTime())) return 'N/A';
     return new Intl.DateTimeFormat('en-US', {
         month: 'long',
         day: 'numeric',
         year: 'numeric'
-    }).format(new Date(date));
+    }).format(parsedDate);
 }
 
 /**
@@ -119,14 +130,30 @@ export function extractPagination(data: unknown): { total: number; page: number;
 
     const obj = data as Record<string, unknown>;
 
-    // Check for meta object
+    // Handle double-nested data from backend TransformInterceptor wrapper
+    if (obj.data && typeof obj.data === 'object' && !Array.isArray(obj.data)) {
+        const inner = obj.data as Record<string, unknown>;
+        if (inner.meta && typeof inner.meta === 'object') {
+            const innerMeta = inner.meta as Record<string, unknown>;
+            return {
+                total: (innerMeta.total as number) || (innerMeta.totalCount as number) || 0,
+                page: (innerMeta.page as number) || (innerMeta.currentPage as number) || 1,
+                totalPages: (innerMeta.totalPages as number) || (innerMeta.pages as number) || 1,
+            };
+        }
+    }
+
+    // Check for standard meta object
     if (obj.meta && typeof obj.meta === 'object') {
         const meta = obj.meta as Record<string, unknown>;
-        return {
-            total: (meta.total as number) || (meta.totalCount as number) || 0,
-            page: (meta.page as number) || (meta.currentPage as number) || 1,
-            totalPages: (meta.totalPages as number) || (meta.pages as number) || 1,
-        };
+        // If the meta only has timestamp/method/path (interceptor meta), ignore it and check flat properties later
+        if (meta.total !== undefined || meta.page !== undefined || meta.totalPages !== undefined) {
+            return {
+                total: (meta.total as number) || (meta.totalCount as number) || 0,
+                page: (meta.page as number) || (meta.currentPage as number) || 1,
+                totalPages: (meta.totalPages as number) || (meta.pages as number) || 1,
+            };
+        }
     }
 
     // Check for flat pagination properties
