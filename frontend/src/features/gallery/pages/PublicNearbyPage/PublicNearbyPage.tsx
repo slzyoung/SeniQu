@@ -944,19 +944,26 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
 
     const sortedPlaces = useMemo(() => {
         let items = [...places];
+
+        // Defensive input sanitization (Anti-hacking & Anti-tampering)
+        const safeMinRating = Math.max(0, Math.min(5, Number(minRating) || 0));
+        const safeMaxDistance = Math.max(0, Math.min(70, Number(maxDistance) || 0));
+        const safeSortBy = ['distance', 'rating', 'popularity'].includes(sortBy) ? sortBy : 'distance';
+        const safeActiveFilter = ['all', 'museum', 'gallery', 'heritage'].includes(activeFilter) ? activeFilter : 'all';
+
         // Filter by category type
-        if (activeFilter !== 'all') {
-            items = items.filter(item => item.type === activeFilter);
+        if (safeActiveFilter !== 'all') {
+            items = items.filter(item => item.type === safeActiveFilter);
         }
         // Filter by minimum rating
-        if (minRating > 0) {
-            items = items.filter(item => (item.rating || 0) >= minRating);
+        if (safeMinRating > 0) {
+            items = items.filter(item => (item.rating || 0) >= safeMinRating);
         }
-        // Filter by maximum distance (km) - only filter if maxDistance > 0 is selected
-        if (userLocation && maxDistance > 0) {
+        // Filter by maximum distance (km) - only filter if safeMaxDistance > 0 is selected
+        if (userLocation && safeMaxDistance > 0) {
             items = items.filter(item => {
                 const dist = getDistance(item);
-                return dist !== null && dist <= maxDistance;
+                return dist !== null && dist <= safeMaxDistance;
             });
         }
         // Filter by search query
@@ -968,8 +975,8 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
             );
         }
         
-        // Sorting logic based on sortBy selection:
-        if (sortBy === 'distance' && userLocation) {
+        // Sorting logic based on safeSortBy selection:
+        if (safeSortBy === 'distance' && userLocation) {
             items.sort((a, b) => {
                 const distA = getDistance(a) ?? Infinity;
                 const distB = getDistance(b) ?? Infinity;
@@ -978,7 +985,7 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                 }
                 return (b.rating || 0) - (a.rating || 0); // secondary sort: rating
             });
-        } else if (sortBy === 'popularity') {
+        } else if (safeSortBy === 'popularity') {
             items.sort((a, b) => {
                 const countA = a.reviewCount || 0;
                 const countB = b.reviewCount || 0;
@@ -1330,13 +1337,13 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                 isFittingBoundsRef.current = true;
                 mapRef.current.panTo(center);
             }
-            searchNearbyPlaces(center, activeFilter, searchQuery);
+            searchNearbyPlaces(center, activeFilter, debouncedSearchQuery);
             setHasInitialSearched(true);
             if (userLocation) {
                 setHasSearchedUserLoc(true);
             }
         }
-    }, [isLoaded, userLocation, hasInitialSearched, activeFilter, searchQuery, searchNearbyPlaces]);
+    }, [isLoaded, userLocation, hasInitialSearched, debouncedSearchQuery, searchNearbyPlaces]);
 
     // Update center and re-search when a real userLocation becomes available
     useEffect(() => {
@@ -1345,10 +1352,20 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
             if (mapRef.current) {
                 mapRef.current.panTo(center);
             }
-            searchNearbyPlaces(center, activeFilter, searchQuery);
+            searchNearbyPlaces(center, activeFilter, debouncedSearchQuery);
             setHasSearchedUserLoc(true);
         }
-    }, [isLoaded, userLocation, hasInitialSearched, hasSearchedUserLoc, activeFilter, searchQuery, searchNearbyPlaces]);
+    }, [isLoaded, userLocation, hasInitialSearched, hasSearchedUserLoc, debouncedSearchQuery, searchNearbyPlaces]);
+
+    // Re-fetch from backend when search query is typed and debounced (anti-throttling)
+    useEffect(() => {
+        if (isLoaded && hasInitialSearched) {
+            const center = userLocation 
+                ? { lat: userLocation.latitude, lng: userLocation.longitude } 
+                : DEFAULT_CENTER;
+            searchNearbyPlaces(center, activeFilter, debouncedSearchQuery);
+        }
+    }, [debouncedSearchQuery, isLoaded, hasInitialSearched, userLocation, activeFilter, searchNearbyPlaces]);
 
 
 
@@ -1785,14 +1802,13 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                                     value={maxDistance}
                                     onChange={(e) => setMaxDistance(Number(e.target.value))}
                                 >
-                                    <option value={0}>Semua Jarak (Maks 100 km)</option>
+                                    <option value={0}>Semua Jarak</option>
                                     <option value={1}>Jarak ≤ 1 km</option>
                                     <option value={5}>Jarak ≤ 5 km</option>
                                     <option value={10}>Jarak ≤ 10 km</option>
                                     <option value={25}>Jarak ≤ 25 km</option>
                                     <option value={50}>Jarak ≤ 50 km</option>
-                                    <option value={75}>Jarak ≤ 75 km</option>
-                                    <option value={100}>Jarak ≤ 100 km</option>
+                                    <option value={70}>Jarak ≤ 70 km</option>
                                 </select>
                             </div>
                             <div className="pnb-select-wrapper">
@@ -1816,8 +1832,8 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                                     onChange={(e) => setSortBy(e.target.value as any)}
                                 >
                                     <option value="distance">Urutkan: Terdekat</option>
-                                    <option value="rating">Urutkan: Rating Tertinggi</option>
-                                    <option value="popularity">Urutkan: Ulasan Terbanyak</option>
+                                    <option value="rating">Urutkan: Rating</option>
+                                    <option value="popularity">Urutkan: Populer</option>
                                 </select>
                             </div>
                         </div>
