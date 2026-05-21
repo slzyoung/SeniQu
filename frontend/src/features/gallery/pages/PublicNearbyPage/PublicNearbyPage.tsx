@@ -287,7 +287,19 @@ function MuseumDetailSheet({
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         >
             {/* Drag handle */}
-            <button className="pnb-sheet__handle" onClick={onToggle} aria-label="Toggle details">
+            <button
+                className="pnb-sheet__handle"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onToggle();
+                }}
+                onTouchEnd={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onToggle();
+                }}
+                aria-label="Toggle details"
+            >
                 <span className="pnb-sheet__handle-bar" />
             </button>
 
@@ -300,7 +312,19 @@ function MuseumDetailSheet({
                         {museum.rating?.toFixed(1) || '4.5'} ({museum.reviewCount || '0'})
                     </span>
                 </div>
-                <button className="pnb-sheet__close" onClick={onClose}>
+                <button
+                    className="pnb-sheet__close"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onClose();
+                    }}
+                    onTouchEnd={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        onClose();
+                    }}
+                    aria-label="Close details"
+                >
                     <X className="w-4 h-4" />
                 </button>
             </div>
@@ -507,7 +531,16 @@ function ComingSoonTicketModal({
                             </span>
                             <button 
                                 className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
-                                onClick={onClose}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onClose();
+                                }}
+                                onTouchEnd={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    onClose();
+                                }}
+                                aria-label="Close modal"
                             >
                                 <X className="w-4 h-4 text-gray-400 hover:text-white" />
                             </button>
@@ -610,7 +643,19 @@ function PhotoLightboxModal({
                 onClick={onClose}
             >
                 {/* Close Button */}
-                <button className="pnb-lightbox-close" onClick={onClose} aria-label="Close lightbox">
+                <button
+                    className="pnb-lightbox-close"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onClose();
+                    }}
+                    onTouchEnd={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        onClose();
+                    }}
+                    aria-label="Close lightbox"
+                >
                     <X className="w-6 h-6 text-white" />
                 </button>
 
@@ -687,7 +732,19 @@ function ReviewsModal({
                             <h3 className="pnb-reviews-modal-title">Ulasan Google Maps</h3>
                             <p className="pnb-reviews-modal-subtitle">{museumName}</p>
                         </div>
-                        <button className="pnb-reviews-modal-close" onClick={onClose}>
+                        <button
+                            className="pnb-reviews-modal-close"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onClose();
+                            }}
+                            onTouchEnd={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                onClose();
+                            }}
+                            aria-label="Close reviews"
+                        >
                             <X className="w-5 h-5 text-gray-400 hover:text-white" />
                         </button>
                     </div>

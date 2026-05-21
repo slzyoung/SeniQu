@@ -169,7 +169,19 @@ function MuseumDetailSheet({
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         >
             {/* Drag handle */}
-            <button className="nbm-sheet__handle" onClick={onToggle} aria-label="Toggle details">
+            <button
+                className="nbm-sheet__handle"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onToggle();
+                }}
+                onTouchEnd={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onToggle();
+                }}
+                aria-label="Toggle details"
+            >
                 <span className="nbm-sheet__handle-bar" />
             </button>
 
@@ -182,7 +194,19 @@ function MuseumDetailSheet({
                         {museum.rating?.toFixed(1) || '4.5'} ({museum.reviewCount || '0'})
                     </span>
                 </div>
-                <button className="nbm-sheet__close" onClick={onClose}>
+                <button
+                    className="nbm-sheet__close"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onClose();
+                    }}
+                    onTouchEnd={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        onClose();
+                    }}
+                    aria-label="Close details"
+                >
                     <X className="w-4 h-4" />
                 </button>
             </div>

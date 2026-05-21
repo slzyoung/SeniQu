@@ -432,6 +432,7 @@
 }
 
 .nbm-sheet__close {
+  position: relative;
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -443,6 +444,16 @@
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+/* Expand touch target to 52px on mobile screens */
+.nbm-sheet__close::after {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  right: -10px;
+  bottom: -10px;
 }
 
 .nbm-sheet__close:hover {

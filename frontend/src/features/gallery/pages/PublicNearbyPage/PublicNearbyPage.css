@@ -440,6 +440,7 @@
 }
 
 .pnb-sheet__close {
+  position: relative;
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -452,6 +453,16 @@
   cursor: pointer;
   transition: all 0.2s ease;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Expand touch target to 52px on mobile screens */
+.pnb-sheet__close::after {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  right: -10px;
+  bottom: -10px;
 }
 
 .pnb-sheet__close:hover {
@@ -1447,6 +1458,41 @@
   overflow: hidden !important;
 }
 
+/* Make InfoWindow close button larger and easier to click on mobile */
+.gm-style-iw button.gm-ui-hover-effect {
+  width: 36px !important;
+  height: 36px !important;
+  top: 2px !important;
+  right: 2px !important;
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  opacity: 1 !important;
+  transition: all 0.2s ease !important;
+  padding: 0 !important;
+}
+
+.gm-style-iw button.gm-ui-hover-effect:hover {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+.gm-style-iw button.gm-ui-hover-effect > span {
+  margin: 0 !important;
+  display: block !important;
+  background-color: var(--text-muted) !important;
+}
+
+@media (max-width: 767px) {
+  .gm-style-iw button.gm-ui-hover-effect {
+    width: 44px !important;
+    height: 44px !important;
+  }
+}
+
 /* Marker label background pill */
 .pnb-marker-label {
   background: rgba(255, 255, 255, 0.92);
@@ -2047,6 +2093,7 @@
 }
 
 .pnb-reviews-modal-close {
+  position: relative;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.08);
   width: 36px;
@@ -2057,6 +2104,15 @@
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+.pnb-reviews-modal-close::after {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  right: -8px;
+  bottom: -8px;
 }
 
 .light .pnb-reviews-modal-close {
