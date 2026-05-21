@@ -15,7 +15,7 @@ import { ROUTES } from '../../../lib/constants';
 
 // Default center (Jakarta)
 const DEFAULT_CENTER = { lat: -6.2088, lng: 106.8456 };
-const LIBRARIES: ("places" | "geometry")[] = ["places"];
+const LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"];
 
 interface AdvancedMarkerProps {
     map: google.maps.Map | null;

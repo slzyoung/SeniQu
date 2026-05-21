@@ -67,11 +67,19 @@
       const originalWarn = console.warn;
       const originalLog = console.log;
       const originalError = console.error;
+      const suppressPatterns = [
+        'SES Removing unpermitted intrinsics',
+        'SES ',
+        'lockdown-install',
+        'lockdown',
+        'MaxListenersExceededWarning',
+        'Removing unpermitted intrinsics',
+        'ses.cjs',
+        'ses.umd',
+      ];
       const shouldSuppress = (args) => {
         const msg = args.map(a => String(a)).join(' ');
-        return msg.includes('SES Removing unpermitted intrinsics') ||
-          msg.includes('lockdown-install.js') ||
-          msg.includes('MaxListenersExceededWarning');
+        return suppressPatterns.some(p => msg.includes(p));
       };
       console.warn = function (...args) { if (!shouldSuppress(args)) originalWarn.apply(console, args); };
       console.log = function (...args) { if (!shouldSuppress(args)) originalLog.apply(console, args); };

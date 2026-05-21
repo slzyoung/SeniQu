@@ -205,7 +205,7 @@ const FILTER_CHIPS: { id: FilterType; label: string; icon?: any }[] = [
     { id: 'all', label: 'All' },
     { id: 'museum', label: 'Museum', icon: Building2 },
     { id: 'gallery', label: 'Gallery', icon: Image },
-    { id: 'heritage', label: 'Heritage', icon: Compass },
+    { id: 'heritage', label: 'Heritage & Wisata', icon: Compass },
 ];
 
 // ============================================
@@ -624,8 +624,8 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     const [hasSearchedUserLoc, setHasSearchedUserLoc] = useState(false);
     const initialCenterRef = useRef<{ lat: number; lng: number } | null>(null);
     const isFittingBoundsRef = useRef(false);
-    const [sortBy, setSortBy] = useState<'distance' | 'rating'>('distance');
     const [minRating, setMinRating] = useState<number>(0);
+    const [maxDistance, setMaxDistance] = useState<number>(0); // 0 = no limit
     const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
 
     const getDistance = useCallback((museum: any) => {
@@ -657,6 +657,13 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
         if (minRating > 0) {
             items = items.filter(item => (item.rating || 0) >= minRating);
         }
+        // Filter by maximum distance (km)
+        if (maxDistance > 0 && userLocation) {
+            items = items.filter(item => {
+                const dist = getDistance(item);
+                return dist !== null && dist <= maxDistance;
+            });
+        }
         // Filter by search query
         if (searchQuery) {
             const queryClean = searchQuery.toLowerCase();
@@ -665,18 +672,22 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                 item.address.toLowerCase().includes(queryClean)
             );
         }
-        // Sort
-        if (sortBy === 'distance' && userLocation) {
+        // Smart automated sorting (best practice):
+        // Closest distance first if user location is available. Otherwise, highest rating first.
+        if (userLocation) {
             items.sort((a, b) => {
                 const distA = getDistance(a) ?? Infinity;
                 const distB = getDistance(b) ?? Infinity;
-                return distA - distB;
+                if (distA !== distB) {
+                    return distA - distB;
+                }
+                return (b.rating || 0) - (a.rating || 0); // secondary sort by rating
             });
-        } else if (sortBy === 'rating') {
+        } else {
             items.sort((a, b) => (b.rating || 0) - (a.rating || 0));
         }
         return items;
-    }, [places, sortBy, userLocation, getDistance, activeFilter, minRating, searchQuery]);
+    }, [places, userLocation, getDistance, activeFilter, minRating, maxDistance, searchQuery]);
 
     const watchIdRef = useRef<number | null>(null);
     const mapRef = useRef<google.maps.Map | null>(null);
@@ -749,13 +760,57 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                         'https://images.unsplash.com/photo-1566121318599-23fcf93f4bf3?w=400&h=300&fit=crop',
                     ];
                     const previewImages = place.photos && place.photos.length > 0 ? place.photos : fallbackPhotos;
+                    let type = place.type || 'heritage';
+                    if (place.name) {
+                        const nameLower = place.name.toLowerCase();
+                        
+                        // 1. Tourism, Destination & Heritage keyword check
+                        if (
+                            nameLower.includes('wisata') ||
+                            nameLower.includes('pariwisata') ||
+                            nameLower.includes('tourism') ||
+                            nameLower.includes('tourist') ||
+                            nameLower.includes('destination') ||
+                            nameLower.includes('destinasi') ||
+                            nameLower.includes('candi') ||
+                            nameLower.includes('temple') ||
+                            nameLower.includes('palace') ||
+                            nameLower.includes('kraton') ||
+                            nameLower.includes('benteng') ||
+                            nameLower.includes('fort') ||
+                            nameLower.includes('taman') ||
+                            nameLower.includes('park') ||
+                            nameLower.includes('monument') ||
+                            nameLower.includes('monumen') ||
+                            nameLower.includes('pantai') ||
+                            nameLower.includes('beach')
+                        ) {
+                            type = 'heritage';
+                        }
+                        
+                        // 2. Hotel filter override (galleries in hotels go to heritage)
+                        else if (type === 'gallery') {
+                            if (
+                                nameLower.includes('hotel') ||
+                                nameLower.includes('suites') ||
+                                nameLower.includes('resort') ||
+                                nameLower.includes('villa') ||
+                                nameLower.includes('homestay') ||
+                                nameLower.includes('guest house') ||
+                                nameLower.includes('inn')
+                            ) {
+                                type = 'heritage';
+                            }
+                        }
+                    }
+
                     return {
                         id: place.id || Math.random().toString(),
                         name: place.name || 'Heritage Destination',
                         city: place.address?.split(',')[1]?.trim() || 'Nearby',
                         province: place.address?.split(',')[2]?.trim() || '',
                         address: place.address || '',
-                        type: place.type || 'heritage',
+                        type,
                         rating,
                         reviewCount,
                         totalArtworks: reviewCount ? Math.round(reviewCount / 3) : 50,
@@ -1336,51 +1391,37 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                         </div>
                     </div>
 
-                    {/* Sort Options */}
-                    <div className="pnb-sort-container" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span className="pnb-sort-label">Urutkan:</span>
-                            <button
-                                className={`pnb-sort-btn ${sortBy === 'distance' ? 'pnb-sort-btn--active' : ''}`}
-                                onClick={() => setSortBy('distance')}
-                            >
-                                Terdekat
-                            </button>
-                            <button
-                                className={`pnb-sort-btn ${sortBy === 'rating' ? 'pnb-sort-btn--active' : ''}`}
-                                onClick={() => setSortBy('rating')}
-                            >
-                                Rating Tertinggi
-                            </button>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
-                            <span className="pnb-sort-label">Filter Rating:</span>
-                            <select
-                                value={minRating}
-                                onChange={(e) => setMinRating(Number(e.target.value))}
-                                style={{
-                                    fontSize: '12px',
-                                    padding: '4px 24px 4px 10px',
-                                    borderRadius: '999px',
-                                    border: '1px solid var(--border-color)',
-                                    background: 'var(--bg-elevated)',
-                                    color: 'var(--text-muted)',
-                                    cursor: 'pointer',
-                                    fontWeight: 500,
-                                    outline: 'none',
-                                    appearance: 'none',
-                                    backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                                    backgroundRepeat: 'no-repeat',
-                                    backgroundPosition: 'right 8px center',
-                                    backgroundSize: '12px',
-                                    transition: 'all 0.2s ease',
-                                }}
-                            >
-                                <option value={0}>Semua Rating</option>
-                                <option value={4.0}>★ 4.0 ke atas</option>
-                                <option value={4.5}>★ 4.5 ke atas</option>
-                                <option value={4.7}>★ 4.7 ke atas</option>
-                            </select>
+                    {/* Professional Filter Panel */}
+                    <div className="pnb-sort-container" style={{ margin: '0 0 12px 0', borderBottom: 'none' }}>
+                        <div className="pnb-filter-row">
+                            <div className="pnb-select-wrapper">
+                                <MapPin className="pnb-select-icon text-blue-500" />
+                                <select
+                                    className="pnb-filter-select-premium"
+                                    value={maxDistance}
+                                    onChange={(e) => setMaxDistance(Number(e.target.value))}
+                                >
+                                    <option value={0}>Semua Jarak</option>
+                                    <option value={1}>Jarak ≤ 1 km</option>
+                                    <option value={3}>Jarak ≤ 3 km</option>
+                                    <option value={5}>Jarak ≤ 5 km</option>
+                                    <option value={10}>Jarak ≤ 10 km</option>
+                                    <option value={25}>Jarak ≤ 25 km</option>
+                                </select>
+                            </div>
+                            <div className="pnb-select-wrapper">
+                                <Star className="pnb-select-icon text-amber-500 fill-amber-500/20" />
+                                <select
+                                    className="pnb-filter-select-premium"
+                                    value={minRating}
+                                    onChange={(e) => setMinRating(Number(e.target.value))}
+                                >
+                                    <option value={0}>Semua Rating</option>
+                                    <option value={4.0}>Rating ★ 4.0+</option>
+                                    <option value={4.5}>Rating ★ 4.5+</option>
+                                    <option value={4.7}>Rating ★ 4.7+</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 

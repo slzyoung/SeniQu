@@ -42,15 +42,11 @@ async function bootstrap() {
 
     // Helmet for security headers (OWASP)
     await app.register(require("@fastify/helmet"), {
-        contentSecurityPolicy: {
-            directives: {
-                defaultSrc: ["'self'"],
-                styleSrc: ["'self'", "'unsafe-inline'"],
-                imgSrc: ["'self'", "data:", "https:"],
-                scriptSrc: ["'self'"],
-            },
-        },
+        // CSP disabled on API server — frontend (Netlify) handles CSP
+        // Having CSP on both API and frontend causes header conflicts
+        contentSecurityPolicy: false,
         crossOriginEmbedderPolicy: false,
+        crossOriginResourcePolicy: { policy: "cross-origin" },
         // Anti-Hacking: Force HTTPS via HSTS
         strictTransportSecurity: {
             maxAge: 31536000, // 1 year
