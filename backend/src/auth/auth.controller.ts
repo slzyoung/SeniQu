@@ -34,10 +34,29 @@ import { WalletLoginDto } from "./dto/wallet-login.dto"
 export class AuthController {
     private readonly logger = new Logger(AuthController.name)
 
+    /**
+     * Server-side fallback store for OAuth params.
+     * Mobile browsers (Safari ITP, Chrome) block cross-domain cookies
+     * between api.seniqu.art and seniquapp.netlify.app, so we also store
+     * the PKCE params server-side, keyed by the state parameter.
+     * Entries auto-expire after 10 minutes.
+     */
+    private readonly oauthParamsStore = new Map<string, { codeVerifier: string; state: string; nonce: string; expiresAt: number }>()
+
     constructor(
         private readonly authService: AuthService,
         private readonly configService: ConfigService,
-    ) { }
+    ) {
+        // Clean up expired entries every 5 minutes
+        setInterval(() => {
+            const now = Date.now()
+            for (const [key, value] of this.oauthParamsStore) {
+                if (now > value.expiresAt) {
+                    this.oauthParamsStore.delete(key)
+                }
+            }
+        }, 5 * 60 * 1000).unref()
+    }
 
     /**
      * Authenticate with wallet signature (manual — no Privy)
@@ -122,6 +141,16 @@ export class AuthController {
             signed: true,
         })
 
+        // MOBILE FALLBACK: Also store server-side keyed by state.
+        // This ensures mobile browsers that block cross-domain cookies
+        // can still complete the OAuth flow.
+        this.oauthParamsStore.set(state, {
+            codeVerifier,
+            state,
+            nonce,
+            expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
+        })
+
         this.logger.log(`Google OAuth initiated — PKCE + signed state + nonce (callbackUrl: ${callbackUrl})`)
         return res.send({ authUrl })
     }
@@ -191,38 +220,56 @@ export class AuthController {
             const allCookieKeys = req.cookies ? Object.keys(req.cookies) : []
             this.logger.debug(`[OAuth CB] Available cookies: [${allCookieKeys.join(", ")}]`)
 
-            // Read the signed cookie (Fastify: all cookies in req.cookies, signed or not)
+            // ── Strategy: Try cookie first, then fall back to server-side store ──
+            // Mobile browsers often block cross-domain cookies, so we need both.
+            let oauthParams: { codeVerifier: string; state: string; nonce: string } | null = null
+            let paramsSource = "none"
+
+            // 1) Try reading from the signed cookie (works on desktop browsers)
             const signedCookie = req.cookies?.__oauth_params
-            if (!signedCookie) {
-                this.logger.warn(`[OAuth CB] Missing __oauth_params cookie. Available: [${allCookieKeys.join(", ")}]. This usually means the cookie was not set or expired.`)
+            if (signedCookie) {
+                try {
+                    const unsigned = req.unsignCookie(signedCookie)
+                    if (unsigned.valid && unsigned.value) {
+                        const parsed = JSON.parse(unsigned.value)
+                        if (parsed.codeVerifier && parsed.state && parsed.nonce) {
+                            oauthParams = parsed
+                            paramsSource = "cookie"
+                        }
+                    } else {
+                        this.logger.warn("[OAuth CB] Cookie signature invalid — trying server-side fallback")
+                    }
+                } catch (e) {
+                    this.logger.warn(`[OAuth CB] Cookie parse failed: ${(e as any).message} — trying server-side fallback`)
+                }
+            }
+
+            // 2) Fallback: retrieve from server-side in-memory store (mobile browsers)
+            if (!oauthParams && state) {
+                const stored = this.oauthParamsStore.get(state)
+                if (stored && Date.now() <= stored.expiresAt) {
+                    oauthParams = { codeVerifier: stored.codeVerifier, state: stored.state, nonce: stored.nonce }
+                    paramsSource = "server-store"
+                    this.logger.log(`[OAuth CB] ✅ Retrieved OAuth params from server-side store (mobile fallback)`)
+                } else if (stored) {
+                    this.logger.warn(`[OAuth CB] Server-side store entry expired`)
+                    this.oauthParamsStore.delete(state)
+                }
+            }
+
+            // 3) Both methods failed — session truly expired
+            if (!oauthParams) {
+                this.logger.warn(`[OAuth CB] No OAuth params found via cookie OR server store. Cookie keys: [${allCookieKeys.join(", ")}]. This is likely a mobile browser blocking cross-domain cookies and the server entry expired.`)
                 clearOAuthCookie()
                 return res.status(302).redirect(
                     `${frontendUrl}/auth/callback#error=${encodeURIComponent("session_expired")}`
                 )
             }
 
-            // Unsign cookie (Fastify @fastify/cookie uses req.unsignCookie)
-            const unsigned = req.unsignCookie(signedCookie)
-            if (!unsigned.valid || !unsigned.value) {
-                this.logger.warn("[OAuth CB] Invalid cookie signature — tampered or secret mismatch")
-                clearOAuthCookie()
-                return res.status(302).redirect(
-                    `${frontendUrl}/auth/callback#error=${encodeURIComponent("session_expired")}`
-                )
-            }
+            this.logger.debug(`[OAuth CB] OAuth params retrieved via: ${paramsSource}`)
 
-            const cookieRaw = unsigned.value
-
-            let oauthParams: { codeVerifier: string; state: string; nonce: string }
-            try {
-                oauthParams = JSON.parse(cookieRaw)
-            } catch {
-                this.logger.warn("[OAuth CB] Corrupted __oauth_params cookie payload")
-                clearOAuthCookie()
-                return res.status(302).redirect(
-                    `${frontendUrl}/auth/callback#error=${encodeURIComponent("invalid_session")}`
-                )
-            }
+            // Clean up server-side store entry (one-time use)
+            this.oauthParamsStore.delete(state)
 
             // Validate state matches what we stored
             if (state !== oauthParams.state) {
