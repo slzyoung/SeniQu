@@ -253,6 +253,8 @@ function MuseumDetailSheet({
     onBuyTicket,
     onPhotoClick,
     onViewAllReviews,
+    showRouteLine,
+    onClearRoute,
 }: {
     museum: any;
     expanded: boolean;
@@ -267,6 +269,8 @@ function MuseumDetailSheet({
     onBuyTicket: () => void;
     onPhotoClick: (index: number) => void;
     onViewAllReviews: () => void;
+    showRouteLine?: boolean;
+    onClearRoute?: () => void;
 }) {
     const crowdColor = museum.crowdLevel?.includes('Busy')
         ? 'pnb-badge--red'
@@ -374,13 +378,21 @@ function MuseumDetailSheet({
             {/* Action buttons */}
             <div className="pnb-sheet__actions">
                 <button
-                    className="pnb-action-btn pnb-action-btn--primary"
+                    className={`pnb-action-btn ${showRouteLine ? 'pnb-action-btn--secondary' : 'pnb-action-btn--primary'}`}
                     disabled={isRouteLoading}
-                    onClick={onGetDirections}
+                    onClick={showRouteLine ? onClearRoute : onGetDirections}
                 >
-                    <Navigation className="w-4 h-4" />
+                    {isRouteLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : showRouteLine ? (
+                        <X className="w-4 h-4" />
+                    ) : (
+                        <Navigation className="w-4 h-4" />
+                    )}
                     {isRouteLoading ? (
                         <span>Mencari rute...</span>
+                    ) : showRouteLine ? (
+                        <span>Clear Route</span>
                     ) : (
                         <span>Get Directions</span>
                     )}
@@ -1027,13 +1039,17 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
         setTravelMode(newMode);
     }, []);
 
-    const selectPlace = useCallback((museum: any | null) => {
-        setSelectedMuseum(museum);
+    const clearRoute = useCallback(() => {
         setShowRouteLine(false);
         setRoutePath([]);
         setRouteDistance(null);
         setRouteDuration(null);
     }, []);
+
+    const selectPlace = useCallback((museum: any | null) => {
+        setSelectedMuseum(museum);
+        clearRoute();
+    }, [clearRoute]);
 
     const { isLoaded, loadError } = useJsApiLoader({
         id: 'google-map-script',
@@ -1603,27 +1619,29 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                                     )}
 
                                     {/* Place Markers (AdvancedMarkerElement — recommended) */}
-                                    {mapInstance && sortedPlaces.map((museum: any) => {
-                                        const mLat = museum.coordinates?.lat ?? museum.latitude;
-                                        const mLng = museum.coordinates?.lng ?? museum.longitude;
-                                        if (typeof mLat !== 'number' || typeof mLng !== 'number') return null;
-                                        const isActive = selectedMuseum?.id === museum.id;
+                                    {mapInstance && sortedPlaces
+                                        .filter((museum: any) => !showRouteLine || selectedMuseum?.id === museum.id)
+                                        .map((museum: any) => {
+                                            const mLat = museum.coordinates?.lat ?? museum.latitude;
+                                            const mLng = museum.coordinates?.lng ?? museum.longitude;
+                                            if (typeof mLat !== 'number' || typeof mLng !== 'number') return null;
+                                            const isActive = selectedMuseum?.id === museum.id;
 
-                                        return (
-                                            <AdvancedMarker
-                                                key={museum.id}
-                                                map={mapInstance}
-                                                position={{ lat: mLat, lng: mLng }}
-                                                title={museum.name}
-                                                onClick={() => {
-                                                    selectPlace(museum);
-                                                    setSheetExpanded(false);
-                                                }}
-                                                isActive={isActive}
-                                                placeType={museum.type}
-                                            />
-                                        );
-                                    })}
+                                            return (
+                                                <AdvancedMarker
+                                                    key={museum.id}
+                                                    map={mapInstance}
+                                                    position={{ lat: mLat, lng: mLng }}
+                                                    title={museum.name}
+                                                    onClick={() => {
+                                                        selectPlace(museum);
+                                                        setSheetExpanded(false);
+                                                    }}
+                                                    isActive={isActive}
+                                                    placeType={museum.type}
+                                                />
+                                            );
+                                        })}
 
                                     {/* InfoWindow tooltip for selected place */}
                                     {selectedMuseum && (() => {
@@ -1712,6 +1730,8 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                                 onBuyTicket={() => setShowTicketModal(true)}
                                 onPhotoClick={(index) => setActivePhotoIndex(index)}
                                 onViewAllReviews={() => setShowReviewsModal(true)}
+                                showRouteLine={showRouteLine}
+                                onClearRoute={clearRoute}
                             />
                         )}
                     </AnimatePresence>
