@@ -1099,19 +1099,13 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     }, [activeFilter, debouncedSearchQuery, minRating, maxDistance, sortBy]);
 
     // Keep selection synchronized with active filter and search queries
-    // Only auto-select if the user hasn't manually clicked a marker
+    // Clear selection if the selected place is filtered out
     useEffect(() => {
         if (selectedMuseum) {
             const isStillVisible = sortedPlaces.some(p => p.id === selectedMuseum.id);
             if (!isStillVisible) {
-                // Only auto-select first item if user didn't manually pick something
-                if (!userSelectedRef.current) {
-                    selectPlace(sortedPlaces.length > 0 ? sortedPlaces[0] : null);
-                } else {
-                    // User had selected something that's now filtered out, clear selection
-                    selectPlace(null);
-                    userSelectedRef.current = false;
-                }
+                selectPlace(null);
+                userSelectedRef.current = false;
             }
         }
     }, [sortedPlaces, selectedMuseum, selectPlace]);
@@ -1317,13 +1311,6 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                 }
 
                 setPlaces(unique);
-                // Only auto-select first place if nothing is currently selected
-                // This prevents the "jump back to nearest" bug on mobile
-                if (!selectedMuseum && unique.length > 0) {
-                    selectPlace(unique[0]);
-                } else if (unique.length === 0) {
-                    selectPlace(null);
-                }
                 setIsPlacesLoading(false);
             })
             .catch((err) => {

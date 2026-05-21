@@ -418,23 +418,16 @@ export function NearbyMuseumsPage() {
         });
     }, [mergedMuseums, activeFilter, searchQuery]);
 
-    // Select first museum by default, only if user hasn't manually picked one
+    // Clear selection if the selected museum is filtered out
     useEffect(() => {
         if (selectedMuseum) {
             const isStillVisible = filteredMuseums.some((m: any) => m.id === selectedMuseum.id);
             if (!isStillVisible) {
-                if (!userSelectedRef.current) {
-                    setSelectedMuseum(filteredMuseums.length > 0 ? filteredMuseums[0] : null);
-                } else {
-                    setSelectedMuseum(null);
-                    userSelectedRef.current = false;
-                }
+                setSelectedMuseum(null);
+                userSelectedRef.current = false;
             }
-        } else if (filteredMuseums.length > 0 && !userSelectedRef.current) {
-            setSelectedMuseum(filteredMuseums[0]);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filteredMuseums]);
+    }, [filteredMuseums, selectedMuseum]);
 
     const { isAuthenticated } = useAuthStore();
     // When rendered in PublicLayout (not authenticated), the fixed Navbar needs extra offset
