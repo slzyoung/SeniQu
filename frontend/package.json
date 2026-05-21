@@ -54,5 +54,8 @@
     "typescript": "^5.5.4",
     "vite": "^5.2.0",
     "vite-plugin-node-polyfills": "^0.25.0"
+  },
+  "overrides": {
+    "ws": "8.20.1"
   }
 }

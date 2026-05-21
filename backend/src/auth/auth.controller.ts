@@ -479,4 +479,32 @@ export class AuthController {
     ) {
         return this.authService.verifyPasswordChange(userId, body.otp, body.newPassword)
     }
+
+    /**
+     * Request forgot password OTP (Forgot Password Step 1)
+     */
+    @Post("forgot-password/request")
+    @Public()
+    @BypassSecurity()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: "Request forgot password OTP" })
+    async requestForgotPassword(
+        @Body() body: { email: string },
+    ) {
+        return this.authService.requestForgotPassword(body.email)
+    }
+
+    /**
+     * Verify forgot password and reset password (Forgot Password Step 2)
+     */
+    @Post("forgot-password/verify")
+    @Public()
+    @BypassSecurity()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: "Verify forgot password OTP and reset password" })
+    async verifyForgotPassword(
+        @Body() body: { email: string; otp: string; newPassword: string },
+    ) {
+        return this.authService.verifyForgotPassword(body.email, body.otp, body.newPassword)
+    }
 }

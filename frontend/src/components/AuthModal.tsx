@@ -28,7 +28,7 @@ interface AuthModalProps {
   initialView?: AuthView;
 }
 
-type AuthView = 'main' | 'email-login' | 'email-register' | 'wallet-select' | 'wallet-select-account' | 'otp-input' | 'email-verify-pending';
+type AuthView = 'main' | 'email-login' | 'email-register' | 'wallet-select' | 'wallet-select-account' | 'otp-input' | 'email-verify-pending' | 'forgot-password' | 'forgot-password-otp';
 
 type WalletType = 'metamask' | 'phantom' | 'solflare' | 'walletconnect';
 
@@ -167,6 +167,16 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   const [otpResendCooldown, setOtpResendCooldown] = useState(0);
   const otpInputRefs = React.useRef<(HTMLInputElement | null)[]>([]);
 
+  // Forgot password state
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotOtpDigits, setForgotOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
+  const [forgotMaskedEmail, setForgotMaskedEmail] = useState('');
+  const [forgotResendCooldown, setForgotResendCooldown] = useState(0);
+  const forgotOtpInputRefs = React.useRef<(HTMLInputElement | null)[]>([]);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [forgotPasswordFocused, setForgotPasswordFocused] = useState(false);
+
   // Track modal open state for async operations
   const isOpenRef = React.useRef(isOpen);
 
@@ -191,6 +201,13 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     setOtpEmail('');
     setOtpMaskedEmail('');
     setOtpResendCooldown(0);
+    setForgotEmail('');
+    setForgotNewPassword('');
+    setForgotOtpDigits(['', '', '', '', '', '']);
+    setForgotMaskedEmail('');
+    setForgotResendCooldown(0);
+    setPasswordFocused(false);
+    setForgotPasswordFocused(false);
 
     // If we are partly authenticated in Privy but not Backend, Force Logout from Privy
     // This ensures next time user opens modal, they start fresh
@@ -678,6 +695,117 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     }
   }, [otpDigits]);
 
+  // Handle Forgot Password Request (Step 1)
+  const handleForgotPasswordRequest = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail) return;
+    setIsLoading(true);
+    setErrors({});
+
+    try {
+      const response = await authService.forgotPasswordRequest(forgotEmail);
+      setForgotMaskedEmail(response.email);
+      setForgotOtpDigits(['', '', '', '', '', '']);
+      setView('forgot-password-otp');
+      toast.success('Reset Code Sent', response.message || 'OTP code sent successfully.');
+      setForgotResendCooldown(60);
+    } catch (error: any) {
+      const msg = error.message || 'Failed to request password reset.';
+      setErrors({ general: msg });
+      toast.error('Request Failed', msg);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [forgotEmail, toast]);
+
+  // Handle Forgot Password Verify & Reset (Step 2)
+  const handleForgotPasswordVerify = useCallback(async (otpCode: string) => {
+    if (otpCode.length !== 6) return;
+    if (forgotNewPassword.length < 8) {
+      setErrors({ newPassword: 'Password must be at least 8 characters' });
+      toast.error('Weak Password', 'Password must be at least 8 characters');
+      return;
+    }
+    setIsLoading(true);
+    setErrors({});
+
+    try {
+      await authService.forgotPasswordVerify(forgotEmail, otpCode, forgotNewPassword);
+      toast.success('Success', 'Password has been reset successfully. Please sign in.');
+      // Reset forgot state
+      setForgotEmail('');
+      setForgotNewPassword('');
+      setForgotOtpDigits(['', '', '', '', '', '']);
+      setView('email-login');
+    } catch (error: any) {
+      const msg = error.message || 'Failed to reset password. Invalid or expired OTP.';
+      setErrors({ general: msg });
+      toast.error('Reset Failed', msg);
+      setForgotOtpDigits(['', '', '', '', '', '']);
+      forgotOtpInputRefs.current[0]?.focus();
+    } finally {
+      setIsLoading(false);
+    }
+  }, [forgotEmail, forgotNewPassword, toast]);
+
+  // Handle Forgot OTP resend
+  const handleResendForgotOtp = useCallback(async () => {
+    if (forgotResendCooldown > 0) return;
+    try {
+      await authService.forgotPasswordRequest(forgotEmail);
+      toast.success('Code Resent', 'A new reset code has been sent to your email.');
+      setForgotResendCooldown(60);
+      setForgotOtpDigits(['', '', '', '', '', '']);
+      forgotOtpInputRefs.current[0]?.focus();
+    } catch (error: any) {
+      toast.error('Resend Failed', error.message || 'Failed to resend code.');
+    }
+  }, [forgotEmail, forgotResendCooldown, toast]);
+
+  // Forgot password OTP resend cooldown timer
+  useEffect(() => {
+    if (forgotResendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setForgotResendCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [forgotResendCooldown]);
+
+  // Handle Forgot OTP digit input
+  const handleForgotOtpChange = useCallback((index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    const newDigits = [...forgotOtpDigits];
+    newDigits[index] = value.slice(-1);
+    setForgotOtpDigits(newDigits);
+
+    if (value && index < 5) {
+      forgotOtpInputRefs.current[index + 1]?.focus();
+    }
+
+    const fullOtp = newDigits.join('');
+    if (fullOtp.length === 6) {
+      handleForgotPasswordVerify(fullOtp);
+    }
+  }, [forgotOtpDigits, handleForgotPasswordVerify]);
+
+  // Handle Forgot OTP paste
+  const handleForgotOtpPaste = useCallback((e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length === 6) {
+      const digits = pasted.split('');
+      setForgotOtpDigits(digits);
+      handleForgotPasswordVerify(pasted);
+    }
+  }, [handleForgotPasswordVerify]);
+
+  // Handle Forgot OTP backspace
+  const handleForgotOtpKeyDown = useCallback((index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !forgotOtpDigits[index] && index > 0) {
+      forgotOtpInputRefs.current[index - 1]?.focus();
+    }
+  }, [forgotOtpDigits]);
+
   // Google Icon SVG
   const GoogleIcon = () => (
     <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -845,27 +973,27 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   const renderEmailLoginView = () => (
     <>
       {/* Header with Back Button */}
-      <div className="px-8 pt-8 pb-6">
+      <div className="px-6 sm:px-8 pt-6 sm:pt-8 pb-4">
         <button
           onClick={() => switchView('main')}
-          className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-4"
+          className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-3"
         >
           <ArrowLeft className="w-4 h-4" />
           <span className="text-sm">Back</span>
         </button>
-        <h2 className="text-2xl font-serif font-bold text-theme-text mb-2">
+        <h2 className="text-xl sm:text-2xl font-serif font-bold text-theme-text mb-1">
           Sign in with Email
         </h2>
-        <p className="text-theme-muted text-sm">
+        <p className="text-theme-muted text-xs sm:text-sm">
           Enter your email and password to continue.
         </p>
       </div>
 
       {/* Login Form */}
-      <form onSubmit={handleEmailLogin} className="px-8 pb-10 space-y-4">
+      <form onSubmit={handleEmailLogin} className="px-6 sm:px-8 pb-8 sm:pb-10 space-y-3.5">
         {/* General Error */}
         {errors.general && (
-          <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+          <div className="flex items-center gap-2 p-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs sm:text-sm">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{errors.general}</span>
           </div>
@@ -873,48 +1001,57 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
         {/* Email Input */}
         <div>
-          <label className="block text-sm font-medium text-theme-text mb-2">Email</label>
+          <label className="block text-xs sm:text-sm font-medium text-theme-text mb-1.5">Email</label>
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-muted" />
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-theme-muted" />
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               required
-              className={`w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.email ? 'border-red-500' : 'border-theme-border'
-                } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
+              className={`w-full pl-10 sm:pl-11 pr-4 py-2 sm:py-2.5 bg-gray-50 dark:bg-theme-elevated border ${errors.email ? 'border-red-500' : 'border-theme-border'
+                } rounded-xl text-xs sm:text-sm text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
             />
           </div>
           {errors.email && (
-            <p className="mt-1 text-xs text-red-400">{errors.email}</p>
+            <p className="mt-1 text-[10px] sm:text-xs text-red-400">{errors.email}</p>
           )}
         </div>
 
         {/* Password Input */}
         <div>
-          <label className="block text-sm font-medium text-theme-text mb-2">Password</label>
+          <div className="flex justify-between items-center mb-1.5">
+            <label className="block text-xs sm:text-sm font-medium text-theme-text">Password</label>
+            <button
+              type="button"
+              onClick={() => switchView('forgot-password')}
+              className="text-[10px] sm:text-xs text-gold hover:underline font-semibold"
+            >
+              Forgot password?
+            </button>
+          </div>
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-muted" />
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-theme-muted" />
             <input
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
-              className={`w-full pl-11 pr-12 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.password ? 'border-red-500' : 'border-theme-border'
-                } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
+              className={`w-full pl-10 sm:pl-11 pr-10 sm:pr-12 py-2 sm:py-2.5 bg-gray-50 dark:bg-theme-elevated border ${errors.password ? 'border-red-500' : 'border-theme-border'
+                } rounded-xl text-xs sm:text-sm text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-text"
             >
-              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              {showPassword ? <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Eye className="w-4 h-4 sm:w-5 sm:h-5" />}
             </button>
           </div>
           {errors.password && (
-            <p className="mt-1 text-xs text-red-400">{errors.password}</p>
+            <p className="mt-1 text-[10px] sm:text-xs text-red-400">{errors.password}</p>
           )}
         </div>
 
@@ -922,25 +1059,25 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full flex items-center justify-center gap-2 bg-gold text-theme-bg py-3.5 rounded-xl font-medium hover:bg-gold/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-2 bg-gold text-theme-bg py-2.5 sm:py-3.5 rounded-xl font-medium hover:bg-gold/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
         >
           {isLoading ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
+            <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
           ) : (
             <>
               <span>Sign In</span>
-              <CheckCircle className="w-4 h-4" />
+              <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </>
           )}
         </button>
 
         {/* Register Link */}
-        <p className="text-center text-sm text-theme-muted">
+        <p className="text-center text-xs sm:text-sm text-theme-muted pt-1">
           Don't have an account?{' '}
           <button
             type="button"
             onClick={() => switchView('email-register')}
-            className="text-gold hover:underline"
+            className="text-gold hover:underline font-semibold"
           >
             Sign up
           </button>
@@ -953,27 +1090,27 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   const renderEmailRegisterView = () => (
     <>
       {/* Header with Back Button */}
-      <div className="px-8 pt-8 pb-6">
+      <div className="px-6 sm:px-8 pt-5 sm:pt-6 pb-2">
         <button
           onClick={() => switchView('email-login')}
-          className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-4"
+          className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-2.5"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span className="text-sm">Back to login</span>
+          <span className="text-xs sm:text-sm">Back to login</span>
         </button>
-        <h2 className="text-2xl font-serif font-bold text-theme-text mb-2">
+        <h2 className="text-xl sm:text-2xl font-serif font-bold text-theme-text mb-1">
           Create Account
         </h2>
-        <p className="text-theme-muted text-sm">
-          Join SeniQu to start your art collection journey.
+        <p className="text-theme-muted text-xs leading-relaxed">
+          Join SeniQu to start your digital art heritage journey.
         </p>
       </div>
 
       {/* Register Form */}
-      <form onSubmit={handleEmailRegister} className="px-8 pb-10 space-y-4">
+      <form onSubmit={handleEmailRegister} className="px-6 sm:px-8 pb-8 space-y-3">
         {/* General Error */}
         {errors.general && (
-          <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+          <div className="flex items-center gap-2 p-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{errors.general}</span>
           </div>
@@ -981,32 +1118,35 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
         {/* Display Name Input */}
         <div>
-          <label className="block text-sm font-medium text-theme-text mb-2">
+          <label className="block text-xs font-medium text-theme-text mb-1">
             Display Name <span className="text-red-400">*</span>
           </label>
           <input
             type="text"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Your name"
+            placeholder="Your full name"
             required
             minLength={2}
             maxLength={50}
-            className={`w-full px-4 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.displayName ? 'border-red-500' : 'border-theme-border'
-              } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
+            className={`w-full px-3 py-2 bg-gray-50 dark:bg-theme-elevated border ${errors.displayName ? 'border-red-500' : 'border-theme-border'
+              } rounded-xl text-xs sm:text-sm text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
           />
           {errors.displayName && (
-            <p className="mt-1 text-xs text-red-400">{errors.displayName}</p>
+            <p className="mt-1 text-[10px] text-red-400">{errors.displayName}</p>
           )}
         </div>
 
         {/* Username Input */}
         <div>
-          <label className="block text-sm font-medium text-theme-text mb-2">
-            Username <span className="text-red-400">*</span>
-          </label>
+          <div className="flex justify-between items-center mb-1">
+            <label className="block text-xs font-medium text-theme-text">
+              Username <span className="text-red-400">*</span>
+            </label>
+            <span className="text-[9px] text-theme-muted">a-z, 0-9, _ only</span>
+          </div>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-muted">@</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-muted text-xs sm:text-sm">@</span>
             <input
               type="text"
               value={username}
@@ -1015,104 +1155,319 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
               required
               minLength={3}
               maxLength={20}
-              className={`w-full pl-8 pr-4 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.username ? 'border-red-500' : 'border-theme-border'
-                } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
+              className={`w-full pl-7 pr-3 py-2 bg-gray-50 dark:bg-theme-elevated border ${errors.username ? 'border-red-500' : 'border-theme-border'
+                } rounded-xl text-xs sm:text-sm text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
             />
           </div>
-          <p className="mt-1 text-xs text-theme-muted">Lowercase letters, numbers, and underscores only</p>
           {errors.username && (
-            <p className="mt-1 text-xs text-red-400">{errors.username}</p>
+            <p className="mt-1 text-[10px] text-red-400">{errors.username}</p>
           )}
         </div>
 
         {/* Email Input */}
         <div>
-          <label className="block text-sm font-medium text-theme-text mb-2">Email</label>
+          <label className="block text-xs font-medium text-theme-text mb-1">Email</label>
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-muted" />
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-muted" />
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               required
-              className={`w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.email ? 'border-red-500' : 'border-theme-border'
-                } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
+              className={`w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-theme-elevated border ${errors.email ? 'border-red-500' : 'border-theme-border'
+                } rounded-xl text-xs sm:text-sm text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
             />
           </div>
           {errors.email && (
-            <p className="mt-1 text-xs text-red-400">{errors.email}</p>
+            <p className="mt-1 text-[10px] text-red-400">{errors.email}</p>
           )}
         </div>
 
         {/* Password Input */}
         <div>
-          <label className="block text-sm font-medium text-theme-text mb-2">Password</label>
+          <label className="block text-xs font-medium text-theme-text mb-1">Password</label>
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-muted" />
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-muted" />
             <input
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onFocus={() => setPasswordFocused(true)}
+              onBlur={() => setPasswordFocused(false)}
               placeholder="••••••••"
               required
-              className={`w-full pl-11 pr-12 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.password ? 'border-red-500' : 'border-theme-border'
-                } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
+              className={`w-full pl-9 pr-9 py-2 bg-gray-50 dark:bg-theme-elevated border ${errors.password ? 'border-red-500' : 'border-theme-border'
+                } rounded-xl text-xs sm:text-sm text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-text"
             >
-              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
           {errors.password && (
-            <p className="mt-1 text-xs text-red-400">{errors.password}</p>
+            <p className="mt-1 text-[10px] text-red-400">{errors.password}</p>
           )}
           <PasswordStrength password={password} />
         </div>
 
-        {/* Password Requirements */}
-        <div className="text-xs text-theme-muted bg-theme-elevated/30 p-3 rounded-xl">
-          <p className="font-medium mb-1">Password requirements:</p>
-          <ul className="space-y-0.5 ml-3 list-disc">
-            <li className={password.length >= 8 ? 'text-green-400' : ''}>At least 8 characters</li>
-            <li className={/[A-Z]/.test(password) ? 'text-green-400' : ''}>One uppercase letter</li>
-            <li className={/[a-z]/.test(password) ? 'text-green-400' : ''}>One lowercase letter</li>
-            <li className={/[0-9]/.test(password) ? 'text-green-400' : ''}>One number</li>
-            <li className={/[^A-Za-z0-9]/.test(password) ? 'text-green-400' : ''}>One special character</li>
-          </ul>
+        {/* Password Requirements - Focus Triggered Grid for Mobile Neatness */}
+        {passwordFocused && (
+          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9px] text-theme-muted bg-theme-elevated/40 p-2.5 rounded-xl border border-theme-border/50 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className={`flex items-center gap-1.5 ${password.length >= 8 ? 'text-green-400 font-semibold' : ''}`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${password.length >= 8 ? 'bg-green-400' : 'bg-theme-muted/50'}`} />
+              <span>Min. 8 characters</span>
+            </div>
+            <div className={`flex items-center gap-1.5 ${/[A-Z]/.test(password) ? 'text-green-400 font-semibold' : ''}`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${/[A-Z]/.test(password) ? 'bg-green-400' : 'bg-theme-muted/50'}`} />
+              <span>Uppercase letter</span>
+            </div>
+            <div className={`flex items-center gap-1.5 ${/[a-z]/.test(password) ? 'text-green-400 font-semibold' : ''}`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${/[a-z]/.test(password) ? 'bg-green-400' : 'bg-theme-muted/50'}`} />
+              <span>Lowercase letter</span>
+            </div>
+            <div className={`flex items-center gap-1.5 ${/[0-9]/.test(password) ? 'text-green-400 font-semibold' : ''}`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${/[0-9]/.test(password) ? 'bg-green-400' : 'bg-theme-muted/50'}`} />
+              <span>One number</span>
+            </div>
+            <div className={`flex items-center gap-1.5 ${/[^A-Za-z0-9]/.test(password) ? 'text-green-400 font-semibold' : ''}`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${/[^A-Za-z0-9]/.test(password) ? 'bg-green-400' : 'bg-theme-muted/50'}`} />
+              <span>Special char</span>
+            </div>
+          </div>
+        )}
+
+        {/* Submit Button */}
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="w-full flex items-center justify-center gap-2 bg-gold text-theme-bg py-2.5 sm:py-3 rounded-xl font-medium hover:bg-gold/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
+        >
+          {isLoading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <>
+              <span>Create Account</span>
+              <CheckCircle className="w-3.5 h-3.5" />
+            </>
+          )}
+        </button>
+
+        {/* Login Link */}
+        <p className="text-center text-xs text-theme-muted pt-0.5">
+          Already have an account?{' '}
+          <button
+            type="button"
+            onClick={() => switchView('email-login')}
+            className="text-gold hover:underline font-semibold"
+          >
+            Sign in
+          </button>
+        </p>
+      </form>
+    </>
+  );
+
+  // Render forgot password form (Step 1)
+  const renderForgotPasswordView = () => (
+    <>
+      {/* Header with Back Button */}
+      <div className="px-6 sm:px-8 pt-6 sm:pt-8 pb-4">
+        <button
+          onClick={() => switchView('email-login')}
+          className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-3"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span className="text-sm">Back to login</span>
+        </button>
+        <h2 className="text-xl sm:text-2xl font-serif font-bold text-theme-text mb-1">
+          Reset Password
+        </h2>
+        <p className="text-theme-muted text-xs sm:text-sm leading-relaxed">
+          Enter your email to receive a 6-digit recovery code.
+        </p>
+      </div>
+
+      {/* Forgot Password Form */}
+      <form onSubmit={handleForgotPasswordRequest} className="px-6 sm:px-8 pb-8 sm:pb-10 space-y-4">
+        {/* General Error */}
+        {errors.general && (
+          <div className="flex items-center gap-2 p-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs sm:text-sm">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{errors.general}</span>
+          </div>
+        )}
+
+        {/* Email Input */}
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-theme-text mb-1.5">Email</label>
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-theme-muted" />
+            <input
+              type="email"
+              value={forgotEmail}
+              onChange={(e) => setForgotEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              className="w-full pl-10 sm:pl-11 pr-4 py-2 sm:py-2.5 bg-gray-50 dark:bg-theme-elevated border border-theme-border rounded-xl text-xs sm:text-sm text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50"
+            />
+          </div>
         </div>
 
         {/* Submit Button */}
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full flex items-center justify-center gap-2 bg-gold text-theme-bg py-3.5 rounded-xl font-medium hover:bg-gold/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-2 bg-gold text-theme-bg py-2.5 sm:py-3.5 rounded-xl font-medium hover:bg-gold/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
         >
           {isLoading ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
+            <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
           ) : (
             <>
-              <span>Create Account</span>
-              <CheckCircle className="w-4 h-4" />
+              <span>Send Recovery Code</span>
+              <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </>
           )}
         </button>
-
-        {/* Login Link */}
-        <p className="text-center text-sm text-theme-muted">
-          Already have an account?{' '}
-          <button
-            type="button"
-            onClick={() => switchView('email-login')}
-            className="text-gold hover:underline"
-          >
-            Sign in
-          </button>
-        </p>
       </form>
+    </>
+  );
+
+  // Render forgot password OTP and new password form (Step 2)
+  const renderForgotPasswordOtpView = () => (
+    <>
+      {/* Header with Back Button */}
+      <div className="px-6 sm:px-8 pt-6 sm:pt-8 pb-4">
+        <button
+          onClick={() => switchView('forgot-password')}
+          className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-3"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span className="text-xs sm:text-sm">Back</span>
+        </button>
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 flex items-center justify-center border border-amber-500/20 flex-shrink-0">
+            <KeyRound className="w-5 h-5 text-amber-500" />
+          </div>
+          <div>
+            <h2 className="text-lg sm:text-xl font-serif font-bold text-theme-text">Enter Reset Code</h2>
+            <p className="text-theme-muted text-[11px] truncate max-w-[240px]">Sent to {forgotMaskedEmail}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-6 sm:px-8 pb-8 sm:pb-10 space-y-4">
+        {/* General Error */}
+        {errors.general && (
+          <div className="flex items-center gap-2 p-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{errors.general}</span>
+          </div>
+        )}
+
+        {/* New Password Input */}
+        <div>
+          <label className="block text-xs font-medium text-theme-text mb-1">New Password</label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-muted" />
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={forgotNewPassword}
+              onChange={(e) => setForgotNewPassword(e.target.value)}
+              onFocus={() => setForgotPasswordFocused(true)}
+              onBlur={() => setForgotPasswordFocused(false)}
+              placeholder="••••••••"
+              required
+              className="w-full pl-9 pr-9 py-2 bg-gray-50 dark:bg-theme-elevated border border-theme-border rounded-xl text-xs sm:text-sm text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-text"
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+          {forgotPasswordFocused && (
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9px] text-theme-muted bg-theme-elevated/40 p-2.5 rounded-xl border border-theme-border/50 mt-2 animate-in fade-in duration-200">
+              <div className={`flex items-center gap-1.5 ${forgotNewPassword.length >= 8 ? 'text-green-400 font-semibold' : ''}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${forgotNewPassword.length >= 8 ? 'bg-green-400' : 'bg-theme-muted/50'}`} />
+                <span>Min. 8 characters</span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${/[A-Z]/.test(forgotNewPassword) ? 'text-green-400 font-semibold' : ''}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${/[A-Z]/.test(forgotNewPassword) ? 'bg-green-400' : 'bg-theme-muted/50'}`} />
+                <span>Uppercase letter</span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${/[a-z]/.test(forgotNewPassword) ? 'text-green-400 font-semibold' : ''}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${/[a-z]/.test(forgotNewPassword) ? 'bg-green-400' : 'bg-theme-muted/50'}`} />
+                <span>Lowercase letter</span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${/[0-9]/.test(forgotNewPassword) ? 'text-green-400 font-semibold' : ''}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${/[0-9]/.test(forgotNewPassword) ? 'bg-green-400' : 'bg-theme-muted/50'}`} />
+                <span>One number</span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${/[^A-Za-z0-9]/.test(forgotNewPassword) ? 'text-green-400 font-semibold' : ''}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${/[^A-Za-z0-9]/.test(forgotNewPassword) ? 'bg-green-400' : 'bg-theme-muted/50'}`} />
+                <span>Special char</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* OTP Inputs */}
+        <div className="pt-2">
+          <label className="block text-xs font-medium text-theme-text mb-2 text-center">6-Digit Reset Code</label>
+          <div className="flex justify-center gap-2 sm:gap-3" onPaste={handleForgotOtpPaste}>
+            {forgotOtpDigits.map((digit, index) => (
+              <input
+                key={index}
+                ref={(el) => { forgotOtpInputRefs.current[index] = el; }}
+                type="text"
+                inputMode="numeric"
+                maxLength={1}
+                value={digit}
+                onChange={(e) => handleForgotOtpChange(index, e.target.value)}
+                onKeyDown={(e) => handleForgotOtpKeyDown(index, e)}
+                autoFocus={index === 0}
+                disabled={isLoading}
+                className={`w-9 h-11 sm:w-10 sm:h-12 text-center text-lg sm:text-xl font-bold bg-gray-50 dark:bg-theme-elevated border-2 ${
+                  digit ? 'border-amber-500/60 text-amber-600 dark:text-gold' : 'border-theme-border'
+                } rounded-xl text-theme-text focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-all`}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Loading indicator */}
+        {isLoading && (
+          <div className="flex items-center justify-center gap-2 text-amber-500 text-xs sm:text-sm">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Verifying & resetting...</span>
+          </div>
+        )}
+
+        {/* Timer + Resend */}
+        <div className="text-center pt-2">
+          <p className="text-theme-muted text-xs mb-1.5">
+            Code expires in <span className="text-amber-500 font-semibold">5 minutes</span>
+          </p>
+          {forgotResendCooldown > 0 ? (
+            <p className="text-theme-muted text-xs">
+              Resend code in <span className="text-amber-500 font-mono font-semibold">{forgotResendCooldown}s</span>
+            </p>
+          ) : (
+            <button
+              onClick={handleResendForgotOtp}
+              className="text-amber-600 dark:text-gold hover:underline text-xs font-semibold transition-colors"
+            >
+              Resend Code
+            </button>
+          )}
+        </div>
+      </div>
     </>
   );
 
@@ -1453,6 +1808,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                   {view === 'main' && renderMainView()}
                   {view === 'email-login' && renderEmailLoginView()}
                   {view === 'email-register' && renderEmailRegisterView()}
+                  {view === 'forgot-password' && renderForgotPasswordView()}
+                  {view === 'forgot-password-otp' && renderForgotPasswordOtpView()}
                   {view === 'otp-input' && (
                     <>
                       {/* OTP Input View */}
