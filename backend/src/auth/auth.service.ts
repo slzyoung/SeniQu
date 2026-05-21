@@ -667,27 +667,38 @@ export class AuthService {
             })
             isNewUser = true
 
-            // Auto-create Privy Embedded Wallet (Deposit Wallet)
-            await this.privyService.createWithEmbeddedWallet({
+            // Auto-create Privy Embedded Wallet — FIRE AND FORGET (non-blocking)
+            // Don't let Privy API slowness block the OAuth redirect
+            this.privyService.createWithEmbeddedWallet({
                 email: user.email || undefined
-            })
+            }).catch(err => this.logger.warn(`[GoogleOAuth] Background Privy wallet creation failed: ${err.message}`))
         } else if (!user.googleId) {
             await this.usersService.updateGoogleId(user.id, googleProfile.googleId)
             user.googleId = googleProfile.googleId
         }
 
-        // Ensure existing users also get a wallet if they don't have one
-        await this.ensureEmbeddedWallet(user)
+        // Ensure existing users also get a wallet — FIRE AND FORGET (non-blocking)
+        // Wallet provisioning is NOT critical for the login redirect
+        this.ensureEmbeddedWallet(user).catch(err =>
+            this.logger.warn(`[GoogleOAuth] Background wallet sync failed for ${user.id}: ${err.message}`)
+        )
 
         const tokens = await this.generateTokens(user)
-        const privyToken = await this.privyService.getCustomAuthToken(user.id)
+
+        // Privy custom auth token — non-critical, wrap in try-catch
+        let privyToken: string | undefined
+        try {
+            privyToken = (await this.privyService.getCustomAuthToken(user.id)) || undefined
+        } catch (err) {
+            this.logger.warn(`[GoogleOAuth] Privy custom token failed: ${(err as any).message}`)
+        }
 
         const fullyPopulatedUser = await this.usersService.findById(user.id)
 
         return {
             user: fullyPopulatedUser || user,
             ...tokens,
-            privyToken: privyToken || undefined,
+            privyToken,
             isNewUser,
         }
     }

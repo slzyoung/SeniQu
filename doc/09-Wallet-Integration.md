@@ -42,6 +42,13 @@ useSyncJwtBasedAuthState({
 });
 ```
 
+### 2.2.1 Asynchronous Wallet Provisioning (Backend)
+To guarantee high performance and reliability during the sign-in/callback redirect flow, the backend provisions and synchronizes embedded wallets asynchronously in the background using a **non-blocking fire-and-forget pattern**:
+- **Why**: Privy API interactions (such as wallet initialization and retrieval) can occasionally introduce 10-30+ seconds of network latency or timing fluctuations.
+- **How**: During user sign-in or account creation in the Google OAuth callback, the `ensureEmbeddedWallet` and `createWithEmbeddedWallet` functions are invoked as un-awaited background promises.
+- **Fail-safe**: Any errors or API timeouts from Privy are safely captured and logged asynchronously, ensuring that the primary authentication thread immediately redirect the user to the frontend dashboard.
+
+
 ### 2.3 Wallet Creation & Linking
 When a user visits the **Wallet Page** (`/dashboard/wallet`):
 1.  **Adaptive Wallet Resolution**: The system uses a robust strategy to find the correct embedded wallet:

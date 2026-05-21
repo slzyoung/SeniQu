@@ -164,6 +164,9 @@ sequenceDiagram
 | **Nonce** | Random UUID verified against Google ID token `nonce` claim to prevent replay attacks |
 | **Cookie** | Signed httpOnly, Secure, SameSite=Lax — client JS cannot read or tamper |
 | **Cleanup** | Cookie cleared after every callback, regardless of success or failure |
+| **Response Format Preservation** | NestJS `TransformInterceptor` dynamically detects 3xx status codes and `@Res()` handlers (returning undefined/null) to bypass `{ success: true, data: ... }` JSON wrapping on redirect requests |
+| **Resilience & Fail-Safe** | Multilayered safety net with outer try-catch guarantees a `302 Redirect` is always sent to the frontend with an encoded error parameter in the URL hash, preventing blank/hung screens |
+| **Non-blocking Wallet Provisioning** | Background/fire-and-forget sync/provisioning pattern for Privy embedded wallets prevents server latency or timeouts from blocking user authentication |
 
 ### 1.7 Privy Embedded Wallet (Auto-Sync & Verification)
 
