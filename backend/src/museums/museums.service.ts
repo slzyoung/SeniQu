@@ -107,6 +107,10 @@ export class MuseumsService {
         const apiKey = this.configService.get<string>('googleMaps.apiKey')
             || process.env.GOOGLE_MAPS_API_KEY
             || '';
+        const referer = this.configService.get<string>('FRONTEND_URL')
+            || process.env.FRONTEND_URL
+            || 'http://localhost:5173';
+
         if (!apiKey) {
             this.logger.warn('GOOGLE_MAPS_API_KEY is not configured');
             return { places: [] };
@@ -131,6 +135,7 @@ export class MuseumsService {
                         'Content-Type': 'application/json',
                         'X-Goog-Api-Key': apiKey,
                         'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.rating,places.userRatingCount,places.photos,places.regularOpeningHours,places.businessStatus',
+                        'Referer': referer.endsWith('/') ? referer : `${referer}/`,
                     },
                     body: JSON.stringify({
                         includedTypes: group.types,
@@ -218,6 +223,10 @@ export class MuseumsService {
         const apiKey = this.configService.get<string>('googleMaps.apiKey')
             || process.env.GOOGLE_MAPS_API_KEY
             || '';
+        const referer = this.configService.get<string>('FRONTEND_URL')
+            || process.env.FRONTEND_URL
+            || 'http://localhost:5173';
+
         if (!apiKey) {
             this.logger.warn('GOOGLE_MAPS_API_KEY is not configured in backend .env');
             throw new NotFoundException('Google Maps API key is not configured');
@@ -244,6 +253,7 @@ export class MuseumsService {
                     'Content-Type': 'application/json',
                     'X-Goog-Api-Key': apiKey,
                     'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs',
+                    'Referer': referer.endsWith('/') ? referer : `${referer}/`,
                 },
                 body: JSON.stringify({
                     origin: {

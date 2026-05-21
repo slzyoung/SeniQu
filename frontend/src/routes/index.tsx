@@ -2,7 +2,7 @@
  * Main Router Configuration
  */
 
-import { lazy } from 'react';
+
 import { lazyWithRetry } from '../utils/lazyImport';
 import {
     createBrowserRouter,
@@ -86,7 +86,7 @@ const SystemHealth = lazyWithRetry(() => import('../features/admin/pages/SystemH
 const ReportsIssues = lazyWithRetry(() => import('../features/admin/pages/ReportsIssues'));
 const PartnershipManagement = lazyWithRetry(() => import('../features/admin/pages/PartnershipManagement'));
 const SystemAlerts = lazyWithRetry(() => import('../features/admin/pages/SystemAlerts'));
-const AdminAlerts = lazyWithRetry(() => import('../features/admin/pages/SystemAlerts'));
+
 const AdminProfile = lazyWithRetry(() => import('../features/admin/pages/AdminProfile'));
 const AdminWalletPage = lazyWithRetry(() => import('../features/admin/pages/AdminWalletPage'));
 
@@ -249,7 +249,14 @@ const router = createBrowserRouter(
 );
 
 export function AppRouter() {
-    return <RouterProvider router={router} />;
+    return (
+        <RouterProvider
+            router={router}
+            future={{
+                v7_startTransition: true,
+            }}
+        />
+    );
 }
 
 export default AppRouter;

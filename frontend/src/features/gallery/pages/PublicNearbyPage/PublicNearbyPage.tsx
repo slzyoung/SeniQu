@@ -49,7 +49,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../../../hooks/useTheme';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GoogleMap, useLoadScript, MarkerF, CircleF, InfoWindowF, PolylineF } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, CircleF, InfoWindowF, PolylineF } from '@react-google-maps/api';
 import { museumService } from '../../../../services/museumService';
 import './PublicNearbyPage.css';
 
@@ -68,76 +68,123 @@ interface UserLocation {
 const DEFAULT_CENTER = { lat: -6.2088, lng: 106.8456 };
 const MAP_LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"];
 
-const GOOGLE_MAP_STYLES = [
-    { elementType: "geometry", stylers: [{ color: "#1a1b26" }] },
-    { elementType: "labels.text.stroke", stylers: [{ color: "#1a1b26" }] },
-    { elementType: "labels.text.fill", stylers: [{ color: "#7982a9" }] },
-    {
-        featureType: "administrative.locality",
-        elementType: "labels.text.fill",
-        stylers: [{ color: "#c0caf5" }],
-    },
-    {
-        featureType: "poi",
-        elementType: "labels.text.fill",
-        stylers: [{ color: "#c0caf5" }],
-    },
-    {
-        featureType: "poi.park",
-        elementType: "geometry",
-        stylers: [{ color: "#1f2335" }],
-    },
-    {
-        featureType: "poi.park",
-        elementType: "labels.text.fill",
-        stylers: [{ color: "#565f89" }],
-    },
-    {
-        featureType: "road",
-        elementType: "geometry",
-        stylers: [{ color: "#24283b" }],
-    },
-    {
-        featureType: "road",
-        elementType: "geometry.stroke",
-        stylers: [{ color: "#1a1b26" }],
-    },
-    {
-        featureType: "road",
-        elementType: "labels.text.fill",
-        stylers: [{ color: "#9aa5ce" }],
-    },
-    {
-        featureType: "road.highway",
-        elementType: "geometry",
-        stylers: [{ color: "#3d425b" }],
-    },
-    {
-        featureType: "road.highway",
-        elementType: "geometry.stroke",
-        stylers: [{ color: "#1a1b26" }],
-    },
-    {
-        featureType: "road.highway",
-        elementType: "labels.text.fill",
-        stylers: [{ color: "#cfc9c2" }],
-    },
-    {
-        featureType: "water",
-        elementType: "geometry",
-        stylers: [{ color: "#16161e" }],
-    },
-    {
-        featureType: "water",
-        elementType: "labels.text.fill",
-        stylers: [{ color: "#565f89" }],
-    },
-    {
-        featureType: "water",
-        elementType: "labels.text.stroke",
-        stylers: [{ color: "#16161e" }],
-    },
-];
+
+
+/** Creates a native Google Maps blue dot DOM element for user location */
+function createBlueDotElement(): HTMLDivElement {
+    const outer = document.createElement('div');
+    outer.style.position = 'relative';
+    outer.style.width = '22px';
+    outer.style.height = '22px';
+
+    const halo = document.createElement('div');
+    Object.assign(halo.style, {
+        position: 'absolute', top: '50%', left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: '22px', height: '22px', borderRadius: '50%',
+        backgroundColor: 'rgba(66, 133, 244, 0.2)',
+        animation: 'gmaps-blue-dot-pulse 2s ease-out infinite',
+    });
+    outer.appendChild(halo);
+
+    const ring = document.createElement('div');
+    Object.assign(ring.style, {
+        position: 'absolute', top: '50%', left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: '16px', height: '16px', borderRadius: '50%',
+        backgroundColor: '#FFFFFF', boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+    });
+    outer.appendChild(ring);
+
+    const dot = document.createElement('div');
+    Object.assign(dot.style, {
+        position: 'absolute', top: '50%', left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: '12px', height: '12px', borderRadius: '50%',
+        backgroundColor: '#4285F4',
+    });
+    outer.appendChild(dot);
+
+    if (!document.getElementById('gmaps-blue-dot-style')) {
+        const style = document.createElement('style');
+        style.id = 'gmaps-blue-dot-style';
+        style.textContent = `
+            @keyframes gmaps-blue-dot-pulse {
+                0%   { transform: translate(-50%, -50%) scale(1);   opacity: 1; }
+                100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    return outer;
+}
+
+interface AdvancedMarkerProps {
+    map: google.maps.Map | null;
+    position: { lat: number; lng: number };
+    title?: string;
+    onClick?: () => void;
+    isUserLocation?: boolean;
+    isActive?: boolean;
+    placeType?: string;
+}
+
+function AdvancedMarker({ map, position, title, onClick, isUserLocation, isActive, placeType }: AdvancedMarkerProps) {
+    const onClickRef = useRef(onClick);
+    onClickRef.current = onClick;
+
+    useEffect(() => {
+        if (!map) return;
+        let marker: any = null;
+
+        const handleClick = () => {
+            onClickRef.current?.();
+        };
+
+        const initMarker = async () => {
+            try {
+                const { AdvancedMarkerElement, PinElement } = await google.maps.importLibrary("marker") as any;
+
+                const markerOptions: any = {
+                    map,
+                    position,
+                    title,
+                    gmpClickable: !isUserLocation,
+                };
+
+                if (isUserLocation) {
+                    markerOptions.content = createBlueDotElement();
+                    markerOptions.zIndex = 999;
+                } else {
+                    const pin = new PinElement({
+                        scale: isActive ? 1.3 : 1.0,
+                    });
+                    markerOptions.content = pin;
+                }
+
+                marker = new AdvancedMarkerElement(markerOptions);
+
+                if (!isUserLocation) {
+                    marker.addEventListener('gmp-click', handleClick);
+                }
+            } catch (error) {
+                console.error('Error creating AdvancedMarker:', error);
+            }
+        };
+
+        initMarker();
+
+        return () => {
+            if (marker) {
+                marker.removeEventListener('gmp-click', handleClick);
+                marker.map = null;
+            }
+        };
+    }, [map, position.lat, position.lng, title, isUserLocation, isActive, placeType]);
+
+    return null;
+}
+
 
 // ============================================
 // SECURITY: Input sanitization
@@ -539,7 +586,7 @@ export default function PublicNearbyPage() {
 }
 
 function NearbyPageInner({ apiKey }: { apiKey: string }) {
-    const { isDark } = useTheme();
+    useTheme();
     const [viewMode, setViewMode] = useState<ViewMode>('map');
     const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
@@ -573,12 +620,13 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
         return () => clearInterval(interval);
     }, [userLocation]);
     const [isPlacesLoading, setIsPlacesLoading] = useState(false);
-    const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
     const [hasInitialSearched, setHasInitialSearched] = useState(false);
+    const [hasSearchedUserLoc, setHasSearchedUserLoc] = useState(false);
     const initialCenterRef = useRef<{ lat: number; lng: number } | null>(null);
     const isFittingBoundsRef = useRef(false);
     const [sortBy, setSortBy] = useState<'distance' | 'rating'>('distance');
     const [minRating, setMinRating] = useState<number>(0);
+    const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
 
     const getDistance = useCallback((museum: any) => {
         if (!userLocation) return null;
@@ -645,28 +693,23 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
         setRouteDuration(null);
     }, []);
 
-    const { isLoaded, loadError } = useLoadScript({
+    const { isLoaded, loadError } = useJsApiLoader({
+        id: 'google-map-script',
         googleMapsApiKey: apiKey,
         libraries: MAP_LIBRARIES,
     });
 
-    // Custom Marker Pin icon helper
-    const getMarkerIcon = useCallback((_type: string, _isSelected: boolean) => {
-        // Returning undefined forces the Google Maps API to draw its native default red marker pin
-        return undefined;
-    }, []);
+
 
     // Map Load Handlers
     const onMapLoad = useCallback((map: google.maps.Map) => {
         mapRef.current = map;
-        const initialCenter = map.getCenter();
-        if (initialCenter) {
-            setMapCenter({ lat: initialCenter.lat(), lng: initialCenter.lng() });
-        }
+        setMapInstance(map);
     }, []);
 
     const onMapUnmount = useCallback(() => {
         mapRef.current = null;
+        setMapInstance(null);
     }, []);
 
     const handleZoomIn = () => {
@@ -845,11 +888,12 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
         };
     }, []);
 
-    // Initial search when map and coordinates load
+    // Initial search when map loads (use DEFAULT_CENTER first, update when userLocation is fetched)
     useEffect(() => {
-        if (isLoaded && userLocation && !hasInitialSearched) {
-            const center = { lat: userLocation.latitude, lng: userLocation.longitude };
-            setMapCenter(center);
+        if (isLoaded && !hasInitialSearched) {
+            const center = userLocation 
+                ? { lat: userLocation.latitude, lng: userLocation.longitude } 
+                : DEFAULT_CENTER;
             initialCenterRef.current = center;
             if (mapRef.current) {
                 isFittingBoundsRef.current = true;
@@ -857,16 +901,25 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
             }
             searchNearbyPlaces(center, activeFilter, searchQuery);
             setHasInitialSearched(true);
+            if (userLocation) {
+                setHasSearchedUserLoc(true);
+            }
         }
     }, [isLoaded, userLocation, hasInitialSearched, activeFilter, searchQuery, searchNearbyPlaces]);
 
-    // Re-run search automatically on active filter/search query change
+    // Update center and re-search when a real userLocation becomes available
     useEffect(() => {
-        if (isLoaded && hasInitialSearched) {
-            const center = mapCenter || (userLocation ? { lat: userLocation.latitude, lng: userLocation.longitude } : DEFAULT_CENTER);
+        if (isLoaded && userLocation && hasInitialSearched && !hasSearchedUserLoc) {
+            const center = { lat: userLocation.latitude, lng: userLocation.longitude };
+            if (mapRef.current) {
+                mapRef.current.panTo(center);
+            }
             searchNearbyPlaces(center, activeFilter, searchQuery);
+            setHasSearchedUserLoc(true);
         }
-    }, [activeFilter, searchQuery, isLoaded, hasInitialSearched]);
+    }, [isLoaded, userLocation, hasInitialSearched, hasSearchedUserLoc, activeFilter, searchQuery, searchNearbyPlaces]);
+
+
 
     // Instant Haversine estimation for distance/time display (no API call)
     const calculateEstimation = useCallback(() => {
@@ -1101,27 +1154,22 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                                     onUnmount={onMapUnmount}
                                     onIdle={handleMapIdle}
                                     options={{
+                                        mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "DEMO_MAP_ID",
                                         disableDefaultUI: true,
-                                        styles: isDark ? GOOGLE_MAP_STYLES : [],
                                     }}
                                 >
                                     {/* User Location Marker & Pulser Halo */}
                                     {userLocation && (
                                         <>
-                                            {/* Google Maps Classic Blue Dot Marker */}
-                                            <MarkerF
-                                                position={{ lat: userLocation.latitude, lng: userLocation.longitude }}
-                                                icon={{
-                                                    path: google.maps.SymbolPath.CIRCLE,
-                                                    fillColor: '#3B82F6', // Google blue
-                                                    fillOpacity: 1.0,
-                                                    scale: 8,
-                                                    strokeColor: '#FFFFFF', // White border
-                                                    strokeWeight: 2.5,
-                                                }}
-                                                title="Lokasi Anda"
-                                                zIndex={999}
-                                            />
+                                            {/* Google Maps AdvancedMarker Blue Dot */}
+                                            {mapInstance && (
+                                                <AdvancedMarker
+                                                    map={mapInstance}
+                                                    position={{ lat: userLocation.latitude, lng: userLocation.longitude }}
+                                                    title="Lokasi Anda"
+                                                    isUserLocation
+                                                />
+                                            )}
                                             {/* High-Fidelity Expanding Radar Pulsing Halo */}
                                             <CircleF
                                                 center={{ lat: userLocation.latitude, lng: userLocation.longitude }}
@@ -1138,31 +1186,25 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                                         </>
                                     )}
 
-                                    {/* Place Markers */}
-                                    {sortedPlaces.map((museum: any) => {
+                                    {/* Place Markers (AdvancedMarkerElement — recommended) */}
+                                    {mapInstance && sortedPlaces.map((museum: any) => {
                                         const mLat = museum.coordinates?.lat ?? museum.latitude;
                                         const mLng = museum.coordinates?.lng ?? museum.longitude;
                                         if (typeof mLat !== 'number' || typeof mLng !== 'number') return null;
                                         const isActive = selectedMuseum?.id === museum.id;
 
                                         return (
-                                            <MarkerF
+                                            <AdvancedMarker
                                                 key={museum.id}
+                                                map={mapInstance}
                                                 position={{ lat: mLat, lng: mLng }}
                                                 title={museum.name}
                                                 onClick={() => {
                                                     selectPlace(museum);
                                                     setSheetExpanded(false);
                                                 }}
-                                                icon={getMarkerIcon(museum.type, isActive)}
-                                                label={!isActive ? {
-                                                    text: museum.name?.length > 18 ? museum.name.substring(0, 18) + '...' : museum.name,
-                                                    color: isDark ? '#E5E7EB' : '#1F2937',
-                                                    fontSize: '11px',
-                                                    fontWeight: '600',
-                                                    className: 'pnb-marker-label',
-                                                } : undefined}
-                                                zIndex={isActive ? 900 : 1}
+                                                isActive={isActive}
+                                                placeType={museum.type}
                                             />
                                         );
                                     })}
