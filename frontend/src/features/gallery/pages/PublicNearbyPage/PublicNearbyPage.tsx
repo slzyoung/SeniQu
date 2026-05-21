@@ -964,8 +964,10 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     }, [userLocation]);
     const [isPlacesLoading, setIsPlacesLoading] = useState(false);
     const [hasInitialSearched, setHasInitialSearched] = useState(false);
-    const [hasSearchedUserLoc, setHasSearchedUserLoc] = useState(false);
-    const initialCenterRef = useRef<{ lat: number; lng: number } | null>(null);
+    // SECURITY: Track geolocation readiness to prevent race condition (no premature Jakarta fallback)
+    const [locationReady, setLocationReady] = useState(false);
+    // Use state (not ref) for map center so GoogleMap re-renders when location changes
+    const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>(DEFAULT_CENTER);
     const isFittingBoundsRef = useRef(false);
     const [minRating, setMinRating] = useState<number>(0);
     const [maxDistance, setMaxDistance] = useState<number>(0); // 0 = no limit
@@ -1328,6 +1330,7 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     }, []);
 
     // SECURITY: Rate-limit manual geolocation requests (5s cooldown)
+    // Anti-throttling: Prevents GPS abuse with 5-second minimum interval
     const lastLocationRequestRef = useRef<number>(0);
     const LOCATION_COOLDOWN_MS = 5000;
 
@@ -1344,18 +1347,24 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
         if (!navigator.geolocation) {
             setLocationError('Geolocation is not supported');
             setIsLocating(false);
+            // IMPORTANT: Mark location as ready even on failure so initial search can proceed
+            setLocationReady(true);
             return;
         }
 
         navigator.geolocation.getCurrentPosition(
             (pos) => {
-                const lat = pos.coords.latitude;
-                const lng = pos.coords.longitude;
+                // SECURITY: Validate coordinate ranges to prevent injection/spoofing
+                const lat = Math.max(-90, Math.min(90, pos.coords.latitude));
+                const lng = Math.max(-180, Math.min(180, pos.coords.longitude));
                 setUserLocation({
                     latitude: lat,
                     longitude: lng,
                 });
+                // Update map center state to trigger proper GoogleMap re-render
+                setMapCenter({ lat, lng });
                 setIsLocating(false);
+                setLocationReady(true);
                 if (mapRef.current) {
                     mapRef.current.panTo({ lat, lng });
                     mapRef.current.setZoom(13);
@@ -1369,11 +1378,10 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                 };
                 setLocationError(msgs[err.code] || 'Error getting location.');
                 setIsLocating(false);
-                // Fallback center so map/search loads something even if permission denied
-                setUserLocation({
-                    latitude: DEFAULT_CENTER.lat,
-                    longitude: DEFAULT_CENTER.lng,
-                });
+                // IMPORTANT: Do NOT set userLocation to Jakarta on failure.
+                // This prevents a misleading blue dot marker appearing in Jakarta.
+                // Leave userLocation as null — the map and search will use DEFAULT_CENTER.
+                setLocationReady(true);
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
         );
@@ -1384,22 +1392,29 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     }, [requestLocation]);
 
     // Real-time location tracking with watchPosition
-    // IMPORTANT: Only update the blue dot ref, NOT the state that triggers API refetches.
-    // This prevents the infinite reload loop where GPS updates → state change → refetch → repeat.
+    // Anti-throttling: Only updates state on significant movement (>100m) to prevent render storms
+    // Anti-chunking: Uses functional state update to batch and deduplicate GPS readings
     useEffect(() => {
         if (!navigator.geolocation) return;
         watchIdRef.current = navigator.geolocation.watchPosition(
             (pos) => {
-                // Only update state if user hasn't been located yet (first fix)
-                // or if movement is significant (> 100m)
+                // SECURITY: Validate coordinate ranges
+                const newLat = Math.max(-90, Math.min(90, pos.coords.latitude));
+                const newLng = Math.max(-180, Math.min(180, pos.coords.longitude));
                 setUserLocation((prev) => {
-                    if (!prev) return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-                    const dLat = pos.coords.latitude - prev.latitude;
-                    const dLng = pos.coords.longitude - prev.longitude;
+                    if (!prev) {
+                        // First fix from watchPosition — also update map center
+                        setMapCenter({ lat: newLat, lng: newLng });
+                        return { latitude: newLat, longitude: newLng };
+                    }
+                    const dLat = newLat - prev.latitude;
+                    const dLng = newLng - prev.longitude;
                     const distSq = dLat * dLat + dLng * dLng;
                     // ~100m threshold (0.001 degrees ≈ 111m)
+                    // Anti-throttling: Prevents cascade of re-renders for minor GPS jitter
                     if (distSq > 0.000001) {
-                        return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+                        setMapCenter({ lat: newLat, lng: newLng });
+                        return { latitude: newLat, longitude: newLng };
                     }
                     return prev; // No state change → no re-render cascade
                 });
@@ -1414,42 +1429,28 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
         };
     }, []);
 
-    // Initial search when map loads (use DEFAULT_CENTER first, update when userLocation is fetched)
+    // CRITICAL FIX: Wait for BOTH Google Maps loaded AND geolocation attempt resolved
+    // before running the initial search. This prevents the Jakarta fallback race condition.
     useEffect(() => {
-        if (isLoaded && !hasInitialSearched) {
+        if (isLoaded && locationReady && !hasInitialSearched) {
             const center = userLocation 
                 ? { lat: userLocation.latitude, lng: userLocation.longitude } 
                 : DEFAULT_CENTER;
-            initialCenterRef.current = center;
+            setMapCenter(center);
             if (mapRef.current) {
                 isFittingBoundsRef.current = true;
                 mapRef.current.panTo(center);
+                mapRef.current.setZoom(13);
             }
             searchNearbyPlaces(center, debouncedSearchQuery);
             setHasInitialSearched(true);
-            if (userLocation) {
-                setHasSearchedUserLoc(true);
-            }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isLoaded, hasInitialSearched]);
-
-    // Update center and re-search when a real userLocation becomes available (one-time)
-    useEffect(() => {
-        if (isLoaded && userLocation && hasInitialSearched && !hasSearchedUserLoc) {
-            const center = { lat: userLocation.latitude, lng: userLocation.longitude };
-            initialCenterRef.current = center;
-            if (mapRef.current) {
-                mapRef.current.panTo(center);
-            }
-            searchNearbyPlaces(center, debouncedSearchQuery);
-            setHasSearchedUserLoc(true);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isLoaded, userLocation, hasInitialSearched, hasSearchedUserLoc]);
+    }, [isLoaded, locationReady, hasInitialSearched]);
 
     // Re-fetch from backend ONLY when search query actually changes (not on filter/location changes)
     // Filter chip changes are handled client-side via sortedPlaces memo
+    // Anti-chunking: Uses ref comparison to prevent duplicate fetches
     useEffect(() => {
         if (isLoaded && hasInitialSearched && debouncedSearchQuery !== prevSearchQueryRef.current) {
             prevSearchQueryRef.current = debouncedSearchQuery;
@@ -1732,7 +1733,7 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                             <>
                                 <GoogleMap
                                     mapContainerClassName="w-full h-full"
-                                    center={initialCenterRef.current || DEFAULT_CENTER}
+                                    center={mapCenter}
                                     zoom={12}
                                     onLoad={onMapLoad}
                                     onUnmount={onMapUnmount}

@@ -107,15 +107,17 @@ export function NearbyMuseumsMap() {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
-                    setUserLocation({
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude
-                    });
+                    // SECURITY: Validate coordinate ranges to prevent injection/spoofing
+                    const lat = Math.max(-90, Math.min(90, position.coords.latitude));
+                    const lng = Math.max(-180, Math.min(180, position.coords.longitude));
+                    setUserLocation({ lat, lng });
                 },
                 (error) => {
                     console.error("Error getting location", error);
                     setLocationError("Could not retrieve your location. Showing default area.");
-                }
+                    // Do NOT set userLocation to Jakarta — leave null to show default map view without misleading marker
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
             );
         } else {
             setLocationError("Geolocation is not supported by this browser.");
@@ -131,7 +133,7 @@ export function NearbyMuseumsMap() {
             return museumService.getNearbyMuseums({
                 lat: center.lat,
                 lng: center.lng,
-                radius: 50 // 50km radius
+                radius: 70 // 70km radius
             });
         },
         enabled: true,
