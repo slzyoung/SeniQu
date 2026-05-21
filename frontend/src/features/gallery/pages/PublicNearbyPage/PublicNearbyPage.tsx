@@ -974,6 +974,22 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     } | null>(null);
     const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
 
+    const handleTravelModeChange = useCallback((newMode: google.maps.TravelMode) => {
+        setTravelMode(newMode);
+    }, []);
+
+    const clearRoute = useCallback(() => {
+        setShowRouteLine(false);
+        setRoutePath([]);
+        setRouteDistance(null);
+        setRouteDuration(null);
+    }, []);
+
+    const selectPlace = useCallback((museum: any | null) => {
+        setSelectedMuseum(museum);
+        clearRoute();
+    }, [clearRoute]);
+
     useEffect(() => {
         if (detectedRegion && maxDistance > detectedRegion.maxRadiusKm) {
             setMaxDistance(0);
@@ -1076,6 +1092,16 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
         setVisibleCount(12);
     }, [activeFilter, debouncedSearchQuery, minRating, maxDistance, sortBy]);
 
+    // Keep selection synchronized with active filter and search queries
+    useEffect(() => {
+        if (selectedMuseum) {
+            const isStillVisible = sortedPlaces.some(p => p.id === selectedMuseum.id);
+            if (!isStillVisible) {
+                selectPlace(sortedPlaces.length > 0 ? sortedPlaces[0] : null);
+            }
+        }
+    }, [sortedPlaces, selectedMuseum, selectPlace]);
+
     // Intersection Observer for lazy loading list items
     useEffect(() => {
         if (!observerTargetRef.current) return;
@@ -1098,22 +1124,6 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
 
     const watchIdRef = useRef<number | null>(null);
     const mapRef = useRef<google.maps.Map | null>(null);
-
-    const handleTravelModeChange = useCallback((newMode: google.maps.TravelMode) => {
-        setTravelMode(newMode);
-    }, []);
-
-    const clearRoute = useCallback(() => {
-        setShowRouteLine(false);
-        setRoutePath([]);
-        setRouteDistance(null);
-        setRouteDuration(null);
-    }, []);
-
-    const selectPlace = useCallback((museum: any | null) => {
-        setSelectedMuseum(museum);
-        clearRoute();
-    }, [clearRoute]);
 
     const { isLoaded, loadError } = useJsApiLoader({
         id: 'google-map-script',

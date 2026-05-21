@@ -341,12 +341,11 @@ function MuseumListCard({ museum, onSelect }: { museum: any; onSelect: () => voi
 // ============================================
 
 export function NearbyMuseumsPage() {
-    const navigate = useNavigate();
     const [viewMode, setViewMode] = useState<ViewMode>('map');
     const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
     const [isLocating, setIsLocating] = useState(false);
-    const [radius, setRadius] = useState('100');
+    const [radius] = useState('100');
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
     const [selectedMuseum, setSelectedMuseum] = useState<any | null>(null);
@@ -416,9 +415,14 @@ export function NearbyMuseumsPage() {
         return matchesFilter && matchesSearch;
     });
 
-    // Select first museum by default if none selected
+    // Select first museum by default, and update selection if the current selection is filtered out
     useEffect(() => {
-        if (!selectedMuseum && filteredMuseums.length > 0) {
+        if (selectedMuseum) {
+            const isStillVisible = filteredMuseums.some(m => m.id === selectedMuseum.id);
+            if (!isStillVisible) {
+                setSelectedMuseum(filteredMuseums.length > 0 ? filteredMuseums[0] : null);
+            }
+        } else if (filteredMuseums.length > 0) {
             setSelectedMuseum(filteredMuseums[0]);
         }
     }, [filteredMuseums, selectedMuseum]);
