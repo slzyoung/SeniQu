@@ -21,6 +21,11 @@ export class MuseumsService {
     private readonly logger = new Logger(MuseumsService.name)
     private readonly supabase: SupabaseClient
 
+    /** Server-side cache to prevent duplicate Google Places API calls */
+    private readonly placesCache = new Map<string, { data: any; expiresAt: number }>();
+    private readonly PLACES_CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
+    private readonly PLACES_CACHE_MAX_SIZE = 50;
+
     constructor(private configService: ConfigService) {
         this.supabase = createClient(
             this.configService.get<string>("SUPABASE_URL")!,
@@ -125,6 +130,17 @@ export class MuseumsService {
         if (!apiKey) {
             this.logger.warn('GOOGLE_MAPS_API_KEY is not configured');
             return { places: [], region: regionInfo };
+        }
+
+        // === Server-side cache check (3 min TTL, ~111m resolution) ===
+        const cacheKey = `${safeLat.toFixed(3)}_${safeLng.toFixed(3)}_${safeRadius}_${query || ''}`;
+        const cached = this.placesCache.get(cacheKey);
+        if (cached && Date.now() < cached.expiresAt) {
+            this.logger.log(`Places cache HIT: ${cacheKey}`);
+            return cached.data;
+        }
+        if (cached) {
+            this.placesCache.delete(cacheKey); // Evict expired
         }
 
         // === Multi-layer grid centers to maximize coverage and avoid 20-result API cap ===
@@ -446,7 +462,29 @@ export class MuseumsService {
         const capped = [...museums, ...galleries, ...heritage];
 
         this.logger.log(`Nearby: ${centers.length} grids → ${allPlaces.length} raw → ${filtered.length} within ${radiusKm}km (capped breakdown: ${museums.length} museums, ${galleries.length} galleries, ${heritage.length} heritage)`);
-        return { places: capped, region: regionInfo };
+
+        const result = { places: capped, region: regionInfo };
+
+        // === Write to server-side cache ===
+        // Evict oldest entries if cache is full
+        if (this.placesCache.size >= this.PLACES_CACHE_MAX_SIZE) {
+            const now = Date.now();
+            for (const [key, entry] of this.placesCache) {
+                if (now >= entry.expiresAt) {
+                    this.placesCache.delete(key);
+                }
+            }
+            if (this.placesCache.size >= this.PLACES_CACHE_MAX_SIZE) {
+                const firstKey = this.placesCache.keys().next().value;
+                if (firstKey) this.placesCache.delete(firstKey);
+            }
+        }
+        this.placesCache.set(cacheKey, {
+            data: result,
+            expiresAt: Date.now() + this.PLACES_CACHE_TTL_MS,
+        });
+
+        return result;
     }
 
     /**

@@ -12,7 +12,7 @@
  * - Light & Dark mode compatible
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
     MapPin,
     Navigation,
@@ -350,6 +350,7 @@ export function NearbyMuseumsPage() {
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
     const [selectedMuseum, setSelectedMuseum] = useState<any | null>(null);
     const [sheetExpanded, setSheetExpanded] = useState(false);
+    const userSelectedRef = useRef(false);
 
     // Location
     const requestLocation = () => {
@@ -406,26 +407,34 @@ export function NearbyMuseumsPage() {
 
     const isLoading = userLocation ? nearbyLoading : allLoading;
 
-    // Filter
-    const filteredMuseums = mergedMuseums.filter((m: any) => {
-        const matchesFilter = activeFilter === 'all' || m.type === activeFilter;
-        const matchesSearch = !searchQuery ||
-            m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            m.city?.toLowerCase().includes(searchQuery.toLowerCase());
-        return matchesFilter && matchesSearch;
-    });
+    // Filter — memoized to prevent new array reference every render
+    const filteredMuseums = useMemo(() => {
+        return mergedMuseums.filter((m: any) => {
+            const matchesFilter = activeFilter === 'all' || m.type === activeFilter;
+            const matchesSearch = !searchQuery ||
+                m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                m.city?.toLowerCase().includes(searchQuery.toLowerCase());
+            return matchesFilter && matchesSearch;
+        });
+    }, [mergedMuseums, activeFilter, searchQuery]);
 
-    // Select first museum by default, and update selection if the current selection is filtered out
+    // Select first museum by default, only if user hasn't manually picked one
     useEffect(() => {
         if (selectedMuseum) {
-            const isStillVisible = filteredMuseums.some(m => m.id === selectedMuseum.id);
+            const isStillVisible = filteredMuseums.some((m: any) => m.id === selectedMuseum.id);
             if (!isStillVisible) {
-                setSelectedMuseum(filteredMuseums.length > 0 ? filteredMuseums[0] : null);
+                if (!userSelectedRef.current) {
+                    setSelectedMuseum(filteredMuseums.length > 0 ? filteredMuseums[0] : null);
+                } else {
+                    setSelectedMuseum(null);
+                    userSelectedRef.current = false;
+                }
             }
-        } else if (filteredMuseums.length > 0) {
+        } else if (filteredMuseums.length > 0 && !userSelectedRef.current) {
             setSelectedMuseum(filteredMuseums[0]);
         }
-    }, [filteredMuseums, selectedMuseum]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filteredMuseums]);
 
     const { isAuthenticated } = useAuthStore();
     // When rendered in PublicLayout (not authenticated), the fixed Navbar needs extra offset
@@ -494,6 +503,7 @@ export function NearbyMuseumsPage() {
                                     left: `${15 + (i * 14)}%`,
                                 }}
                                 onClick={() => {
+                                    userSelectedRef.current = true;
                                     setSelectedMuseum(museum);
                                     setSheetExpanded(false);
                                 }}
@@ -624,6 +634,7 @@ export function NearbyMuseumsPage() {
                                     key={museum.id}
                                     museum={museum}
                                     onSelect={() => {
+                                        userSelectedRef.current = true;
                                         setSelectedMuseum(museum);
                                         setViewMode('map');
                                     }}

@@ -946,6 +946,9 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     const [travelMode, setTravelMode] = useState<google.maps.TravelMode>('DRIVING' as any);
     
     const [places, setPlaces] = useState<any[]>([]);
+    const userSelectedRef = useRef(false);
+    const prevSearchQueryRef = useRef('');
+    const fetchInFlightRef = useRef(false);
     
     // Radar pulse animation for User Location Blue Dot
     const [radarRadius, setRadarRadius] = useState(50);
@@ -985,7 +988,10 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
         setRouteDuration(null);
     }, []);
 
-    const selectPlace = useCallback((museum: any | null) => {
+    const selectPlace = useCallback((museum: any | null, isUserAction = false) => {
+        if (isUserAction) {
+            userSelectedRef.current = true;
+        }
         setSelectedMuseum(museum);
         clearRoute();
     }, [clearRoute]);
@@ -1093,11 +1099,19 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     }, [activeFilter, debouncedSearchQuery, minRating, maxDistance, sortBy]);
 
     // Keep selection synchronized with active filter and search queries
+    // Only auto-select if the user hasn't manually clicked a marker
     useEffect(() => {
         if (selectedMuseum) {
             const isStillVisible = sortedPlaces.some(p => p.id === selectedMuseum.id);
             if (!isStillVisible) {
-                selectPlace(sortedPlaces.length > 0 ? sortedPlaces[0] : null);
+                // Only auto-select first item if user didn't manually pick something
+                if (!userSelectedRef.current) {
+                    selectPlace(sortedPlaces.length > 0 ? sortedPlaces[0] : null);
+                } else {
+                    // User had selected something that's now filtered out, clear selection
+                    selectPlace(null);
+                    userSelectedRef.current = false;
+                }
             }
         }
     }, [sortedPlaces, selectedMuseum, selectPlace]);
@@ -1157,12 +1171,16 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     };
 
     // Perform query with NestJS backend proxy which uses Google Places API (New)
+    // IMPORTANT: This should only be called for initial load and search query changes,
+    // NOT for filter chip changes (those are handled client-side via sortedPlaces)
     const searchNearbyPlaces = useCallback((
         center: { lat: number; lng: number },
-        _filter: FilterType,
         _query: string
     ) => {
         if (!isLoaded) return;
+        // Prevent duplicate in-flight requests
+        if (fetchInFlightRef.current) return;
+        fetchInFlightRef.current = true;
 
         setIsPlacesLoading(true);
 
@@ -1299,9 +1317,11 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                 }
 
                 setPlaces(unique);
-                if (unique.length > 0) {
+                // Only auto-select first place if nothing is currently selected
+                // This prevents the "jump back to nearest" bug on mobile
+                if (!selectedMuseum && unique.length > 0) {
                     selectPlace(unique[0]);
-                } else {
+                } else if (unique.length === 0) {
                     selectPlace(null);
                 }
                 setIsPlacesLoading(false);
@@ -1309,8 +1329,11 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
             .catch((err) => {
                 console.error("Failed to fetch nearby places from backend:", err);
                 setIsPlacesLoading(false);
+            })
+            .finally(() => {
+                fetchInFlightRef.current = false;
             });
-    }, [isLoaded, selectPlace]);
+    }, [isLoaded, selectPlace, selectedMuseum]);
 
     // Auto-search disabled when map is panned to keep locations stay static and stable
     const handleMapIdle = useCallback(() => {
@@ -1374,17 +1397,28 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     }, [requestLocation]);
 
     // Real-time location tracking with watchPosition
+    // IMPORTANT: Only update the blue dot ref, NOT the state that triggers API refetches.
+    // This prevents the infinite reload loop where GPS updates → state change → refetch → repeat.
     useEffect(() => {
         if (!navigator.geolocation) return;
         watchIdRef.current = navigator.geolocation.watchPosition(
             (pos) => {
-                setUserLocation({
-                    latitude: pos.coords.latitude,
-                    longitude: pos.coords.longitude,
+                // Only update state if user hasn't been located yet (first fix)
+                // or if movement is significant (> 100m)
+                setUserLocation((prev) => {
+                    if (!prev) return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+                    const dLat = pos.coords.latitude - prev.latitude;
+                    const dLng = pos.coords.longitude - prev.longitude;
+                    const distSq = dLat * dLat + dLng * dLng;
+                    // ~100m threshold (0.001 degrees ≈ 111m)
+                    if (distSq > 0.000001) {
+                        return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+                    }
+                    return prev; // No state change → no re-render cascade
                 });
             },
             () => { /* silently ignore */ },
-            { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+            { enableHighAccuracy: true, maximumAge: 30000, timeout: 15000 }
         );
         return () => {
             if (watchIdRef.current !== null) {
@@ -1404,35 +1438,41 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                 isFittingBoundsRef.current = true;
                 mapRef.current.panTo(center);
             }
-            searchNearbyPlaces(center, activeFilter, debouncedSearchQuery);
+            searchNearbyPlaces(center, debouncedSearchQuery);
             setHasInitialSearched(true);
             if (userLocation) {
                 setHasSearchedUserLoc(true);
             }
         }
-    }, [isLoaded, userLocation, hasInitialSearched, debouncedSearchQuery, searchNearbyPlaces]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLoaded, hasInitialSearched]);
 
-    // Update center and re-search when a real userLocation becomes available
+    // Update center and re-search when a real userLocation becomes available (one-time)
     useEffect(() => {
         if (isLoaded && userLocation && hasInitialSearched && !hasSearchedUserLoc) {
             const center = { lat: userLocation.latitude, lng: userLocation.longitude };
+            initialCenterRef.current = center;
             if (mapRef.current) {
                 mapRef.current.panTo(center);
             }
-            searchNearbyPlaces(center, activeFilter, debouncedSearchQuery);
+            searchNearbyPlaces(center, debouncedSearchQuery);
             setHasSearchedUserLoc(true);
         }
-    }, [isLoaded, userLocation, hasInitialSearched, hasSearchedUserLoc, debouncedSearchQuery, searchNearbyPlaces]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLoaded, userLocation, hasInitialSearched, hasSearchedUserLoc]);
 
-    // Re-fetch from backend when search query is typed and debounced (anti-throttling)
+    // Re-fetch from backend ONLY when search query actually changes (not on filter/location changes)
+    // Filter chip changes are handled client-side via sortedPlaces memo
     useEffect(() => {
-        if (isLoaded && hasInitialSearched) {
+        if (isLoaded && hasInitialSearched && debouncedSearchQuery !== prevSearchQueryRef.current) {
+            prevSearchQueryRef.current = debouncedSearchQuery;
             const center = userLocation 
                 ? { lat: userLocation.latitude, lng: userLocation.longitude } 
                 : DEFAULT_CENTER;
-            searchNearbyPlaces(center, activeFilter, debouncedSearchQuery);
+            searchNearbyPlaces(center, debouncedSearchQuery);
         }
-    }, [debouncedSearchQuery, isLoaded, hasInitialSearched, userLocation, activeFilter, searchNearbyPlaces]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [debouncedSearchQuery]);
 
 
 
@@ -1534,7 +1574,15 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
             return;
         }
 
-        const fallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${latVal},${lngVal}`;
+        // Map google.maps.TravelMode to backend/external mode string
+        let modeStr = 'driving';
+        const tmStr = String(travelMode).toUpperCase();
+        if (tmStr === 'WALKING') modeStr = 'walking';
+        else if (tmStr === 'BICYCLING') modeStr = 'bicycling';
+        else if (tmStr === 'TRANSIT') modeStr = 'transit';
+
+        const originParam = userLocation ? `&origin=${userLocation.latitude},${userLocation.longitude}` : '';
+        const fallbackUrl = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${latVal},${lngVal}&travelmode=${modeStr}`;
 
         if (!userLocation) {
             // Fallback: open external map directions directly
@@ -1544,14 +1592,7 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
 
         setIsRouteLoading(true);
         try {
-            // Map google.maps.TravelMode to backend mode string
-            let modeStr = 'driving';
-            const tmStr = String(travelMode).toUpperCase();
-            if (tmStr === 'WALKING') modeStr = 'walking';
-            else if (tmStr === 'BICYCLING') modeStr = 'bicycling';
-            else if (tmStr === 'TRANSIT') modeStr = 'transit';
-
-            const response = await museumService.getRouteDirections(
+            let response = await museumService.getRouteDirections(
                 userLocation.latitude,
                 userLocation.longitude,
                 latVal,
@@ -1560,7 +1601,32 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
             );
 
             // Handle wrapped NestJS response: { data: { status, polyline, ... } }
-            const routeData = response?.data || response;
+            let routeData = response?.data || response;
+
+            // Fallback chain: if BICYCLING or TRANSIT fails (ZERO_RESULTS / error), fall back to WALKING, then DRIVING
+            if (routeData?.status !== 'OK' && (modeStr === 'bicycling' || modeStr === 'transit')) {
+                console.warn(`${modeStr} route failed or returned zero results. Trying walking fallback route...`);
+                response = await museumService.getRouteDirections(
+                    userLocation.latitude,
+                    userLocation.longitude,
+                    latVal,
+                    lngVal,
+                    'walking'
+                );
+                routeData = response?.data || response;
+
+                if (routeData?.status !== 'OK') {
+                    console.warn(`Walking fallback route failed. Trying driving fallback route...`);
+                    response = await museumService.getRouteDirections(
+                        userLocation.latitude,
+                        userLocation.longitude,
+                        latVal,
+                        lngVal,
+                        'driving'
+                    );
+                    routeData = response?.data || response;
+                }
+            }
 
             if (routeData?.status === 'OK' && routeData?.polyline) {
                 const decodedPath = decodePolyline(routeData.polyline);
@@ -1579,7 +1645,7 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                     mapRef.current.fitBounds(bounds, { top: 60, bottom: 280, left: 40, right: 40 });
                 }
             } else {
-                console.warn('Route request failed, falling back to external map:', routeData?.errorMessage || 'Unknown error');
+                console.warn('All route attempts failed, falling back to external map:', routeData?.errorMessage || 'Unknown error');
                 window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
             }
         } catch (error) {
@@ -1733,7 +1799,7 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                                                     position={{ lat: mLat, lng: mLng }}
                                                     title={museum.name}
                                                     onClick={() => {
-                                                        selectPlace(museum);
+                                                        selectPlace(museum, true);
                                                         setSheetExpanded(false);
                                                     }}
                                                     isActive={isActive}
@@ -1941,7 +2007,7 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                                     museum={museum}
                                     distance={getDistance(museum)}
                                     onSelect={() => {
-                                        selectPlace(museum);
+                                        selectPlace(museum, true);
                                         setViewMode('map');
                                     }}
                                 />
