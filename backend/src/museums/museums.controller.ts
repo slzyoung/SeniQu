@@ -75,7 +75,7 @@ export class MuseumsController {
     @ApiOperation({ summary: "Search nearby museums, galleries, and heritage sites using Google Places API" })
     @ApiQuery({ name: "lat", required: true, type: Number })
     @ApiQuery({ name: "lng", required: true, type: Number })
-    @ApiQuery({ name: "radius", required: false, type: Number, description: "Radius in meters (default: 100000, max: 100000)" })
+    @ApiQuery({ name: "radius", required: false, type: Number, description: "Radius in meters (default: 70000, max: 70000)" })
     @ApiQuery({ name: "query", required: false, type: String, description: "Search query for specific name/address matching" })
     async searchNearbyPlaces(
         @Query("lat") lat: number,
@@ -85,7 +85,7 @@ export class MuseumsController {
     ) {
         const safeLat = Math.max(-90, Math.min(90, Number(lat) || 0));
         const safeLng = Math.max(-180, Math.min(180, Number(lng) || 0));
-        const safeRadius = Math.max(1000, Math.min(100000, Number(radius) || 100000));
+        const safeRadius = Math.max(1000, Math.min(70000, Number(radius) || 70000));
         // SECURITY: Truncate query to prevent oversized search strings
         const safeQuery = query ? String(query).slice(0, 200) : undefined;
         return this.museumsService.searchNearbyPlaces(

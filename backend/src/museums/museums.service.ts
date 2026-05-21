@@ -110,16 +110,15 @@ export class MuseumsService {
         // === Input validation & sanitization ===
         const safeLat = Math.max(-90, Math.min(90, Number(lat) || 0));
         const safeLng = Math.max(-180, Math.min(180, Number(lng) || 0));
-        const MAX_RADIUS_KM = 100;
+        const MAX_RADIUS_KM = 70;
         const MAX_RADIUS_M = MAX_RADIUS_KM * 1000;
         const GOOGLE_MAX_RADIUS = 50000;
         const safeRadius = Math.min(Math.max(1000, Number(radiusMeters) || MAX_RADIUS_M), MAX_RADIUS_M);
 
         const apiKey = this.configService.get<string>('googleMaps.apiKey')
             || process.env.GOOGLE_MAPS_API_KEY || '';
-        let referer = this.configService.get<string>('FRONTEND_URL')
+        const referer = this.configService.get<string>('FRONTEND_URL')
             || process.env.FRONTEND_URL || 'http://localhost:5173';
-        if (referer.includes('localhost')) referer = 'https://seniqu.art';
 
         const regionInfo = { isMajorCity: false, regionName: 'Sekitar', maxRadiusKm: MAX_RADIUS_KM };
 
@@ -129,7 +128,7 @@ export class MuseumsService {
         }
 
         // === Multi-layer grid centers to maximize coverage and avoid 20-result API cap ===
-        // Optimized grid centers (max 9 centers for 100km) to keep API requests budget-safe and ensure absolute coverage
+        // Optimized grid centers (max 7 centers for 70km) to keep API requests budget-safe and ensure absolute coverage
         const centers: { lat: number; lng: number; radius: number }[] = [];
         
         if (safeRadius <= 20000) {
@@ -150,19 +149,19 @@ export class MuseumsService {
                 { lat: safeLat, lng: safeLng - kmToLng(offsetKm), radius: outerRadius },
             );
         } else {
-            // Hexagonal + diagonal 8 outer centers for 100km radius to ensure absolute coverage
-            const coreRadius = 50000;
-            const outerRadius = 50000; // max radius allowed by Google is 50000
-            const offsetKm = (safeRadius / 1000) * 0.62; // ~62km offset at 100km radius
+            // Hexagonal 6 outer centers for 70km radius to ensure absolute coverage at minimal cost
+            const coreRadius = 45000;
+            const outerRadius = 35000;
+            const offsetKm = (safeRadius / 1000) * 0.6; // ~42km offset at 70km radius
 
             const kmToLat = (km: number) => km / 111.32;
             const kmToLng = (km: number) => km / (111.32 * Math.cos(safeLat * Math.PI / 180));
 
             centers.push({ lat: safeLat, lng: safeLng, radius: coreRadius });
             
-            // 8 directions at 45 degree intervals
-            for (let i = 0; i < 8; i++) {
-                const angleRad = (i * 45 * Math.PI) / 180;
+            // 6 directions at 60 degree intervals
+            for (let i = 0; i < 6; i++) {
+                const angleRad = (i * 60 * Math.PI) / 180;
                 const dLat = offsetKm * Math.cos(angleRad);
                 const dLng = offsetKm * Math.sin(angleRad);
                 centers.push({
@@ -408,7 +407,7 @@ export class MuseumsService {
             || '';
 
         if (!apiKey) {
-            return { isMajorCity: false, regionName: 'Unknown', maxRadiusKm: 100 };
+            return { isMajorCity: false, regionName: 'Unknown', maxRadiusKm: 70 };
         }
 
         const MAJOR_CITIES = [
@@ -442,29 +441,29 @@ export class MuseumsService {
                         if (types.includes('administrative_area_level_2') || types.includes('locality')) {
                             if (longName.startsWith('kota ')) {
                                 const cityName = comp.long_name.replace(/^kota /i, '').trim();
-                                this.logger.log(`Region: Kota ${cityName} → Major city (100km)`);
-                                return { isMajorCity: true, regionName: `Kota ${cityName}`, maxRadiusKm: 100 };
+                                this.logger.log(`Region: Kota ${cityName} → Major city (70km)`);
+                                return { isMajorCity: true, regionName: `Kota ${cityName}`, maxRadiusKm: 70 };
                             }
                             if (longName.startsWith('kabupaten ')) {
                                 const regName = comp.long_name.replace(/^kabupaten /i, '').trim();
-                                this.logger.log(`Region: Kabupaten ${regName} → Regency (100km)`);
-                                return { isMajorCity: false, regionName: `Kabupaten ${regName}`, maxRadiusKm: 100 };
+                                this.logger.log(`Region: Kabupaten ${regName} → Regency (70km)`);
+                                return { isMajorCity: false, regionName: `Kabupaten ${regName}`, maxRadiusKm: 70 };
                             }
                         }
 
                         if (MAJOR_CITIES.some(city => longName.includes(city) || formattedAddr.includes(city))) {
-                            this.logger.log(`Region: ${comp.long_name} → Known major city (100km)`);
-                            return { isMajorCity: true, regionName: comp.long_name, maxRadiusKm: 100 };
+                            this.logger.log(`Region: ${comp.long_name} → Known major city (70km)`);
+                            return { isMajorCity: true, regionName: comp.long_name, maxRadiusKm: 70 };
                         }
                     }
                 }
             }
 
-            this.logger.log(`Region: No major city match → default regency (100km)`);
-            return { isMajorCity: false, regionName: 'Daerah', maxRadiusKm: 100 };
+            this.logger.log(`Region: No major city match → default regency (70km)`);
+            return { isMajorCity: false, regionName: 'Daerah', maxRadiusKm: 70 };
         } catch (error: any) {
             this.logger.error(`Region detection failed: ${error.message}`);
-            return { isMajorCity: false, regionName: 'Unknown', maxRadiusKm: 100 };
+            return { isMajorCity: false, regionName: 'Unknown', maxRadiusKm: 70 };
         }
     }
 

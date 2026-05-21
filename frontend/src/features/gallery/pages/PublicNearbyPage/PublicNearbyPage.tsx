@@ -1092,8 +1092,8 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
 
         setIsPlacesLoading(true);
 
-        // Fetch all categories from backend (max 100km)
-        museumService.searchNearbyPlaces(center.lat, center.lng, 100000, _query)
+        // Fetch all categories from backend (max 70km)
+        museumService.searchNearbyPlaces(center.lat, center.lng, 70000, _query)
             .then((result) => {
                 const placesData = result?.places || [];
                 const regionInfo = result?.region || null;
