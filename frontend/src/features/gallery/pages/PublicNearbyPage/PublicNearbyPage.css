@@ -666,6 +666,114 @@
 
 
 /* ================================================
+   § 8b. GOOGLE MAPS REVIEWS
+   ================================================ */
+
+.pnb-reviews {
+  margin-bottom: 18px;
+}
+
+.pnb-reviews__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pnb-reviews__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pnb-review-card {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  transition: all 0.25s ease;
+}
+
+.pnb-review-card:hover {
+  border-color: rgba(201, 168, 76, 0.2);
+}
+
+.pnb-review-card__top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.pnb-review-card__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+}
+
+.pnb-review-card__avatar--fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.15));
+}
+
+.pnb-review-card__meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.pnb-review-card__author {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pnb-review-card__stars {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin-top: 2px;
+}
+
+.pnb-review-card__time {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
+.pnb-review-card__text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.light .pnb-review-card {
+  background: #f8f9fa;
+  border-color: rgba(0, 0, 0, 0.05);
+}
+
+.light .pnb-review-card:hover {
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+
+/* ================================================
    § 9. ACTION BUTTONS
    ================================================ */
 
@@ -1457,8 +1565,8 @@
 }
 
 .pnb-filter-row {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   width: 100%;
 }
@@ -1468,7 +1576,8 @@
   position: relative;
   display: flex;
   align-items: center;
-  width: 100%;
+  flex: 1;
+  min-width: 100px;
 }
 
 .pnb-select-icon {
@@ -1709,4 +1818,389 @@
 @keyframes float-gentle {
   0%, 100% { transform: translateY(0px) rotate(0deg); }
   50% { transform: translateY(-10px) rotate(0.8deg); }
+}
+
+/* Detected Region Badge */
+.pnb-detected-region-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+  font-size: 13px;
+  font-weight: 500;
+  backdrop-filter: blur(8px);
+  margin-top: 4px;
+  margin-bottom: 4px;
+  align-self: flex-start;
+}
+
+.light .pnb-detected-region-badge {
+  background: rgba(59, 130, 246, 0.05);
+  border-color: rgba(59, 130, 246, 0.12);
+  color: #2563eb;
+}
+
+.pnb-badge-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #3b82f6;
+  animation: pnb-pulse-anim 2s infinite;
+}
+
+@keyframes pnb-pulse-anim {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+/* ================================================
+   § 14. PHOTO LIGHTBOX & REVIEWS MODALS
+   ================================================ */
+
+/* Lightbox Overlay */
+.pnb-lightbox-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(12px);
+  user-select: none;
+}
+
+.pnb-lightbox-close {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 10001;
+}
+
+.pnb-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(1.05);
+}
+
+.pnb-lightbox-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 10001;
+}
+
+.pnb-lightbox-arrow:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-50%) scale(1.05);
+}
+
+.pnb-lightbox-arrow--left {
+  left: 32px;
+}
+
+.pnb-lightbox-arrow--right {
+  right: 32px;
+}
+
+.pnb-lightbox-content {
+  max-width: 85vw;
+  max-height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pnb-lightbox-image {
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+}
+
+.pnb-lightbox-counter {
+  position: absolute;
+  bottom: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: white;
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 1px;
+}
+
+/* Reviews Modal Overlay */
+.pnb-reviews-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(8px);
+  padding: 16px;
+}
+
+.pnb-reviews-modal-container {
+  width: 100%;
+  max-width: 550px;
+  background: #121214;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.light .pnb-reviews-modal-container {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.pnb-reviews-modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.light .pnb-reviews-modal-header {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+.pnb-reviews-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.pnb-reviews-modal-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 4px 0 0 0;
+  font-weight: 500;
+}
+
+.pnb-reviews-modal-close {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.light .pnb-reviews-modal-close {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.05);
+}
+
+.pnb-reviews-modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.light .pnb-reviews-modal-close:hover {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+/* Summary Card */
+.pnb-reviews-summary-card {
+  padding: 20px 24px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.light .pnb-reviews-summary-card {
+  background: #f8f9fa;
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+.pnb-reviews-summary-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.pnb-reviews-summary-avg {
+  font-size: 40px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.pnb-reviews-summary-stars {
+  display: flex;
+  gap: 2px;
+  margin: 6px 0;
+}
+
+.pnb-reviews-summary-total {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.pnb-reviews-summary-bars {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pnb-reviews-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pnb-reviews-bar-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  width: 24px;
+  text-align: right;
+}
+
+.pnb-reviews-bar-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.light .pnb-reviews-bar-track {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.pnb-reviews-bar-fill {
+  height: 100%;
+  background: #F59E0B;
+  border-radius: 3px;
+}
+
+/* Reviews List */
+.pnb-reviews-modal-list {
+  padding: 16px 24px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pnb-review-modal-card {
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.light .pnb-review-modal-card {
+  border-bottom-color: rgba(0, 0, 0, 0.05);
+}
+
+.pnb-review-modal-card:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.pnb-review-modal-card-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.pnb-review-modal-card-meta {
+  flex: 1;
+}
+
+.pnb-review-modal-card-text {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.pnb-reviews-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .pnb-lightbox-arrow {
+    width: 44px;
+    height: 44px;
+  }
+  .pnb-lightbox-arrow--left {
+    left: 12px;
+  }
+  .pnb-lightbox-arrow--right {
+    right: 12px;
+  }
+  .pnb-reviews-summary-card {
+    gap: 16px;
+    padding: 16px;
+  }
+  .pnb-reviews-modal-container {
+    max-height: 90vh;
+  }
 }

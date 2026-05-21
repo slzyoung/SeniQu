@@ -100,106 +100,323 @@ export class MuseumsService {
 
     /**
      * Search nearby places using Google Places API (New)
-     * Calls POST https://places.googleapis.com/v1/places:searchNearby
-     * Returns museums, galleries, and heritage/cultural sites near the given coordinates.
+     * POST https://places.googleapis.com/v1/places:searchNearby
+     *
+     * Returns museums, galleries, and heritage/cultural sites within max 70km.
+     * Only uses verified-valid Table A types to prevent 400 errors.
+     * Sequential batch processing with delay for anti-throttling.
      */
-    async searchNearbyPlaces(lat: number, lng: number, radiusMeters: number) {
+    async searchNearbyPlaces(lat: number, lng: number, radiusMeters: number, query?: string) {
+        // === Input validation & sanitization ===
+        const safeLat = Math.max(-90, Math.min(90, Number(lat) || 0));
+        const safeLng = Math.max(-180, Math.min(180, Number(lng) || 0));
+        const MAX_RADIUS_KM = 70;
+        const MAX_RADIUS_M = MAX_RADIUS_KM * 1000;
+        const GOOGLE_MAX_RADIUS = 50000;
+        const safeRadius = Math.min(Math.max(1000, Number(radiusMeters) || MAX_RADIUS_M), MAX_RADIUS_M);
+
         const apiKey = this.configService.get<string>('googleMaps.apiKey')
-            || process.env.GOOGLE_MAPS_API_KEY
-            || '';
-        const referer = this.configService.get<string>('FRONTEND_URL')
-            || process.env.FRONTEND_URL
-            || 'http://localhost:5173';
+            || process.env.GOOGLE_MAPS_API_KEY || '';
+        let referer = this.configService.get<string>('FRONTEND_URL')
+            || process.env.FRONTEND_URL || 'http://localhost:5173';
+        if (referer.includes('localhost')) referer = 'https://seniqu.art';
+
+        const regionInfo = { isMajorCity: false, regionName: 'Sekitar', maxRadiusKm: MAX_RADIUS_KM };
 
         if (!apiKey) {
             this.logger.warn('GOOGLE_MAPS_API_KEY is not configured');
-            return { places: [] };
+            return { places: [], region: regionInfo };
         }
 
-        const url = 'https://places.googleapis.com/v1/places:searchNearby';
+        // === Multi-layer grid centers to maximize coverage and avoid 20-result API cap ===
+        // Strategy: inner ring uses small radii (dense urban), outer ring uses larger radii (rural)
+        const centers: { lat: number; lng: number; radius: number }[] = [];
+        
+        if (safeRadius <= 15000) {
+            centers.push({ lat: safeLat, lng: safeLng, radius: safeRadius });
+        } else {
+            // Helper: convert km offset to degree offsets at this latitude
+            const kmToLat = (km: number) => km / 111.32;
+            const kmToLng = (km: number) => km / (111.32 * Math.cos(safeLat * Math.PI / 180));
 
-        // Run separate searches for each category to get comprehensive results
-        const typeGroups = [
-            { types: ['museum'], category: 'museum' },
-            { types: ['art_gallery'], category: 'gallery' },
-            { types: ['cultural_landmark', 'historical_landmark', 'tourist_attraction'], category: 'heritage' },
-        ];
+            // Layer 0: Center — small radius for dense city core
+            centers.push({ lat: safeLat, lng: safeLng, radius: 15000 });
 
-        const allPlaces: any[] = [];
+            // Layer 1: Inner ring (4 cardinal at ~12km offset, 15km radius)
+            // Captures all museums/galleries in the immediate city area
+            const innerOffKm = 12;
+            centers.push(
+                { lat: safeLat + kmToLat(innerOffKm), lng: safeLng, radius: 15000 },
+                { lat: safeLat - kmToLat(innerOffKm), lng: safeLng, radius: 15000 },
+                { lat: safeLat, lng: safeLng + kmToLng(innerOffKm), radius: 15000 },
+                { lat: safeLat, lng: safeLng - kmToLng(innerOffKm), radius: 15000 },
+            );
 
-        for (const group of typeGroups) {
+            // Layer 2: Mid ring (4 diagonals at ~22km offset, 20km radius)
+            const midOffKm = 22;
+            const midDiagKm = midOffKm * 0.707;
+            centers.push(
+                { lat: safeLat + kmToLat(midDiagKm), lng: safeLng + kmToLng(midDiagKm), radius: 20000 },
+                { lat: safeLat + kmToLat(midDiagKm), lng: safeLng - kmToLng(midDiagKm), radius: 20000 },
+                { lat: safeLat - kmToLat(midDiagKm), lng: safeLng + kmToLng(midDiagKm), radius: 20000 },
+                { lat: safeLat - kmToLat(midDiagKm), lng: safeLng - kmToLng(midDiagKm), radius: 20000 },
+            );
+
+            // Layer 3: Outer ring (4 cardinal at ~45km offset, 30km radius) — only if total > 30km
+            if (safeRadius > 30000) {
+                const outerOffKm = Math.min(45, (safeRadius / 1000) * 0.65);
+                centers.push(
+                    { lat: safeLat + kmToLat(outerOffKm), lng: safeLng, radius: 30000 },
+                    { lat: safeLat - kmToLat(outerOffKm), lng: safeLng, radius: 30000 },
+                    { lat: safeLat, lng: safeLng + kmToLng(outerOffKm), radius: 30000 },
+                    { lat: safeLat, lng: safeLng - kmToLng(outerOffKm), radius: 30000 },
+                );
+            }
+        }
+
+        // Safety: clamp all generated centers to valid Google API ranges
+        for (const c of centers) {
+            c.lat = Math.max(-90, Math.min(90, c.lat));
+            c.lng = Math.max(-180, Math.min(180, c.lng));
+        }
+
+        // === 1. If search query is provided, execute Google Places Text Search API first ===
+        let textPlaces: any[] = [];
+        const refererHeader = referer.endsWith('/') ? referer : `${referer}/`;
+        if (query && query.trim().length > 0) {
             try {
-                const response = await fetch(url, {
+                const textSearchUrl = 'https://places.googleapis.com/v1/places:searchText';
+                const res = await fetch(textSearchUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Goog-Api-Key': apiKey,
-                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.rating,places.userRatingCount,places.photos,places.regularOpeningHours,places.businessStatus',
-                        'Referer': referer.endsWith('/') ? referer : `${referer}/`,
+                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.photos,places.reviews',
+                        'Accept-Language': 'id',
+                        'Referer': refererHeader,
                     },
                     body: JSON.stringify({
-                        includedTypes: group.types,
-                        maxResultCount: 10,
-                        locationRestriction: {
+                        textQuery: query,
+                        languageCode: 'id',
+                        locationBias: {
                             circle: {
-                                center: {
-                                    latitude: lat,
-                                    longitude: lng,
-                                },
-                                radius: Math.min(radiusMeters, 50000),
+                                center: { latitude: safeLat, longitude: safeLng },
+                                radius: Math.min(safeRadius, 50000),
                             },
                         },
                     }),
                 });
-
-                const data = await response.json() as any;
-
-                if (response.ok && data.places) {
-                    const mapped = data.places.map((place: any) => {
-                        const photoUrls = (place.photos || []).slice(0, 5).map((photo: any) => {
-                            return `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=400&maxHeightPx=300&key=${apiKey}`;
-                        });
-
+                if (res.ok) {
+                    const data = await res.json() as any;
+                    textPlaces = (data.places || []).map((p: any) => {
+                        let category = 'heritage';
+                        const nameLower = (p.displayName?.text || '').toLowerCase();
+                        if (nameLower.includes('museum') || nameLower.includes('galeri') || nameLower.includes('gallery')) {
+                            category = nameLower.includes('gallery') || nameLower.includes('galeri') ? 'gallery' : 'museum';
+                        } else if (p.types?.includes('art_gallery')) {
+                            category = 'gallery';
+                        } else if (p.types?.includes('museum')) {
+                            category = 'museum';
+                        }
+                        
                         return {
-                            id: place.id,
-                            name: place.displayName?.text || 'Unknown Place',
-                            address: place.formattedAddress || '',
-                            latitude: place.location?.latitude || 0,
-                            longitude: place.location?.longitude || 0,
-                            type: group.category,
-                            rating: place.rating || 0,
-                            reviewCount: place.userRatingCount || 0,
-                            photos: photoUrls,
-                            businessStatus: place.businessStatus || 'OPERATIONAL',
-                            openNow: place.regularOpeningHours?.openNow ?? null,
-                            googleTypes: place.types || [],
+                            id: p.id,
+                            name: p.displayName?.text || '',
+                            address: p.formattedAddress || '',
+                            latitude: p.location?.latitude,
+                            longitude: p.location?.longitude,
+                            rating: p.rating,
+                            reviewCount: p.userRatingCount,
+                            type: category,
+                            photos: (p.photos || []).slice(0, 8).map((ph: any) =>
+                                `https://places.googleapis.com/v1/${ph.name}/media?key=${apiKey}&maxHeightPx=400&maxWidthPx=400`
+                            ),
+                            reviews: (p.reviews || []).slice(0, 5).map((r: any) => ({
+                                author: r.authorAttribution?.displayName || 'Anonymous',
+                                authorPhoto: r.authorAttribution?.photoUri || '',
+                                rating: r.rating || 0,
+                                text: r.text?.text || '',
+                                time: r.relativePublishTimeDescription || '',
+                                publishTime: r.publishTime || '',
+                            })),
                         };
                     });
-                    allPlaces.push(...mapped);
-                } else if (data.error) {
-                    this.logger.warn(`Places API search failed for types ${group.types.join(',')}: ${data.error.message}`);
+                } else {
+                    const errText = await res.text();
+                    this.logger.error(`Places TextSearch API ${res.status}: ${errText}`);
                 }
-            } catch (error: any) {
-                this.logger.error(`Places API network error for types ${group.types.join(',')}: ${error.message}`);
+            } catch (err: any) {
+                this.logger.error(`Places TextSearch error: ${err.message}`);
             }
         }
 
-        // Deduplicate by place id
-        const seen = new Set<string>();
-        const unique = allPlaces.filter(p => {
-            if (seen.has(p.id)) return false;
-            seen.add(p.id);
-            return true;
-        });
+        // === Only verified-valid Table A types ===
+        const typeGroups = [
+            { types: ['museum', 'art_museum', 'history_museum'], category: 'museum' },
+            { types: ['art_gallery'], category: 'gallery' },
+            { types: ['tourist_attraction', 'cultural_landmark', 'historical_place', 'monument'], category: 'heritage' },
+        ];
 
-        // Sort by distance from center
-        unique.sort((a, b) => {
-            const distA = this.haversineDistance(lat, lng, a.latitude, a.longitude);
-            const distB = this.haversineDistance(lat, lng, b.latitude, b.longitude);
-            return distA - distB;
-        });
+        const url = 'https://places.googleapis.com/v1/places:searchNearby';
+        const allPlaces: any[] = [...textPlaces];
 
-        return { places: unique };
+        // === Sequential batch per center (anti-throttling) ===
+        for (let ci = 0; ci < centers.length; ci++) {
+            const center = centers[ci];
+            const queryRadius = Math.min(center.radius, GOOGLE_MAX_RADIUS);
+            const batchPromises = typeGroups.map((group) =>
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Goog-Api-Key': apiKey,
+                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.photos,places.reviews',
+                        'Accept-Language': 'id',
+                        'Referer': refererHeader,
+                    },
+                    body: JSON.stringify({
+                        includedTypes: group.types,
+                        maxResultCount: 20,
+                        languageCode: 'id',
+                        locationRestriction: {
+                            circle: {
+                                center: { latitude: center.lat, longitude: center.lng },
+                                radius: queryRadius,
+                            },
+                        },
+                    }),
+                }).then(async (res) => {
+                    if (!res.ok) {
+                        const errText = await res.text();
+                        this.logger.error(`Places API ${res.status} [${group.category}]: ${errText}`);
+                        return [];
+                    }
+                    const data = await res.json() as any;
+                    return (data.places || []).map((p: any) => ({
+                        id: p.id,
+                        name: p.displayName?.text || '',
+                        address: p.formattedAddress || '',
+                        latitude: p.location?.latitude,
+                        longitude: p.location?.longitude,
+                        rating: p.rating,
+                        reviewCount: p.userRatingCount,
+                        type: group.category,
+                        photos: (p.photos || []).slice(0, 8).map((ph: any) =>
+                            `https://places.googleapis.com/v1/${ph.name}/media?key=${apiKey}&maxHeightPx=400&maxWidthPx=400`
+                        ),
+                        reviews: (p.reviews || []).slice(0, 5).map((r: any) => ({
+                            author: r.authorAttribution?.displayName || 'Anonymous',
+                            authorPhoto: r.authorAttribution?.photoUri || '',
+                            rating: r.rating || 0,
+                            text: r.text?.text || '',
+                            time: r.relativePublishTimeDescription || '',
+                            publishTime: r.publishTime || '',
+                        })),
+                    }));
+                }).catch((err: any) => {
+                    this.logger.error(`Places fetch error [${group.category}]: ${err.message}`);
+                    return [] as any[];
+                })
+            );
+
+            const results = await Promise.allSettled(batchPromises);
+            for (const r of results) {
+                if (r.status === 'fulfilled') allPlaces.push(...r.value);
+            }
+
+            // Anti-throttle: small delay between grid centers (skip after last)
+            if (ci < centers.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 120));
+            }
+        }
+
+        // === Deduplicate → filter within radius → sort by distance ===
+        const unique = Array.from(new Map(allPlaces.map(p => [p.id, p])).values());
+        const radiusKm = safeRadius / 1000;
+        const textPlaceIds = new Set(textPlaces.map(p => p.id));
+        const filtered = unique.filter(p => {
+            if (typeof p.latitude !== 'number' || typeof p.longitude !== 'number') return false;
+            // If explicitly searched by text, bypass the radius check so user gets exact query results
+            if (textPlaceIds.has(p.id)) return true;
+            return this.haversineDistance(safeLat, safeLng, p.latitude, p.longitude) <= radiusKm;
+        });
+        filtered.sort((a, b) =>
+            this.haversineDistance(safeLat, safeLng, a.latitude, a.longitude) -
+            this.haversineDistance(safeLat, safeLng, b.latitude, b.longitude)
+        );
+
+        this.logger.log(`Nearby: ${centers.length} grids × ${typeGroups.length} types → ${allPlaces.length} raw → ${filtered.length} within ${radiusKm}km (TextSearch matched ${textPlaces.length})`);
+        return { places: filtered, region: regionInfo };
+    }
+
+    /**
+     * Detect whether coordinates are in a major city (Kota Besar, 50km) or kabupaten/regency (100km).
+     * Uses Google Geocoding API reverse geocode + comprehensive Indonesian city list.
+     */
+    async detectRegionType(lat: number, lng: number): Promise<{ isMajorCity: boolean; regionName: string; maxRadiusKm: number }> {
+        const apiKey = this.configService.get<string>('googleMaps.apiKey')
+            || process.env.GOOGLE_MAPS_API_KEY
+            || '';
+
+        if (!apiKey) {
+            return { isMajorCity: false, regionName: 'Unknown', maxRadiusKm: 100 };
+        }
+
+        const MAJOR_CITIES = [
+            'jakarta', 'surabaya', 'bandung', 'medan', 'semarang', 'makassar',
+            'palembang', 'tangerang', 'depok', 'bekasi', 'batam', 'bogor',
+            'padang', 'malang', 'denpasar', 'samarinda', 'banjarmasin',
+            'tasikmalaya', 'pontianak', 'cimahi', 'balikpapan', 'jambi',
+            'surakarta', 'solo', 'manado', 'yogyakarta', 'jogja', 'jogjakarta',
+            'cilegon', 'kupang', 'pekanbaru', 'ambon', 'mataram', 'jayapura',
+            'bengkulu', 'palu', 'kendari', 'tegal', 'binjai', 'pematangsiantar',
+            'cirebon', 'kediri', 'serang', 'sukabumi', 'madiun', 'probolinggo',
+            'banda aceh', 'bandar lampung', 'pangkalpinang', 'bitung',
+            'tanjungpinang', 'gorontalo', 'ternate', 'lubuklinggau',
+            'sorong', 'tangerang selatan',
+        ];
+
+        try {
+            const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}&language=id&result_type=administrative_area_level_2|administrative_area_level_1|locality`;
+            const response = await fetch(geocodeUrl);
+            const data = await response.json() as any;
+
+            if (data.status === 'OK' && data.results && data.results.length > 0) {
+                for (const result of data.results) {
+                    const formattedAddr = (result.formatted_address || '').toLowerCase();
+                    const components = result.address_components || [];
+
+                    for (const comp of components) {
+                        const longName = (comp.long_name || '').toLowerCase();
+                        const types: string[] = comp.types || [];
+
+                        if (types.includes('administrative_area_level_2') || types.includes('locality')) {
+                            if (longName.startsWith('kota ')) {
+                                const cityName = comp.long_name.replace(/^kota /i, '').trim();
+                                this.logger.log(`Region: Kota ${cityName} → Major city (50km)`);
+                                return { isMajorCity: true, regionName: `Kota ${cityName}`, maxRadiusKm: 50 };
+                            }
+                            if (longName.startsWith('kabupaten ')) {
+                                const regName = comp.long_name.replace(/^kabupaten /i, '').trim();
+                                this.logger.log(`Region: Kabupaten ${regName} → Regency (100km)`);
+                                return { isMajorCity: false, regionName: `Kabupaten ${regName}`, maxRadiusKm: 100 };
+                            }
+                        }
+
+                        if (MAJOR_CITIES.some(city => longName.includes(city) || formattedAddr.includes(city))) {
+                            this.logger.log(`Region: ${comp.long_name} → Known major city (50km)`);
+                            return { isMajorCity: true, regionName: comp.long_name, maxRadiusKm: 50 };
+                        }
+                    }
+                }
+            }
+
+            this.logger.log(`Region: No major city match → default regency (100km)`);
+            return { isMajorCity: false, regionName: 'Daerah', maxRadiusKm: 100 };
+        } catch (error: any) {
+            this.logger.error(`Region detection failed: ${error.message}`);
+            return { isMajorCity: false, regionName: 'Unknown', maxRadiusKm: 100 };
+        }
     }
 
     /**

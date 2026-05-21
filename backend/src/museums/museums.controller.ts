@@ -71,17 +71,33 @@ export class MuseumsController {
     @ApiOperation({ summary: "Search nearby museums, galleries, and heritage sites using Google Places API" })
     @ApiQuery({ name: "lat", required: true, type: Number })
     @ApiQuery({ name: "lng", required: true, type: Number })
-    @ApiQuery({ name: "radius", required: false, type: Number, description: "Radius in meters (default: 15000)" })
+    @ApiQuery({ name: "radius", required: false, type: Number, description: "Radius in meters (default: 70000, max: 70000)" })
+    @ApiQuery({ name: "query", required: false, type: String, description: "Search query for specific name/address matching" })
     async searchNearbyPlaces(
         @Query("lat") lat: number,
         @Query("lng") lng: number,
         @Query("radius") radius?: number,
+        @Query("query") query?: string,
     ) {
         return this.museumsService.searchNearbyPlaces(
             Number(lat),
             Number(lng),
-            Number(radius) || 15000,
+            Number(radius) || 70000,
+            query,
         );
+    }
+
+    @Public()
+    @Get("region-type")
+    @Throttle({ default: { limit: 10, ttl: 60000 } })
+    @ApiOperation({ summary: "Detect if coordinates are in a major city (50km) or regency/kabupaten area (100km)" })
+    @ApiQuery({ name: "lat", required: true, type: Number })
+    @ApiQuery({ name: "lng", required: true, type: Number })
+    async detectRegionType(
+        @Query("lat") lat: number,
+        @Query("lng") lng: number,
+    ) {
+        return this.museumsService.detectRegionType(Number(lat), Number(lng));
     }
 
     @Public()

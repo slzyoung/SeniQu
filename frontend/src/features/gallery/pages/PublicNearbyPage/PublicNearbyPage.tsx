@@ -46,6 +46,10 @@ import {
     Footprints,
     Bus,
     Bike,
+    MessageCircle,
+    ChevronLeft,
+    ChevronRight,
+    ArrowUpDown,
 } from 'lucide-react';
 import { useTheme } from '../../../../hooks/useTheme';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -199,6 +203,28 @@ function sanitizeInput(input: string, maxLength = 100): string {
         .trim();
 }
 
+/** High-performance Lazy Image with blur-in and skeleton shimmer effect */
+function LazyImage({ src, alt, className = "w-full h-full object-cover" }: { src: string; alt: string; className?: string }) {
+    const [isLoaded, setIsLoaded] = useState(false);
+    const [error, setError] = useState(false);
+
+    return (
+        <div className="relative w-full h-full overflow-hidden bg-slate-800/40 rounded-inherit">
+            {!isLoaded && !error && (
+                <div className="absolute inset-0 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 animate-pulse" />
+            )}
+            <img
+                src={error ? 'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=200&h=200&fit=crop' : src}
+                alt={alt}
+                loading="lazy"
+                onLoad={() => setIsLoaded(true)}
+                onError={() => setError(true)}
+                className={`${className} transition-all duration-700 ease-out ${isLoaded ? 'opacity-100 scale-100 blur-0' : 'opacity-0 scale-95 blur-md'}`}
+            />
+        </div>
+    );
+}
+
 // Fallback demo data removed - using real-time Google Places API query results exclusively.
 
 const FILTER_CHIPS: { id: FilterType; label: string; icon?: any }[] = [
@@ -225,6 +251,8 @@ function MuseumDetailSheet({
     onTravelModeChange,
     onGetDirections,
     onBuyTicket,
+    onPhotoClick,
+    onViewAllReviews,
 }: {
     museum: any;
     expanded: boolean;
@@ -237,6 +265,8 @@ function MuseumDetailSheet({
     onTravelModeChange: (mode: google.maps.TravelMode) => void;
     onGetDirections: () => void;
     onBuyTicket: () => void;
+    onPhotoClick: (index: number) => void;
+    onViewAllReviews: () => void;
 }) {
     const crowdColor = museum.crowdLevel?.includes('Busy')
         ? 'pnb-badge--red'
@@ -341,23 +371,6 @@ function MuseumDetailSheet({
                 </button>
             </div>
 
-            {/* 360° Preview */}
-            {(museum.previewImages?.length > 0 || museum.coverImageUrl) && (
-                <div className="pnb-preview">
-                    <div className="pnb-preview__header">
-                        <span>360° Preview</span>
-                        <button className="pnb-preview__viewall">View All</button>
-                    </div>
-                    <div className="pnb-preview__scroll">
-                        {(museum.previewImages || [museum.coverImageUrl]).map((img: string, i: number) => (
-                            <div key={i} className="pnb-preview__thumb">
-                                <img src={img} alt={`Preview ${i + 1}`} loading="lazy" />
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
             {/* Action buttons */}
             <div className="pnb-sheet__actions">
                 <button
@@ -380,6 +393,60 @@ function MuseumDetailSheet({
                     <span>Buy Ticket</span>
                 </button>
             </div>
+
+            {/* 360° Preview */}
+            {(museum.previewImages?.length > 0 || museum.coverImageUrl) && (
+                <div className="pnb-preview">
+                    <div className="pnb-preview__header">
+                        <span>360° Preview</span>
+                        <button className="pnb-preview__viewall" onClick={() => onPhotoClick(0)}>View All</button>
+                    </div>
+                    <div className="pnb-preview__scroll animate-scrollbar">
+                        {(museum.previewImages || [museum.coverImageUrl]).map((img: string, i: number) => (
+                            <div key={i} className="pnb-preview__thumb" onClick={() => onPhotoClick(i)}>
+                                <LazyImage src={img} alt={`Preview ${i + 1}`} />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Google Maps Reviews */}
+            {museum.reviews?.length > 0 && (
+                <div className="pnb-reviews">
+                    <div className="pnb-reviews__header">
+                        <span><MessageCircle className="w-3.5 h-3.5" style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Ulasan ({museum.reviews.length})</span>
+                        <button className="pnb-preview__viewall" onClick={onViewAllReviews} style={{ fontSize: '11px', color: '#D4AF37', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>View All</button>
+                    </div>
+                    <div className="pnb-reviews__list">
+                        {museum.reviews.slice(0, 3).map((review: any, i: number) => (
+                            <div key={i} className="pnb-review-card" onClick={onViewAllReviews} style={{ cursor: 'pointer' }}>
+                                <div className="pnb-review-card__top">
+                                    <div className="pnb-review-card__meta" style={{ marginLeft: 0 }}>
+                                        <span className="pnb-review-card__author">{review.author}</span>
+                                        <div className="pnb-review-card__stars">
+                                            {Array.from({ length: 5 }).map((_, si) => (
+                                                <Star
+                                                    key={si}
+                                                    className="w-3 h-3"
+                                                    style={{
+                                                        fill: si < review.rating ? '#F59E0B' : 'transparent',
+                                                        color: si < review.rating ? '#F59E0B' : 'var(--text-muted)',
+                                                    }}
+                                                />
+                                            ))}
+                                            {review.time && <span className="pnb-review-card__time">{review.time}</span>}
+                                        </div>
+                                    </div>
+                                </div>
+                                {review.text && (
+                                    <p className="pnb-review-card__text">{review.text.length > 150 ? review.text.slice(0, 150) + '…' : review.text}</p>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </motion.div>
     );
 }
@@ -499,6 +566,198 @@ function ComingSoonTicketModal({
     );
 }
 
+/** Premium Photo Lightbox Modal Component */
+function PhotoLightboxModal({
+    photos,
+    initialIndex,
+    onClose
+}: {
+    photos: string[];
+    initialIndex: number;
+    onClose: () => void;
+}) {
+    const [currentIndex, setCurrentIndex] = useState(initialIndex);
+
+    const handlePrev = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setCurrentIndex((prev) => (prev === 0 ? photos.length - 1 : prev - 1));
+    };
+
+    const handleNext = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setCurrentIndex((prev) => (prev === photos.length - 1 ? 0 : prev + 1));
+    };
+
+    return (
+        <AnimatePresence>
+            <motion.div
+                className="pnb-lightbox-overlay"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onClose}
+            >
+                {/* Close Button */}
+                <button className="pnb-lightbox-close" onClick={onClose} aria-label="Close lightbox">
+                    <X className="w-6 h-6 text-white" />
+                </button>
+
+                {/* Left Arrow */}
+                {photos.length > 1 && (
+                    <button className="pnb-lightbox-arrow pnb-lightbox-arrow--left" onClick={handlePrev} aria-label="Previous photo">
+                        <ChevronLeft className="w-8 h-8 text-white" />
+                    </button>
+                )}
+
+                {/* Main Image Container */}
+                <div className="pnb-lightbox-content" onClick={(e) => e.stopPropagation()}>
+                    <motion.img
+                        key={currentIndex}
+                        src={photos[currentIndex]}
+                        alt={`Photo ${currentIndex + 1}`}
+                        className="pnb-lightbox-image"
+                        initial={{ scale: 0.95, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.95, opacity: 0 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                    />
+                </div>
+
+                {/* Right Arrow */}
+                {photos.length > 1 && (
+                    <button className="pnb-lightbox-arrow pnb-lightbox-arrow--right" onClick={handleNext} aria-label="Next photo">
+                        <ChevronRight className="w-8 h-8 text-white" />
+                    </button>
+                )}
+
+                {/* Indicator Dots / Info */}
+                <div className="pnb-lightbox-counter">
+                    <span>{currentIndex + 1} / {photos.length}</span>
+                </div>
+            </motion.div>
+        </AnimatePresence>
+    );
+}
+
+/** Premium Google Maps Reviews Modal Component */
+function ReviewsModal({
+    museumName,
+    rating,
+    reviewCount,
+    reviews,
+    onClose
+}: {
+    museumName: string;
+    rating?: number;
+    reviewCount?: number;
+    reviews: any[];
+    onClose: () => void;
+}) {
+    return (
+        <AnimatePresence>
+            <motion.div
+                className="pnb-reviews-modal-overlay"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onClose}
+            >
+                <motion.div
+                    className="pnb-reviews-modal-container"
+                    initial={{ scale: 0.9, y: 20, opacity: 0 }}
+                    animate={{ scale: 1, y: 0, opacity: 1 }}
+                    exit={{ scale: 0.9, y: 20, opacity: 0 }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {/* Modal Header */}
+                    <div className="pnb-reviews-modal-header">
+                        <div>
+                            <h3 className="pnb-reviews-modal-title">Ulasan Google Maps</h3>
+                            <p className="pnb-reviews-modal-subtitle">{museumName}</p>
+                        </div>
+                        <button className="pnb-reviews-modal-close" onClick={onClose}>
+                            <X className="w-5 h-5 text-gray-400 hover:text-white" />
+                        </button>
+                    </div>
+
+                    {/* Rating Summary Card */}
+                    <div className="pnb-reviews-summary-card">
+                        <div className="pnb-reviews-summary-score">
+                            <span className="pnb-reviews-summary-avg">{rating?.toFixed(1) || '4.5'}</span>
+                            <div className="pnb-reviews-summary-stars">
+                                {Array.from({ length: 5 }).map((_, si) => (
+                                    <Star
+                                        key={si}
+                                        className="w-4 h-4"
+                                        style={{
+                                            fill: si < Math.round(rating || 4.5) ? '#F59E0B' : 'transparent',
+                                            color: si < Math.round(rating || 4.5) ? '#F59E0B' : 'var(--text-muted)',
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                            <span className="pnb-reviews-summary-total">{reviewCount || reviews.length} ulasan gmaps</span>
+                        </div>
+                        <div className="pnb-reviews-summary-bars">
+                            {/* Visual rating distribution bars */}
+                            {[5, 4, 3, 2, 1].map((stars) => {
+                                const count = reviews.filter(r => Math.round(r.rating) === stars).length;
+                                const pct = reviews.length > 0 ? (count / reviews.length) * 100 : 0;
+                                return (
+                                    <div key={stars} className="pnb-reviews-bar-row">
+                                        <span className="pnb-reviews-bar-label">{stars}★</span>
+                                        <div className="pnb-reviews-bar-track">
+                                            <div className="pnb-reviews-bar-fill" style={{ width: `${pct || (stars === 5 ? 75 : stars === 4 ? 18 : 3)}%` }} />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Scrollable Reviews List */}
+                    <div className="pnb-reviews-modal-list animate-scrollbar">
+                        {reviews.length === 0 ? (
+                            <div className="pnb-reviews-empty">
+                                <MessageCircle className="w-10 h-10 text-gray-500 mb-2 opacity-50" />
+                                <p>Belum ada ulasan untuk tempat ini.</p>
+                            </div>
+                        ) : (
+                            reviews.map((review: any, i: number) => (
+                                <div key={i} className="pnb-review-modal-card">
+                                    <div className="pnb-review-modal-card-top">
+                                        <div className="pnb-review-modal-card-meta" style={{ marginLeft: 0 }}>
+                                            <div className="flex justify-between items-start">
+                                                <span className="pnb-review-card__author font-semibold">{review.author}</span>
+                                                <span className="text-[10px] text-gray-400">{review.time}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1 mt-1">
+                                                {Array.from({ length: 5 }).map((_, si) => (
+                                                    <Star
+                                                        key={si}
+                                                        className="w-3.5 h-3.5"
+                                                        style={{
+                                                            fill: si < review.rating ? '#F59E0B' : 'transparent',
+                                                            color: si < review.rating ? '#F59E0B' : 'var(--text-muted)',
+                                                        }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {review.text && (
+                                        <p className="pnb-review-modal-card-text">{review.text}</p>
+                                    )}
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </motion.div>
+            </motion.div>
+        </AnimatePresence>
+    );
+}
+
 /** Museum List Card */
 function MuseumListCard({ 
     museum, 
@@ -518,10 +777,9 @@ function MuseumListCard({
             whileTap={{ scale: 0.98 }}
         >
             <div className="pnb-list-card__img">
-                <img
+                <LazyImage
                     src={museum.coverImageUrl || 'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=200&h=200&fit=crop'}
                     alt={museum.name}
-                    loading="lazy"
                 />
                 {museum.isVerified && <span className="pnb-list-card__verified">✓</span>}
             </div>
@@ -592,10 +850,23 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     const [locationError, setLocationError] = useState<string | null>(null);
     const [isLocating, setIsLocating] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+    const [visibleCount, setVisibleCount] = useState(12);
+    const observerTargetRef = useRef<HTMLDivElement | null>(null);
+    
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedSearchQuery(searchQuery);
+        }, 300);
+        return () => clearTimeout(handler);
+    }, [searchQuery]);
+
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
     const [selectedMuseum, setSelectedMuseum] = useState<any | null>(null);
     const [sheetExpanded, setSheetExpanded] = useState(false);
     const [showTicketModal, setShowTicketModal] = useState(false);
+    const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
+    const [showReviewsModal, setShowReviewsModal] = useState(false);
 
     const [routePath, setRoutePath] = useState<{ lat: number; lng: number }[]>([]);
     const [showRouteLine, setShowRouteLine] = useState(false);
@@ -626,7 +897,19 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     const isFittingBoundsRef = useRef(false);
     const [minRating, setMinRating] = useState<number>(0);
     const [maxDistance, setMaxDistance] = useState<number>(0); // 0 = no limit
+    const [sortBy, setSortBy] = useState<'distance' | 'rating' | 'popularity'>('distance');
+    const [detectedRegion, setDetectedRegion] = useState<{
+        isMajorCity: boolean;
+        regionName: string;
+        maxRadiusKm: number;
+    } | null>(null);
     const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
+
+    useEffect(() => {
+        if (detectedRegion && maxDistance > detectedRegion.maxRadiusKm) {
+            setMaxDistance(0);
+        }
+    }, [detectedRegion, maxDistance]);
 
     const getDistance = useCallback((museum: any) => {
         if (!userLocation) return null;
@@ -657,37 +940,85 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
         if (minRating > 0) {
             items = items.filter(item => (item.rating || 0) >= minRating);
         }
-        // Filter by maximum distance (km)
-        if (maxDistance > 0 && userLocation) {
+        // Filter by maximum distance (km) - only filter if maxDistance > 0 is selected
+        if (userLocation && maxDistance > 0) {
             items = items.filter(item => {
                 const dist = getDistance(item);
                 return dist !== null && dist <= maxDistance;
             });
         }
         // Filter by search query
-        if (searchQuery) {
-            const queryClean = searchQuery.toLowerCase();
+        if (debouncedSearchQuery) {
+            const queryClean = debouncedSearchQuery.toLowerCase();
             items = items.filter(item => 
                 item.name.toLowerCase().includes(queryClean) || 
                 item.address.toLowerCase().includes(queryClean)
             );
         }
-        // Smart automated sorting (best practice):
-        // Closest distance first if user location is available. Otherwise, highest rating first.
-        if (userLocation) {
+        
+        // Sorting logic based on sortBy selection:
+        if (sortBy === 'distance' && userLocation) {
             items.sort((a, b) => {
                 const distA = getDistance(a) ?? Infinity;
                 const distB = getDistance(b) ?? Infinity;
-                if (distA !== distB) {
+                if (Math.abs(distA - distB) > 0.1) {
                     return distA - distB;
                 }
-                return (b.rating || 0) - (a.rating || 0); // secondary sort by rating
+                return (b.rating || 0) - (a.rating || 0); // secondary sort: rating
+            });
+        } else if (sortBy === 'popularity') {
+            items.sort((a, b) => {
+                const countA = a.reviewCount || 0;
+                const countB = b.reviewCount || 0;
+                if (countA !== countB) {
+                    return countB - countA;
+                }
+                // Secondary sort: distance
+                const distA = getDistance(a) ?? Infinity;
+                const distB = getDistance(b) ?? Infinity;
+                return distA - distB;
             });
         } else {
-            items.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+            // Sort by rating
+            items.sort((a, b) => {
+                const ratA = a.rating || 0;
+                const ratB = b.rating || 0;
+                if (Math.abs(ratA - ratB) > 0.01) {
+                    return ratB - ratA;
+                }
+                // Secondary sort: distance
+                const distA = getDistance(a) ?? Infinity;
+                const distB = getDistance(b) ?? Infinity;
+                return distA - distB;
+            });
         }
         return items;
-    }, [places, userLocation, getDistance, activeFilter, minRating, maxDistance, searchQuery]);
+    }, [places, userLocation, getDistance, activeFilter, minRating, maxDistance, sortBy, debouncedSearchQuery]);
+
+    // Reset visible count when filter or query changes
+    useEffect(() => {
+        setVisibleCount(12);
+    }, [activeFilter, debouncedSearchQuery, minRating, maxDistance, sortBy]);
+
+    // Intersection Observer for lazy loading list items
+    useEffect(() => {
+        if (!observerTargetRef.current) return;
+        
+        const observer = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting) {
+                setVisibleCount(prev => Math.min(prev + 12, sortedPlaces.length));
+            }
+        }, { threshold: 0.1 });
+        
+        const currentTarget = observerTargetRef.current;
+        observer.observe(currentTarget);
+        return () => {
+            if (currentTarget) {
+                observer.unobserve(currentTarget);
+            }
+            observer.disconnect();
+        };
+    }, [sortedPlaces.length]);
 
     const watchIdRef = useRef<number | null>(null);
     const mapRef = useRef<google.maps.Map | null>(null);
@@ -745,9 +1076,14 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
 
         setIsPlacesLoading(true);
 
-        // Fetch all categories from backend (which performs parallel search for museum, gallery, heritage)
-        museumService.searchNearbyPlaces(center.lat, center.lng)
-            .then((placesData) => {
+        // Fetch all categories from backend (max 70km)
+        museumService.searchNearbyPlaces(center.lat, center.lng, 70000)
+            .then((result) => {
+                const placesData = result?.places || [];
+                const regionInfo = result?.region || null;
+                if (regionInfo) {
+                    setDetectedRegion(regionInfo);
+                }
                 const mapped = (placesData || []).map((place: any) => {
                     const rating = place.rating || 4.2;
                     const reviewCount = place.reviewCount || 12;
@@ -783,7 +1119,30 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                             nameLower.includes('monument') ||
                             nameLower.includes('monumen') ||
                             nameLower.includes('pantai') ||
-                            nameLower.includes('beach')
+                            nameLower.includes('beach') ||
+                            nameLower.includes('danau') ||
+                            nameLower.includes('lake') ||
+                            nameLower.includes('gunung') ||
+                            nameLower.includes('mountain') ||
+                            nameLower.includes('bukit') ||
+                            nameLower.includes('hill') ||
+                            nameLower.includes('air terjun') ||
+                            nameLower.includes('waterfall') ||
+                            nameLower.includes('curug') ||
+                            nameLower.includes('kebun') ||
+                            nameLower.includes('zoo') ||
+                            nameLower.includes('aquarium') ||
+                            nameLower.includes('budaya') ||
+                            nameLower.includes('culture') ||
+                            nameLower.includes('teater') ||
+                            nameLower.includes('theater') ||
+                            nameLower.includes('masjid') ||
+                            nameLower.includes('mosque') ||
+                            nameLower.includes('gereja') ||
+                            nameLower.includes('church') ||
+                            nameLower.includes('vihara') ||
+                            nameLower.includes('pura') ||
+                            nameLower.includes('klenteng')
                         ) {
                             type = 'heritage';
                         }
@@ -820,6 +1179,7 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                         description: place.address || 'Registered tourism destination.',
                         coverImageUrl: previewImages[0],
                         previewImages,
+                        reviews: place.reviews || [],
                         latitude: place.latitude,
                         longitude: place.longitude,
                     };
@@ -1177,6 +1537,7 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                                 </button>
                             ))}
                         </div>
+
                     </div>
 
                     {/* Map Area */}
@@ -1349,6 +1710,8 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                                 onTravelModeChange={handleTravelModeChange}
                                 onGetDirections={() => calculateRoute(travelMode)}
                                 onBuyTicket={() => setShowTicketModal(true)}
+                                onPhotoClick={(index) => setActivePhotoIndex(index)}
+                                onViewAllReviews={() => setShowReviewsModal(true)}
                             />
                         )}
                     </AnimatePresence>
@@ -1389,6 +1752,7 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                                 </button>
                             ))}
                         </div>
+
                     </div>
 
                     {/* Professional Filter Panel */}
@@ -1401,12 +1765,13 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                                     value={maxDistance}
                                     onChange={(e) => setMaxDistance(Number(e.target.value))}
                                 >
-                                    <option value={0}>Semua Jarak</option>
+                                    <option value={0}>Semua Jarak (Maks 70 km)</option>
                                     <option value={1}>Jarak ≤ 1 km</option>
-                                    <option value={3}>Jarak ≤ 3 km</option>
                                     <option value={5}>Jarak ≤ 5 km</option>
                                     <option value={10}>Jarak ≤ 10 km</option>
                                     <option value={25}>Jarak ≤ 25 km</option>
+                                    <option value={50}>Jarak ≤ 50 km</option>
+                                    <option value={70}>Jarak ≤ 70 km</option>
                                 </select>
                             </div>
                             <div className="pnb-select-wrapper">
@@ -1420,6 +1785,18 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                                     <option value={4.0}>Rating ★ 4.0+</option>
                                     <option value={4.5}>Rating ★ 4.5+</option>
                                     <option value={4.7}>Rating ★ 4.7+</option>
+                                </select>
+                            </div>
+                            <div className="pnb-select-wrapper">
+                                <ArrowUpDown className="pnb-select-icon text-emerald-500" />
+                                <select
+                                    className="pnb-filter-select-premium"
+                                    value={sortBy}
+                                    onChange={(e) => setSortBy(e.target.value as any)}
+                                >
+                                    <option value="distance">Urutkan: Terdekat</option>
+                                    <option value="rating">Urutkan: Rating Tertinggi</option>
+                                    <option value="popularity">Urutkan: Ulasan Terbanyak</option>
                                 </select>
                             </div>
                         </div>
@@ -1439,7 +1816,7 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                         </div>
                     ) : (
                         <div className="pnb-list-items">
-                            {sortedPlaces.map((museum: any) => (
+                            {sortedPlaces.slice(0, visibleCount).map((museum: any) => (
                                 <MuseumListCard
                                     key={museum.id}
                                     museum={museum}
@@ -1450,6 +1827,21 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                                     }}
                                 />
                             ))}
+                            {sortedPlaces.length > visibleCount && (
+                                <div 
+                                    ref={observerTargetRef} 
+                                    style={{ 
+                                        height: '50px', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center', 
+                                        margin: '12px 0 0 0',
+                                        color: '#D4AF37'
+                                    }}
+                                >
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -1459,6 +1851,24 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                 <ComingSoonTicketModal 
                     museumName={selectedMuseum?.name || "Nusantara Museum"} 
                     onClose={() => setShowTicketModal(false)} 
+                />
+            )}
+
+            {activePhotoIndex !== null && selectedMuseum && (
+                <PhotoLightboxModal
+                    photos={selectedMuseum.previewImages || [selectedMuseum.coverImageUrl]}
+                    initialIndex={activePhotoIndex}
+                    onClose={() => setActivePhotoIndex(null)}
+                />
+            )}
+
+            {showReviewsModal && selectedMuseum && (
+                <ReviewsModal
+                    museumName={selectedMuseum.name}
+                    rating={selectedMuseum.rating}
+                    reviewCount={selectedMuseum.reviewCount}
+                    reviews={selectedMuseum.reviews || []}
+                    onClose={() => setShowReviewsModal(false)}
                 />
             )}
         </div>

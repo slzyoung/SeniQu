@@ -43,6 +43,8 @@ export interface CreateMuseumData {
 class MuseumService {
     private static instance: MuseumService;
 
+    private searchCache = new Map<string, any>();
+
     private constructor() { }
 
     static getInstance(): MuseumService {
@@ -110,11 +112,51 @@ class MuseumService {
      * Search nearby places via backend Google Places API (New)
      * Returns museums, galleries, and heritage sites near given coordinates
      */
-    async searchNearbyPlaces(lat: number, lng: number, radius?: number): Promise<any[]> {
+    async searchNearbyPlaces(lat: number, lng: number, radius?: number, query?: string): Promise<{ places: any[]; region?: { isMajorCity: boolean; regionName: string; maxRadiusKm: number } }> {
+        const rad = radius || 15000;
+        // round to 4 decimal places to stabilize cache keys against minor user movements (~11 meters)
+        const cacheKey = `${lat.toFixed(4)}_${lng.toFixed(4)}_${rad}_${query || ''}`;
+        
+        if (this.searchCache.has(cacheKey)) {
+            return this.searchCache.get(cacheKey)!;
+        }
+
         const response = await apiGet<any>('/museums/search-nearby', {
-            params: { lat, lng, radius: radius || 15000 },
+            params: { lat, lng, radius: rad, query },
         });
-        return response?.places || response?.data?.places || [];
+        const places = response?.places || response?.data?.places || [];
+        const region = response?.region || response?.data?.region || undefined;
+        
+        const result = { places, region };
+
+        // Limit cache size to 20 to prevent excessive memory usage
+        if (this.searchCache.size > 20) {
+            const firstKey = this.searchCache.keys().next().value;
+            if (firstKey) this.searchCache.delete(firstKey);
+        }
+        this.searchCache.set(cacheKey, result);
+        
+        return result;
+    }
+
+    /**
+     * Detect if user is in a major city or kabupaten/regency area
+     * Uses Google Geocoding API on the backend to determine administrative area type
+     */
+    async detectRegionType(lat: number, lng: number): Promise<{ isMajorCity: boolean; regionName: string; maxRadiusKm: number }> {
+        try {
+            const response = await apiGet<any>('/museums/region-type', {
+                params: { lat, lng },
+            });
+            return {
+                isMajorCity: response?.isMajorCity ?? response?.data?.isMajorCity ?? false,
+                regionName: response?.regionName ?? response?.data?.regionName ?? 'Daerah',
+                maxRadiusKm: response?.maxRadiusKm ?? response?.data?.maxRadiusKm ?? 70,
+            };
+        } catch (error) {
+            console.warn('Region detection failed, defaulting to 70km:', error);
+            return { isMajorCity: false, regionName: 'Sekitar', maxRadiusKm: 70 };
+        }
     }
 
     /**

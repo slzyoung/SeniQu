@@ -3,7 +3,7 @@
  * Handles the verification link clicked from email
  */
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { CheckCircle, XCircle, Loader2, ArrowRight } from 'lucide-react';
