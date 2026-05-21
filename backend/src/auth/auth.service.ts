@@ -742,7 +742,7 @@ export class AuthService {
         const accessToken = this.jwtService.sign(payload)
 
         const refreshToken = this.jwtService.sign(payload, {
-            expiresIn: this.configService.get<string>("auth.jwtRefreshExpiresIn"),
+            expiresIn: (this.configService.get<string>("auth.jwtRefreshExpiresIn") || "30d") as any,
         })
 
         return { accessToken, refreshToken }
