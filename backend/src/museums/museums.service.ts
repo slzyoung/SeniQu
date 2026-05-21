@@ -206,9 +206,10 @@ export class MuseumsService {
                 });
                 if (res.ok) {
                     const data = await res.json() as any;
-                    textPlaces = (data.places || []).map((p: any) => {
+                    const mapped = (data.places || []).map((p: any) => {
                         let category = 'heritage';
-                        const nameLower = (p.displayName?.text || '').toLowerCase();
+                        const name = p.displayName?.text || '';
+                        const nameLower = name.toLowerCase();
                         const matchedTypes = p.types || [];
                         if (nameLower.includes('museum') || matchedTypes.some((t: string) => ['museum', 'art_museum', 'history_museum'].includes(t))) {
                             category = 'museum';
@@ -216,9 +217,33 @@ export class MuseumsService {
                             category = 'gallery';
                         }
                         
+                        // Validate genuine museum/gallery
+                        if (category === 'museum' || category === 'gallery') {
+                            const isGenuine = this.isGenuineMuseumOrGallery(name, matchedTypes, category);
+                            if (!isGenuine) {
+                                // Demote to heritage if it's a historical/cultural landmark
+                                const isHeritageLandmark = matchedTypes.some((t: string) => 
+                                    ['tourist_attraction', 'historical_place', 'monument', 'cultural_landmark'].includes(t)
+                                );
+                                if (isHeritageLandmark) {
+                                    category = 'heritage';
+                                } else {
+                                    return null; // Discard completely
+                                }
+                            }
+                        }
+
+                        // Validate genuine heritage site
+                        if (category === 'heritage') {
+                            const isGenuine = this.isGenuineHeritage(name, matchedTypes, p.rating, p.userRatingCount);
+                            if (!isGenuine) {
+                                return null; // Discard minor local spots
+                            }
+                        }
+
                         return {
                             id: p.id,
-                            name: p.displayName?.text || '',
+                            name: name,
                             address: p.formattedAddress || '',
                             latitude: p.location?.latitude,
                             longitude: p.location?.longitude,
@@ -238,6 +263,7 @@ export class MuseumsService {
                             })),
                         };
                     });
+                    textPlaces = mapped.filter((p: any) => p !== null);
                 } else {
                     const errText = await res.text();
                     this.logger.error(`Places TextSearch API ${res.status}: ${errText}`);
@@ -308,9 +334,10 @@ export class MuseumsService {
                         return [];
                     }
                     const data = await res.json() as any;
-                    return (data.places || []).map((p: any) => {
+                    const mapped = (data.places || []).map((p: any) => {
                         let category = group.category;
-                        const nameLower = (p.displayName?.text || '').toLowerCase();
+                        const name = p.displayName?.text || '';
+                        const nameLower = name.toLowerCase();
                         const matchedTypes = p.types || [];
                         
                         if (nameLower.includes('museum') || matchedTypes.some((t: string) => ['museum', 'art_museum', 'history_museum'].includes(t))) {
@@ -319,9 +346,33 @@ export class MuseumsService {
                             category = 'gallery';
                         }
 
+                        // Validate genuine museum/gallery
+                        if (category === 'museum' || category === 'gallery') {
+                            const isGenuine = this.isGenuineMuseumOrGallery(name, matchedTypes, category);
+                            if (!isGenuine) {
+                                // Demote to heritage if it's a historical/cultural landmark
+                                const isHeritageLandmark = matchedTypes.some((t: string) => 
+                                    ['tourist_attraction', 'historical_place', 'monument', 'cultural_landmark'].includes(t)
+                                );
+                                if (isHeritageLandmark) {
+                                    category = 'heritage';
+                                } else {
+                                    return null; // Discard completely
+                                }
+                            }
+                        }
+
+                        // Validate genuine heritage site
+                        if (category === 'heritage') {
+                            const isGenuine = this.isGenuineHeritage(name, matchedTypes, p.rating, p.userRatingCount);
+                            if (!isGenuine) {
+                                return null; // Discard minor local spots
+                            }
+                        }
+
                         return {
                             id: p.id,
-                            name: p.displayName?.text || '',
+                            name: name,
                             address: p.formattedAddress || '',
                             latitude: p.location?.latitude,
                             longitude: p.location?.longitude,
@@ -341,6 +392,7 @@ export class MuseumsService {
                             })),
                         };
                     });
+                    return mapped.filter((p: any) => p !== null);
                 }).catch((err: any) => {
                     this.logger.error(`Places fetch error [${group.category}]: ${err.message}`);
                     return [] as any[];
@@ -465,6 +517,151 @@ export class MuseumsService {
             this.logger.error(`Region detection failed: ${error.message}`);
             return { isMajorCity: false, regionName: 'Unknown', maxRadiusKm: 70 };
         }
+    }
+
+    /**
+     * Strict verification to filter out minor neighborhood infrastructure (local mosques,
+     * schools, sports fields, local businesses) and only keep genuine historical landmarks,
+     * famous tourist destinations, and high-quality hidden gems.
+     */
+    private isGenuineHeritage(name: string, types: string[], rating?: number, reviewCount?: number): boolean {
+        const nameLower = name.toLowerCase();
+        const safeRating = rating || 0;
+        const safeReviews = reviewCount || 0;
+
+        // 1. Strict name exclusions for local community infrastructure & minor places
+        const badHeritageNameKeywords = [
+            'mushola', 'musholla', 'langgar', 'pos ronda', 'pos kamling', 
+            'panti asuhan', 'sekolah', ' sd', ' smp', ' sma', ' smk', ' tk ', 'paud', 
+            'polsek', 'koramil', 'bengkel', 'laundry', 'salon', 'spa', 'apotek', 'klinik', 'puskesmas',
+            'lapangan bulutangkis', 'lapangan tenis', 'lapangan voli'
+        ];
+        if (badHeritageNameKeywords.some(keyword => nameLower.includes(keyword))) {
+            return false;
+        }
+
+        // 2. Filter out minor local neighborhood mosques/churches/temples (unless famous/high review count)
+        const isReligiousPlace = types.some(t => ['buddhist_temple', 'hindu_temple', 'church', 'mosque'].includes(t)) 
+            || nameLower.includes('masjid') || nameLower.includes('gereja') || nameLower.includes('candi') || nameLower.includes('wihara') || nameLower.includes('klenteng');
+            
+        if (isReligiousPlace) {
+            // A famous/historical religious site will have a decent review count or rating.
+            // Minor local mosques/churches have very few reviews (less than 15).
+            // Candi (temples) are usually always heritage, so we exclude "candi" from this strict check.
+            const isHistoricalWord = nameLower.includes('candi') || nameLower.includes('agung') || nameLower.includes('gedhe') || nameLower.includes('historical') || nameLower.includes('heritage') || nameLower.includes('katedral') || nameLower.includes('cathedral');
+            if (!isHistoricalWord && safeReviews < 15) {
+                return false;
+            }
+        }
+
+        // 3. Filter out commercial shops, restaurants, cafes, hotels from heritage list
+        // Unless they are famous heritage spots (e.g. have >= 50 reviews or contain "heritage", "historical", "situs", "monumen")
+        const badCommercialKeywords = [
+            'hotel', 'resort', 'homestay', 'home stay', 'guesthouse', 'guest house', 'villa', 'hostel',
+            'cafe', 'coffee', 'kopi', 'resto', 'restaurant', 'warung', 'rumah makan', 
+            'toko', 'shop', 'boutique', 'butik', 'mall', 'furniture', 'decor', 'decorating', 
+            'wedding', 'sewa', 'rent', 'rental', 'bengkel', 'laundry'
+        ];
+        if (badCommercialKeywords.some(keyword => nameLower.includes(keyword))) {
+            const isFamousHeritage = nameLower.includes('heritage') || nameLower.includes('historical') || nameLower.includes('situs') || nameLower.includes('monumen') || nameLower.includes('keraton') || nameLower.includes('palace');
+            if (!isFamousHeritage && safeReviews < 50) {
+                return false;
+            }
+        }
+
+        // 4. Filter out places with no tourist value (e.g. rating/reviews are extremely low or non-existent, unless name contains strong heritage terms)
+        const hasStrongHeritageWord = [
+            'museum', 'galeri', 'gallery', 'heritage', 'historical', 'situs', 'monumen', 'monument', 
+            'candi', 'temple', 'keraton', 'palace', 'benteng', 'fort', 'tugu', 'makam', 'tomb', 
+            'wisata', 'tourism', 'taman nasional', 'national_park', 'goa', 'cave', 'pantai', 'beach', 
+            'curug', 'air terjun', 'waterfall', 'bukit', 'hill', 'gunung', 'mountain', 'hutan', 'forest'
+        ].some(keyword => nameLower.includes(keyword));
+
+        // If a place has 0 reviews and doesn't contain any strong heritage/tourism terms, it's likely a generic establishment/establishment marker
+        if (safeReviews === 0 && !hasStrongHeritageWord) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Strict verification to filter out residential houses, florists, wedding decor,
+     * cafes, and generic stores masquerading as museums or galleries.
+     */
+    private isGenuineMuseumOrGallery(name: string, types: string[], category: string): boolean {
+        const nameLower = name.toLowerCase();
+        
+        // 1. Strict name exclusion keywords (businesses, shops, lodgings, eateries)
+        const badNameKeywords = [
+            'hotel', 'resort', 'homestay', 'home stay', 'guesthouse', 'guest house', 
+            'hostel', 'motel', 'villa', 'kos ', 'kost ', 'kontrakan', 'residence',
+            'cafe', 'coffee', 'kopi', 'resto', 'restaurant', 'warung', 'rumah makan', 
+            'toko', 'shop', 'boutique', 'butik', 'mall', 'supermarket', 'mart',
+            'furniture', 'decor', 'decorating', 'florist', 'bouquet', 'buket', 'flower', 'bunga',
+            'wedding', 'sewa', 'rent', 'rental', 'salon', 'spa', 'laundry', 'tailor', 'jahit',
+            'studio foto', 'photo studio', 'print', 'percetakan', 'advertising', 'apartemen', 'apartment'
+        ];
+        
+        if (badNameKeywords.some(keyword => nameLower.includes(keyword))) {
+            // Special exceptions: keep if name contains both "museum" / "gallery" and a bad keyword,
+            // but is NOT primarily a lodging, warung, or hotel.
+            const isHighlyLikelyMuseum = nameLower.includes('museum') || nameLower.includes('musium') || nameLower.includes('galeri') || nameLower.includes('gallery');
+            if (!isHighlyLikelyMuseum) {
+                return false;
+            }
+            
+            // If it contains hotel, homestay, guesthouse, villa, warung, rumah makan, cafe, resto, restaurant, coffee, toko, shop, rent, decor:
+            const superBadKeywords = [
+                'hotel', 'homestay', 'guesthouse', 'guest house', 'villa', 'warung', 'rumah makan', 
+                'cafe', 'coffee', 'kopi', 'resto', 'restaurant', 'toko', 'shop', 'boutique', 'butik',
+                'florist', 'bouquet', 'buket', 'rent', 'rental', 'sewa', 'decor', 'decorating'
+            ];
+            if (superBadKeywords.some(k => nameLower.includes(k))) {
+                return false;
+            }
+        }
+
+        // 2. Strict type exclusions (Google Place categories that represent lodging, food, retail, residential)
+        const badTypes = [
+            'lodging', 'hotel', 'guest_house', 'hostel', 'motel', 
+            'real_estate_agency', 'housing_development', 'apartment_building',
+            'clothing_store', 'shopping_mall', 'home_goods_store', 'supermarket',
+            'furniture_store', 'florist', 'hair_care', 'beauty_salon', 'spa',
+            'bakery', 'meal_takeaway', 'grocery_or_supermarket', 'liquor_store',
+            'cafe', 'restaurant', 'bar', 'night_club', 'food'
+        ];
+
+        if (category === 'museum' || category === 'gallery') {
+            const hasBadType = types.some(type => badTypes.includes(type));
+            if (hasBadType) {
+                // Keep if name clearly indicates a museum or gallery, and it is NOT a lodging type
+                const isHighlyLikelyMuseum = nameLower.includes('museum') || nameLower.includes('musium') || nameLower.includes('galeri') || nameLower.includes('gallery');
+                const hasLodgingType = types.some(t => ['lodging', 'hotel', 'guest_house', 'hostel', 'motel'].includes(t));
+                
+                if (isHighlyLikelyMuseum && !hasLodgingType) {
+                    // Allowed (e.g. historic gallery with a cafe/shop tag)
+                } else {
+                    return false;
+                }
+            }
+        }
+
+        // 3. Filter out private residential houses/homes that don't belong to museum/gallery categories
+        // If the category is NOT verified museum, and the name starts with "rumah" or "house of" (case-insensitive),
+        // and it does NOT contain "museum", "gallery", "galeri", "art", "seni", "sejarah", "history", "heritage", "culture", "budaya", "batik", "lukis"
+        if (category !== 'museum' && (nameLower.startsWith('rumah') || nameLower.startsWith('house of'))) {
+            const hasPositiveKeyword = [
+                'museum', 'gallery', 'galeri', 'art', 'seni', 'sejarah', 
+                'history', 'heritage', 'culture', 'budaya', 'monumen', 'situs', 'batik', 'lukis'
+            ].some(keyword => nameLower.includes(keyword));
+            
+            if (!hasPositiveKeyword) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
