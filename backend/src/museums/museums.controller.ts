@@ -53,16 +53,20 @@ export class MuseumsController {
 
     @Public()
     @Get("nearby")
+    @Throttle({ default: { limit: 15, ttl: 60000 } })
     @ApiOperation({ summary: "Find museums near a location" })
     @ApiQuery({ name: "lat", required: true, type: Number })
     @ApiQuery({ name: "lng", required: true, type: Number })
-    @ApiQuery({ name: "radius", required: false, type: Number, description: "Radius in km (default: 50)" })
+    @ApiQuery({ name: "radius", required: false, type: Number, description: "Radius in km (default: 50, max: 100)" })
     async findNearby(
         @Query("lat") lat: number,
         @Query("lng") lng: number,
         @Query("radius") radius?: number,
     ) {
-        return this.museumsService.findNearby(lat, lng, radius || 50)
+        const safeLat = Math.max(-90, Math.min(90, Number(lat) || 0));
+        const safeLng = Math.max(-180, Math.min(180, Number(lng) || 0));
+        const safeRadius = Math.max(1, Math.min(100, Number(radius) || 50));
+        return this.museumsService.findNearby(safeLat, safeLng, safeRadius)
     }
 
     @Public()
@@ -79,11 +83,16 @@ export class MuseumsController {
         @Query("radius") radius?: number,
         @Query("query") query?: string,
     ) {
+        const safeLat = Math.max(-90, Math.min(90, Number(lat) || 0));
+        const safeLng = Math.max(-180, Math.min(180, Number(lng) || 0));
+        const safeRadius = Math.max(1000, Math.min(70000, Number(radius) || 70000));
+        // SECURITY: Truncate query to prevent oversized search strings
+        const safeQuery = query ? String(query).slice(0, 200) : undefined;
         return this.museumsService.searchNearbyPlaces(
-            Number(lat),
-            Number(lng),
-            Number(radius) || 70000,
-            query,
+            safeLat,
+            safeLng,
+            safeRadius,
+            safeQuery,
         );
     }
 
@@ -97,17 +106,20 @@ export class MuseumsController {
         @Query("lat") lat: number,
         @Query("lng") lng: number,
     ) {
-        return this.museumsService.detectRegionType(Number(lat), Number(lng));
+        const safeLat = Math.max(-90, Math.min(90, Number(lat) || 0));
+        const safeLng = Math.max(-180, Math.min(180, Number(lng) || 0));
+        return this.museumsService.detectRegionType(safeLat, safeLng);
     }
 
     @Public()
     @Get("route")
+    @Throttle({ default: { limit: 10, ttl: 60000 } })
     @ApiOperation({ summary: "Get routing directions from Google Maps API" })
     @ApiQuery({ name: "originLat", required: true, type: Number })
     @ApiQuery({ name: "originLng", required: true, type: Number })
     @ApiQuery({ name: "destLat", required: true, type: Number })
     @ApiQuery({ name: "destLng", required: true, type: Number })
-    @ApiQuery({ name: "mode", required: false, type: String })
+    @ApiQuery({ name: "mode", required: false, type: String, enum: ['driving', 'walking', 'bicycling', 'transit'] })
     async getRoute(
         @Query("originLat") originLat: number,
         @Query("originLng") originLng: number,
@@ -115,12 +127,22 @@ export class MuseumsController {
         @Query("destLng") destLng: number,
         @Query("mode") mode?: string,
     ) {
+        // SECURITY: Validate and clamp coordinates to valid geo ranges
+        const safeOriginLat = Math.max(-90, Math.min(90, Number(originLat) || 0));
+        const safeOriginLng = Math.max(-180, Math.min(180, Number(originLng) || 0));
+        const safeDestLat = Math.max(-90, Math.min(90, Number(destLat) || 0));
+        const safeDestLng = Math.max(-180, Math.min(180, Number(destLng) || 0));
+        // SECURITY: Validate mode against allowed values
+        const ALLOWED_MODES = ['driving', 'walking', 'bicycling', 'transit'];
+        const safeMode = ALLOWED_MODES.includes(String(mode || '').toLowerCase())
+            ? String(mode).toLowerCase()
+            : 'driving';
         return this.museumsService.getRoute(
-            Number(originLat),
-            Number(originLng),
-            Number(destLat),
-            Number(destLng),
-            mode || "driving"
+            safeOriginLat,
+            safeOriginLng,
+            safeDestLat,
+            safeDestLng,
+            safeMode
         );
     }
 

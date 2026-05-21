@@ -43,7 +43,10 @@ export interface CreateMuseumData {
 class MuseumService {
     private static instance: MuseumService;
 
-    private searchCache = new Map<string, any>();
+    /** SECURITY: TTL-based cache to prevent stale data and memory bloat */
+    private static readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+    private static readonly CACHE_MAX_SIZE = 20;
+    private searchCache = new Map<string, { data: any; expiresAt: number }>();
 
     private constructor() { }
 
@@ -111,14 +114,26 @@ class MuseumService {
     /**
      * Search nearby places via backend Google Places API (New)
      * Returns museums, galleries, and heritage sites near given coordinates
+     *
+     * SECURITY:
+     * - Cache with TTL expiration (5 min) to prevent stale data
+     * - Cache key rounds coords to 4 decimals (~11m) to stabilize
+     * - Max 20 cache entries to limit memory usage
+     * - Coordinates and query are validated server-side
      */
     async searchNearbyPlaces(lat: number, lng: number, radius?: number, query?: string): Promise<{ places: any[]; region?: { isMajorCity: boolean; regionName: string; maxRadiusKm: number } }> {
         const rad = radius || 15000;
         // round to 4 decimal places to stabilize cache keys against minor user movements (~11 meters)
         const cacheKey = `${lat.toFixed(4)}_${lng.toFixed(4)}_${rad}_${query || ''}`;
         
-        if (this.searchCache.has(cacheKey)) {
-            return this.searchCache.get(cacheKey)!;
+        // SECURITY: Check cache with TTL validation
+        const cached = this.searchCache.get(cacheKey);
+        if (cached && Date.now() < cached.expiresAt) {
+            return cached.data;
+        }
+        // Evict expired entry if present
+        if (cached) {
+            this.searchCache.delete(cacheKey);
         }
 
         const response = await apiGet<any>('/museums/search-nearby', {
@@ -129,12 +144,25 @@ class MuseumService {
         
         const result = { places, region };
 
-        // Limit cache size to 20 to prevent excessive memory usage
-        if (this.searchCache.size > 20) {
-            const firstKey = this.searchCache.keys().next().value;
-            if (firstKey) this.searchCache.delete(firstKey);
+        // SECURITY: Evict oldest entries when cache exceeds max size
+        if (this.searchCache.size >= MuseumService.CACHE_MAX_SIZE) {
+            // Remove expired entries first
+            const now = Date.now();
+            for (const [key, entry] of this.searchCache) {
+                if (now >= entry.expiresAt) {
+                    this.searchCache.delete(key);
+                }
+            }
+            // If still full, remove the oldest entry
+            if (this.searchCache.size >= MuseumService.CACHE_MAX_SIZE) {
+                const firstKey = this.searchCache.keys().next().value;
+                if (firstKey) this.searchCache.delete(firstKey);
+            }
         }
-        this.searchCache.set(cacheKey, result);
+        this.searchCache.set(cacheKey, {
+            data: result,
+            expiresAt: Date.now() + MuseumService.CACHE_TTL_MS,
+        });
         
         return result;
     }

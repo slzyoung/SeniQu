@@ -346,7 +346,10 @@ export class MuseumsService {
         );
 
         this.logger.log(`Nearby: ${centers.length} grids × ${typeGroups.length} types → ${allPlaces.length} raw → ${filtered.length} within ${radiusKm}km (TextSearch matched ${textPlaces.length})`);
-        return { places: filtered, region: regionInfo };
+        // SECURITY: Cap response size to prevent oversized chunked transfer payloads
+        const MAX_RESULTS = 100;
+        const capped = filtered.slice(0, MAX_RESULTS);
+        return { places: capped, region: regionInfo };
     }
 
     /**
@@ -496,7 +499,7 @@ export class MuseumsService {
             });
 
             const responseText = await response.text();
-            this.logger.log(`Google Routes API response status: ${response.status}, body: ${responseText}`);
+            this.logger.log(`Google Routes API response status: ${response.status}, length: ${responseText.length} bytes`);
 
             let data: any = null;
             try {
@@ -543,7 +546,7 @@ export class MuseumsService {
                     distanceText,
                     durationText,
                     polyline: route.polyline?.encodedPolyline || '',
-                    raw: data
+                    // SECURITY: Do not expose raw Google API response to client
                 };
             }
 
