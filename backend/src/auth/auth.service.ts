@@ -173,8 +173,10 @@ export class AuthService {
             }
         }
 
+        const fullyPopulatedUser = await this.usersService.findById(user.id)
+
         return {
-            user,
+            user: fullyPopulatedUser || user,
             ...tokens,
             isNewUser,
         }
@@ -447,8 +449,10 @@ export class AuthService {
 
         this.logger.log(`OTP verified — login complete for ${email}`)
 
+        const fullyPopulatedUser = await this.usersService.findById(user.id)
+
         return {
-            user,
+            user: fullyPopulatedUser || user,
             ...tokens,
             privyToken: privyToken || undefined,
         }
@@ -678,8 +682,10 @@ export class AuthService {
         const tokens = await this.generateTokens(user)
         const privyToken = await this.privyService.getCustomAuthToken(user.id)
 
+        const fullyPopulatedUser = await this.usersService.findById(user.id)
+
         return {
-            user,
+            user: fullyPopulatedUser || user,
             ...tokens,
             privyToken: privyToken || undefined,
             isNewUser,

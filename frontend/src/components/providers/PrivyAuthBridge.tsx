@@ -217,6 +217,7 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
     /**
      * HYDRATION: Backend -> Privy
      * If user is logged in to backend, fetch custom token and log in to Privy
+     */
     const getExternalJwt = useCallback(async () => {
         try {
             if (isCustomAuthDisabled) return undefined;

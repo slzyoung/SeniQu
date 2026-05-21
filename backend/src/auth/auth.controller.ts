@@ -84,7 +84,8 @@ export class AuthController {
     @Public()
     @ApiOperation({ summary: "Initiate Google OAuth (server-side security params)" })
     async initiateGoogleOAuth(
-        @Res() res: Response,
+        @Req() req: any,
+        @Res() res: any,
     ) {
         const cookieSecret = this.configService.get<string>("google.oauthCookieSecret")
         if (!cookieSecret) {
@@ -110,16 +111,18 @@ export class AuthController {
         const cookiePayload = JSON.stringify({ codeVerifier, state, nonce })
         const isProduction = this.configService.get("NODE_ENV") === "production"
 
-        res.cookie("__oauth_params", cookiePayload, {
+        // Use Fastify-native setCookie (maxAge in SECONDS for @fastify/cookie)
+        const raw = res.raw ? res : req.res // Get Fastify reply
+        raw.setCookie("__oauth_params", cookiePayload, {
             httpOnly: true,
-            secure: isProduction, // Secure only in production (HTTPS)
-            sameSite: isProduction ? "none" : "lax", // 'none' + secure allows cross-site cookie usage in all contexts (e.g. iframes or strict redirect flows)
-            maxAge: 10 * 60 * 1000, // 10 minutes
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "lax",
+            maxAge: 10 * 60, // 10 minutes in SECONDS (Fastify convention)
             path: "/",
             signed: true,
         })
 
-        this.logger.log("Google OAuth initiated — PKCE + signed state + nonce")
+        this.logger.log(`Google OAuth initiated — PKCE + signed state + nonce (callbackUrl: ${callbackUrl})`)
         return res.send({ authUrl })
     }
 
@@ -136,30 +139,37 @@ export class AuthController {
         @Query("state") state: string,
         @Query("error") error: string,
         @Req() req: any,
-        @Res() res: Response,
+        @Res() res: any,
     ) {
         const frontendUrl = this.configService.get<string>("frontendUrl") || "https://seniquapp.netlify.app"
         const cookieSecret = this.configService.get<string>("google.oauthCookieSecret")
+        const isProduction = this.configService.get("NODE_ENV") === "production"
+
         if (!cookieSecret) {
             this.logger.error("OAUTH_COOKIE_SECRET not configured")
             return res.redirect(`${frontendUrl}/auth/callback#error=server_error`)
         }
 
-        // Always clear the OAuth cookie after use
-        const clearCookie = () => {
-            const isProduction = this.configService.get("NODE_ENV") === "production"
-            res.clearCookie("__oauth_params", {
-                path: "/",
-                httpOnly: true,
-                secure: isProduction,
-                sameSite: isProduction ? "none" : "lax"
-            })
+        // Use Fastify-native clearCookie (must match options used when setting)
+        const raw = res.raw ? res : req.res
+        const clearOAuthCookie = () => {
+            try {
+                raw.clearCookie("__oauth_params", {
+                    path: "/",
+                    httpOnly: true,
+                    secure: isProduction,
+                    sameSite: isProduction ? "none" : "lax",
+                    signed: true,
+                })
+            } catch (e) {
+                this.logger.warn(`clearCookie fallback: ${(e as any).message}`)
+            }
         }
 
         // Handle OAuth error from Google
         if (error) {
-            this.logger.warn(`Google OAuth error: ${error}`)
-            clearCookie()
+            this.logger.warn(`Google OAuth error from Google: ${error}`)
+            clearOAuthCookie()
             return res.redirect(
                 `${frontendUrl}/auth/callback#error=${encodeURIComponent(error)}`
             )
@@ -167,28 +177,44 @@ export class AuthController {
 
         if (!code || !state) {
             this.logger.warn("Google OAuth callback missing code or state")
-            clearCookie()
+            clearOAuthCookie()
             return res.redirect(
                 `${frontendUrl}/auth/callback#error=${encodeURIComponent("missing_params")}`
             )
         }
 
-        // Read the signed cookie
-        const cookieRaw = req.signedCookies?.__oauth_params
-        if (!cookieRaw) {
-            this.logger.warn("Missing __oauth_params cookie (expired or tampered)")
-            clearCookie()
+        // Debug: Log available cookies
+        const allCookieKeys = req.cookies ? Object.keys(req.cookies) : []
+        this.logger.debug(`[OAuth CB] Available cookies: [${allCookieKeys.join(", ")}]`)
+
+        // Read the signed cookie (Fastify: all cookies in req.cookies, signed or not)
+        const signedCookie = req.cookies?.__oauth_params
+        if (!signedCookie) {
+            this.logger.warn(`[OAuth CB] Missing __oauth_params cookie. Available: [${allCookieKeys.join(", ")}]. This usually means the cookie was not set or expired.`)
+            clearOAuthCookie()
             return res.redirect(
                 `${frontendUrl}/auth/callback#error=${encodeURIComponent("session_expired")}`
             )
         }
 
+        // Unsign cookie (Fastify @fastify/cookie uses req.unsignCookie)
+        const unsigned = req.unsignCookie(signedCookie)
+        if (!unsigned.valid || !unsigned.value) {
+            this.logger.warn("[OAuth CB] Invalid cookie signature — tampered or secret mismatch")
+            clearOAuthCookie()
+            return res.redirect(
+                `${frontendUrl}/auth/callback#error=${encodeURIComponent("session_expired")}`
+            )
+        }
+
+        const cookieRaw = unsigned.value
+
         let oauthParams: { codeVerifier: string; state: string; nonce: string }
         try {
             oauthParams = JSON.parse(cookieRaw)
         } catch {
-            this.logger.warn("Corrupted __oauth_params cookie")
-            clearCookie()
+            this.logger.warn("[OAuth CB] Corrupted __oauth_params cookie payload")
+            clearOAuthCookie()
             return res.redirect(
                 `${frontendUrl}/auth/callback#error=${encodeURIComponent("invalid_session")}`
             )
@@ -196,8 +222,8 @@ export class AuthController {
 
         // Validate state matches what we stored
         if (state !== oauthParams.state) {
-            this.logger.warn("OAuth state mismatch")
-            clearCookie()
+            this.logger.warn(`[OAuth CB] State mismatch — URL: ${state.substring(0,20)}..., Cookie: ${oauthParams.state.substring(0,20)}...`)
+            clearOAuthCookie()
             return res.redirect(
                 `${frontendUrl}/auth/callback#error=${encodeURIComponent("state_mismatch")}`
             )
@@ -205,14 +231,16 @@ export class AuthController {
 
         // Verify HMAC signature + timestamp freshness
         if (!this.authService.verifyOAuthState(state, cookieSecret)) {
-            this.logger.warn("OAuth state signature invalid or expired")
-            clearCookie()
+            this.logger.warn("[OAuth CB] OAuth state HMAC signature invalid or timestamp expired")
+            clearOAuthCookie()
             return res.redirect(
                 `${frontendUrl}/auth/callback#error=${encodeURIComponent("state_invalid")}`
             )
         }
 
         try {
+            this.logger.log("[OAuth CB] All validations passed — exchanging code for tokens...")
+
             const result = await this.authService.handleGoogleCallbackRedirect(
                 code,
                 oauthParams.codeVerifier,
@@ -220,17 +248,40 @@ export class AuthController {
             )
 
             // Build redirect URL with tokens in hash fragment
+            // SECURITY: Strip sensitive fields (password hash, privyId, etc.)
+            // before sending user data to frontend via URL
+            const safeUser = {
+                id: result.user.id,
+                email: result.user.email,
+                username: result.user.username,
+                displayName: result.user.displayName,
+                bio: result.user.bio,
+                avatar: result.user.avatar,
+                userType: result.user.userType,
+                adminRole: result.user.adminRole,
+                isVerified: result.user.isEmailVerified || false,
+                isEmailVerified: result.user.isEmailVerified || false,
+                isPremium: false,
+                wallets: (result.user.wallets || []).map((w: any) => ({
+                    chainType: w.chainType,
+                    address: w.address,
+                    verifiedAt: w.verifiedAt,
+                })),
+                socialLinks: result.user.socialLinks,
+                createdAt: result.user.createdAt,
+                updatedAt: result.user.updatedAt,
+            }
             const params = new URLSearchParams()
             params.set("access_token", result.accessToken)
             params.set("refresh_token", result.refreshToken)
-            params.set("user", JSON.stringify(result.user))
+            params.set("user", JSON.stringify(safeUser))
 
-            clearCookie()
-            this.logger.log("Google OAuth success — PKCE + state + nonce verified")
+            clearOAuthCookie()
+            this.logger.log(`[OAuth CB] ✅ Google OAuth success for user ${result.user?.email || result.user?.id}. Redirecting to ${frontendUrl}/auth/callback`)
             return res.redirect(`${frontendUrl}/auth/callback#${params.toString()}`)
         } catch (err) {
-            this.logger.error(`Google OAuth callback error: ${err.message}`, err.stack)
-            clearCookie()
+            this.logger.error(`[OAuth CB] ❌ Token exchange/user creation failed: ${err.message}`, err.stack)
+            clearOAuthCookie()
             return res.redirect(
                 `${frontendUrl}/auth/callback#error=${encodeURIComponent(err.message || "auth_failed")}`
             )

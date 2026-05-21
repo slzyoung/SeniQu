@@ -7,3 +7,4 @@ export { ProtectedRoute, PublicOnlyRoute, LazyLoader } from './ProtectedRoute';
 export { DashboardLayout, PageContainer, StatsGrid } from './DashboardLayout';
 export { GlobalSearchModal } from './GlobalSearchModal';
 export { QuickSearch } from './QuickSearch';
+export { CookieConsent } from './CookieConsent';
