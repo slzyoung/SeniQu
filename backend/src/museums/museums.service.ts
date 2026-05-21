@@ -110,7 +110,7 @@ export class MuseumsService {
         // === Input validation & sanitization ===
         const safeLat = Math.max(-90, Math.min(90, Number(lat) || 0));
         const safeLng = Math.max(-180, Math.min(180, Number(lng) || 0));
-        const MAX_RADIUS_KM = 70;
+        const MAX_RADIUS_KM = 100;
         const MAX_RADIUS_M = MAX_RADIUS_KM * 1000;
         const GOOGLE_MAX_RADIUS = 50000;
         const safeRadius = Math.min(Math.max(1000, Number(radiusMeters) || MAX_RADIUS_M), MAX_RADIUS_M);
@@ -129,14 +129,14 @@ export class MuseumsService {
         }
 
         // === Multi-layer grid centers to maximize coverage and avoid 20-result API cap ===
-        // Optimized grid centers (max 5 centers for 70km) to keep API requests budget-safe
+        // Optimized grid centers (max 9 centers for 100km) to keep API requests budget-safe and ensure absolute coverage
         const centers: { lat: number; lng: number; radius: number }[] = [];
         
         if (safeRadius <= 20000) {
             centers.push({ lat: safeLat, lng: safeLng, radius: safeRadius });
-        } else if (safeRadius <= 40000) {
-            const coreRadius = Math.min(20000, safeRadius * 0.5);
-            const outerRadius = Math.min(30000, safeRadius * 0.7);
+        } else if (safeRadius <= 50000) {
+            const coreRadius = Math.min(25000, safeRadius * 0.5);
+            const outerRadius = Math.min(35000, safeRadius * 0.7);
             const offsetKm = (safeRadius / 1000) * 0.55;
 
             const kmToLat = (km: number) => km / 111.32;
@@ -150,20 +150,27 @@ export class MuseumsService {
                 { lat: safeLat, lng: safeLng - kmToLng(offsetKm), radius: outerRadius },
             );
         } else {
-            const coreRadius = 45000;
-            const outerRadius = 35000;
-            const offsetKm = (safeRadius / 1000) * 0.6; // ~42km offset at 70km radius
+            // Hexagonal + diagonal 8 outer centers for 100km radius to ensure absolute coverage
+            const coreRadius = 50000;
+            const outerRadius = 50000; // max radius allowed by Google is 50000
+            const offsetKm = (safeRadius / 1000) * 0.62; // ~62km offset at 100km radius
 
             const kmToLat = (km: number) => km / 111.32;
             const kmToLng = (km: number) => km / (111.32 * Math.cos(safeLat * Math.PI / 180));
 
             centers.push({ lat: safeLat, lng: safeLng, radius: coreRadius });
-            centers.push(
-                { lat: safeLat + kmToLat(offsetKm), lng: safeLng, radius: outerRadius },
-                { lat: safeLat - kmToLat(offsetKm), lng: safeLng, radius: outerRadius },
-                { lat: safeLat, lng: safeLng + kmToLng(offsetKm), radius: outerRadius },
-                { lat: safeLat, lng: safeLng - kmToLng(offsetKm), radius: outerRadius },
-            );
+            
+            // 8 directions at 45 degree intervals
+            for (let i = 0; i < 8; i++) {
+                const angleRad = (i * 45 * Math.PI) / 180;
+                const dLat = offsetKm * Math.cos(angleRad);
+                const dLng = offsetKm * Math.sin(angleRad);
+                centers.push({
+                    lat: safeLat + kmToLat(dLat),
+                    lng: safeLng + kmToLng(dLng),
+                    radius: outerRadius
+                });
+            }
         }
 
         // Safety: clamp all generated centers to valid Google API ranges
@@ -183,7 +190,7 @@ export class MuseumsService {
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Goog-Api-Key': apiKey,
-                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.photos,places.reviews',
+                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.photos,places.reviews,places.types',
                         'Accept-Language': 'id',
                         'Referer': refererHeader,
                     },
@@ -203,12 +210,11 @@ export class MuseumsService {
                     textPlaces = (data.places || []).map((p: any) => {
                         let category = 'heritage';
                         const nameLower = (p.displayName?.text || '').toLowerCase();
-                        if (nameLower.includes('museum') || nameLower.includes('galeri') || nameLower.includes('gallery')) {
-                            category = nameLower.includes('gallery') || nameLower.includes('galeri') ? 'gallery' : 'museum';
-                        } else if (p.types?.includes('art_gallery')) {
-                            category = 'gallery';
-                        } else if (p.types?.includes('museum')) {
+                        const matchedTypes = p.types || [];
+                        if (nameLower.includes('museum') || matchedTypes.some((t: string) => ['museum', 'art_museum', 'history_museum'].includes(t))) {
                             category = 'museum';
+                        } else if (nameLower.includes('gallery') || nameLower.includes('galeri') || matchedTypes.some((t: string) => ['art_gallery'].includes(t))) {
+                            category = 'gallery';
                         }
                         
                         return {
@@ -243,7 +249,7 @@ export class MuseumsService {
         }
 
         // === Only verified-valid Table A types ===
-        // Expanded to include diverse tourism destinations ('national_park', 'park', 'amusement_park', 'zoo', 'cultural_center')
+        // Expanded to include diverse tourism destinations ('national_park', 'park', 'amusement_park', 'zoo', 'cultural_center', 'aquarium', 'buddhist_temple', 'hindu_temple', 'church', 'mosque')
         const typeGroups = [
             { types: ['museum', 'art_museum', 'history_museum'], category: 'museum' },
             { types: ['art_gallery'], category: 'gallery' },
@@ -257,7 +263,12 @@ export class MuseumsService {
                     'national_park',
                     'park',
                     'amusement_park',
-                    'zoo'
+                    'zoo',
+                    'aquarium',
+                    'buddhist_temple',
+                    'hindu_temple',
+                    'church',
+                    'mosque'
                 ], 
                 category: 'heritage' 
             },
@@ -276,7 +287,7 @@ export class MuseumsService {
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Goog-Api-Key': apiKey,
-                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.photos,places.reviews',
+                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.photos,places.reviews,places.types',
                         'Accept-Language': 'id',
                         'Referer': refererHeader,
                     },
@@ -298,27 +309,39 @@ export class MuseumsService {
                         return [];
                     }
                     const data = await res.json() as any;
-                    return (data.places || []).map((p: any) => ({
-                        id: p.id,
-                        name: p.displayName?.text || '',
-                        address: p.formattedAddress || '',
-                        latitude: p.location?.latitude,
-                        longitude: p.location?.longitude,
-                        rating: p.rating,
-                        reviewCount: p.userRatingCount,
-                        type: group.category,
-                        photos: (p.photos || []).slice(0, 8).map((ph: any) =>
-                            `https://places.googleapis.com/v1/${ph.name}/media?key=${apiKey}&maxHeightPx=400&maxWidthPx=400`
-                        ),
-                        reviews: (p.reviews || []).slice(0, 5).map((r: any) => ({
-                            author: r.authorAttribution?.displayName || 'Anonymous',
-                            authorPhoto: r.authorAttribution?.photoUri || '',
-                            rating: r.rating || 0,
-                            text: r.text?.text || '',
-                            time: r.relativePublishTimeDescription || '',
-                            publishTime: r.publishTime || '',
-                        })),
-                    }));
+                    return (data.places || []).map((p: any) => {
+                        let category = group.category;
+                        const nameLower = (p.displayName?.text || '').toLowerCase();
+                        const matchedTypes = p.types || [];
+                        
+                        if (nameLower.includes('museum') || matchedTypes.some((t: string) => ['museum', 'art_museum', 'history_museum'].includes(t))) {
+                            category = 'museum';
+                        } else if (nameLower.includes('gallery') || nameLower.includes('galeri') || matchedTypes.some((t: string) => ['art_gallery'].includes(t))) {
+                            category = 'gallery';
+                        }
+
+                        return {
+                            id: p.id,
+                            name: p.displayName?.text || '',
+                            address: p.formattedAddress || '',
+                            latitude: p.location?.latitude,
+                            longitude: p.location?.longitude,
+                            rating: p.rating,
+                            reviewCount: p.userRatingCount,
+                            type: category,
+                            photos: (p.photos || []).slice(0, 8).map((ph: any) =>
+                                `https://places.googleapis.com/v1/${ph.name}/media?key=${apiKey}&maxHeightPx=400&maxWidthPx=400`
+                            ),
+                            reviews: (p.reviews || []).slice(0, 5).map((r: any) => ({
+                                author: r.authorAttribution?.displayName || 'Anonymous',
+                                authorPhoto: r.authorAttribution?.photoUri || '',
+                                rating: r.rating || 0,
+                                text: r.text?.text || '',
+                                time: r.relativePublishTimeDescription || '',
+                                publishTime: r.publishTime || '',
+                            })),
+                        };
+                    });
                 }).catch((err: any) => {
                     this.logger.error(`Places fetch error [${group.category}]: ${err.message}`);
                     return [] as any[];
@@ -336,8 +359,21 @@ export class MuseumsService {
             }
         }
 
-        // === Deduplicate → filter within radius → sort by distance ===
-        const unique = Array.from(new Map(allPlaces.map(p => [p.id, p])).values());
+        // === Deduplicate prioritizing specific category (museum > gallery > heritage) ===
+        const uniqueMap = new Map<string, any>();
+        for (const p of allPlaces) {
+            const existing = uniqueMap.get(p.id);
+            if (!existing) {
+                uniqueMap.set(p.id, p);
+            } else {
+                if (p.type === 'museum') {
+                    uniqueMap.set(p.id, p);
+                } else if (p.type === 'gallery' && existing.type !== 'museum') {
+                    uniqueMap.set(p.id, p);
+                }
+            }
+        }
+        const unique = Array.from(uniqueMap.values());
         const radiusKm = safeRadius / 1000;
         const textPlaceIds = new Set(textPlaces.map(p => p.id));
         const filtered = unique.filter(p => {
@@ -351,10 +387,14 @@ export class MuseumsService {
             this.haversineDistance(safeLat, safeLng, b.latitude, b.longitude)
         );
 
-        this.logger.log(`Nearby: ${centers.length} grids × ${typeGroups.length} types → ${allPlaces.length} raw → ${filtered.length} within ${radiusKm}km (TextSearch matched ${textPlaces.length})`);
-        // SECURITY: Cap response size to prevent oversized chunked transfer payloads
-        const MAX_RESULTS = 100;
-        const capped = filtered.slice(0, MAX_RESULTS);
+        // Group by category and slice each category separately to ensure museums/galleries are not crowded out by heritage/tourism places
+        const museums = filtered.filter(p => p.type === 'museum').slice(0, 150);
+        const galleries = filtered.filter(p => p.type === 'gallery').slice(0, 150);
+        const heritage = filtered.filter(p => p.type === 'heritage').slice(0, 150);
+
+        const capped = [...museums, ...galleries, ...heritage];
+
+        this.logger.log(`Nearby: ${centers.length} grids → ${allPlaces.length} raw → ${filtered.length} within ${radiusKm}km (capped breakdown: ${museums.length} museums, ${galleries.length} galleries, ${heritage.length} heritage)`);
         return { places: capped, region: regionInfo };
     }
 
@@ -402,8 +442,8 @@ export class MuseumsService {
                         if (types.includes('administrative_area_level_2') || types.includes('locality')) {
                             if (longName.startsWith('kota ')) {
                                 const cityName = comp.long_name.replace(/^kota /i, '').trim();
-                                this.logger.log(`Region: Kota ${cityName} → Major city (70km)`);
-                                return { isMajorCity: true, regionName: `Kota ${cityName}`, maxRadiusKm: 70 };
+                                this.logger.log(`Region: Kota ${cityName} → Major city (100km)`);
+                                return { isMajorCity: true, regionName: `Kota ${cityName}`, maxRadiusKm: 100 };
                             }
                             if (longName.startsWith('kabupaten ')) {
                                 const regName = comp.long_name.replace(/^kabupaten /i, '').trim();
@@ -413,8 +453,8 @@ export class MuseumsService {
                         }
 
                         if (MAJOR_CITIES.some(city => longName.includes(city) || formattedAddr.includes(city))) {
-                            this.logger.log(`Region: ${comp.long_name} → Known major city (70km)`);
-                            return { isMajorCity: true, regionName: comp.long_name, maxRadiusKm: 70 };
+                            this.logger.log(`Region: ${comp.long_name} → Known major city (100km)`);
+                            return { isMajorCity: true, regionName: comp.long_name, maxRadiusKm: 100 };
                         }
                     }
                 }

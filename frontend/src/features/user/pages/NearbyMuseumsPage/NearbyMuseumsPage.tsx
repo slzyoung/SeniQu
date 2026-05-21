@@ -313,7 +313,7 @@ export function NearbyMuseumsPage() {
     const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
     const [isLocating, setIsLocating] = useState(false);
-    const [radius, setRadius] = useState('25');
+    const [radius, setRadius] = useState('100');
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
     const [selectedMuseum, setSelectedMuseum] = useState<any | null>(null);

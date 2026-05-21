@@ -1092,8 +1092,8 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
 
         setIsPlacesLoading(true);
 
-        // Fetch all categories from backend (max 70km)
-        museumService.searchNearbyPlaces(center.lat, center.lng, 70000)
+        // Fetch all categories from backend (max 100km)
+        museumService.searchNearbyPlaces(center.lat, center.lng, 100000, _query)
             .then((result) => {
                 const placesData = result?.places || [];
                 const regionInfo = result?.region || null;
@@ -1785,13 +1785,14 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                                     value={maxDistance}
                                     onChange={(e) => setMaxDistance(Number(e.target.value))}
                                 >
-                                    <option value={0}>Semua Jarak (Maks 70 km)</option>
+                                    <option value={0}>Semua Jarak (Maks 100 km)</option>
                                     <option value={1}>Jarak ≤ 1 km</option>
                                     <option value={5}>Jarak ≤ 5 km</option>
                                     <option value={10}>Jarak ≤ 10 km</option>
                                     <option value={25}>Jarak ≤ 25 km</option>
                                     <option value={50}>Jarak ≤ 50 km</option>
-                                    <option value={70}>Jarak ≤ 70 km</option>
+                                    <option value={75}>Jarak ≤ 75 km</option>
+                                    <option value={100}>Jarak ≤ 100 km</option>
                                 </select>
                             </div>
                             <div className="pnb-select-wrapper">
