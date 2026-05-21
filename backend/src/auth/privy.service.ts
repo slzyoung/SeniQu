@@ -327,6 +327,7 @@ export class PrivyService implements OnModuleInit {
             const token = jwt.sign(payload, privateKey, {
                 algorithm: "RS256",
                 expiresIn: "1h",
+                keyid: "seniqu-auth-key-1",
                 // Backdate iat slightly to allow for clock skew (1 minute)
                 notBefore: "-1m",
             })

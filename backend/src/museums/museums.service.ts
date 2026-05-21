@@ -129,49 +129,41 @@ export class MuseumsService {
         }
 
         // === Multi-layer grid centers to maximize coverage and avoid 20-result API cap ===
-        // Strategy: inner ring uses small radii (dense urban), outer ring uses larger radii (rural)
+        // Optimized grid centers (max 5 centers for 70km) to keep API requests budget-safe
         const centers: { lat: number; lng: number; radius: number }[] = [];
         
-        if (safeRadius <= 15000) {
+        if (safeRadius <= 20000) {
             centers.push({ lat: safeLat, lng: safeLng, radius: safeRadius });
-        } else {
-            // Helper: convert km offset to degree offsets at this latitude
+        } else if (safeRadius <= 40000) {
+            const coreRadius = Math.min(20000, safeRadius * 0.5);
+            const outerRadius = Math.min(30000, safeRadius * 0.7);
+            const offsetKm = (safeRadius / 1000) * 0.55;
+
             const kmToLat = (km: number) => km / 111.32;
             const kmToLng = (km: number) => km / (111.32 * Math.cos(safeLat * Math.PI / 180));
 
-            // Layer 0: Center — small radius for dense city core
-            centers.push({ lat: safeLat, lng: safeLng, radius: 15000 });
-
-            // Layer 1: Inner ring (4 cardinal at ~12km offset, 15km radius)
-            // Captures all museums/galleries in the immediate city area
-            const innerOffKm = 12;
+            centers.push({ lat: safeLat, lng: safeLng, radius: coreRadius });
             centers.push(
-                { lat: safeLat + kmToLat(innerOffKm), lng: safeLng, radius: 15000 },
-                { lat: safeLat - kmToLat(innerOffKm), lng: safeLng, radius: 15000 },
-                { lat: safeLat, lng: safeLng + kmToLng(innerOffKm), radius: 15000 },
-                { lat: safeLat, lng: safeLng - kmToLng(innerOffKm), radius: 15000 },
+                { lat: safeLat + kmToLat(offsetKm), lng: safeLng, radius: outerRadius },
+                { lat: safeLat - kmToLat(offsetKm), lng: safeLng, radius: outerRadius },
+                { lat: safeLat, lng: safeLng + kmToLng(offsetKm), radius: outerRadius },
+                { lat: safeLat, lng: safeLng - kmToLng(offsetKm), radius: outerRadius },
             );
+        } else {
+            const coreRadius = 45000;
+            const outerRadius = 35000;
+            const offsetKm = (safeRadius / 1000) * 0.6; // ~42km offset at 70km radius
 
-            // Layer 2: Mid ring (4 diagonals at ~22km offset, 20km radius)
-            const midOffKm = 22;
-            const midDiagKm = midOffKm * 0.707;
+            const kmToLat = (km: number) => km / 111.32;
+            const kmToLng = (km: number) => km / (111.32 * Math.cos(safeLat * Math.PI / 180));
+
+            centers.push({ lat: safeLat, lng: safeLng, radius: coreRadius });
             centers.push(
-                { lat: safeLat + kmToLat(midDiagKm), lng: safeLng + kmToLng(midDiagKm), radius: 20000 },
-                { lat: safeLat + kmToLat(midDiagKm), lng: safeLng - kmToLng(midDiagKm), radius: 20000 },
-                { lat: safeLat - kmToLat(midDiagKm), lng: safeLng + kmToLng(midDiagKm), radius: 20000 },
-                { lat: safeLat - kmToLat(midDiagKm), lng: safeLng - kmToLng(midDiagKm), radius: 20000 },
+                { lat: safeLat + kmToLat(offsetKm), lng: safeLng, radius: outerRadius },
+                { lat: safeLat - kmToLat(offsetKm), lng: safeLng, radius: outerRadius },
+                { lat: safeLat, lng: safeLng + kmToLng(offsetKm), radius: outerRadius },
+                { lat: safeLat, lng: safeLng - kmToLng(offsetKm), radius: outerRadius },
             );
-
-            // Layer 3: Outer ring (4 cardinal at ~45km offset, 30km radius) — only if total > 30km
-            if (safeRadius > 30000) {
-                const outerOffKm = Math.min(45, (safeRadius / 1000) * 0.65);
-                centers.push(
-                    { lat: safeLat + kmToLat(outerOffKm), lng: safeLng, radius: 30000 },
-                    { lat: safeLat - kmToLat(outerOffKm), lng: safeLng, radius: 30000 },
-                    { lat: safeLat, lng: safeLng + kmToLng(outerOffKm), radius: 30000 },
-                    { lat: safeLat, lng: safeLng - kmToLng(outerOffKm), radius: 30000 },
-                );
-            }
         }
 
         // Safety: clamp all generated centers to valid Google API ranges
@@ -251,10 +243,24 @@ export class MuseumsService {
         }
 
         // === Only verified-valid Table A types ===
+        // Expanded to include diverse tourism destinations ('national_park', 'park', 'amusement_park', 'zoo', 'cultural_center')
         const typeGroups = [
             { types: ['museum', 'art_museum', 'history_museum'], category: 'museum' },
             { types: ['art_gallery'], category: 'gallery' },
-            { types: ['tourist_attraction', 'cultural_landmark', 'historical_place', 'monument'], category: 'heritage' },
+            { 
+                types: [
+                    'tourist_attraction', 
+                    'cultural_landmark', 
+                    'historical_place', 
+                    'monument',
+                    'cultural_center',
+                    'national_park',
+                    'park',
+                    'amusement_park',
+                    'zoo'
+                ], 
+                category: 'heritage' 
+            },
         ];
 
         const url = 'https://places.googleapis.com/v1/places:searchNearby';
@@ -396,8 +402,8 @@ export class MuseumsService {
                         if (types.includes('administrative_area_level_2') || types.includes('locality')) {
                             if (longName.startsWith('kota ')) {
                                 const cityName = comp.long_name.replace(/^kota /i, '').trim();
-                                this.logger.log(`Region: Kota ${cityName} → Major city (50km)`);
-                                return { isMajorCity: true, regionName: `Kota ${cityName}`, maxRadiusKm: 50 };
+                                this.logger.log(`Region: Kota ${cityName} → Major city (70km)`);
+                                return { isMajorCity: true, regionName: `Kota ${cityName}`, maxRadiusKm: 70 };
                             }
                             if (longName.startsWith('kabupaten ')) {
                                 const regName = comp.long_name.replace(/^kabupaten /i, '').trim();
@@ -407,8 +413,8 @@ export class MuseumsService {
                         }
 
                         if (MAJOR_CITIES.some(city => longName.includes(city) || formattedAddr.includes(city))) {
-                            this.logger.log(`Region: ${comp.long_name} → Known major city (50km)`);
-                            return { isMajorCity: true, regionName: comp.long_name, maxRadiusKm: 50 };
+                            this.logger.log(`Region: ${comp.long_name} → Known major city (70km)`);
+                            return { isMajorCity: true, regionName: comp.long_name, maxRadiusKm: 70 };
                         }
                     }
                 }
