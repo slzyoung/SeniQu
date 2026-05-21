@@ -1,7 +1,8 @@
-import { Controller, Get, Logger } from "@nestjs/common"
+import { Controller, Get, Logger, Res } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import * as fs from "fs"
 import * as crypto from "crypto"
+import { FastifyReply } from "fastify"
 
 @Controller(".well-known")
 export class JwksController {
@@ -10,14 +11,19 @@ export class JwksController {
     constructor(private readonly configService: ConfigService) { }
 
     @Get("jwks.json")
-    async getJwks() {
+    async getJwks(@Res() res: FastifyReply) {
         try {
             // Read public key from env or file
             let publicKeyPem: string
 
             const envKey = this.configService.get<string>("PRIVY_PUBLIC_KEY")
             if (envKey) {
-                publicKeyPem = envKey.replace(/\\n/g, "\n")
+                // Remove surrounding quotes if they exist
+                let key = envKey.replace(/^"|"$/g, '')
+                // Handle both literal newlines and escaped "\n" strings
+                publicKeyPem = key.includes("\\n")
+                    ? key.replace(/\\n/g, "\n")
+                    : key
             } else {
                 const publicKeyPath = process.cwd() + "/public.pem"
                 if (fs.existsSync(publicKeyPath)) {
@@ -48,12 +54,12 @@ export class JwksController {
                 // If we don't set kid in JWT, verifiers try all keys.
             }
 
-            return {
+            return res.send({
                 keys: [jwkWithMeta],
-            }
+            })
         } catch (error) {
             this.logger.error(`Failed to generate JWKS: ${error.message}`)
-            return { keys: [] }
+            return res.send({ keys: [] })
         }
     }
 }
