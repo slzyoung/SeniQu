@@ -2,6 +2,54 @@
 <html lang="en">
 
 <head>
+  <!-- Console Noise Suppression (Must be first to capture early logs/lockdowns) -->
+  <script>
+    (function () {
+      const suppressPatterns = [
+        'SES Removing unpermitted intrinsics',
+        'SES ',
+        'lockdown-install',
+        'lockdown',
+        'MaxListenersExceededWarning',
+        'Removing unpermitted intrinsics',
+        'ses.cjs',
+        'ses.umd',
+      ];
+      const shouldSuppress = (args) => {
+        const msg = args.map(a => {
+          try {
+            return String(a);
+          } catch(e) {
+            return '';
+          }
+        }).join(' ');
+        return suppressPatterns.some(p => msg.includes(p));
+      };
+
+      const wrapConsole = (method) => {
+        let realMethod = console[method];
+        Object.defineProperty(console, method, {
+          get() {
+            return function (...args) {
+              if (!shouldSuppress(args)) {
+                if (typeof realMethod === 'function') {
+                  realMethod.apply(console, args);
+                }
+              }
+            };
+          },
+          set(newMethod) {
+            realMethod = newMethod;
+          },
+          configurable: true,
+          enumerable: true
+        });
+      };
+
+      ['log', 'warn', 'error', 'info', 'debug'].forEach(wrapConsole);
+    })();
+  </script>
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
 
@@ -59,32 +107,6 @@
       "foundingDate": "2026",
       "knowsAbout": ["Indonesian Art", "Cultural Heritage", "Digital Museums", "NFT Art", "Solana Blockchain"]
     }
-  </script>
-
-  <!-- Console Noise Suppression -->
-  <script>
-    (function () {
-      const originalWarn = console.warn;
-      const originalLog = console.log;
-      const originalError = console.error;
-      const suppressPatterns = [
-        'SES Removing unpermitted intrinsics',
-        'SES ',
-        'lockdown-install',
-        'lockdown',
-        'MaxListenersExceededWarning',
-        'Removing unpermitted intrinsics',
-        'ses.cjs',
-        'ses.umd',
-      ];
-      const shouldSuppress = (args) => {
-        const msg = args.map(a => String(a)).join(' ');
-        return suppressPatterns.some(p => msg.includes(p));
-      };
-      console.warn = function (...args) { if (!shouldSuppress(args)) originalWarn.apply(console, args); };
-      console.log = function (...args) { if (!shouldSuppress(args)) originalLog.apply(console, args); };
-      console.error = function (...args) { if (!shouldSuppress(args)) originalError.apply(console, args); };
-    })();
   </script>
 </head>
 

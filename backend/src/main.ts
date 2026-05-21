@@ -144,7 +144,7 @@ async function bootstrap() {
     // ===========================================
 
     app.setGlobalPrefix("api/v1", {
-        exclude: [".well-known/(.*)"],
+        exclude: [".well-known/(.*)", "favicon.ico"],
     })
 
     // ===========================================
