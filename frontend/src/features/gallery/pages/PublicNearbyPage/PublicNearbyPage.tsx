@@ -1512,15 +1512,28 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
 
     // Calculate route via backend proxy (Google Routes API v2)
     const calculateRoute = useCallback(async (travelMode: google.maps.TravelMode) => {
-        if (!userLocation || !selectedMuseum) return;
+        if (!selectedMuseum) return;
+
+        const destLat = selectedMuseum.coordinates?.lat ?? selectedMuseum.latitude;
+        const destLng = selectedMuseum.coordinates?.lng ?? selectedMuseum.longitude;
+        const latVal = typeof destLat === 'string' ? parseFloat(destLat) : destLat;
+        const lngVal = typeof destLng === 'string' ? parseFloat(destLng) : destLng;
+
+        if (typeof latVal !== 'number' || isNaN(latVal) || typeof lngVal !== 'number' || isNaN(lngVal)) {
+            console.error("Invalid destination coordinates");
+            return;
+        }
+
+        const fallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${latVal},${lngVal}`;
+
+        if (!userLocation) {
+            // Fallback: open external map directions directly
+            window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+            return;
+        }
+
         setIsRouteLoading(true);
         try {
-            const destLat = selectedMuseum.coordinates?.lat ?? selectedMuseum.latitude;
-            const destLng = selectedMuseum.coordinates?.lng ?? selectedMuseum.longitude;
-            if (typeof destLat !== 'number' || typeof destLng !== 'number') {
-                throw new Error("Invalid destination coordinates");
-            }
-
             // Map google.maps.TravelMode to backend mode string
             let modeStr = 'driving';
             const tmStr = String(travelMode).toUpperCase();
@@ -1531,8 +1544,8 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
             const response = await museumService.getRouteDirections(
                 userLocation.latitude,
                 userLocation.longitude,
-                destLat,
-                destLng,
+                latVal,
+                lngVal,
                 modeStr
             );
 
@@ -1546,20 +1559,22 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                 setRouteDistance(routeData.distanceText || null);
                 setRouteDuration(routeData.durationText || null);
 
-                // Fit map bounds to show the entire route
-                if (mapRef.current && decodedPath.length > 0) {
+                // Fit map bounds to show the entire route, ensuring google maps library is loaded
+                if (window.google?.maps && mapRef.current && decodedPath.length > 0) {
                     isFittingBoundsRef.current = true;
                     const bounds = new google.maps.LatLngBounds();
                     bounds.extend({ lat: userLocation.latitude, lng: userLocation.longitude });
-                    bounds.extend({ lat: destLat, lng: destLng });
+                    bounds.extend({ lat: latVal, lng: lngVal });
                     decodedPath.forEach(p => bounds.extend(p));
                     mapRef.current.fitBounds(bounds, { top: 60, bottom: 280, left: 40, right: 40 });
                 }
             } else {
-                console.error('Route request failed:', routeData?.errorMessage || 'Unknown error');
+                console.warn('Route request failed, falling back to external map:', routeData?.errorMessage || 'Unknown error');
+                window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
             }
         } catch (error) {
-            console.error('Error calculating route:', error);
+            console.error('Error calculating route, falling back to external map:', error);
+            window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
         } finally {
             setIsRouteLoading(false);
         }

@@ -257,12 +257,21 @@ function MuseumDetailSheet({
             <div className="nbm-sheet__actions">
                 <button
                     className="nbm-action-btn nbm-action-btn--primary"
-                    onClick={() => {
-                        if (museum.latitude && museum.longitude) {
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        const destLat = museum.coordinates?.lat ?? museum.latitude;
+                        const destLng = museum.coordinates?.lng ?? museum.longitude;
+                        const latVal = typeof destLat === 'string' ? parseFloat(destLat) : destLat;
+                        const lngVal = typeof destLng === 'string' ? parseFloat(destLng) : destLng;
+
+                        if (typeof latVal === 'number' && !isNaN(latVal) && typeof lngVal === 'number' && !isNaN(lngVal)) {
                             window.open(
-                                `https://www.google.com/maps/dir/?api=1&destination=${museum.latitude},${museum.longitude}`,
-                                '_blank'
+                                `https://www.google.com/maps/dir/?api=1&destination=${latVal},${lngVal}`,
+                                '_blank',
+                                'noopener,noreferrer'
                             );
+                        } else {
+                            console.error("Invalid coordinates for directions link");
                         }
                     }}
                 >
