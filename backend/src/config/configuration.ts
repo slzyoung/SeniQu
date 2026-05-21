@@ -79,6 +79,11 @@ export const configuration = () => ({
         key: process.env.SMTP_KEY,
         from: process.env.EMAIL_FROM || "SeniQu <noreply@seniqu.com>",
     },
+
+    // Google Maps
+    googleMaps: {
+        apiKey: process.env.GOOGLE_MAPS_API_KEY || '',
+    },
 })
 
 /**
@@ -134,6 +139,9 @@ export const validationSchema = Joi.object({
     SMTP_USER: Joi.string().optional(),
     SMTP_KEY: Joi.string().optional(),
     EMAIL_FROM: Joi.string().optional(),
+
+    // Google Maps
+    GOOGLE_MAPS_API_KEY: Joi.string().optional().allow(''),
 })
 
 export type AppConfiguration = ReturnType<typeof configuration>

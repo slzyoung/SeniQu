@@ -66,6 +66,58 @@ export class MuseumsController {
     }
 
     @Public()
+    @Get("search-nearby")
+    @Throttle({ default: { limit: 20, ttl: 60000 } })
+    @ApiOperation({ summary: "Search nearby museums, galleries, and heritage sites using Google Places API" })
+    @ApiQuery({ name: "lat", required: true, type: Number })
+    @ApiQuery({ name: "lng", required: true, type: Number })
+    @ApiQuery({ name: "radius", required: false, type: Number, description: "Radius in meters (default: 15000)" })
+    async searchNearbyPlaces(
+        @Query("lat") lat: number,
+        @Query("lng") lng: number,
+        @Query("radius") radius?: number,
+    ) {
+        return this.museumsService.searchNearbyPlaces(
+            Number(lat),
+            Number(lng),
+            Number(radius) || 15000,
+        );
+    }
+
+    @Public()
+    @Get("route")
+    @ApiOperation({ summary: "Get routing directions from Google Maps API" })
+    @ApiQuery({ name: "originLat", required: true, type: Number })
+    @ApiQuery({ name: "originLng", required: true, type: Number })
+    @ApiQuery({ name: "destLat", required: true, type: Number })
+    @ApiQuery({ name: "destLng", required: true, type: Number })
+    @ApiQuery({ name: "mode", required: false, type: String })
+    async getRoute(
+        @Query("originLat") originLat: number,
+        @Query("originLng") originLng: number,
+        @Query("destLat") destLat: number,
+        @Query("destLng") destLng: number,
+        @Query("mode") mode?: string,
+    ) {
+        return this.museumsService.getRoute(
+            Number(originLat),
+            Number(originLng),
+            Number(destLat),
+            Number(destLng),
+            mode || "driving"
+        );
+    }
+
+    @Public()
+    @Get("maps-config")
+    @Throttle({ default: { limit: 30, ttl: 60000 } })
+    @ApiOperation({ summary: "Get Google Maps client configuration" })
+    @ApiResponse({ status: 200, description: "Maps API key for client-side rendering" })
+    async getMapsConfig() {
+        return this.museumsService.getMapsConfig()
+    }
+
+    @Public()
     @Get(":slug")
     @ApiOperation({ summary: "Get museum details by slug" })
     @ApiResponse({ status: 200, description: "Museum details" })

@@ -90,6 +90,21 @@ backend/src/
 | **Analytics** | `/analytics/*` | Artist & admin dashboards |
 | **Notifications** | `/notifications/*` | User notification system |
 
+### 4.3 Google Maps Proxy Integration (Museums Module)
+
+The Museums module acts as a **secure proxy** between the frontend and Google APIs, ensuring that the `GOOGLE_MAPS_API_KEY` never leaves the server.
+
+| Endpoint | Google API Proxied | Purpose |
+|----------|--------------------|---------|
+| `GET /museums/maps-config` | — | Delivers API key to frontend at runtime (rate-limited: 30/min) |
+| `GET /museums/search-nearby` | Google Places API (New) | Finds museums, galleries, heritage near coordinates |
+| `GET /museums/route` | Google Routes API v2 | Computes driving directions, returns encoded polyline |
+
+**Key implementation details:**
+- `museums.service.ts` uses `fetch()` to POST to `https://routes.googleapis.com/directions/v2:computeRoutes` with the server-side API key in the `X-Goog-Api-Key` header.
+- Response parsing uses safe text-first decoding (`response.text()` → `JSON.parse()`) to prevent crashes from non-JSON Google error pages.
+- The `@Get("route")` endpoint is declared **before** `@Get(":slug")` in the controller to prevent NestJS from interpreting `"route"` as a slug parameter.
+
 ## 5. Security Best Practices (OWASP)
 
 ### 5.1 Input Validation

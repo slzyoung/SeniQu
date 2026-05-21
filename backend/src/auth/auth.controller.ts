@@ -89,7 +89,7 @@ export class AuthController {
         const cookieSecret = this.configService.get<string>("google.oauthCookieSecret")
         if (!cookieSecret) {
             this.logger.error("OAUTH_COOKIE_SECRET not configured")
-            return res.status(500).json({ error: "Server configuration error" })
+            return res.status(500).send({ error: "Server configuration error" })
         }
         const callbackUrl = this.configService.get<string>("google.callbackUrl") || ""
 
@@ -120,7 +120,7 @@ export class AuthController {
         })
 
         this.logger.log("Google OAuth initiated — PKCE + signed state + nonce")
-        return res.json({ authUrl })
+        return res.send({ authUrl })
     }
 
     /**

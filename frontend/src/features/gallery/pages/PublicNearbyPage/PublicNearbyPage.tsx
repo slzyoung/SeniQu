@@ -20,7 +20,7 @@
  * - Fully responsive (mobile-first)
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
     MapPin,
     Navigation,
@@ -42,10 +42,15 @@ import {
     ExternalLink,
     X,
     SlidersHorizontal,
+    Car,
+    Footprints,
+    Bus,
+    Bike,
 } from 'lucide-react';
-import { useMuseums, useNearbyMuseums } from '../../../../hooks/useMuseums';
-import { extractArray } from '../../../../lib/utils';
+import { useTheme } from '../../../../hooks/useTheme';
 import { motion, AnimatePresence } from 'framer-motion';
+import { GoogleMap, useLoadScript, MarkerF, CircleF, InfoWindowF, PolylineF } from '@react-google-maps/api';
+import { museumService } from '../../../../services/museumService';
 import './PublicNearbyPage.css';
 
 // ============================================
@@ -60,6 +65,80 @@ interface UserLocation {
     longitude: number;
 }
 
+const DEFAULT_CENTER = { lat: -6.2088, lng: 106.8456 };
+const MAP_LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"];
+
+const GOOGLE_MAP_STYLES = [
+    { elementType: "geometry", stylers: [{ color: "#1a1b26" }] },
+    { elementType: "labels.text.stroke", stylers: [{ color: "#1a1b26" }] },
+    { elementType: "labels.text.fill", stylers: [{ color: "#7982a9" }] },
+    {
+        featureType: "administrative.locality",
+        elementType: "labels.text.fill",
+        stylers: [{ color: "#c0caf5" }],
+    },
+    {
+        featureType: "poi",
+        elementType: "labels.text.fill",
+        stylers: [{ color: "#c0caf5" }],
+    },
+    {
+        featureType: "poi.park",
+        elementType: "geometry",
+        stylers: [{ color: "#1f2335" }],
+    },
+    {
+        featureType: "poi.park",
+        elementType: "labels.text.fill",
+        stylers: [{ color: "#565f89" }],
+    },
+    {
+        featureType: "road",
+        elementType: "geometry",
+        stylers: [{ color: "#24283b" }],
+    },
+    {
+        featureType: "road",
+        elementType: "geometry.stroke",
+        stylers: [{ color: "#1a1b26" }],
+    },
+    {
+        featureType: "road",
+        elementType: "labels.text.fill",
+        stylers: [{ color: "#9aa5ce" }],
+    },
+    {
+        featureType: "road.highway",
+        elementType: "geometry",
+        stylers: [{ color: "#3d425b" }],
+    },
+    {
+        featureType: "road.highway",
+        elementType: "geometry.stroke",
+        stylers: [{ color: "#1a1b26" }],
+    },
+    {
+        featureType: "road.highway",
+        elementType: "labels.text.fill",
+        stylers: [{ color: "#cfc9c2" }],
+    },
+    {
+        featureType: "water",
+        elementType: "geometry",
+        stylers: [{ color: "#16161e" }],
+    },
+    {
+        featureType: "water",
+        elementType: "labels.text.fill",
+        stylers: [{ color: "#565f89" }],
+    },
+    {
+        featureType: "water",
+        elementType: "labels.text.stroke",
+        stylers: [{ color: "#16161e" }],
+    },
+];
+
 // ============================================
 // SECURITY: Input sanitization
 // ============================================
@@ -73,80 +152,7 @@ function sanitizeInput(input: string, maxLength = 100): string {
         .trim();
 }
 
-// ============================================
-// DEMO DATA (fallback when API returns empty)
-// ============================================
-
-const DEMO_MUSEUMS = [
-    {
-        id: 'demo-1',
-        name: 'National Museum of Indonesia',
-        city: 'Jakarta',
-        province: 'DKI Jakarta',
-        address: 'Jalan Medan Merdeka Barat No.12',
-        type: 'museum',
-        rating: 4.8,
-        reviewCount: '1.2k',
-        totalArtworks: 1500,
-        crowdLevel: 'Moderate traffic',
-        waitTime: '~15 mins',
-        isVerified: true,
-        description: 'The largest and most complete museum in Indonesia.',
-        coverImageUrl: 'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=400&h=300&fit=crop',
-        previewImages: [
-            'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=200&h=150&fit=crop',
-            'https://images.unsplash.com/photo-1584735935682-2f2b69dff9d2?w=200&h=150&fit=crop',
-            'https://images.unsplash.com/photo-1544967082-d9d25d867d66?w=200&h=150&fit=crop',
-        ],
-        latitude: -6.1762,
-        longitude: 106.8222,
-    },
-    {
-        id: 'demo-2',
-        name: 'Museum of Fine Arts',
-        city: 'Yogyakarta',
-        province: 'DI Yogyakarta',
-        address: 'Jalan Solo No.5, Yogyakarta',
-        type: 'gallery',
-        rating: 4.6,
-        reviewCount: '890',
-        totalArtworks: 850,
-        crowdLevel: 'Not crowded',
-        waitTime: '~5 mins',
-        isVerified: true,
-        description: 'A premier gallery showcasing contemporary Indonesian fine arts.',
-        coverImageUrl: 'https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=400&h=300&fit=crop',
-        previewImages: [
-            'https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=200&h=150&fit=crop',
-            'https://images.unsplash.com/photo-1577083552431-6e5fd01988ec?w=200&h=150&fit=crop',
-        ],
-        latitude: -7.7886,
-        longitude: 110.3571,
-    },
-    {
-        id: 'demo-3',
-        name: 'Borobudur Heritage Center',
-        city: 'Magelang',
-        province: 'Central Java',
-        address: 'Jalan Badrawati, Borobudur',
-        type: 'heritage',
-        rating: 4.9,
-        reviewCount: '3.5k',
-        totalArtworks: 2000,
-        crowdLevel: 'Busy',
-        waitTime: '~25 mins',
-        isVerified: true,
-        description: 'A UNESCO World Heritage Site and the largest Buddhist temple in the world.',
-        coverImageUrl: 'https://images.unsplash.com/photo-1596402184320-417e7178b2cd?w=400&h=300&fit=crop',
-        previewImages: [
-            'https://images.unsplash.com/photo-1596402184320-417e7178b2cd?w=200&h=150&fit=crop',
-            'https://images.unsplash.com/photo-1555400038-63f5ba517a7b?w=200&h=150&fit=crop',
-            'https://images.unsplash.com/photo-1578469550956-0e16b69c6a3d?w=200&h=150&fit=crop',
-        ],
-        latitude: -7.6079,
-        longitude: 110.2038,
-    },
-];
+// Fallback demo data removed - using real-time Google Places API query results exclusively.
 
 const FILTER_CHIPS: { id: FilterType; label: string; icon?: any }[] = [
     { id: 'all', label: 'All' },
@@ -165,11 +171,25 @@ function MuseumDetailSheet({
     expanded,
     onToggle,
     onClose,
+    distance,
+    duration,
+    isRouteLoading,
+    travelMode,
+    onTravelModeChange,
+    onGetDirections,
+    onBuyTicket,
 }: {
     museum: any;
     expanded: boolean;
     onToggle: () => void;
     onClose: () => void;
+    distance?: string | null;
+    duration?: string | null;
+    isRouteLoading?: boolean;
+    travelMode: google.maps.TravelMode;
+    onTravelModeChange: (mode: google.maps.TravelMode) => void;
+    onGetDirections: () => void;
+    onBuyTicket: () => void;
 }) {
     const crowdColor = museum.crowdLevel?.includes('Busy')
         ? 'pnb-badge--red'
@@ -227,6 +247,51 @@ function MuseumDetailSheet({
                         <span className="pnb-status-pill__value">{museum.waitTime || '~10 mins'}</span>
                     </div>
                 </div>
+                {distance && duration && (
+                    <div className="pnb-status-pill pnb-badge--gold">
+                        <Navigation className="w-3.5 h-3.5" />
+                        <div>
+                            <span className="pnb-status-pill__label">NEAREST ROUTE</span>
+                            <span className="pnb-status-pill__value">{distance} ({duration})</span>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Travel Mode Selector */}
+            <div className="pnb-travel-modes">
+                <button
+                    className={`pnb-travel-mode-btn ${travelMode === ('DRIVING' as any) ? 'pnb-travel-mode-btn--active' : ''}`}
+                    onClick={() => onTravelModeChange('DRIVING' as any)}
+                    title="Driving"
+                >
+                    <Car className="w-4 h-4" />
+                    <span>Drive</span>
+                </button>
+                <button
+                    className={`pnb-travel-mode-btn ${travelMode === ('WALKING' as any) ? 'pnb-travel-mode-btn--active' : ''}`}
+                    onClick={() => onTravelModeChange('WALKING' as any)}
+                    title="Walking"
+                >
+                    <Footprints className="w-4 h-4" />
+                    <span>Walk</span>
+                </button>
+                <button
+                    className={`pnb-travel-mode-btn ${travelMode === ('TRANSIT' as any) ? 'pnb-travel-mode-btn--active' : ''}`}
+                    onClick={() => onTravelModeChange('TRANSIT' as any)}
+                    title="Transit"
+                >
+                    <Bus className="w-4 h-4" />
+                    <span>Transit</span>
+                </button>
+                <button
+                    className={`pnb-travel-mode-btn ${travelMode === ('BICYCLING' as any) ? 'pnb-travel-mode-btn--active' : ''}`}
+                    onClick={() => onTravelModeChange('BICYCLING' as any)}
+                    title="Cycling"
+                >
+                    <Bike className="w-4 h-4" />
+                    <span>Cycle</span>
+                </button>
             </div>
 
             {/* 360° Preview */}
@@ -250,35 +315,153 @@ function MuseumDetailSheet({
             <div className="pnb-sheet__actions">
                 <button
                     className="pnb-action-btn pnb-action-btn--primary"
-                    onClick={() => {
-                        if (museum.latitude && museum.longitude) {
-                            window.open(
-                                `https://www.google.com/maps/dir/?api=1&destination=${museum.latitude},${museum.longitude}`,
-                                '_blank',
-                                'noopener,noreferrer'
-                            );
-                        }
-                    }}
+                    disabled={isRouteLoading}
+                    onClick={onGetDirections}
                 >
                     <Navigation className="w-4 h-4" />
-                    Get Directions
+                    {isRouteLoading ? (
+                        <span>Mencari rute...</span>
+                    ) : (
+                        <span>Get Directions</span>
+                    )}
                 </button>
                 <button
                     className="pnb-action-btn pnb-action-btn--secondary"
-                    onClick={() => {
-                        window.open(`/gallery/museum/${museum.id}`, '_self');
-                    }}
+                    onClick={onBuyTicket}
                 >
                     <Ticket className="w-4 h-4" />
-                    Buy Ticket
+                    <span>Buy Ticket</span>
                 </button>
             </div>
         </motion.div>
     );
 }
 
+/** Beautiful Coming Soon Golden Ticket Modal Component */
+function ComingSoonTicketModal({ 
+    museumName, 
+    onClose 
+}: { 
+    museumName: string; 
+    onClose: () => void; 
+}) {
+    return (
+        <AnimatePresence>
+            <motion.div 
+                className="pnb-ticket-overlay"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onClose}
+            >
+                <motion.div 
+                    className="pnb-ticket-container"
+                    initial={{ scale: 0.8, y: 30, opacity: 0 }}
+                    animate={{ 
+                        scale: 1, 
+                        y: 0, 
+                        opacity: 1,
+                        transition: { type: "spring", stiffness: 180, damping: 20 }
+                    }}
+                    exit={{ scale: 0.8, y: 30, opacity: 0 }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {/* Glowing background halo */}
+                    <div className="pnb-ticket-glow" />
+
+                    {/* Premium Ticket Card */}
+                    <div className="pnb-ticket-card">
+                        {/* Laser line scanning sweep */}
+                        <div className="pnb-ticket-laser" />
+
+                        {/* Top corner luxury badge */}
+                        <div className="flex justify-between items-center mb-6">
+                            <span className="text-[10px] tracking-[0.25em] font-semibold text-[#D4AF37] uppercase bg-[#D4AF37]/10 px-3.5 py-1 rounded-full border border-[#D4AF37]/20">
+                                Premium Pass
+                            </span>
+                            <button 
+                                className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+                                onClick={onClose}
+                            >
+                                <X className="w-4 h-4 text-gray-400 hover:text-white" />
+                            </button>
+                        </div>
+
+                        {/* Header details */}
+                        <div className="text-center mb-6">
+                            <h3 className="text-xl font-bold tracking-tight text-white mb-1">
+                                Nusantara Cultural Pass
+                            </h3>
+                            <p className="text-[10px] text-gray-400 font-semibold tracking-wider">
+                                DIGITIZED HERITAGE & ACCESS GATEWAY
+                            </p>
+                        </div>
+
+                        {/* Museum Target Information */}
+                        <div className="bg-[#121214]/80 border border-white/5 rounded-2xl p-4 mb-6 text-center">
+                            <span className="text-[9px] uppercase tracking-wider text-[#D4AF37] font-bold block mb-1">
+                                Access Destination
+                            </span>
+                            <span className="text-sm font-semibold text-white block truncate">
+                                {museumName}
+                            </span>
+                        </div>
+
+                        {/* Middle ticket dash separator with circular cuts */}
+                        <div className="pnb-ticket-separator" />
+
+                        {/* Bottom Stub details */}
+                        <div className="pt-8 text-center">
+                            <span className="text-[10px] tracking-[0.3em] font-bold text-[#D4AF37] uppercase block mb-2">
+                                COMING SOON
+                            </span>
+                            <p className="text-[11px] text-gray-400 max-w-[280px] mx-auto leading-relaxed mb-6">
+                                Kami sedang mengintegrasikan sistem e-ticketing berbasis blockchain untuk pelestarian cagar budaya Nusantara yang aman & transparan.
+                            </p>
+
+                            {/* Ticket barcode effect */}
+                            <div className="pnb-ticket-barcode">
+                                <div className="pnb-ticket-bar thick" />
+                                <div className="pnb-ticket-bar thin" />
+                                <div className="pnb-ticket-bar" />
+                                <div className="pnb-ticket-bar wide" />
+                                <div className="pnb-ticket-bar thick" />
+                                <div className="pnb-ticket-bar" />
+                                <div className="pnb-ticket-bar thin" />
+                                <div className="pnb-ticket-bar wide" />
+                                <div className="pnb-ticket-bar thick" />
+                                <div className="pnb-ticket-bar thin" />
+                                <div className="pnb-ticket-bar" />
+                            </div>
+                            <span className="text-[8px] tracking-[0.4em] text-[#D4AF37]/60 uppercase font-bold block mt-3">
+                                SENIQU PASS SECURITY SEC-09
+                            </span>
+                        </div>
+
+                        {/* Cool glowing activation button */}
+                        <button
+                            className="w-full mt-6 py-3 px-4 rounded-xl font-bold text-xs tracking-wider text-black bg-gradient-to-r from-[#D4AF37] via-[#FFDF73] to-[#D4AF37] hover:brightness-110 active:scale-[0.98] transition-all duration-200 shadow-[0_4px_20px_rgba(212,175,55,0.25)] uppercase"
+                            onClick={onClose}
+                        >
+                            Dapatkan Notifikasi
+                        </button>
+                    </div>
+                </motion.div>
+            </motion.div>
+        </AnimatePresence>
+    );
+}
+
 /** Museum List Card */
-function MuseumListCard({ museum, onSelect }: { museum: any; onSelect: () => void }) {
+function MuseumListCard({ 
+    museum, 
+    onSelect,
+    distance
+}: { 
+    museum: any; 
+    onSelect: () => void;
+    distance?: number | null;
+}) {
     return (
         <motion.div
             className="pnb-list-card"
@@ -308,6 +491,11 @@ function MuseumListCard({ museum, onSelect }: { museum: any; onSelect: () => voi
                 <p className="pnb-list-card__location">
                     <MapPin className="w-3 h-3" />
                     {museum.city}{museum.province ? `, ${museum.province}` : ''}
+                    {distance !== undefined && distance !== null && (
+                        <span className="pnb-list-card__distance">
+                            &nbsp;•&nbsp;{distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(1)} km`}
+                        </span>
+                    )}
                 </p>
                 <div className="pnb-list-card__meta">
                     {museum.totalArtworks && <span>{museum.totalArtworks} artworks</span>}
@@ -324,6 +512,34 @@ function MuseumListCard({ museum, onSelect }: { museum: any; onSelect: () => voi
 // ============================================
 
 export default function PublicNearbyPage() {
+    const [mapsApiKey, setMapsApiKey] = useState<string | null>(null);
+    const [keyLoading, setKeyLoading] = useState(true);
+
+    useEffect(() => {
+        museumService.getMapsApiKey()
+            .then(key => {
+                setMapsApiKey(key);
+                setKeyLoading(false);
+            })
+            .catch(() => {
+                setMapsApiKey('');
+                setKeyLoading(false);
+            });
+    }, []);
+
+    if (keyLoading) {
+        return (
+            <div className="pnb-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+                <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#D4AF37' }} />
+            </div>
+        );
+    }
+
+    return <NearbyPageInner apiKey={mapsApiKey || ''} />;
+}
+
+function NearbyPageInner({ apiKey }: { apiKey: string }) {
+    const { isDark } = useTheme();
     const [viewMode, setViewMode] = useState<ViewMode>('map');
     const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
@@ -332,15 +548,235 @@ export default function PublicNearbyPage() {
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
     const [selectedMuseum, setSelectedMuseum] = useState<any | null>(null);
     const [sheetExpanded, setSheetExpanded] = useState(false);
+    const [showTicketModal, setShowTicketModal] = useState(false);
 
-    // SECURITY: Rate-limit geolocation requests (5s cooldown)
+    const [routePath, setRoutePath] = useState<{ lat: number; lng: number }[]>([]);
+    const [showRouteLine, setShowRouteLine] = useState(false);
+    const [isRouteLoading, setIsRouteLoading] = useState(false);
+
+    const [routeDistance, setRouteDistance] = useState<string | null>(null);
+    const [routeDuration, setRouteDuration] = useState<string | null>(null);
+    const [travelMode, setTravelMode] = useState<google.maps.TravelMode>('DRIVING' as any);
+    
+    const [places, setPlaces] = useState<any[]>([]);
+    
+    // Radar pulse animation for User Location Blue Dot
+    const [radarRadius, setRadarRadius] = useState(50);
+    useEffect(() => {
+        if (!userLocation) return;
+        const interval = setInterval(() => {
+            setRadarRadius((prev) => {
+                if (prev >= 750) return 40;
+                return prev + 3.2;
+            });
+        }, 12);
+        return () => clearInterval(interval);
+    }, [userLocation]);
+    const [isPlacesLoading, setIsPlacesLoading] = useState(false);
+    const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
+    const [hasInitialSearched, setHasInitialSearched] = useState(false);
+    const initialCenterRef = useRef<{ lat: number; lng: number } | null>(null);
+    const isFittingBoundsRef = useRef(false);
+    const [sortBy, setSortBy] = useState<'distance' | 'rating'>('distance');
+    const [minRating, setMinRating] = useState<number>(0);
+
+    const getDistance = useCallback((museum: any) => {
+        if (!userLocation) return null;
+        const lat1 = userLocation.latitude;
+        const lon1 = userLocation.longitude;
+        const lat2 = museum.coordinates?.lat ?? museum.latitude;
+        const lon2 = museum.coordinates?.lng ?? museum.longitude;
+        if (typeof lat1 !== 'number' || typeof lat2 !== 'number') return null;
+        
+        // Simple Haversine calculation
+        const R = 6371; // km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }, [userLocation]);
+
+    const sortedPlaces = useMemo(() => {
+        let items = [...places];
+        // Filter by category type
+        if (activeFilter !== 'all') {
+            items = items.filter(item => item.type === activeFilter);
+        }
+        // Filter by minimum rating
+        if (minRating > 0) {
+            items = items.filter(item => (item.rating || 0) >= minRating);
+        }
+        // Filter by search query
+        if (searchQuery) {
+            const queryClean = searchQuery.toLowerCase();
+            items = items.filter(item => 
+                item.name.toLowerCase().includes(queryClean) || 
+                item.address.toLowerCase().includes(queryClean)
+            );
+        }
+        // Sort
+        if (sortBy === 'distance' && userLocation) {
+            items.sort((a, b) => {
+                const distA = getDistance(a) ?? Infinity;
+                const distB = getDistance(b) ?? Infinity;
+                return distA - distB;
+            });
+        } else if (sortBy === 'rating') {
+            items.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+        }
+        return items;
+    }, [places, sortBy, userLocation, getDistance, activeFilter, minRating, searchQuery]);
+
+    const watchIdRef = useRef<number | null>(null);
+    const mapRef = useRef<google.maps.Map | null>(null);
+
+    const handleTravelModeChange = useCallback((newMode: google.maps.TravelMode) => {
+        setTravelMode(newMode);
+    }, []);
+
+    const selectPlace = useCallback((museum: any | null) => {
+        setSelectedMuseum(museum);
+        setShowRouteLine(false);
+        setRoutePath([]);
+        setRouteDistance(null);
+        setRouteDuration(null);
+    }, []);
+
+    const { isLoaded, loadError } = useLoadScript({
+        googleMapsApiKey: apiKey,
+        libraries: MAP_LIBRARIES,
+    });
+
+    // Custom Marker Pin icon helper
+    const getMarkerIcon = useCallback((_type: string, _isSelected: boolean) => {
+        // Returning undefined forces the Google Maps API to draw its native default red marker pin
+        return undefined;
+    }, []);
+
+    // Map Load Handlers
+    const onMapLoad = useCallback((map: google.maps.Map) => {
+        mapRef.current = map;
+        const initialCenter = map.getCenter();
+        if (initialCenter) {
+            setMapCenter({ lat: initialCenter.lat(), lng: initialCenter.lng() });
+        }
+    }, []);
+
+    const onMapUnmount = useCallback(() => {
+        mapRef.current = null;
+    }, []);
+
+    const handleZoomIn = () => {
+        if (mapRef.current) {
+            mapRef.current.setZoom((mapRef.current.getZoom() || 12) + 1);
+        }
+    };
+
+    const handleZoomOut = () => {
+        if (mapRef.current) {
+            mapRef.current.setZoom((mapRef.current.getZoom() || 12) - 1);
+        }
+    };
+
+    // Perform query with NestJS backend proxy which uses Google Places API (New)
+    const searchNearbyPlaces = useCallback((
+        center: { lat: number; lng: number },
+        _filter: FilterType,
+        _query: string
+    ) => {
+        if (!isLoaded) return;
+
+        setIsPlacesLoading(true);
+
+        // Fetch all categories from backend (which performs parallel search for museum, gallery, heritage)
+        museumService.searchNearbyPlaces(center.lat, center.lng)
+            .then((placesData) => {
+                const mapped = (placesData || []).map((place: any) => {
+                    const rating = place.rating || 4.2;
+                    const reviewCount = place.reviewCount || 12;
+                    const waitTime = rating > 4.5 ? '~15 mins' : '~5 mins';
+                    const crowdLevel = reviewCount > 300 ? 'Busy' : reviewCount > 100 ? 'Moderate traffic' : 'Not crowded';
+                    const fallbackPhotos = [
+                        'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=400&h=300&fit=crop',
+                        'https://images.unsplash.com/photo-1596436889106-be35e843f974?w=400&h=300&fit=crop',
+                        'https://images.unsplash.com/photo-1604999333679-b86d54738315?w=400&h=300&fit=crop',
+                        'https://images.unsplash.com/photo-1566121318599-23fcf93f4bf3?w=400&h=300&fit=crop',
+                    ];
+                    const previewImages = place.photos && place.photos.length > 0 ? place.photos : fallbackPhotos;
+                    return {
+                        id: place.id || Math.random().toString(),
+                        name: place.name || 'Heritage Destination',
+                        city: place.address?.split(',')[1]?.trim() || 'Nearby',
+                        province: place.address?.split(',')[2]?.trim() || '',
+                        address: place.address || '',
+                        type: place.type || 'heritage',
+                        rating,
+                        reviewCount,
+                        totalArtworks: reviewCount ? Math.round(reviewCount / 3) : 50,
+                        crowdLevel,
+                        waitTime,
+                        isVerified: true,
+                        description: place.address || 'Registered tourism destination.',
+                        coverImageUrl: previewImages[0],
+                        previewImages,
+                        latitude: place.latitude,
+                        longitude: place.longitude,
+                    };
+                });
+
+                // Deduplicate by place id
+                const seen = new Set<string>();
+                const unique = mapped.filter((p: any) => {
+                    if (seen.has(p.id)) return false;
+                    seen.add(p.id);
+                    return true;
+                });
+
+                // Sort by distance using spherical geometry helper from google maps
+                if (google?.maps?.geometry?.spherical) {
+                    unique.sort((a: any, b: any) => {
+                        const distA = google.maps.geometry.spherical.computeDistanceBetween(
+                            new google.maps.LatLng(center.lat, center.lng),
+                            new google.maps.LatLng(a.latitude, a.longitude)
+                        );
+                        const distB = google.maps.geometry.spherical.computeDistanceBetween(
+                            new google.maps.LatLng(center.lat, center.lng),
+                            new google.maps.LatLng(b.latitude, b.longitude)
+                        );
+                        return distA - distB;
+                    });
+                }
+
+                setPlaces(unique);
+                if (unique.length > 0) {
+                    selectPlace(unique[0]);
+                } else {
+                    selectPlace(null);
+                }
+                setIsPlacesLoading(false);
+            })
+            .catch((err) => {
+                console.error("Failed to fetch nearby places from backend:", err);
+                setIsPlacesLoading(false);
+            });
+    }, [isLoaded, selectPlace]);
+
+    // Auto-search disabled when map is panned to keep locations stay static and stable
+    const handleMapIdle = useCallback(() => {
+        // Do nothing to keep selected places and list static when map is dragged
+    }, []);
+
+    // SECURITY: Rate-limit manual geolocation requests (5s cooldown)
     const lastLocationRequestRef = useRef<number>(0);
     const LOCATION_COOLDOWN_MS = 5000;
 
     const requestLocation = useCallback(() => {
         const now = Date.now();
         if (now - lastLocationRequestRef.current < LOCATION_COOLDOWN_MS) {
-            return; // Throttled
+            return;
         }
         lastLocationRequestRef.current = now;
 
@@ -355,11 +791,17 @@ export default function PublicNearbyPage() {
 
         navigator.geolocation.getCurrentPosition(
             (pos) => {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
                 setUserLocation({
-                    latitude: pos.coords.latitude,
-                    longitude: pos.coords.longitude,
+                    latitude: lat,
+                    longitude: lng,
                 });
                 setIsLocating(false);
+                if (mapRef.current) {
+                    mapRef.current.panTo({ lat, lng });
+                    mapRef.current.setZoom(13);
+                }
             },
             (err) => {
                 const msgs: Record<number, string> = {
@@ -369,6 +811,11 @@ export default function PublicNearbyPage() {
                 };
                 setLocationError(msgs[err.code] || 'Error getting location.');
                 setIsLocating(false);
+                // Fallback center so map/search loads something even if permission denied
+                setUserLocation({
+                    latitude: DEFAULT_CENTER.lat,
+                    longitude: DEFAULT_CENTER.lng,
+                });
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
         );
@@ -378,48 +825,205 @@ export default function PublicNearbyPage() {
         requestLocation();
     }, [requestLocation]);
 
-    // API Queries — staleTime prevents excessive refetching (anti-throttling)
-    const { data: nearbyMuseums, isLoading: nearbyLoading } = useNearbyMuseums({
-        lat: userLocation?.latitude || 0,
-        lng: userLocation?.longitude || 0,
-        radius: 25,
-    });
-    const { data: allMuseums, isLoading: allLoading } = useMuseums({ limit: 20 });
-
-    const rawMuseums = userLocation
-        ? extractArray(nearbyMuseums)
-        : extractArray(allMuseums);
-
-    // Merge with demo data if API returns nothing
-    const mergedMuseums = rawMuseums.length > 0
-        ? rawMuseums.map((m: any) => ({
-            ...m,
-            type: m.type || 'museum',
-            crowdLevel: m.crowdLevel || 'Normal traffic',
-            waitTime: m.waitTime || '~10 mins',
-            reviewCount: m.reviewCount || '0',
-            previewImages: m.previewImages || (m.coverImageUrl ? [m.coverImageUrl] : []),
-        }))
-        : DEMO_MUSEUMS;
-
-    const isLoading = userLocation ? nearbyLoading : allLoading;
-
-    // Filter with sanitized search
-    const filteredMuseums = mergedMuseums.filter((m: any) => {
-        const matchesFilter = activeFilter === 'all' || m.type === activeFilter;
-        const safeQuery = sanitizeInput(searchQuery);
-        const matchesSearch = !safeQuery ||
-            m.name?.toLowerCase().includes(safeQuery.toLowerCase()) ||
-            m.city?.toLowerCase().includes(safeQuery.toLowerCase());
-        return matchesFilter && matchesSearch;
-    });
-
-    // Select first museum by default
+    // Real-time location tracking with watchPosition
     useEffect(() => {
-        if (!selectedMuseum && filteredMuseums.length > 0) {
-            setSelectedMuseum(filteredMuseums[0]);
+        if (!navigator.geolocation) return;
+        watchIdRef.current = navigator.geolocation.watchPosition(
+            (pos) => {
+                setUserLocation({
+                    latitude: pos.coords.latitude,
+                    longitude: pos.coords.longitude,
+                });
+            },
+            () => { /* silently ignore */ },
+            { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+        );
+        return () => {
+            if (watchIdRef.current !== null) {
+                navigator.geolocation.clearWatch(watchIdRef.current);
+            }
+        };
+    }, []);
+
+    // Initial search when map and coordinates load
+    useEffect(() => {
+        if (isLoaded && userLocation && !hasInitialSearched) {
+            const center = { lat: userLocation.latitude, lng: userLocation.longitude };
+            setMapCenter(center);
+            initialCenterRef.current = center;
+            if (mapRef.current) {
+                isFittingBoundsRef.current = true;
+                mapRef.current.panTo(center);
+            }
+            searchNearbyPlaces(center, activeFilter, searchQuery);
+            setHasInitialSearched(true);
         }
-    }, [filteredMuseums, selectedMuseum]);
+    }, [isLoaded, userLocation, hasInitialSearched, activeFilter, searchQuery, searchNearbyPlaces]);
+
+    // Re-run search automatically on active filter/search query change
+    useEffect(() => {
+        if (isLoaded && hasInitialSearched) {
+            const center = mapCenter || (userLocation ? { lat: userLocation.latitude, lng: userLocation.longitude } : DEFAULT_CENTER);
+            searchNearbyPlaces(center, activeFilter, searchQuery);
+        }
+    }, [activeFilter, searchQuery, isLoaded, hasInitialSearched]);
+
+    // Instant Haversine estimation for distance/time display (no API call)
+    const calculateEstimation = useCallback(() => {
+        if (!userLocation || !selectedMuseum) return;
+        const destLat = selectedMuseum.coordinates?.lat ?? selectedMuseum.latitude;
+        const destLng = selectedMuseum.coordinates?.lng ?? selectedMuseum.longitude;
+        if (typeof destLat !== 'number' || typeof destLng !== 'number') return;
+
+        const lat1 = userLocation.latitude;
+        const lon1 = userLocation.longitude;
+        const lat2 = destLat;
+        const lon2 = destLng;
+        
+        const R = 6371e3; // Earth radius in metres
+        const phi1 = lat1 * Math.PI / 180;
+        const phi2 = lat2 * Math.PI / 180;
+        const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+        const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+
+        const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+                  Math.cos(phi1) * Math.cos(phi2) *
+                  Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const d = R * c; // Straight line distance in metres
+        
+        const estimatedRoadKm = (d * 1.3) / 1000;
+        const distText = estimatedRoadKm < 1 
+            ? `${Math.round(estimatedRoadKm * 1000)} m` 
+            : `${estimatedRoadKm.toFixed(1)} km`;
+        
+        let speedKmh = 40;
+        let waitMins = 0;
+        const mode = travelMode;
+        if (mode === ('WALKING' as any)) speedKmh = 4.5;
+        else if (mode === ('BICYCLING' as any)) speedKmh = 15;
+        else if (mode === ('TRANSIT' as any)) { speedKmh = 25; waitMins = 12; }
+        
+        const totalMins = Math.round((estimatedRoadKm / speedKmh) * 60 + waitMins);
+        const durationText = totalMins < 60
+            ? `${totalMins} menit`
+            : `${Math.floor(totalMins / 60)} jam${totalMins % 60 > 0 ? ` ${totalMins % 60} mnt` : ''}`;
+        
+        setRouteDistance(distText);
+        setRouteDuration(durationText);
+    }, [userLocation, selectedMuseum, travelMode]);
+
+
+
+    // Calculate real Google Maps Directions route in-app using Google Maps DirectionsService (default gmaps route)
+    // Decode Google Maps encoded polyline format
+    const decodePolyline = useCallback((encoded: string): { lat: number; lng: number }[] => {
+        if (!encoded) return [];
+        const len = encoded.length;
+        let index = 0;
+        const array: { lat: number; lng: number }[] = [];
+        let lat = 0;
+        let lng = 0;
+
+        while (index < len) {
+            let b: number;
+            let shift = 0;
+            let result = 0;
+            do {
+                b = encoded.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            const dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+            lat += dlat;
+
+            shift = 0;
+            result = 0;
+            do {
+                b = encoded.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+            lng += dlng;
+
+            array.push({ lat: lat * 1e-5, lng: lng * 1e-5 });
+        }
+        return array;
+    }, []);
+
+    // Calculate route via backend proxy (Google Routes API v2)
+    const calculateRoute = useCallback(async (travelMode: google.maps.TravelMode) => {
+        if (!userLocation || !selectedMuseum) return;
+        setIsRouteLoading(true);
+        try {
+            const destLat = selectedMuseum.coordinates?.lat ?? selectedMuseum.latitude;
+            const destLng = selectedMuseum.coordinates?.lng ?? selectedMuseum.longitude;
+            if (typeof destLat !== 'number' || typeof destLng !== 'number') {
+                throw new Error("Invalid destination coordinates");
+            }
+
+            // Map google.maps.TravelMode to backend mode string
+            let modeStr = 'driving';
+            const tmStr = String(travelMode).toUpperCase();
+            if (tmStr === 'WALKING') modeStr = 'walking';
+            else if (tmStr === 'BICYCLING') modeStr = 'bicycling';
+            else if (tmStr === 'TRANSIT') modeStr = 'transit';
+
+            const response = await museumService.getRouteDirections(
+                userLocation.latitude,
+                userLocation.longitude,
+                destLat,
+                destLng,
+                modeStr
+            );
+
+            // Handle wrapped NestJS response: { data: { status, polyline, ... } }
+            const routeData = response?.data || response;
+
+            if (routeData?.status === 'OK' && routeData?.polyline) {
+                const decodedPath = decodePolyline(routeData.polyline);
+                setRoutePath(decodedPath);
+                setShowRouteLine(true);
+                setRouteDistance(routeData.distanceText || null);
+                setRouteDuration(routeData.durationText || null);
+
+                // Fit map bounds to show the entire route
+                if (mapRef.current && decodedPath.length > 0) {
+                    isFittingBoundsRef.current = true;
+                    const bounds = new google.maps.LatLngBounds();
+                    bounds.extend({ lat: userLocation.latitude, lng: userLocation.longitude });
+                    bounds.extend({ lat: destLat, lng: destLng });
+                    decodedPath.forEach(p => bounds.extend(p));
+                    mapRef.current.fitBounds(bounds, { top: 60, bottom: 280, left: 40, right: 40 });
+                }
+            } else {
+                console.error('Route request failed:', routeData?.errorMessage || 'Unknown error');
+            }
+        } catch (error) {
+            console.error('Error calculating route:', error);
+        } finally {
+            setIsRouteLoading(false);
+        }
+    }, [userLocation, selectedMuseum, decodePolyline]);
+
+    // Auto-estimate distance/time when place is selected or travel mode changes (without drawing line)
+    useEffect(() => {
+        if (userLocation && selectedMuseum && !showRouteLine) {
+            calculateEstimation();
+        }
+    }, [userLocation, selectedMuseum?.id, travelMode, showRouteLine, calculateEstimation]);
+
+    // Recalculate route automatically when travelMode changes if route is active
+    useEffect(() => {
+        if (showRouteLine && userLocation && selectedMuseum) {
+            calculateRoute(travelMode);
+        }
+    }, [travelMode, showRouteLine, userLocation, selectedMuseum?.id, calculateRoute]);
+
+    const isLoading = isPlacesLoading || isLocating;
+
+
 
     // SECURITY: Handle search input with sanitization
     const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -469,46 +1073,138 @@ export default function PublicNearbyPage() {
 
                     {/* Map Area */}
                     <div className="pnb-map">
-                        <div className="pnb-map__bg">
-                            <img
-                                src="https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/106.8456,-6.2088,11,0/800x600@2x?access_token=placeholder"
-                                alt="Map"
-                                className="pnb-map__img"
-                                onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                }}
-                            />
-                            <div className="pnb-map__fallback" />
-                        </div>
+                        {!apiKey ? (
+                            <div className="pnb-map-fallback flex flex-col items-center justify-center p-6 text-center h-full bg-slate-900 text-white">
+                                <AlertCircle className="w-12 h-12 text-slate-500 mb-4" />
+                                <h3 className="text-lg font-semibold mb-2">Google Maps Key Missing</h3>
+                                <p className="text-slate-400 text-sm max-w-xs">
+                                    Please configure GOOGLE_MAPS_API_KEY in the backend environment.
+                                </p>
+                            </div>
+                        ) : loadError ? (
+                            <div className="pnb-map-fallback flex flex-col items-center justify-center p-6 text-center h-full bg-slate-900 text-white">
+                                <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+                                <h3 className="text-lg font-semibold mb-2">Failed to load Map</h3>
+                                <p className="text-slate-400 text-sm">{loadError.message}</p>
+                            </div>
+                        ) : !isLoaded ? (
+                            <div className="pnb-map-fallback flex items-center justify-center h-full bg-slate-900 text-white">
+                                <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+                            </div>
+                        ) : (
+                            <>
+                                <GoogleMap
+                                    mapContainerClassName="w-full h-full"
+                                    center={initialCenterRef.current || DEFAULT_CENTER}
+                                    zoom={12}
+                                    onLoad={onMapLoad}
+                                    onUnmount={onMapUnmount}
+                                    onIdle={handleMapIdle}
+                                    options={{
+                                        disableDefaultUI: true,
+                                        styles: isDark ? GOOGLE_MAP_STYLES : [],
+                                    }}
+                                >
+                                    {/* User Location Marker & Pulser Halo */}
+                                    {userLocation && (
+                                        <>
+                                            {/* Google Maps Classic Blue Dot Marker */}
+                                            <MarkerF
+                                                position={{ lat: userLocation.latitude, lng: userLocation.longitude }}
+                                                icon={{
+                                                    path: google.maps.SymbolPath.CIRCLE,
+                                                    fillColor: '#3B82F6', // Google blue
+                                                    fillOpacity: 1.0,
+                                                    scale: 8,
+                                                    strokeColor: '#FFFFFF', // White border
+                                                    strokeWeight: 2.5,
+                                                }}
+                                                title="Lokasi Anda"
+                                                zIndex={999}
+                                            />
+                                            {/* High-Fidelity Expanding Radar Pulsing Halo */}
+                                            <CircleF
+                                                center={{ lat: userLocation.latitude, lng: userLocation.longitude }}
+                                                radius={radarRadius}
+                                                options={{
+                                                    fillColor: '#3B82F6',
+                                                    fillOpacity: Math.max(0.003, 0.22 * (1 - (radarRadius - 40) / 710)),
+                                                    strokeColor: '#3B82F6',
+                                                    strokeOpacity: Math.max(0.003, 0.48 * (1 - (radarRadius - 40) / 710)),
+                                                    strokeWeight: 1.1,
+                                                    clickable: false,
+                                                }}
+                                            />
+                                        </>
+                                    )}
 
-                        {/* Museum Pins */}
-                        {filteredMuseums.slice(0, 6).map((museum: any, i: number) => (
-                            <button
-                                key={museum.id}
-                                className={`pnb-pin ${selectedMuseum?.id === museum.id ? 'pnb-pin--active' : ''}`}
-                                style={{
-                                    top: `${18 + (i * 12)}%`,
-                                    left: `${15 + (i * 14)}%`,
-                                }}
-                                onClick={() => {
-                                    setSelectedMuseum(museum);
-                                    setSheetExpanded(false);
-                                }}
-                            >
-                                <div className="pnb-pin__marker">
-                                    <Building2 className="w-3.5 h-3.5" />
-                                </div>
-                                {selectedMuseum?.id === museum.id && (
-                                    <motion.span
-                                        className="pnb-pin__label"
-                                        initial={{ opacity: 0, y: 4 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                    >
-                                        {museum.name.length > 18 ? museum.name.slice(0, 18) + '…' : museum.name}
-                                    </motion.span>
-                                )}
-                            </button>
-                        ))}
+                                    {/* Place Markers */}
+                                    {sortedPlaces.map((museum: any) => {
+                                        const mLat = museum.coordinates?.lat ?? museum.latitude;
+                                        const mLng = museum.coordinates?.lng ?? museum.longitude;
+                                        if (typeof mLat !== 'number' || typeof mLng !== 'number') return null;
+                                        const isActive = selectedMuseum?.id === museum.id;
+
+                                        return (
+                                            <MarkerF
+                                                key={museum.id}
+                                                position={{ lat: mLat, lng: mLng }}
+                                                title={museum.name}
+                                                onClick={() => {
+                                                    selectPlace(museum);
+                                                    setSheetExpanded(false);
+                                                }}
+                                                icon={getMarkerIcon(museum.type, isActive)}
+                                                label={!isActive ? {
+                                                    text: museum.name?.length > 18 ? museum.name.substring(0, 18) + '...' : museum.name,
+                                                    color: isDark ? '#E5E7EB' : '#1F2937',
+                                                    fontSize: '11px',
+                                                    fontWeight: '600',
+                                                    className: 'pnb-marker-label',
+                                                } : undefined}
+                                                zIndex={isActive ? 900 : 1}
+                                            />
+                                        );
+                                    })}
+
+                                    {/* InfoWindow tooltip for selected place */}
+                                    {selectedMuseum && (() => {
+                                        const sLat = selectedMuseum.coordinates?.lat ?? selectedMuseum.latitude;
+                                        const sLng = selectedMuseum.coordinates?.lng ?? selectedMuseum.longitude;
+                                        if (typeof sLat !== 'number' || typeof sLng !== 'number') return null;
+                                        return (
+                                            <InfoWindowF
+                                                position={{ lat: sLat, lng: sLng }}
+                                                options={{
+                                                    pixelOffset: new google.maps.Size(0, -40),
+                                                    disableAutoPan: true,
+                                                    maxWidth: 220,
+                                                }}
+                                                onCloseClick={() => {
+                                                    selectPlace(null);
+                                                }}
+                                            >
+                                                <div className="pnb-info-window">
+                                                    <strong>{selectedMuseum.name}</strong>
+                                                    <span className="pnb-info-window__type">{selectedMuseum.type === 'museum' ? '🏛️ Museum' : selectedMuseum.type === 'gallery' ? '🎨 Gallery' : '🏯 Heritage'}</span>
+                                                </div>
+                                            </InfoWindowF>
+                                        );
+                                    })()}
+
+                                     {showRouteLine && routePath.length > 0 && (
+                                         <PolylineF
+                                             path={routePath}
+                                             options={{
+                                                 strokeColor: '#4285F4',
+                                                 strokeOpacity: 0.9,
+                                                 strokeWeight: 5,
+                                             }}
+                                         />
+                                     )}
+                                </GoogleMap>
+                            </>
+                        )}
                     </div>
 
                     {/* Map Controls */}
@@ -522,8 +1218,8 @@ export default function PublicNearbyPage() {
                                 : <Locate className="w-4 h-4" />
                             }
                         </button>
-                        <button className="pnb-map-ctrl" aria-label="Zoom in"><Plus className="w-4 h-4" /></button>
-                        <button className="pnb-map-ctrl" aria-label="Zoom out"><Minus className="w-4 h-4" /></button>
+                        <button className="pnb-map-ctrl" onClick={handleZoomIn} aria-label="Zoom in"><Plus className="w-4 h-4" /></button>
+                        <button className="pnb-map-ctrl" onClick={handleZoomOut} aria-label="Zoom out"><Minus className="w-4 h-4" /></button>
                     </div>
 
                     {/* Location error toast */}
@@ -548,7 +1244,14 @@ export default function PublicNearbyPage() {
                                 museum={selectedMuseum}
                                 expanded={sheetExpanded}
                                 onToggle={() => setSheetExpanded(!sheetExpanded)}
-                                onClose={() => setSelectedMuseum(null)}
+                                onClose={() => selectPlace(null)}
+                                distance={routeDistance}
+                                duration={routeDuration}
+                                isRouteLoading={isRouteLoading}
+                                travelMode={travelMode}
+                                onTravelModeChange={handleTravelModeChange}
+                                onGetDirections={() => calculateRoute(travelMode)}
+                                onBuyTicket={() => setShowTicketModal(true)}
                             />
                         )}
                     </AnimatePresence>
@@ -556,27 +1259,6 @@ export default function PublicNearbyPage() {
             ) : (
                 /* ===== LIST VIEW ===== */
                 <div className="pnb-list-container">
-                    {/* Header */}
-                    <div className="pnb-list-header">
-                        <div>
-                            <h1 className="pnb-list-header__title">Explore Nearby</h1>
-                            <p className="pnb-list-header__subtitle">
-                                {filteredMuseums.length} locations found
-                            </p>
-                        </div>
-                        <div className="pnb-list-header__actions">
-                            <button className="pnb-map-ctrl" onClick={() => setViewMode('map')} aria-label="Map view">
-                                <Map className="w-4 h-4" />
-                            </button>
-                            <button className="pnb-map-ctrl" onClick={requestLocation} aria-label="My location">
-                                {isLocating
-                                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                                    : <Locate className="w-4 h-4" />
-                                }
-                            </button>
-                        </div>
-                    </div>
-
                     {/* Search + Filters */}
                     <div className="pnb-list-search">
                         <div className="pnb-search-bar">
@@ -590,6 +1272,13 @@ export default function PublicNearbyPage() {
                                 autoComplete="off"
                                 spellCheck={false}
                             />
+                            <button
+                                className="pnb-search-bar__filter"
+                                onClick={() => setViewMode('map')}
+                                aria-label="Switch to map view"
+                            >
+                                <Map className="w-4 h-4" />
+                            </button>
                         </div>
                         <div className="pnb-filter-chips">
                             {FILTER_CHIPS.map((chip) => (
@@ -605,13 +1294,61 @@ export default function PublicNearbyPage() {
                         </div>
                     </div>
 
+                    {/* Sort Options */}
+                    <div className="pnb-sort-container" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className="pnb-sort-label">Urutkan:</span>
+                            <button
+                                className={`pnb-sort-btn ${sortBy === 'distance' ? 'pnb-sort-btn--active' : ''}`}
+                                onClick={() => setSortBy('distance')}
+                            >
+                                Terdekat
+                            </button>
+                            <button
+                                className={`pnb-sort-btn ${sortBy === 'rating' ? 'pnb-sort-btn--active' : ''}`}
+                                onClick={() => setSortBy('rating')}
+                            >
+                                Rating Tertinggi
+                            </button>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+                            <span className="pnb-sort-label">Filter Rating:</span>
+                            <select
+                                value={minRating}
+                                onChange={(e) => setMinRating(Number(e.target.value))}
+                                style={{
+                                    fontSize: '12px',
+                                    padding: '4px 24px 4px 10px',
+                                    borderRadius: '999px',
+                                    border: '1px solid var(--border-color)',
+                                    background: 'var(--bg-elevated)',
+                                    color: 'var(--text-muted)',
+                                    cursor: 'pointer',
+                                    fontWeight: 500,
+                                    outline: 'none',
+                                    appearance: 'none',
+                                    backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                                    backgroundRepeat: 'no-repeat',
+                                    backgroundPosition: 'right 8px center',
+                                    backgroundSize: '12px',
+                                    transition: 'all 0.2s ease',
+                                }}
+                            >
+                                <option value={0}>Semua Rating</option>
+                                <option value={4.0}>★ 4.0 ke atas</option>
+                                <option value={4.5}>★ 4.5 ke atas</option>
+                                <option value={4.7}>★ 4.7 ke atas</option>
+                            </select>
+                        </div>
+                    </div>
+
                     {/* List */}
                     {isLoading ? (
                         <div className="pnb-loading">
                             <Loader2 className="w-8 h-8 animate-spin" />
                             <span>Discovering places...</span>
                         </div>
-                    ) : filteredMuseums.length === 0 ? (
+                    ) : sortedPlaces.length === 0 ? (
                         <div className="pnb-empty">
                             <Building2 className="w-12 h-12" />
                             <h3>No locations found</h3>
@@ -619,12 +1356,13 @@ export default function PublicNearbyPage() {
                         </div>
                     ) : (
                         <div className="pnb-list-items">
-                            {filteredMuseums.map((museum: any) => (
+                            {sortedPlaces.map((museum: any) => (
                                 <MuseumListCard
                                     key={museum.id}
                                     museum={museum}
+                                    distance={getDistance(museum)}
                                     onSelect={() => {
-                                        setSelectedMuseum(museum);
+                                        selectPlace(museum);
                                         setViewMode('map');
                                     }}
                                 />
@@ -632,6 +1370,13 @@ export default function PublicNearbyPage() {
                         </div>
                     )}
                 </div>
+            )}
+            
+            {showTicketModal && (
+                <ComingSoonTicketModal 
+                    museumName={selectedMuseum?.name || "Nusantara Museum"} 
+                    onClose={() => setShowTicketModal(false)} 
+                />
             )}
         </div>
     );

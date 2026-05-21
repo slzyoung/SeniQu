@@ -1,1 +1,1 @@
-export { default } from "./NearbyMuseumsPage";
+export { default } from "../../../gallery/pages/PublicNearbyPage";

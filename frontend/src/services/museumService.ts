@@ -98,6 +98,41 @@ class MuseumService {
     }
 
     /**
+     * Get Google Maps API key from backend (secure)
+     */
+    async getMapsApiKey(): Promise<string> {
+        const response = await apiGet<any>('/museums/maps-config');
+        // apiGet already unwraps .data from axios, so response IS the controller return value
+        return response?.apiKey || response?.data?.apiKey || '';
+    }
+
+    /**
+     * Search nearby places via backend Google Places API (New)
+     * Returns museums, galleries, and heritage sites near given coordinates
+     */
+    async searchNearbyPlaces(lat: number, lng: number, radius?: number): Promise<any[]> {
+        const response = await apiGet<any>('/museums/search-nearby', {
+            params: { lat, lng, radius: radius || 15000 },
+        });
+        return response?.places || response?.data?.places || [];
+    }
+
+    /**
+     * Get route directions via backend proxy (solves client restriction settings)
+     */
+    async getRouteDirections(originLat: number, originLng: number, destLat: number, destLng: number, mode: string): Promise<any> {
+        return apiGet<any>('/museums/route', {
+            params: {
+                originLat,
+                originLng,
+                destLat,
+                destLng,
+                mode
+            }
+        });
+    }
+
+    /**
      * Get museum by slug
      */
     async getMuseumBySlug(slug: string): Promise<Museum> {
@@ -148,3 +183,4 @@ class MuseumService {
 }
 
 export const museumService = MuseumService.getInstance();
+

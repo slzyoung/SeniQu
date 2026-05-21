@@ -81,15 +81,100 @@ To ensure the application remains fast and doesn't throttle user data, we employ
 - **ImageCompressor (`lib/imageCompressor.ts`)**: Utilizes `OffscreenCanvas` to intercept user uploads. It resizes massively large photos (e.g. 4K camera photos) down to a manageable size (e.g., max 2048px for Artworks, 400px for Avatars) and converts them to `image/webp`. 
 - **Benefits**: Reduces bandwidth consumption by up to 80% per upload, significantly preventing upload lag and server throttling during peak times.
 
-## 3. Key Libraries
+## 3. Google Maps & Geolocation Integration
+
+### 3.1 Secure API Key Delivery
+
+The Google Maps JavaScript API key is **never bundled** in the frontend static assets. Instead, the `PublicNearbyPage` component fetches it at runtime from the backend:
+
+```tsx
+// PublicNearbyPage.tsx
+useEffect(() => {
+    museumService.getMapsApiKey()  // GET /api/v1/museums/maps-config
+        .then(key => setMapsApiKey(key))
+        .catch(() => setMapsApiKey(''));
+}, []);
+```
+
+This key is then passed to `@react-google-maps/api`'s `useLoadScript` hook.
+
+### 3.2 User Location Marker & Radar Pulse
+
+The user's real-time location is rendered as a **Google Maps-style blue dot** with a high-fidelity expanding radar halo:
+
+| Property | Value |
+|----------|-------|
+| **Marker** | `google.maps.SymbolPath.CIRCLE`, fill `#3B82F6`, white stroke, scale 8 |
+| **Radar Radius** | Expands from 40m to 750m |
+| **Animation** | `setInterval` at 12ms tick (83fps), opacity fades proportionally |
+| **Reset** | Wraps back to 40m when reaching 750m for continuous pulsing |
+
+### 3.3 Route Directions & Polyline Rendering
+
+When the user taps "Get Direction" on a museum card, the frontend:
+1. Calls `museumService.getRouteDirections()` → backend proxy → Google Routes API v2.
+2. Decodes the returned `encodedPolyline` using a custom `decodePolyline()` function.
+3. Renders the path as a `<PolylineF />` component with Google Blue (`#4285F4`, weight 5).
+4. Auto-zooms the map with `map.fitBounds()` to frame both origin and destination.
+
+### 3.4 Filter Chips & Light Mode Contrast
+
+Filter chips ("All", "Museum", "Gallery", "Heritage") use custom CSS classes:
+- **Dark mode**: `pnb-chip--active` sets `color: #fff` with blue gradient.
+- **Light mode**: `.light .pnb-chip.pnb-chip--active` uses `!important` to override hover states that would otherwise change text to dark.
+
+---
+
+## 4. Premium Carousel Components
+
+### 4.1 Architecture
+
+Both **Featured Artworks** (`FeaturedCollections.tsx`) and **Curated Collections** (`CollectionsPage.tsx`) use a shared carousel pattern:
+
+```tsx
+// Core structure
+<div className="relative group/slider" onMouseEnter={...} onMouseLeave={...}>
+  <div ref={scrollContainerRef}
+       className="flex overflow-x-auto gap-4 hide-scrollbar snap-x snap-mandatory scroll-smooth">
+    {items.map(item => (
+      <div className="w-[85%] sm:w-[46%] lg:w-[31.8%] flex-shrink-0 snap-center">
+        <Card ... />
+      </div>
+    ))}
+  </div>
+  {/* Overlay navigation arrows */}
+  <button className="... opacity-0 group-hover/slider:opacity-100 ...">
+    <ChevronLeft />
+  </button>
+  <button className="... opacity-0 group-hover/slider:opacity-100 ...">
+    <ChevronRight />
+  </button>
+</div>
+```
+
+### 4.2 Key Features
+
+| Feature | Implementation |
+|---------|----------------|
+| **Responsive Sizing** | 85% width (mobile, shows peek of next card), 46% (tablet, ~2 cards), 31.8% (desktop, 3 cards) |
+| **Touch Swipe** | Native `overflow-x-auto` + `snap-x snap-mandatory` for iOS/Android-native feel |
+| **Manual Arrows** | Glassmorphic overlay buttons that appear on hover (`group-hover/slider:opacity-100`) |
+| **Scroll Amount** | 85% of `clientWidth` per click for smooth card-to-card sliding |
+| **Autoplay** | `setInterval` every 4.5s, wraps to start when reaching the end |
+| **Pause-on-Hover** | `isHovered` state disables the autoplay interval, resumes on mouse leave |
+
+---
+
+## 5. Key Libraries
 
 - **Lucide React**: Universal icon set.
 - **Framer Motion**: Smooth entry/exit animations for pages and modals.
 - **Recharts**: Professional charts for Analytics dashboards.
 - **Zustand**: Minimalistic global state management.
+- **@react-google-maps/api**: Google Maps React bindings (`GoogleMap`, `MarkerF`, `CircleF`, `PolylineF`).
 - **React Hook Form (Recommended)**: For complex forms.
 
-## 4. Linting & Formatting
+## 6. Linting & Formatting
 
 The project uses strict ESLint and TypeScript configuration.
 - No unused variables.

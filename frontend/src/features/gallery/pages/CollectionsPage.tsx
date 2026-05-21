@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter, Loader2, ArrowDown } from 'lucide-react';
+import { Filter, Loader2, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PageContainer } from '../../../components/common/DashboardLayout';
 import { CollectionCard, CollectionData } from '../../../components/CollectionCard';
 import { useArtworks } from '../../../hooks/useArtworks';
@@ -23,12 +23,17 @@ const getGradient = (index: number) => {
 
 const CATEGORIES = ['All', 'Painting', 'Sculpture', 'Digital', 'Photography', 'Installation'];
 
+import React from 'react';
+
 export default function CollectionsPage() {
     const [activeCategory, setActiveCategory] = useState('All');
     const [favorites, setFavorites] = useState<string[]>([]);
     const [page, setPage] = useState(1);
     const [accumulatedArtworks, setAccumulatedArtworks] = useState<CollectionData[]>([]);
     const { ref, isVisible } = useScrollAnimation();
+    
+    const [isHovered, setIsHovered] = useState(false);
+    const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
     // Fetch real artworks
     const { data: artworksData, isLoading, isFetching } = useArtworks({
@@ -83,8 +88,39 @@ export default function CollectionsPage() {
 
     const hasMore = artworksData?.meta ? page < artworksData.meta.totalPages : false;
 
+    // Carousel manual navigation
+    const handleScroll = (direction: 'left' | 'right') => {
+        if (scrollContainerRef.current) {
+            const { scrollLeft, clientWidth } = scrollContainerRef.current;
+            const scrollAmount = clientWidth * 0.85;
+            scrollContainerRef.current.scrollTo({
+                left: direction === 'left' ? scrollLeft - scrollAmount : scrollLeft + scrollAmount,
+                behavior: 'smooth'
+            });
+        }
+    };
+
+    // Carousel autoplay loop with hover check
+    useEffect(() => {
+        if (accumulatedArtworks.length <= 1 || isHovered) return;
+        const interval = setInterval(() => {
+            if (scrollContainerRef.current) {
+                const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
+                if (scrollLeft + clientWidth >= scrollWidth - 25) {
+                    scrollContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+                } else {
+                    scrollContainerRef.current.scrollTo({
+                        left: scrollLeft + clientWidth * 0.85,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        }, 4500);
+        return () => clearInterval(interval);
+    }, [accumulatedArtworks.length, isHovered]);
+
     return (
-        <PageContainer className="max-w-7xl mx-auto pt-20 px-4 sm:px-6">
+        <PageContainer className="max-w-7xl mx-auto pt-12 px-4 sm:px-6">
             <SEOHead
                 title="Collections"
                 description="Curated collections of Indonesian heritage artworks including paintings sculptures digital art and verified photography."
@@ -136,18 +172,52 @@ export default function CollectionsPage() {
                 </div>
             </div>
 
-            {/* Artworks Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <AnimatePresence mode="popLayout">
-                    {accumulatedArtworks.map((collection) => (
-                        <CollectionCard
-                            key={collection.id}
-                            data={collection}
-                            isFavorite={favorites.includes(collection.id)}
-                            onToggleFavorite={toggleFavorite}
-                        />
-                    ))}
-                </AnimatePresence>
+            {/* Artworks Carousel */}
+            <div 
+                className="relative group/slider w-full"
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+            >
+                <div
+                    ref={scrollContainerRef}
+                    className="flex overflow-x-auto gap-4 md:gap-6 pb-6 pt-2 hide-scrollbar snap-x snap-mandatory scroll-smooth"
+                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                >
+                    <AnimatePresence mode="popLayout">
+                        {accumulatedArtworks.map((collection) => (
+                            <div 
+                                key={collection.id} 
+                                className="w-[85%] sm:w-[46%] lg:w-[31.8%] flex-shrink-0 snap-center"
+                            >
+                                <CollectionCard
+                                    data={collection}
+                                    isFavorite={favorites.includes(collection.id)}
+                                    onToggleFavorite={toggleFavorite}
+                                />
+                            </div>
+                        ))}
+                    </AnimatePresence>
+                </div>
+
+                {/* Navigation Overlay Arrows */}
+                {accumulatedArtworks.length > 1 && (
+                    <>
+                        <button
+                            onClick={() => handleScroll('left')}
+                            className="absolute -left-2 md:-left-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/75 border border-white/10 text-white hover:text-gold hover:border-gold/50 flex items-center justify-center backdrop-blur-md z-30 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.55)] opacity-0 group-hover/slider:opacity-100 focus:opacity-100 hover:scale-105 duration-300"
+                            aria-label="Previous artwork"
+                        >
+                            <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={() => handleScroll('right')}
+                            className="absolute -right-2 md:-right-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/75 border border-white/10 text-white hover:text-gold hover:border-gold/50 flex items-center justify-center backdrop-blur-md z-30 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.55)] opacity-0 group-hover/slider:opacity-100 focus:opacity-100 hover:scale-105 duration-300"
+                            aria-label="Next artwork"
+                        >
+                            <ChevronRight className="w-5 h-5" />
+                        </button>
+                    </>
+                )}
             </div>
 
             {/* Load More Trigger */}

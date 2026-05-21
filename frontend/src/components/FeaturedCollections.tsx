@@ -13,7 +13,9 @@ import {
   ArrowRight,
   Heart,
   Filter,
-  Loader2
+  Loader2,
+  ChevronLeft,
+  ChevronRight
 } from
   'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -152,7 +154,7 @@ const CollectionCard = React.forwardRef<HTMLDivElement, CollectionCardProps>(({
                   />
                 </div>
               )}
-              
+
               {/* Gradient Overlay for Text Readability */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10 opacity-80 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
             </div>
@@ -216,6 +218,8 @@ export function FeaturedCollections() {
   const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState('All');
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [isHovered, setIsHovered] = useState(false);
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
   // Fetch real artworks
   const { data: artworksData, isLoading } = useArtworks({
@@ -249,6 +253,38 @@ export function FeaturedCollections() {
   };
 
   const filteredCollections = collections; // Already filtered by API params
+
+  // Carousel manual navigation
+  const handleScroll = (direction: 'left' | 'right') => {
+    if (scrollContainerRef.current) {
+      const { scrollLeft, clientWidth } = scrollContainerRef.current;
+      const scrollAmount = clientWidth * 0.85; // Scroll 85% of visible width
+      scrollContainerRef.current.scrollTo({
+        left: direction === 'left' ? scrollLeft - scrollAmount : scrollLeft + scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  // Carousel autoplay logic with pause-on-hover best practice
+  React.useEffect(() => {
+    if (filteredCollections.length <= 1 || isHovered) return;
+    const interval = setInterval(() => {
+      if (scrollContainerRef.current) {
+        const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
+        if (scrollLeft + clientWidth >= scrollWidth - 25) {
+          // Wrap back smoothly
+          scrollContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+        } else {
+          scrollContainerRef.current.scrollTo({
+            left: scrollLeft + clientWidth * 0.85,
+            behavior: 'smooth'
+          });
+        }
+      }
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [filteredCollections.length, isHovered]);
 
 
 
@@ -313,26 +349,59 @@ export function FeaturedCollections() {
             <Loader2 className="w-8 h-8 text-gold animate-spin" />
           </div>
         ) : (
-          <motion.div
-            layout
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+          <div 
+            className="relative group/slider w-full"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+          >
+            {/* Scrollable Carousel Wrapper */}
+            <div
+              ref={scrollContainerRef}
+              className="flex overflow-x-auto gap-4 md:gap-6 pb-6 pt-2 hide-scrollbar snap-x snap-mandatory scroll-smooth"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              <AnimatePresence mode="popLayout">
+                {filteredCollections.length > 0 ? (
+                  filteredCollections.map((collection) => (
+                    <div 
+                      key={collection.id} 
+                      className="w-[85%] sm:w-[46%] lg:w-[31.8%] flex-shrink-0 snap-center"
+                    >
+                      <CollectionCard
+                        data={collection}
+                        isFavorite={favorites.includes(collection.id)}
+                        onToggleFavorite={toggleFavorite}
+                      />
+                    </div>
+                  ))
+                ) : (
+                  <div className="w-full text-center py-10 text-theme-muted snap-center">
+                    No artworks found in this category.
+                  </div>
+                )}
+              </AnimatePresence>
+            </div>
 
-            <AnimatePresence mode="popLayout">
-              {filteredCollections.length > 0 ? (
-                filteredCollections.map((collection) =>
-                  <CollectionCard
-                    key={collection.id}
-                    data={collection}
-                    isFavorite={favorites.includes(collection.id)}
-                    onToggleFavorite={toggleFavorite} />
-                )
-              ) : (
-                <div className="col-span-full text-center py-10 text-theme-muted">
-                  No artworks found in this category.
-                </div>
-              )}
-            </AnimatePresence>
-          </motion.div>
+            {/* Navigation Overlay Arrows */}
+            {filteredCollections.length > 1 && (
+              <>
+                <button
+                  onClick={() => handleScroll('left')}
+                  className="absolute -left-2 md:-left-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/75 border border-white/10 text-white hover:text-gold hover:border-gold/50 flex items-center justify-center backdrop-blur-md z-30 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.55)] opacity-0 group-hover/slider:opacity-100 focus:opacity-100 hover:scale-105 duration-300"
+                  aria-label="Previous artwork"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => handleScroll('right')}
+                  className="absolute -right-2 md:-right-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/75 border border-white/10 text-white hover:text-gold hover:border-gold/50 flex items-center justify-center backdrop-blur-md z-30 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.55)] opacity-0 group-hover/slider:opacity-100 focus:opacity-100 hover:scale-105 duration-300"
+                  aria-label="Next artwork"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </>
+            )}
+          </div>
         )}
 
         {/* View All CTA */}
