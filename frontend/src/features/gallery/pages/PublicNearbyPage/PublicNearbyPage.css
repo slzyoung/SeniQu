@@ -1444,8 +1444,9 @@
 }
 
 /* Override Google Maps InfoWindow chrome to look clean */
+/* Hide the header chrome (contains close button) entirely */
 .gm-style-iw-chr {
-  padding-top: 0 !important;
+  display: none !important;
 }
 
 .gm-style-iw {
@@ -1458,39 +1459,10 @@
   overflow: hidden !important;
 }
 
-/* Make InfoWindow close button larger and easier to click on mobile */
+/* Hide InfoWindow close button — it conflicts with the bottom sheet close on mobile.
+   Closing is handled by tapping another marker or clicking outside. */
 .gm-style-iw button.gm-ui-hover-effect {
-  width: 36px !important;
-  height: 36px !important;
-  top: 2px !important;
-  right: 2px !important;
-  background: var(--bg-elevated) !important;
-  border: 1px solid var(--border-color) !important;
-  border-radius: 50% !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  opacity: 1 !important;
-  transition: all 0.2s ease !important;
-  padding: 0 !important;
-}
-
-.gm-style-iw button.gm-ui-hover-effect:hover {
-  background: var(--bg-primary) !important;
-  color: var(--text-primary) !important;
-}
-
-.gm-style-iw button.gm-ui-hover-effect > span {
-  margin: 0 !important;
-  display: block !important;
-  background-color: var(--text-muted) !important;
-}
-
-@media (max-width: 767px) {
-  .gm-style-iw button.gm-ui-hover-effect {
-    width: 44px !important;
-    height: 44px !important;
-  }
+  display: none !important;
 }
 
 /* Marker label background pill */
