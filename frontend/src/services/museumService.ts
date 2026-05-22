@@ -58,6 +58,17 @@ class MuseumService {
     }
 
     /**
+     * Helper to safely extract array data from various wrapped API response shapes
+     */
+    private extractArrayData(res: any): any[] {
+        if (!res) return [];
+        if (Array.isArray(res)) return res;
+        if (res.data && Array.isArray(res.data)) return res.data;
+        if (res.data && res.data.data && Array.isArray(res.data.data)) return res.data.data;
+        return [];
+    }
+
+    /**
      * Helper to map DB response to Museum interface
      */
     private mapDatabaseToMuseum(data: any): Museum {
@@ -88,9 +99,11 @@ class MuseumService {
      */
     async getMuseums(filters: MuseumSearchFilters = {}): Promise<PaginatedResponse<Museum>> {
         const response = await apiGet<any>('/museums', { params: filters });
+        const dataArray = this.extractArrayData(response);
+        const meta = response?.data?.meta || response?.meta;
         return {
-            data: (response.data || []).map(this.mapDatabaseToMuseum),
-            meta: response.meta
+            data: dataArray.map(this.mapDatabaseToMuseum),
+            meta
         };
     }
 
@@ -98,8 +111,9 @@ class MuseumService {
      * Get nearby museums
      */
     async getNearbyMuseums(filters: NearbyFilters): Promise<Museum[]> {
-        const response = await apiGet<{ data: any[] }>('/museums/nearby', { params: filters });
-        return (response.data || []).map(this.mapDatabaseToMuseum);
+        const response = await apiGet<any>('/museums/nearby', { params: filters });
+        const dataArray = this.extractArrayData(response);
+        return dataArray.map(this.mapDatabaseToMuseum);
     }
 
     /**
@@ -121,7 +135,7 @@ class MuseumService {
      * - Max 20 cache entries to limit memory usage
      * - Coordinates and query are validated server-side
      */
-    async searchNearbyPlaces(lat: number, lng: number, radius?: number, query?: string): Promise<{ places: any[]; region?: { isMajorCity: boolean; regionName: string; maxRadiusKm: number } }> {
+    async searchNearbyPlaces(lat: number, lng: number, radius?: number, query?: string): Promise<{ places: any[]; region?: { isMajorCity: boolean; regionName: string; maxRadiusKm: number }; quotaExceeded?: boolean }> {
         const rad = radius || 15000;
         // round to 4 decimal places to stabilize cache keys against minor user movements (~11 meters)
         const cacheKey = `${lat.toFixed(4)}_${lng.toFixed(4)}_${rad}_${query || ''}`;
@@ -141,8 +155,9 @@ class MuseumService {
         });
         const places = response?.places || response?.data?.places || [];
         const region = response?.region || response?.data?.region || undefined;
+        const quotaExceeded = response?.quotaExceeded || response?.data?.quotaExceeded || false;
         
-        const result = { places, region };
+        const result = { places, region, quotaExceeded };
 
         // SECURITY: Evict oldest entries when cache exceeds max size
         if (this.searchCache.size >= MuseumService.CACHE_MAX_SIZE) {
@@ -249,6 +264,14 @@ class MuseumService {
      */
     async deleteMuseum(id: string): Promise<void> {
         return apiDelete(`/museums/${id}`);
+    }
+
+    /**
+     * Get detailed Google Place info dynamically on-demand
+     */
+    async getPlaceDetails(placeId: string): Promise<any> {
+        const response = await apiGet<any>(`/museums/place-details/${placeId}`);
+        return response?.data || response;
     }
 }
 

@@ -23,8 +23,105 @@ export class MuseumsService {
 
     /** Server-side cache to prevent duplicate Google Places API calls */
     private readonly placesCache = new Map<string, { data: any; expiresAt: number }>();
+    private readonly placeDetailsCache = new Map<string, { data: any; expiresAt: number }>();
     private readonly PLACES_CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
     private readonly PLACES_CACHE_MAX_SIZE = 50;
+
+    // ============================================================
+    // STRICT DAILY GOOGLE API BUDGET CONTROL (All Endpoints)
+    // ============================================================
+    // Per-IP daily limits
+    private readonly ipSearchCounts = new Map<string, { count: number; lastRequest: number }>();
+    private readonly ipDetailsCounts = new Map<string, { count: number; lastRequest: number }>();
+    private readonly ipRouteCounts = new Map<string, { count: number; lastRequest: number }>();
+    private readonly ipGeoCounts = new Map<string, { count: number; lastRequest: number }>();
+
+    // Global daily counters
+    private globalSearchToday = 0;
+    private globalDetailsToday = 0;
+    private globalRouteToday = 0;
+    private globalGeoToday = 0;
+    private lastResetDate = new Date().toDateString();
+
+    // Hard daily limits — COST-HARDENED for under $50/month gross (before $200 free credit)
+    // Calculation: With Leaflet/PostGIS as default, Google API is fallback only.
+    // Worst case: Search 30/day×30=$31.50, Details 30/day×30=$6.30, Geo/Route (Free) = $37.80/month (well under $50).
+    // After Google $200 free credit = $0/month.
+    private readonly DAILY_LIMITS = {
+        search:  { perIp: 5,   global: 30  },  // Places searchNearby/searchText ($35/1000)
+        details: { perIp: 10,  global: 30  },  // Places getPlace Advanced ($7/1000)
+        route:   { perIp: 3,   global: 20  },  // Routes API (OSRM, free)
+        geo:     { perIp: 2,   global: 20  },  // Geocoding API (Nominatim, free)
+    };
+
+    /**
+     * Centralized daily reset check — resets ALL counters at midnight
+     */
+    private resetDailyCountersIfNeeded() {
+        const todayStr = new Date().toDateString();
+        if (this.lastResetDate !== todayStr) {
+            this.lastResetDate = todayStr;
+            this.globalSearchToday = 0;
+            this.globalDetailsToday = 0;
+            this.globalRouteToday = 0;
+            this.globalGeoToday = 0;
+            this.ipSearchCounts.clear();
+            this.ipDetailsCounts.clear();
+            this.ipRouteCounts.clear();
+            this.ipGeoCounts.clear();
+            this.logger.log('Daily Google API budget counters RESET');
+        }
+    }
+
+    /**
+     * Check if a specific API type is within budget for a given IP.
+     * Returns { allowed: boolean } and increments counters if allowed.
+     */
+    private checkAndIncrementBudget(
+        type: 'search' | 'details' | 'route' | 'geo',
+        ip: string,
+    ): { allowed: boolean; reason?: string } {
+        this.resetDailyCountersIfNeeded();
+
+        const limits = this.DAILY_LIMITS[type];
+        const ipMap = {
+            search: this.ipSearchCounts,
+            details: this.ipDetailsCounts,
+            route: this.ipRouteCounts,
+            geo: this.ipGeoCounts,
+        }[type];
+        const globalCount = {
+            search: this.globalSearchToday,
+            details: this.globalDetailsToday,
+            route: this.globalRouteToday,
+            geo: this.globalGeoToday,
+        }[type];
+
+        const ipRecord = ipMap.get(ip) || { count: 0, lastRequest: Date.now() };
+
+        if (ipRecord.count >= limits.perIp) {
+            this.logger.warn(`[BUDGET] ${type} IP limit reached: ${ip} (${ipRecord.count}/${limits.perIp})`);
+            return { allowed: false, reason: `IP daily limit reached (${limits.perIp})` };
+        }
+        if (globalCount >= limits.global) {
+            this.logger.warn(`[BUDGET] ${type} GLOBAL limit reached: ${globalCount}/${limits.global}`);
+            return { allowed: false, reason: `Global daily limit reached (${limits.global})` };
+        }
+
+        // Increment
+        ipRecord.count++;
+        ipRecord.lastRequest = Date.now();
+        ipMap.set(ip, ipRecord);
+
+        switch (type) {
+            case 'search': this.globalSearchToday++; break;
+            case 'details': this.globalDetailsToday++; break;
+            case 'route': this.globalRouteToday++; break;
+            case 'geo': this.globalGeoToday++; break;
+        }
+
+        return { allowed: true };
+    }
 
     constructor(private configService: ConfigService) {
         this.supabase = createClient(
@@ -104,6 +201,34 @@ export class MuseumsService {
     }
 
     /**
+     * Helper to perform local fallback search using PostGIS
+     */
+    private async performLocalFallbackSearch(lat: number, lng: number, radiusMeters: number, query?: string): Promise<any[]> {
+        const localResponse = await this.findNearby(lat, lng, radiusMeters / 1000);
+        let localPlaces = (localResponse.data || []).map((m: any) => ({
+            id: m.id,
+            name: m.name,
+            address: m.address?.street || m.address?.city || '',
+            latitude: (m.coordinates as any)?.lat ?? (m.coordinates as any)?.latitude,
+            longitude: (m.coordinates as any)?.lng ?? (m.coordinates as any)?.longitude,
+            rating: m.rating || 5.0,
+            reviewCount: m.artworksCount || 0,
+            type: m.type || 'museum',
+            photos: [],
+            reviews: [],
+        }));
+
+        if (query && query.trim().length > 0) {
+            const q = query.toLowerCase().trim();
+            localPlaces = localPlaces.filter((p: any) => 
+                p.name.toLowerCase().includes(q) || 
+                p.address.toLowerCase().includes(q)
+            );
+        }
+        return localPlaces;
+    }
+
+    /**
      * Search nearby places using Google Places API (New)
      * POST https://places.googleapis.com/v1/places:searchNearby
      *
@@ -111,7 +236,7 @@ export class MuseumsService {
      * Only uses verified-valid Table A types to prevent 400 errors.
      * Sequential batch processing with delay for anti-throttling.
      */
-    async searchNearbyPlaces(lat: number, lng: number, radiusMeters: number, query?: string) {
+    async searchNearbyPlaces(lat: number, lng: number, radiusMeters: number, query?: string, ip?: string) {
         // === Input validation & sanitization ===
         const safeLat = Math.max(-90, Math.min(90, Number(lat) || 0));
         const safeLng = Math.max(-180, Math.min(180, Number(lng) || 0));
@@ -121,15 +246,24 @@ export class MuseumsService {
         const safeRadius = Math.min(Math.max(1000, Number(radiusMeters) || MAX_RADIUS_M), MAX_RADIUS_M);
 
         const apiKey = this.configService.get<string>('googleMaps.apiKey')
-            || process.env.GOOGLE_MAPS_API_KEY || '';
+            || process.env.GOOGLE_MAPS_KEY || '';
         const referer = this.configService.get<string>('FRONTEND_URL')
             || process.env.FRONTEND_URL || 'http://localhost:5173';
 
         const regionInfo = { isMajorCity: false, regionName: 'Sekitar', maxRadiusKm: MAX_RADIUS_KM };
 
         if (!apiKey) {
-            this.logger.warn('GOOGLE_MAPS_API_KEY is not configured');
+            this.logger.warn('GOOGLE_MAPS_KEY is not configured');
             return { places: [], region: regionInfo };
+        }
+
+        // === Centralized Budget Check ===
+        const clientIp = ip || 'unknown';
+        const budget = this.checkAndIncrementBudget('search', clientIp);
+        if (!budget.allowed) {
+            this.logger.warn(`[SEARCH] Budget exceeded for IP ${clientIp}: ${budget.reason}. Falling back to local PostGIS.`);
+            const localPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, query);
+            return { places: localPlaces, region: regionInfo, quotaExceeded: true };
         }
 
         // === Server-side cache check (3 min TTL, ~111m resolution) ===
@@ -143,58 +277,13 @@ export class MuseumsService {
             this.placesCache.delete(cacheKey); // Evict expired
         }
 
-        // === Multi-layer grid centers to maximize coverage and avoid 20-result API cap ===
-        // Optimized grid centers (max 7 centers for 70km) to keep API requests budget-safe and ensure absolute coverage
-        const centers: { lat: number; lng: number; radius: number }[] = [];
-        
-        if (safeRadius <= 20000) {
-            centers.push({ lat: safeLat, lng: safeLng, radius: safeRadius });
-        } else if (safeRadius <= 50000) {
-            const coreRadius = Math.min(25000, safeRadius * 0.5);
-            const outerRadius = Math.min(35000, safeRadius * 0.7);
-            const offsetKm = (safeRadius / 1000) * 0.55;
-
-            const kmToLat = (km: number) => km / 111.32;
-            const kmToLng = (km: number) => km / (111.32 * Math.cos(safeLat * Math.PI / 180));
-
-            centers.push({ lat: safeLat, lng: safeLng, radius: coreRadius });
-            centers.push(
-                { lat: safeLat + kmToLat(offsetKm), lng: safeLng, radius: outerRadius },
-                { lat: safeLat - kmToLat(offsetKm), lng: safeLng, radius: outerRadius },
-                { lat: safeLat, lng: safeLng + kmToLng(offsetKm), radius: outerRadius },
-                { lat: safeLat, lng: safeLng - kmToLng(offsetKm), radius: outerRadius },
-            );
-        } else {
-            // Hexagonal 6 outer centers for 70km radius to ensure absolute coverage at minimal cost
-            const coreRadius = 45000;
-            const outerRadius = 35000;
-            const offsetKm = (safeRadius / 1000) * 0.6; // ~42km offset at 70km radius
-
-            const kmToLat = (km: number) => km / 111.32;
-            const kmToLng = (km: number) => km / (111.32 * Math.cos(safeLat * Math.PI / 180));
-
-            centers.push({ lat: safeLat, lng: safeLng, radius: coreRadius });
-            
-            // 6 directions at 60 degree intervals
-            for (let i = 0; i < 6; i++) {
-                const angleRad = (i * 60 * Math.PI) / 180;
-                const dLat = offsetKm * Math.cos(angleRad);
-                const dLng = offsetKm * Math.sin(angleRad);
-                centers.push({
-                    lat: safeLat + kmToLat(dLat),
-                    lng: safeLng + kmToLng(dLng),
-                    radius: outerRadius
-                });
-            }
-        }
-
-        // Safety: clamp all generated centers to valid Google API ranges
-        for (const c of centers) {
-            c.lat = Math.max(-90, Math.min(90, c.lat));
-            c.lng = Math.max(-180, Math.min(180, c.lng));
-        }
+        // === Only query the user location center (saves budget, prevents massive Google Maps charges) ===
+        const centers: { lat: number; lng: number; radius: number }[] = [
+            { lat: safeLat, lng: safeLng, radius: safeRadius }
+        ];
 
         // === 1. If search query is provided, execute Google Places Text Search API first ===
+        let googleApiFailed = false;
         let textPlaces: any[] = [];
         const refererHeader = referer.endsWith('/') ? referer : `${referer}/`;
         if (query && query.trim().length > 0) {
@@ -205,7 +294,7 @@ export class MuseumsService {
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Goog-Api-Key': apiKey,
-                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.photos,places.reviews,places.types',
+                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.types',
                         'Accept-Language': 'id',
                         'Referer': refererHeader,
                     },
@@ -215,6 +304,7 @@ export class MuseumsService {
                         locationBias: {
                             circle: {
                                 center: { latitude: safeLat, longitude: safeLng },
+                                centerCoordinates: { latitude: safeLat, longitude: safeLng },
                                 radius: Math.min(safeRadius, 50000),
                             },
                         },
@@ -266,26 +356,21 @@ export class MuseumsService {
                             rating: p.rating,
                             reviewCount: p.userRatingCount,
                             type: category,
-                            photos: (p.photos || []).slice(0, 8).map((ph: any) =>
-                                `https://places.googleapis.com/v1/${ph.name}/media?key=${apiKey}&maxHeightPx=400&maxWidthPx=400`
-                            ),
-                            reviews: (p.reviews || []).slice(0, 5).map((r: any) => ({
-                                author: r.authorAttribution?.displayName || 'Anonymous',
-                                authorPhoto: r.authorAttribution?.photoUri || '',
-                                rating: r.rating || 0,
-                                text: r.text?.text || '',
-                                time: r.relativePublishTimeDescription || '',
-                                publishTime: r.publishTime || '',
-                            })),
+                            photos: [],
+                            reviews: [],
                         };
                     });
                     textPlaces = mapped.filter((p: any) => p !== null);
                 } else {
                     const errText = await res.text();
                     this.logger.error(`Places TextSearch API ${res.status}: ${errText}`);
+                    if (res.status === 403 || res.status === 401 || res.status === 429) {
+                        googleApiFailed = true;
+                    }
                 }
             } catch (err: any) {
                 this.logger.error(`Places TextSearch error: ${err.message}`);
+                googleApiFailed = true;
             }
         }
 
@@ -328,7 +413,7 @@ export class MuseumsService {
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Goog-Api-Key': apiKey,
-                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.photos,places.reviews,places.types',
+                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.types',
                         'Accept-Language': 'id',
                         'Referer': refererHeader,
                     },
@@ -347,6 +432,9 @@ export class MuseumsService {
                     if (!res.ok) {
                         const errText = await res.text();
                         this.logger.error(`Places API ${res.status} [${group.category}]: ${errText}`);
+                        if (res.status === 403 || res.status === 401 || res.status === 429) {
+                            googleApiFailed = true;
+                        }
                         return [];
                     }
                     const data = await res.json() as any;
@@ -395,22 +483,14 @@ export class MuseumsService {
                             rating: p.rating,
                             reviewCount: p.userRatingCount,
                             type: category,
-                            photos: (p.photos || []).slice(0, 8).map((ph: any) =>
-                                `https://places.googleapis.com/v1/${ph.name}/media?key=${apiKey}&maxHeightPx=400&maxWidthPx=400`
-                            ),
-                            reviews: (p.reviews || []).slice(0, 5).map((r: any) => ({
-                                author: r.authorAttribution?.displayName || 'Anonymous',
-                                authorPhoto: r.authorAttribution?.photoUri || '',
-                                rating: r.rating || 0,
-                                text: r.text?.text || '',
-                                time: r.relativePublishTimeDescription || '',
-                                publishTime: r.publishTime || '',
-                            })),
+                            photos: [],
+                            reviews: [],
                         };
                     });
                     return mapped.filter((p: any) => p !== null);
                 }).catch((err: any) => {
                     this.logger.error(`Places fetch error [${group.category}]: ${err.message}`);
+                    googleApiFailed = true;
                     return [] as any[];
                 })
             );
@@ -424,6 +504,12 @@ export class MuseumsService {
             if (ci < centers.length - 1) {
                 await new Promise(resolve => setTimeout(resolve, 120));
             }
+        }
+
+        if (googleApiFailed) {
+            this.logger.warn(`Google Places API request failed (403/401/429). Initiating local PostGIS fallback.`);
+            const localPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, query);
+            return { places: localPlaces, region: regionInfo, quotaExceeded: true };
         }
 
         // === Deduplicate prioritizing specific category (museum > gallery > heritage) ===
@@ -488,16 +574,17 @@ export class MuseumsService {
     }
 
     /**
-     * Detect whether coordinates are in a major city (Kota Besar, 50km) or kabupaten/regency (100km).
-     * Uses Google Geocoding API reverse geocode + comprehensive Indonesian city list.
+     * Detect whether coordinates are in a major city (Kota Besar) or kabupaten/regency.
+     * Uses OpenStreetMap Nominatim (100% FREE, no API key needed) instead of Google Geocoding.
+     * Best Practice: Nominatim has a 1 req/sec rate limit — we respect it via budget system.
      */
-    async detectRegionType(lat: number, lng: number): Promise<{ isMajorCity: boolean; regionName: string; maxRadiusKm: number }> {
-        const apiKey = this.configService.get<string>('googleMaps.apiKey')
-            || process.env.GOOGLE_MAPS_API_KEY
-            || '';
-
-        if (!apiKey) {
-            return { isMajorCity: false, regionName: 'Unknown', maxRadiusKm: 70 };
+    async detectRegionType(lat: number, lng: number, ip?: string): Promise<{ isMajorCity: boolean; regionName: string; maxRadiusKm: number }> {
+        // Budget check (still useful to prevent abuse even though API is free)
+        const clientIp = ip || 'unknown';
+        const budget = this.checkAndIncrementBudget('geo', clientIp);
+        if (!budget.allowed) {
+            this.logger.warn(`[GEOCODE-OSM] Rate limit for IP ${clientIp}: ${budget.reason}. Returning default.`);
+            return { isMajorCity: false, regionName: 'Sekitar', maxRadiusKm: 70 };
         }
 
         const MAJOR_CITIES = [
@@ -515,44 +602,51 @@ export class MuseumsService {
         ];
 
         try {
-            const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}&language=id&result_type=administrative_area_level_2|administrative_area_level_1|locality`;
-            const response = await fetch(geocodeUrl);
+            // OpenStreetMap Nominatim — 100% FREE, no API key required
+            const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&accept-language=id&addressdetails=1`;
+            const response = await fetch(nominatimUrl, {
+                headers: {
+                    'User-Agent': 'SeniQu-WebApp/1.0 (https://seniqu.art)',
+                },
+            });
             const data = await response.json() as any;
 
-            if (data.status === 'OK' && data.results && data.results.length > 0) {
-                for (const result of data.results) {
-                    const formattedAddr = (result.formatted_address || '').toLowerCase();
-                    const components = result.address_components || [];
+            if (data && data.address) {
+                const addr = data.address;
+                // Nominatim returns: city, county, state, country fields
+                const city = (addr.city || addr.town || addr.village || '').toLowerCase();
+                const county = (addr.county || '').toLowerCase();
+                const displayName = (data.display_name || '').toLowerCase();
 
-                    for (const comp of components) {
-                        const longName = (comp.long_name || '').toLowerCase();
-                        const types: string[] = comp.types || [];
-
-                        if (types.includes('administrative_area_level_2') || types.includes('locality')) {
-                            if (longName.startsWith('kota ')) {
-                                const cityName = comp.long_name.replace(/^kota /i, '').trim();
-                                this.logger.log(`Region: Kota ${cityName} → Major city (70km)`);
-                                return { isMajorCity: true, regionName: `Kota ${cityName}`, maxRadiusKm: 70 };
-                            }
-                            if (longName.startsWith('kabupaten ')) {
-                                const regName = comp.long_name.replace(/^kabupaten /i, '').trim();
-                                this.logger.log(`Region: Kabupaten ${regName} → Regency (70km)`);
-                                return { isMajorCity: false, regionName: `Kabupaten ${regName}`, maxRadiusKm: 70 };
-                            }
-                        }
-
-                        if (MAJOR_CITIES.some(city => longName.includes(city) || formattedAddr.includes(city))) {
-                            this.logger.log(`Region: ${comp.long_name} → Known major city (70km)`);
-                            return { isMajorCity: true, regionName: comp.long_name, maxRadiusKm: 70 };
-                        }
-                    }
+                // Check for "Kota" prefix in county (Indonesian administrative structure)
+                if (county.startsWith('kota ')) {
+                    const cityName = addr.county.replace(/^kota /i, '').trim();
+                    this.logger.log(`[OSM] Region: Kota ${cityName} → Major city (70km)`);
+                    return { isMajorCity: true, regionName: `Kota ${cityName}`, maxRadiusKm: 70 };
                 }
+                if (county.startsWith('kabupaten ')) {
+                    const regName = addr.county.replace(/^kabupaten /i, '').trim();
+                    this.logger.log(`[OSM] Region: Kabupaten ${regName} → Regency (70km)`);
+                    return { isMajorCity: false, regionName: `Kabupaten ${regName}`, maxRadiusKm: 70 };
+                }
+
+                // Check against known major cities list
+                if (MAJOR_CITIES.some(c => city.includes(c) || county.includes(c) || displayName.includes(c))) {
+                    const name = addr.city || addr.town || addr.county || 'Unknown';
+                    this.logger.log(`[OSM] Region: ${name} → Known major city (70km)`);
+                    return { isMajorCity: true, regionName: name, maxRadiusKm: 70 };
+                }
+
+                // Return county or city name as region
+                const regionName = addr.county || addr.city || addr.town || addr.state || 'Daerah';
+                this.logger.log(`[OSM] Region: ${regionName} → default (70km)`);
+                return { isMajorCity: false, regionName, maxRadiusKm: 70 };
             }
 
-            this.logger.log(`Region: No major city match → default regency (70km)`);
+            this.logger.log(`[OSM] No address data → default (70km)`);
             return { isMajorCity: false, regionName: 'Daerah', maxRadiusKm: 70 };
         } catch (error: any) {
-            this.logger.error(`Region detection failed: ${error.message}`);
+            this.logger.error(`[OSM] Region detection failed: ${error.message}`);
             return { isMajorCity: false, regionName: 'Unknown', maxRadiusKm: 70 };
         }
     }
@@ -717,105 +811,58 @@ export class MuseumsService {
     }
 
     /**
-     * Get routing directions from Google Maps Routes API (New)
+     * Get routing directions from OSRM (Open Source Routing Machine) — 100% FREE
+     * Replaces Google Routes API to eliminate routing costs entirely.
+     * OSRM supports: driving, walking, cycling (no transit — fallback to driving for transit)
      */
-    async getRoute(originLat: number, originLng: number, destLat: number, destLng: number, mode: string) {
-        const apiKey = this.configService.get<string>('googleMaps.apiKey')
-            || process.env.GOOGLE_MAPS_API_KEY
-            || '';
-        const referer = this.configService.get<string>('FRONTEND_URL')
-            || process.env.FRONTEND_URL
-            || 'http://localhost:5173';
-
-        if (!apiKey) {
-            this.logger.warn('GOOGLE_MAPS_API_KEY is not configured in backend .env');
-            throw new NotFoundException('Google Maps API key is not configured');
+    async getRoute(originLat: number, originLng: number, destLat: number, destLng: number, mode: string, ip?: string) {
+        // Budget check (still useful to prevent abuse even though OSRM is free)
+        const clientIp = ip || 'unknown';
+        const budget = this.checkAndIncrementBudget('route', clientIp);
+        if (!budget.allowed) {
+            this.logger.warn(`[ROUTE-OSRM] Rate limit for IP ${clientIp}: ${budget.reason}`);
+            throw new ForbiddenException('Batas harian rute terlampaui. Gunakan tombol "Info Lengkap" untuk navigasi di Google Maps.');
         }
 
-        // Map mode to Google Routes API TravelMode
-        // Options: DRIVE, WALK, BICYCLE, TRANSIT
-        let routeMode = 'DRIVE';
+        // Map mode to OSRM profile: car, foot, bike
+        let osrmProfile = 'car';
         const lowerMode = mode.toLowerCase();
-        if (lowerMode === 'walking' || lowerMode === 'walk') {
-            routeMode = 'WALK';
-        } else if (lowerMode === 'bicycling' || lowerMode === 'bicycle' || lowerMode === 'cycle') {
-            routeMode = 'BICYCLE';
-        } else if (lowerMode === 'transit') {
-            routeMode = 'TRANSIT';
+        if (lowerMode === 'walking' || lowerMode === 'walk' || lowerMode === 'foot') {
+            osrmProfile = 'foot';
+        } else if (lowerMode === 'bicycling' || lowerMode === 'bicycle' || lowerMode === 'bike' || lowerMode === 'cycle') {
+            osrmProfile = 'bike';
         }
+        // transit not supported by OSRM — fallback to car
 
-        const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
+        // OSRM public demo server (production: self-host for reliability)
+        const url = `https://router.project-osrm.org/route/v1/${osrmProfile}/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=polyline&steps=false`;
 
         try {
             const response = await fetch(url, {
-                method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-Goog-Api-Key': apiKey,
-                    'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs',
-                    'Referer': referer.endsWith('/') ? referer : `${referer}/`,
+                    'User-Agent': 'SeniQu-WebApp/1.0 (https://seniqu.art)',
                 },
-                body: JSON.stringify({
-                    origin: {
-                        location: {
-                            latLng: {
-                                latitude: originLat,
-                                longitude: originLng
-                            }
-                        }
-                    },
-                    destination: {
-                        location: {
-                            latLng: {
-                                latitude: destLat,
-                                longitude: destLng
-                            }
-                        }
-                    },
-                    travelMode: routeMode,
-                    languageCode: 'id-ID',
-                    units: 'METRIC'
-                })
             });
 
-            const responseText = await response.text();
-            this.logger.log(`Google Routes API response status: ${response.status}, length: ${responseText.length} bytes`);
-
-            let data: any = null;
-            try {
-                if (responseText) {
-                    data = JSON.parse(responseText);
-                }
-            } catch (e: any) {
-                this.logger.error(`Failed to parse Routes API response: ${responseText}`);
+            if (!response.ok) {
+                this.logger.error(`[OSRM] Route API error: ${response.status}`);
                 return {
                     status: 'ERROR',
-                    errorMessage: `Failed to parse response: ${e.message}. Status code: ${response.status}`,
+                    errorMessage: `OSRM returned status ${response.status}`,
                     routes: []
                 };
             }
 
-            if (!response.ok || (data && data.error)) {
-                const errMsg = data?.error?.message || responseText || 'Routes API request failed';
-                this.logger.error(`Google Routes API error: ${response.status} - ${errMsg}`);
-                return {
-                    status: 'ERROR',
-                    errorMessage: errMsg,
-                    routes: []
-                };
-            }
+            const data = await response.json() as any;
 
-            if (data.routes && data.routes.length > 0) {
+            if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
                 const route = data.routes[0];
-                const distanceKm = (route.distanceMeters || 0) / 1000;
-                const distanceText = distanceKm < 1 
-                    ? `${Math.round(route.distanceMeters || 0)} m` 
+                const distanceKm = (route.distance || 0) / 1000;
+                const distanceText = distanceKm < 1
+                    ? `${Math.round(route.distance || 0)} m`
                     : `${distanceKm.toFixed(1)} km`;
 
-                let durationSecs = 0;
-                if (route.duration) {
-                    durationSecs = parseInt(route.duration.replace('s', ''), 10) || 0;
-                }
+                const durationSecs = route.duration || 0;
                 const durationMins = Math.round(durationSecs / 60);
                 const durationText = durationMins < 60
                     ? `${durationMins} menit`
@@ -825,19 +872,19 @@ export class MuseumsService {
                     status: 'OK',
                     distanceText,
                     durationText,
-                    polyline: route.polyline?.encodedPolyline || '',
-                    // SECURITY: Do not expose raw Google API response to client
+                    polyline: route.geometry || '',
+                    // OSRM returns Google-compatible encoded polyline by default
                 };
             }
 
             return {
                 status: 'ZERO_RESULTS',
-                errorMessage: 'No routes found',
+                errorMessage: data.message || 'No routes found',
                 routes: []
             };
 
         } catch (error: any) {
-            this.logger.error(`Failed to fetch routes: ${error.message}`);
+            this.logger.error(`[OSRM] Failed to fetch routes: ${error.message}`);
             return {
                 status: 'ERROR',
                 errorMessage: error.message,
@@ -851,13 +898,13 @@ export class MuseumsService {
      * Reads from registered config with process.env fallback
      */
     getMapsConfig() {
-        const apiKey = this.configService.get<string>('googleMaps.apiKey')
-            || process.env.GOOGLE_MAPS_API_KEY
-            || ''
+        const apiKey = this.configService.get<string>('googleMaps.clientApiKey')
+            || process.env.FRONTEND_GOOGLE_MAPS_KEY
+            || '';
         if (!apiKey) {
-            this.logger.warn('GOOGLE_MAPS_API_KEY is not configured in backend .env')
+            this.logger.warn('Client restricted Google Maps key is not configured in backend .env');
         }
-        return { apiKey }
+        return { apiKey };
     }
 
     /**
@@ -1057,6 +1104,95 @@ export class MuseumsService {
         }
 
         return { data }
+    }
+
+    /**
+     * Fetch detailed Google Place details on demand (Preferred Tier $25/1000, only on click)
+     */
+    async getPlaceDetails(placeId: string, ip?: string) {
+        const cached = this.placeDetailsCache.get(placeId);
+        if (cached && Date.now() < cached.expiresAt) {
+            this.logger.log(`Place details cache HIT: ${placeId}`);
+            return cached.data;
+        }
+
+        // Budget check
+        const clientIp = ip || 'unknown';
+        const budget = this.checkAndIncrementBudget('details', clientIp);
+        if (!budget.allowed) {
+            this.logger.warn(`[DETAILS] Budget exceeded for IP ${clientIp}: ${budget.reason}. Returning fallback detail sheet.`);
+            return {
+                id: placeId,
+                name: 'Detail Limit Terlampaui',
+                address: 'Batas harian pencarian detail Google Maps untuk hari ini telah tercapai.',
+                latitude: undefined,
+                longitude: undefined,
+                rating: 5.0,
+                reviewCount: 0,
+                photos: [],
+                reviews: [],
+                detailsLoaded: true,
+                quotaExceeded: true
+            };
+        }
+
+        const apiKey = this.configService.get<string>('googleMaps.apiKey')
+            || process.env.GOOGLE_MAPS_KEY || '';
+        const referer = this.configService.get<string>('FRONTEND_URL')
+            || process.env.FRONTEND_URL || 'http://localhost:5173';
+
+        if (!apiKey) {
+            throw new NotFoundException('Google Maps API key is not configured');
+        }
+
+        const refererHeader = referer.endsWith('/') ? referer : `${referer}/`;
+        const url = `https://places.googleapis.com/v1/places/${placeId}`;
+
+        try {
+            const res = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Goog-Api-Key': apiKey,
+                    // Request ONLY basic/advanced fields (NO photos or reviews to avoid Preferred tier costs)
+                    'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,rating,userRatingCount,types',
+                    'Accept-Language': 'id',
+                    'Referer': refererHeader,
+                },
+            });
+
+            if (!res.ok) {
+                const errText = await res.text();
+                this.logger.error(`Places Details API ${res.status}: ${errText}`);
+                throw new Error(`Failed to fetch place details: ${res.status}`);
+            }
+
+            const p = await res.json() as any;
+
+            const result = {
+                id: p.id,
+                name: p.displayName?.text || '',
+                address: p.formattedAddress || '',
+                latitude: p.location?.latitude,
+                longitude: p.location?.longitude,
+                rating: p.rating,
+                reviewCount: p.userRatingCount,
+                photos: [],
+                reviews: [],
+                detailsLoaded: true,
+            };
+
+            // Cache for 15 minutes (details change rarely)
+            this.placeDetailsCache.set(placeId, {
+                data: result,
+                expiresAt: Date.now() + 15 * 60 * 1000,
+            });
+
+            return result;
+        } catch (error) {
+            this.logger.error(`Error in getPlaceDetails for ${placeId}: ${error.message}`);
+            throw new NotFoundException('Failed to retrieve place details');
+        }
     }
 
     /**

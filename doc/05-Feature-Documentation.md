@@ -27,13 +27,20 @@ Accessible to all visitors.
 - **Unified Category Tabs**: Synchronized filter tabs with smooth Framer Motion `layoutId` active-indicator transitions.
 
 ### 1.4 Dynamic Geolocation & Interactive Routing (Nearby Module)
-- **Geocoding & Discovery**: Geolocation-enabled dashboard fetching nearby heritage hotspots, museums, and galleries within 15km using custom backend APIs.
-- **Classic Blue Dot & Pulse Radar**: Renders user location dynamically using a vector-mapped Google Maps blue dot with a high-fidelity white border.
+- **Hybrid Mapping Architecture**: Implemented a multi-provider hybrid map system rendering OpenStreetMap (OSM) via Leaflet.js as the primary default and Google Maps as an optional togglable provider.
+  - **Lazy Script Loading**: Google Maps JavaScript SDK is only downloaded on-demand when the user activates the Google Maps provider toggle.
+  - **Universal Default**: Guest and authenticated users default to Leaflet OSM maps, eliminating map load charges for general browsing.
+- **Geocoding & Discovery**: Geolocation-enabled dashboard fetching nearby heritage hotspots, museums, and galleries within 15km using custom backend APIs. Defaults to free local PostGIS queries (`dataSource: 'local'`).
+- **Classic Blue Dot & Pulse Radar**: Renders user location dynamically.
   - **Silky Smooth Radar**: Circle overlay pulses continuously up to a wide radius of 750 meters with custom-fade opacity calculations and a 12ms tick rate, yielding 83fps.
 - **Dynamic Route Directions**: Provides real-time directions from the user's location to the selected heritage site.
   - **Secure Proxy Architecture**: Bypasses client-side API key exposure by sending coordinate queries to backend proxy routes.
-  - **Polyline Decoding & Rendering**: Decodes Google's Route polyline client-side and plots a premium blue navigation path (`#4285F4`, width 5) directly onto the Google Map.
+  - **Polyline Decoding & Rendering**: Decodes Google's Route polyline client-side and plots a premium blue navigation path (`#4285F4`, width 5) on the active map.
   - **Auto-Viewport Fit**: Automatically calls map `fitBounds` with padding to dynamically frame both the user's location and the destination.
+- **Google Maps API Cost Mitigation**:
+  - **FieldMask Downgrade**: Strips photos and reviews from search queries to avoid Preferred pricing ($32.00/1k requests).
+  - **Single Center Lookup**: Restructures overlapping grids into 1 center query to achieve a 7x call volume reduction.
+  - **On-Demand Details Fetching**: Lazy-loads high-cost photos and reviews through `/place-details/:placeId` only on explicit card clicks.
 - **Consolidated Search Header**: Removed redundant floating navigation triggers (floating compass/map buttons) and embedded the Map Switcher directly into the search bar for an ultra-clean vertical height.
 - **Contrast-Preserving Filter Chips**: Fully custom-tailored active chips in light mode (e.g. "Heritage", "Museum") maintaining pure white text (`#fff !important`) even on hover, overcoming standard default overrides.
 

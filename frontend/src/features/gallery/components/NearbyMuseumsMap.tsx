@@ -93,8 +93,8 @@ export function NearbyMuseumsMap() {
     const [locationError, setLocationError] = useState<string>('');
     const [map, setMap] = useState<google.maps.Map | null>(null);
 
-    // Check for API Key
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+    // SECURITY: Only use VITE_GOOGLE_MAPS_KEY (Maps JavaScript API, restricted by HTTP referrer)
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY || '';
 
     const { isLoaded, loadError } = useJsApiLoader({
         id: 'google-map-script',
@@ -147,7 +147,7 @@ export function NearbyMuseumsMap() {
                     <MapPin className="w-12 h-12 text-theme-muted mb-4" />
                     <h3 className="text-lg font-medium text-theme-text mb-2">Map Unavailable</h3>
                     <p className="text-theme-muted max-w-sm">
-                        Google Maps API key is missing. Please configure VITE_GOOGLE_MAPS_API_KEY in your environment.
+                        Google Maps API key is missing. Please configure VITE_GOOGLE_MAPS_KEY in your environment.
                     </p>
                 </div>
             );
@@ -196,8 +196,9 @@ export function NearbyMuseumsMap() {
 
                 {/* Museum Markers */}
                 {map && museums?.map((museum) => {
-                    const lat = museum.coordinates?.lat ?? museum.coordinates?.latitude;
-                    const lng = museum.coordinates?.lng ?? museum.coordinates?.longitude;
+                    const coords = museum.coordinates as any;
+                    const lat = coords?.lat ?? coords?.latitude ?? (museum as any).latitude;
+                    const lng = coords?.lng ?? coords?.longitude ?? (museum as any).longitude;
                     if (typeof lat !== 'number' || typeof lng !== 'number') return null;
                     return (
                         <AdvancedMarker

@@ -1059,3 +1059,137 @@
     bottom: 55%;
   }
 }
+
+/* ================================================
+   § 15. LEAFLET HYBRID MAP CUSTOM STYLES
+   ================================================ */
+
+.leaflet-container {
+  font-family: 'Inter', sans-serif !important;
+}
+
+/* Leaflet Custom Blue Dot Styling */
+.leaflet-blue-dot {
+  position: relative;
+  width: 22px;
+  height: 22px;
+}
+
+.leaflet-blue-dot-halo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background-color: rgba(59, 130, 246, 0.2);
+  animation: leaflet-blue-dot-pulse 2s ease-out infinite;
+}
+
+.leaflet-blue-dot-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: #FFFFFF;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.leaflet-blue-dot-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #3B82F6;
+}
+
+@keyframes leaflet-blue-dot-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.8);
+    opacity: 0;
+  }
+}
+
+/* Leaflet Custom Pin Styling */
+.leaflet-gold-pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.leaflet-gold-pin-marker {
+  width: 32px;
+  height: 32px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #3B82F6, #1D4ED8);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+  transition: all 0.3s ease;
+  font-size: 14px;
+}
+
+.leaflet-gold-pin-marker > * {
+  transform: rotate(45deg);
+}
+
+/* Active State */
+.leaflet-gold-pin--active .leaflet-gold-pin-marker {
+  background: linear-gradient(135deg, #C9A84C, #A68A3A);
+  box-shadow: 0 4px 16px rgba(201, 168, 76, 0.45);
+  transform: rotate(-45deg) scale(1.15);
+}
+
+/* Type variations matching standard design */
+.leaflet-gold-pin--museum .leaflet-gold-pin-marker {
+  background: linear-gradient(135deg, #C9A84C, #A68A3A);
+}
+
+.leaflet-gold-pin--gallery .leaflet-gold-pin-marker {
+  background: linear-gradient(135deg, #EC4899, #D946EF);
+}
+
+.leaflet-gold-pin--heritage .leaflet-gold-pin-marker {
+  background: linear-gradient(135deg, #10B981, #059669);
+}
+
+.leaflet-popup-content-wrapper {
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 20px var(--shadow-color) !important;
+}
+
+.leaflet-popup-tip {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.nbm-hybrid-toggles {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0;
+  width: 100%;
+}
+
+.nbm-hybrid-toggles::-webkit-scrollbar {
+  display: none;
+}
+

@@ -52,10 +52,21 @@ import {
     ArrowUpDown,
 } from 'lucide-react';
 import { useTheme } from '../../../../hooks/useTheme';
+import { useAuthStore } from '../../../../stores/useAuthStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GoogleMap, useJsApiLoader, CircleF, InfoWindowF, PolylineF } from '@react-google-maps/api';
 import { museumService } from '../../../../services/museumService';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import './PublicNearbyPage.css';
+
+// Fix Leaflet default marker icon issue in Vite
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
 // ============================================
 // TYPES
@@ -70,6 +81,7 @@ interface UserLocation {
 }
 
 const DEFAULT_CENTER = { lat: -6.2088, lng: 106.8456 };
+
 const MAP_LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"];
 
 
@@ -428,6 +440,18 @@ function MuseumDetailSheet({
                     <Ticket className="w-4 h-4" />
                     <span>Buy Ticket</span>
                 </button>
+                {museum.id && typeof museum.id === 'string' && !museum.id.includes('-') && (
+                    <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(museum.name)}&query_place_id=${museum.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="pnb-action-btn pnb-action-btn--secondary flex items-center justify-center gap-1.5"
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        <ExternalLink className="w-4 h-4" />
+                        <span>Info Lengkap</span>
+                    </a>
+                )}
             </div>
 
             {/* 360° Preview */}
@@ -885,11 +909,18 @@ function MuseumListCard({
 // MAIN COMPONENT
 // ============================================
 
-export default function PublicNearbyPage() {
+export default function PublicNearbyPage({ isDashboard = false }: { isDashboard?: boolean }) {
+    const { isAuthenticated } = useAuthStore();
     const [mapsApiKey, setMapsApiKey] = useState<string | null>(null);
     const [keyLoading, setKeyLoading] = useState(true);
 
     useEffect(() => {
+        if (!isAuthenticated && !isDashboard) {
+            setMapsApiKey('');
+            setKeyLoading(false);
+            return;
+        }
+
         museumService.getMapsApiKey()
             .then(key => {
                 setMapsApiKey(key);
@@ -899,22 +930,188 @@ export default function PublicNearbyPage() {
                 setMapsApiKey('');
                 setKeyLoading(false);
             });
-    }, []);
+    }, [isAuthenticated, isDashboard]);
 
     if (keyLoading) {
         return (
-            <div className="pnb-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+            <div className={`pnb-page ${isDashboard ? 'pnb-page--dashboard' : ''}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
                 <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#D4AF37' }} />
             </div>
         );
     }
 
-    return <NearbyPageInner apiKey={mapsApiKey || ''} />;
+    return <NearbyPageInner apiKey={mapsApiKey || ''} isDashboard={isDashboard} />;
 }
 
-function NearbyPageInner({ apiKey }: { apiKey: string }) {
-    useTheme();
+interface GoogleMapViewContainerProps {
+    apiKey: string;
+    mapCenter: { lat: number; lng: number };
+    onMapLoad: (map: google.maps.Map) => void;
+    onMapUnmount: () => void;
+    handleMapIdle: () => void;
+    userLocation: UserLocation | null;
+    radarRadius: number;
+    sortedPlaces: any[];
+    showRouteLine: boolean;
+    selectedMuseum: any | null;
+    selectPlace: (museum: any | null, isUserAction?: boolean) => void;
+    setSheetExpanded: (val: boolean) => void;
+    routePath: { lat: number; lng: number }[];
+    mapInstance: google.maps.Map | null;
+}
+
+function GoogleMapViewContainer({
+    apiKey,
+    mapCenter,
+    onMapLoad,
+    onMapUnmount,
+    handleMapIdle,
+    userLocation,
+    radarRadius,
+    sortedPlaces,
+    showRouteLine,
+    selectedMuseum,
+    selectPlace,
+    setSheetExpanded,
+    routePath,
+    mapInstance,
+}: GoogleMapViewContainerProps) {
+    const { isLoaded, loadError } = useJsApiLoader({
+        id: 'google-map-script',
+        googleMapsApiKey: apiKey,
+        libraries: MAP_LIBRARIES,
+    });
+
+    if (loadError) {
+        return (
+            <div className="pnb-map-fallback flex flex-col items-center justify-center p-6 text-center h-full bg-slate-900 text-white">
+                <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Failed to load Map</h3>
+                <p className="text-slate-400 text-sm">{loadError.message}</p>
+            </div>
+        );
+    }
+
+    if (!isLoaded) {
+        return (
+            <div className="pnb-map-fallback flex items-center justify-center h-full bg-slate-900 text-white">
+                <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+            </div>
+        );
+    }
+
+    return (
+        <GoogleMap
+            mapContainerClassName="w-full h-full"
+            center={mapCenter}
+            zoom={12}
+            onLoad={onMapLoad}
+            onUnmount={onMapUnmount}
+            onIdle={handleMapIdle}
+            options={{
+                mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "DEMO_MAP_ID",
+                disableDefaultUI: true,
+            }}
+        >
+            {/* User Location Marker & Pulser Halo */}
+            {userLocation && (
+                <>
+                    {/* Google Maps AdvancedMarker Blue Dot */}
+                    {mapInstance && (
+                        <AdvancedMarker
+                            map={mapInstance}
+                            position={{ lat: userLocation.latitude, lng: userLocation.longitude }}
+                            title="Lokasi Anda"
+                            isUserLocation
+                        />
+                    )}
+                    {/* High-Fidelity Expanding Radar Pulsing Halo */}
+                    <CircleF
+                        center={{ lat: userLocation.latitude, lng: userLocation.longitude }}
+                        radius={radarRadius}
+                        options={{
+                            fillColor: '#3B82F6',
+                            fillOpacity: Math.max(0.003, 0.22 * (1 - (radarRadius - 40) / 710)),
+                            strokeColor: '#3B82F6',
+                            strokeOpacity: Math.max(0.003, 0.48 * (1 - (radarRadius - 40) / 710)),
+                            strokeWeight: 1.1,
+                            clickable: false,
+                        }}
+                    />
+                </>
+            )}
+
+            {/* Place Markers (AdvancedMarkerElement — recommended) */}
+            {mapInstance && sortedPlaces
+                .filter((museum: any) => !showRouteLine || selectedMuseum?.id === museum.id)
+                .map((museum: any) => {
+                    const mLat = museum.coordinates?.lat ?? museum.latitude;
+                    const mLng = museum.coordinates?.lng ?? museum.longitude;
+                    if (typeof mLat !== 'number' || typeof mLng !== 'number') return null;
+                    const isActive = selectedMuseum?.id === museum.id;
+
+                    return (
+                        <AdvancedMarker
+                            key={museum.id}
+                            map={mapInstance}
+                            position={{ lat: mLat, lng: mLng }}
+                            title={museum.name}
+                            onClick={() => {
+                                selectPlace(museum, true);
+                                setSheetExpanded(false);
+                            }}
+                            isActive={isActive}
+                            placeType={museum.type}
+                        />
+                    );
+                })}
+
+            {/* InfoWindow tooltip for selected place */}
+            {selectedMuseum && (() => {
+                const sLat = selectedMuseum.coordinates?.lat ?? selectedMuseum.latitude;
+                const sLng = selectedMuseum.coordinates?.lng ?? selectedMuseum.longitude;
+                if (typeof sLat !== 'number' || typeof sLng !== 'number') return null;
+                return (
+                    <InfoWindowF
+                        position={{ lat: sLat, lng: sLng }}
+                        options={{
+                            pixelOffset: new google.maps.Size(0, -40),
+                            disableAutoPan: true,
+                            maxWidth: 220,
+                        }}
+                        onCloseClick={() => {
+                            selectPlace(null);
+                        }}
+                    >
+                        <div className="pnb-info-window">
+                            <strong>{selectedMuseum.name}</strong>
+                            <span className="pnb-info-window__type">{selectedMuseum.type === 'museum' ? '🏛️ Museum' : selectedMuseum.type === 'gallery' ? '🎨 Gallery' : '🏯 Heritage'}</span>
+                        </div>
+                    </InfoWindowF>
+                );
+            })()}
+
+            {showRouteLine && routePath.length > 0 && (
+                <PolylineF
+                    path={routePath}
+                    options={{
+                        strokeColor: '#4285F4',
+                        strokeOpacity: 0.9,
+                        strokeWeight: 5,
+                    }}
+                />
+            )}
+        </GoogleMap>
+    );
+}
+
+function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDashboard?: boolean }) {
+    const { theme } = useTheme();
+    const { isAuthenticated } = useAuthStore();
     const [viewMode, setViewMode] = useState<ViewMode>('map');
+    const [mapProvider, setMapProvider] = useState<'openstreetmap' | 'google'>('openstreetmap');
+    const dataSource = 'google';
+
     const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
     const [isLocating, setIsLocating] = useState(false);
@@ -947,7 +1144,6 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     
     const [places, setPlaces] = useState<any[]>([]);
     const userSelectedRef = useRef(false);
-    const prevSearchQueryRef = useRef('');
     const fetchInFlightRef = useRef(false);
     
     // Radar pulse animation for User Location Blue Dot
@@ -962,8 +1158,10 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
         }, 12);
         return () => clearInterval(interval);
     }, [userLocation]);
+
     const [isPlacesLoading, setIsPlacesLoading] = useState(false);
     const [hasInitialSearched, setHasInitialSearched] = useState(false);
+    const [quotaExceeded, setQuotaExceeded] = useState(false);
     // SECURITY: Track geolocation readiness to prevent race condition (no premature Jakarta fallback)
     const [locationReady, setLocationReady] = useState(false);
     // Use state (not ref) for map center so GoogleMap re-renders when location changes
@@ -979,6 +1177,14 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     } | null>(null);
     const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
 
+    // Refs for Leaflet Map and Overlay elements
+    const mapContainerRef = useRef<HTMLDivElement | null>(null);
+    const leafletMapRef = useRef<L.Map | null>(null);
+    const userMarkerRef = useRef<L.Marker | null>(null);
+    const userAccuracyCircleRef = useRef<L.Circle | null>(null);
+    const markersRef = useRef<globalThis.Map<string, L.Marker>>(new globalThis.Map());
+    const routePolylineRef = useRef<L.Polyline | null>(null);
+
     const handleTravelModeChange = useCallback((newMode: google.maps.TravelMode) => {
         setTravelMode(newMode);
     }, []);
@@ -990,12 +1196,44 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
         setRouteDuration(null);
     }, []);
 
-    const selectPlace = useCallback((museum: any | null, isUserAction = false) => {
+    const selectPlace = useCallback(async (museum: any | null, isUserAction = false) => {
         if (isUserAction) {
             userSelectedRef.current = true;
         }
         setSelectedMuseum(museum);
         clearRoute();
+
+        if (museum) {
+            // Lazy-load details (photos, reviews) for Google Places if not loaded yet
+            const isGooglePlace = museum.id && typeof museum.id === 'string' && !museum.id.includes('-');
+            const hasDetailsLoaded = museum.detailsLoaded;
+            
+            if (isGooglePlace && !hasDetailsLoaded) {
+                try {
+                    setIsRouteLoading(true);
+                    const details = await museumService.getPlaceDetails(museum.id);
+                    if (details) {
+                        setSelectedMuseum((prev: any) => {
+                            if (prev && prev.id === museum.id) {
+                                return {
+                                    ...prev,
+                                    photos: details.photos || [],
+                                    previewImages: details.photos || [],
+                                    coverImageUrl: details.photos?.[0] || prev.coverImageUrl,
+                                    reviews: details.reviews || [],
+                                    detailsLoaded: true,
+                                };
+                            }
+                            return prev;
+                        });
+                    }
+                } catch (err) {
+                    console.error("Failed to lazy load place details:", err);
+                } finally {
+                    setIsRouteLoading(false);
+                }
+            }
+        }
     }, [clearRoute]);
 
     useEffect(() => {
@@ -1135,13 +1373,161 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     const watchIdRef = useRef<number | null>(null);
     const mapRef = useRef<google.maps.Map | null>(null);
 
-    const { isLoaded, loadError } = useJsApiLoader({
-        id: 'google-map-script',
-        googleMapsApiKey: apiKey,
-        libraries: MAP_LIBRARIES,
-    });
+    // Leaflet map initialization & cleanup
+    useEffect(() => {
+        if (mapProvider !== 'openstreetmap') return;
+        if (!mapContainerRef.current) return;
+        if (leafletMapRef.current) return;
 
+        const map = L.map(mapContainerRef.current, {
+            zoomControl: false,
+            attributionControl: false,
+        }).setView([mapCenter.lat, mapCenter.lng], 13);
 
+        const tileUrl = theme === 'dark'
+            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+            : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+
+        L.tileLayer(tileUrl, {
+            maxZoom: 20,
+        }).addTo(map);
+
+        leafletMapRef.current = map;
+
+        setTimeout(() => {
+            map.invalidateSize();
+        }, 200);
+
+        return () => {
+            if (leafletMapRef.current) {
+                leafletMapRef.current.remove();
+                leafletMapRef.current = null;
+            }
+        };
+    }, [mapProvider, theme]);
+
+    // Update center of Leaflet map
+    useEffect(() => {
+        if (mapProvider === 'openstreetmap' && leafletMapRef.current) {
+            leafletMapRef.current.setView([mapCenter.lat, mapCenter.lng]);
+        }
+    }, [mapCenter, mapProvider]);
+
+    // Handle user location blue dot and halo on Leaflet
+    useEffect(() => {
+        const map = leafletMapRef.current;
+        if (!map || !userLocation || mapProvider !== 'openstreetmap') return;
+
+        const latLng = L.latLng(userLocation.latitude, userLocation.longitude);
+
+        if (userMarkerRef.current) {
+            userMarkerRef.current.setLatLng(latLng);
+        } else {
+            const blueDotIcon = L.divIcon({
+                html: `<div class="leaflet-blue-dot">
+                    <div class="leaflet-blue-dot-halo"></div>
+                    <div class="leaflet-blue-dot-ring"></div>
+                    <div class="leaflet-blue-dot-core"></div>
+                </div>`,
+                className: 'custom-user-location-icon',
+                iconSize: [22, 22],
+                iconAnchor: [11, 11],
+            });
+            userMarkerRef.current = L.marker(latLng, { icon: blueDotIcon, zIndexOffset: 1000 }).addTo(map);
+        }
+
+        if (userAccuracyCircleRef.current) {
+            userAccuracyCircleRef.current.setLatLng(latLng);
+            userAccuracyCircleRef.current.setRadius(radarRadius);
+        } else {
+            userAccuracyCircleRef.current = L.circle(latLng, {
+                radius: radarRadius,
+                fillColor: '#3B82F6',
+                fillOpacity: Math.max(0.003, 0.22 * (1 - (radarRadius - 40) / 710)),
+                color: '#3B82F6',
+                opacity: Math.max(0.003, 0.48 * (1 - (radarRadius - 40) / 710)),
+                weight: 1,
+                interactive: false,
+            }).addTo(map);
+        }
+    }, [userLocation, radarRadius, mapProvider]);
+
+    // Sync markers on Leaflet
+    useEffect(() => {
+        const map = leafletMapRef.current;
+        if (!map || mapProvider !== 'openstreetmap') return;
+
+        markersRef.current.forEach(m => m.remove());
+        markersRef.current.clear();
+
+        const visiblePlaces = sortedPlaces.filter((museum: any) => !showRouteLine || selectedMuseum?.id === museum.id);
+
+        visiblePlaces.forEach((museum: any) => {
+            const mLat = museum.coordinates?.lat ?? museum.latitude;
+            const mLng = museum.coordinates?.lng ?? museum.longitude;
+            if (typeof mLat !== 'number' || typeof mLng !== 'number') return;
+
+            const isActive = selectedMuseum?.id === museum.id;
+            const typeClass = museum.type === 'museum' ? 'leaflet-gold-pin--museum' : museum.type === 'gallery' ? 'leaflet-gold-pin--gallery' : 'leaflet-gold-pin--heritage';
+
+            const pinIcon = L.divIcon({
+                html: `<div class="leaflet-gold-pin ${isActive ? 'leaflet-gold-pin--active' : ''} ${typeClass}">
+                    <div class="leaflet-gold-pin-marker">
+                        <span>${museum.type === 'museum' ? '🏛️' : museum.type === 'gallery' ? '🎨' : '🏯'}</span>
+                    </div>
+                </div>`,
+                className: `custom-pin-icon-${museum.id}`,
+                iconSize: [32, 32],
+                iconAnchor: [16, 16],
+            });
+
+            const marker = L.marker([mLat, mLng], { icon: pinIcon })
+                .addTo(map)
+                .on('click', () => {
+                    selectPlace(museum, true);
+                    setSheetExpanded(false);
+                });
+
+            marker.bindTooltip(`
+                <div style="font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; padding: 2px;">
+                    ${museum.name}
+                    <div style="font-size: 10px; font-weight: normal; opacity: 0.7; margin-top: 2px;">
+                        ${museum.type === 'museum' ? '🏛️ Museum' : museum.type === 'gallery' ? '🎨 Gallery' : '🏯 Heritage'}
+                    </div>
+                </div>
+            `, {
+                direction: 'top',
+                offset: [0, -10],
+                opacity: 0.95
+            });
+
+            markersRef.current.set(museum.id, marker);
+        });
+    }, [sortedPlaces, selectedMuseum?.id, showRouteLine, mapProvider, selectPlace]);
+
+    // Handle polyline for directions route on Leaflet
+    useEffect(() => {
+        const map = leafletMapRef.current;
+        if (!map || mapProvider !== 'openstreetmap') return;
+
+        if (routePolylineRef.current) {
+            routePolylineRef.current.remove();
+            routePolylineRef.current = null;
+        }
+
+        if (showRouteLine && routePath.length > 0) {
+            const latLngs = routePath.map(p => [p.lat, p.lng] as [number, number]);
+            routePolylineRef.current = L.polyline(latLngs, {
+                color: '#4285F4',
+                weight: 5,
+                opacity: 0.9,
+            }).addTo(map);
+
+            map.fitBounds(routePolylineRef.current.getBounds(), {
+                padding: [50, 50]
+            });
+        }
+    }, [routePath, showRouteLine, mapProvider]);
 
     // Map Load Handlers
     const onMapLoad = useCallback((map: google.maps.Map) => {
@@ -1155,13 +1541,17 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     }, []);
 
     const handleZoomIn = () => {
-        if (mapRef.current) {
+        if (mapProvider === 'openstreetmap') {
+            if (leafletMapRef.current) leafletMapRef.current.zoomIn();
+        } else if (mapRef.current) {
             mapRef.current.setZoom((mapRef.current.getZoom() || 12) + 1);
         }
     };
 
     const handleZoomOut = () => {
-        if (mapRef.current) {
+        if (mapProvider === 'openstreetmap') {
+            if (leafletMapRef.current) leafletMapRef.current.zoomOut();
+        } else if (mapRef.current) {
             mapRef.current.setZoom((mapRef.current.getZoom() || 12) - 1);
         }
     };
@@ -1171,18 +1561,75 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     // NOT for filter chip changes (those are handled client-side via sortedPlaces)
     const searchNearbyPlaces = useCallback((
         center: { lat: number; lng: number },
-        _query: string
+        _query: string,
+        provider: 'local' | 'google' = dataSource
     ) => {
-        if (!isLoaded) return;
-        // Prevent duplicate in-flight requests
         if (fetchInFlightRef.current) return;
         fetchInFlightRef.current = true;
-
         setIsPlacesLoading(true);
 
-        // Fetch all categories from backend (max 70km)
+        if (provider === 'local') {
+            setQuotaExceeded(false);
+            museumService.getNearbyMuseums({
+                lat: center.lat,
+                lng: center.lng,
+                radius: 70
+            })
+            .then((localMuseums) => {
+                const mapped = (localMuseums || []).map((m: any) => {
+                    const lat = m.coordinates?.lat ?? m.latitude ?? 0;
+                    const lng = m.coordinates?.lng ?? m.longitude ?? 0;
+                    const rating = m.rating || 4.5;
+                    const reviewCount = m.reviewCount || 12;
+                    const waitTime = rating > 4.5 ? '~15 mins' : '~5 mins';
+                    const crowdLevel = reviewCount > 300 ? 'Busy' : reviewCount > 100 ? 'Moderate traffic' : 'Not crowded';
+                    return {
+                        id: m.id || Math.random().toString(),
+                        name: m.name || 'Heritage Destination',
+                        city: m.city || m.address?.city || 'Nearby',
+                        province: m.province || m.address?.province || '',
+                        address: m.address ? (typeof m.address === 'string' ? m.address : `${m.address.street || ''}, ${m.address.city || ''}`) : '',
+                        type: m.type || 'museum',
+                        rating,
+                        reviewCount,
+                        totalArtworks: m.artworksCount || 50,
+                        crowdLevel,
+                        waitTime,
+                        isVerified: m.isVerified || false,
+                        description: m.description || '',
+                        coverImageUrl: m.images?.[0] || 'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=400&h=300&fit=crop',
+                        previewImages: m.images || [],
+                        reviews: [],
+                        latitude: lat,
+                        longitude: lng,
+                    };
+                });
+
+                let filtered = mapped;
+                if (_query) {
+                    const q = _query.toLowerCase();
+                    filtered = mapped.filter(item => 
+                        item.name.toLowerCase().includes(q) || 
+                        item.address.toLowerCase().includes(q)
+                    );
+                }
+
+                setPlaces(filtered);
+                setIsPlacesLoading(false);
+            })
+            .catch((err) => {
+                console.error("Failed to fetch local nearby museums:", err);
+                setIsPlacesLoading(false);
+            })
+            .finally(() => {
+                fetchInFlightRef.current = false;
+            });
+            return;
+        }
+
         museumService.searchNearbyPlaces(center.lat, center.lng, 70000, _query)
             .then((result) => {
+                setQuotaExceeded(result?.quotaExceeded || false);
                 const placesData = result?.places || [];
                 const regionInfo = result?.region || null;
                 if (regionInfo) {
@@ -1297,21 +1744,6 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                     return true;
                 });
 
-                // Sort by distance using spherical geometry helper from google maps
-                if (google?.maps?.geometry?.spherical) {
-                    unique.sort((a: any, b: any) => {
-                        const distA = google.maps.geometry.spherical.computeDistanceBetween(
-                            new google.maps.LatLng(center.lat, center.lng),
-                            new google.maps.LatLng(a.latitude, a.longitude)
-                        );
-                        const distB = google.maps.geometry.spherical.computeDistanceBetween(
-                            new google.maps.LatLng(center.lat, center.lng),
-                            new google.maps.LatLng(b.latitude, b.longitude)
-                        );
-                        return distA - distB;
-                    });
-                }
-
                 setPlaces(unique);
                 setIsPlacesLoading(false);
             })
@@ -1322,7 +1754,7 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
             .finally(() => {
                 fetchInFlightRef.current = false;
             });
-    }, [isLoaded, selectPlace, selectedMuseum]);
+    }, [dataSource]);
 
     // Auto-search disabled when map is panned to keep locations stay static and stable
     const handleMapIdle = useCallback(() => {
@@ -1347,25 +1779,24 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
         if (!navigator.geolocation) {
             setLocationError('Geolocation is not supported');
             setIsLocating(false);
-            // IMPORTANT: Mark location as ready even on failure so initial search can proceed
             setLocationReady(true);
             return;
         }
 
         navigator.geolocation.getCurrentPosition(
             (pos) => {
-                // SECURITY: Validate coordinate ranges to prevent injection/spoofing
                 const lat = Math.max(-90, Math.min(90, pos.coords.latitude));
                 const lng = Math.max(-180, Math.min(180, pos.coords.longitude));
                 setUserLocation({
                     latitude: lat,
                     longitude: lng,
                 });
-                // Update map center state to trigger proper GoogleMap re-render
                 setMapCenter({ lat, lng });
                 setIsLocating(false);
                 setLocationReady(true);
-                if (mapRef.current) {
+                if (mapProvider === 'openstreetmap' && leafletMapRef.current) {
+                    leafletMapRef.current.setView([lat, lng], 13);
+                } else if (mapRef.current) {
                     mapRef.current.panTo({ lat, lng });
                     mapRef.current.setZoom(13);
                 }
@@ -1378,45 +1809,42 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                 };
                 setLocationError(msgs[err.code] || 'Error getting location.');
                 setIsLocating(false);
-                // IMPORTANT: Do NOT set userLocation to Jakarta on failure.
-                // This prevents a misleading blue dot marker appearing in Jakarta.
-                // Leave userLocation as null — the map and search will use DEFAULT_CENTER.
                 setLocationReady(true);
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
         );
-    }, []);
+    }, [mapProvider]);
 
     useEffect(() => {
         requestLocation();
     }, [requestLocation]);
 
     // Real-time location tracking with watchPosition
-    // Anti-throttling: Only updates state on significant movement (>100m) to prevent render storms
-    // Anti-chunking: Uses functional state update to batch and deduplicate GPS readings
     useEffect(() => {
         if (!navigator.geolocation) return;
         watchIdRef.current = navigator.geolocation.watchPosition(
             (pos) => {
-                // SECURITY: Validate coordinate ranges
                 const newLat = Math.max(-90, Math.min(90, pos.coords.latitude));
                 const newLng = Math.max(-180, Math.min(180, pos.coords.longitude));
                 setUserLocation((prev) => {
                     if (!prev) {
-                        // First fix from watchPosition — also update map center
                         setMapCenter({ lat: newLat, lng: newLng });
+                        if (mapProvider === 'openstreetmap' && leafletMapRef.current) {
+                            leafletMapRef.current.setView([newLat, newLng], 13);
+                        }
                         return { latitude: newLat, longitude: newLng };
                     }
                     const dLat = newLat - prev.latitude;
                     const dLng = newLng - prev.longitude;
                     const distSq = dLat * dLat + dLng * dLng;
-                    // ~100m threshold (0.001 degrees ≈ 111m)
-                    // Anti-throttling: Prevents cascade of re-renders for minor GPS jitter
                     if (distSq > 0.000001) {
                         setMapCenter({ lat: newLat, lng: newLng });
+                        if (mapProvider === 'openstreetmap' && leafletMapRef.current) {
+                            leafletMapRef.current.setView([newLat, newLng]);
+                        }
                         return { latitude: newLat, longitude: newLng };
                     }
-                    return prev; // No state change → no re-render cascade
+                    return prev;
                 });
             },
             () => { /* silently ignore */ },
@@ -1427,12 +1855,11 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                 navigator.geolocation.clearWatch(watchIdRef.current);
             }
         };
-    }, []);
+    }, [mapProvider]);
 
-    // CRITICAL FIX: Wait for BOTH Google Maps loaded AND geolocation attempt resolved
-    // before running the initial search. This prevents the Jakarta fallback race condition.
+    // Wait for geolocation attempt resolved before running the initial search.
     useEffect(() => {
-        if (isLoaded && locationReady && !hasInitialSearched) {
+        if (locationReady && !hasInitialSearched) {
             const center = userLocation 
                 ? { lat: userLocation.latitude, lng: userLocation.longitude } 
                 : DEFAULT_CENTER;
@@ -1442,25 +1869,23 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                 mapRef.current.panTo(center);
                 mapRef.current.setZoom(13);
             }
+            if (mapProvider === 'openstreetmap' && leafletMapRef.current) {
+                leafletMapRef.current.setView([center.lat, center.lng], 13);
+            }
             searchNearbyPlaces(center, debouncedSearchQuery);
             setHasInitialSearched(true);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isLoaded, locationReady, hasInitialSearched]);
+    }, [locationReady, hasInitialSearched, mapProvider, userLocation]);
 
-    // Re-fetch from backend ONLY when search query actually changes (not on filter/location changes)
-    // Filter chip changes are handled client-side via sortedPlaces memo
-    // Anti-chunking: Uses ref comparison to prevent duplicate fetches
+    // Re-fetch when debounced search query or dataSource changes
     useEffect(() => {
-        if (isLoaded && hasInitialSearched && debouncedSearchQuery !== prevSearchQueryRef.current) {
-            prevSearchQueryRef.current = debouncedSearchQuery;
+        if (hasInitialSearched) {
             const center = userLocation 
                 ? { lat: userLocation.latitude, lng: userLocation.longitude } 
                 : DEFAULT_CENTER;
             searchNearbyPlaces(center, debouncedSearchQuery);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [debouncedSearchQuery]);
+    }, [debouncedSearchQuery, dataSource]);
 
 
 
@@ -1548,7 +1973,65 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
         return array;
     }, []);
 
-    // Calculate route via backend proxy (Google Routes API v2)
+    // Helper to calculate Google Maps route via backend proxy
+    const calculateRouteGoogle = useCallback(async (latVal: number, lngVal: number, modeStr: string, fallbackUrl: string) => {
+        if (!userLocation) return;
+        let response = await museumService.getRouteDirections(
+            userLocation.latitude,
+            userLocation.longitude,
+            latVal,
+            lngVal,
+            modeStr
+        );
+
+        let routeData = response?.data || response;
+
+        if (routeData?.status !== 'OK' && (modeStr === 'bicycling' || modeStr === 'transit')) {
+            console.warn(`${modeStr} route failed or returned zero results. Trying walking fallback route...`);
+            response = await museumService.getRouteDirections(
+                userLocation.latitude,
+                userLocation.longitude,
+                latVal,
+                lngVal,
+                'walking'
+            );
+            routeData = response?.data || response;
+
+            if (routeData?.status !== 'OK') {
+                console.warn(`Walking fallback route failed. Trying driving fallback route...`);
+                response = await museumService.getRouteDirections(
+                    userLocation.latitude,
+                    userLocation.longitude,
+                    latVal,
+                    lngVal,
+                    'driving'
+                );
+                routeData = response?.data || response;
+            }
+        }
+
+        if (routeData?.status === 'OK' && routeData?.polyline) {
+            const decodedPath = decodePolyline(routeData.polyline);
+            setRoutePath(decodedPath);
+            setShowRouteLine(true);
+            setRouteDistance(routeData.distanceText || null);
+            setRouteDuration(routeData.durationText || null);
+
+            if (window.google?.maps && mapRef.current && decodedPath.length > 0) {
+                isFittingBoundsRef.current = true;
+                const bounds = new google.maps.LatLngBounds();
+                bounds.extend({ lat: userLocation.latitude, lng: userLocation.longitude });
+                bounds.extend({ lat: latVal, lng: lngVal });
+                decodedPath.forEach(p => bounds.extend(p));
+                mapRef.current.fitBounds(bounds, { top: 60, bottom: 280, left: 40, right: 40 });
+            }
+        } else {
+            console.warn('All route attempts failed, falling back to external map:', routeData?.errorMessage || 'Unknown error');
+            window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+        }
+    }, [userLocation, decodePolyline]);
+
+    // Calculate route (either OSRM or Google Routes API based on provider)
     const calculateRoute = useCallback(async (travelMode: google.maps.TravelMode) => {
         if (!selectedMuseum) return;
 
@@ -1562,7 +2045,6 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
             return;
         }
 
-        // Map google.maps.TravelMode to backend/external mode string
         let modeStr = 'driving';
         const tmStr = String(travelMode).toUpperCase();
         if (tmStr === 'WALKING') modeStr = 'walking';
@@ -1573,76 +2055,86 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
         const fallbackUrl = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${latVal},${lngVal}&travelmode=${modeStr}`;
 
         if (!userLocation) {
-            // Fallback: open external map directions directly
             window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
             return;
         }
 
         setIsRouteLoading(true);
-        try {
-            let response = await museumService.getRouteDirections(
-                userLocation.latitude,
-                userLocation.longitude,
-                latVal,
-                lngVal,
-                modeStr
-            );
 
-            // Handle wrapped NestJS response: { data: { status, polyline, ... } }
-            let routeData = response?.data || response;
-
-            // Fallback chain: if BICYCLING or TRANSIT fails (ZERO_RESULTS / error), fall back to WALKING, then DRIVING
-            if (routeData?.status !== 'OK' && (modeStr === 'bicycling' || modeStr === 'transit')) {
-                console.warn(`${modeStr} route failed or returned zero results. Trying walking fallback route...`);
-                response = await museumService.getRouteDirections(
-                    userLocation.latitude,
-                    userLocation.longitude,
-                    latVal,
-                    lngVal,
-                    'walking'
-                );
-                routeData = response?.data || response;
-
-                if (routeData?.status !== 'OK') {
-                    console.warn(`Walking fallback route failed. Trying driving fallback route...`);
-                    response = await museumService.getRouteDirections(
-                        userLocation.latitude,
-                        userLocation.longitude,
-                        latVal,
-                        lngVal,
-                        'driving'
-                    );
-                    routeData = response?.data || response;
+        if (mapProvider === 'openstreetmap') {
+            try {
+                // Map modes: driving, walking, bicycling, transit
+                let profile = 'driving';
+                if (modeStr === 'walking' || modeStr === 'transit') {
+                    profile = 'foot';
+                } else if (modeStr === 'bicycling') {
+                    profile = 'bicycle';
                 }
+
+                const url = `https://router.project-osrm.org/route/v1/${profile}/${userLocation.longitude},${userLocation.latitude};${lngVal},${latVal}?overview=full&geometries=geojson`;
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`OSRM API error: ${res.status}`);
+                const data = await res.json();
+                
+                if (data.routes && data.routes.length > 0) {
+                    const route = data.routes[0];
+                    const distanceKm = (route.distance || 0) / 1000;
+                    const distText = distanceKm < 1 
+                        ? `${Math.round(route.distance || 0)} m` 
+                        : `${distanceKm.toFixed(1)} km`;
+                    const durationMins = Math.round((route.duration || 0) / 60);
+                    const durText = durationMins < 60
+                        ? `${durationMins} menit`
+                        : `${Math.floor(durationMins / 60)} jam${durationMins % 60 > 0 ? ` ${durationMins % 60} mnt` : ''}`;
+
+                    const decodedPath = (route.geometry?.coordinates || []).map((coord: number[]) => ({
+                        lat: coord[1],
+                        lng: coord[0]
+                    }));
+
+                    setRoutePath(decodedPath);
+                    setShowRouteLine(true);
+                    setRouteDistance(distText);
+                    setRouteDuration(durText);
+
+                    if (leafletMapRef.current && decodedPath.length > 0) {
+                        const latLngs = decodedPath.map((p: { lat: number; lng: number }) => [p.lat, p.lng] as [number, number]);
+                        if (routePolylineRef.current) {
+                            routePolylineRef.current.remove();
+                        }
+                        routePolylineRef.current = L.polyline(latLngs, {
+                            color: '#4285F4',
+                            weight: 5,
+                            opacity: 0.9,
+                        }).addTo(leafletMapRef.current);
+
+                        leafletMapRef.current.fitBounds(routePolylineRef.current.getBounds(), {
+                            padding: [50, 50]
+                        });
+                    }
+                } else {
+                    throw new Error('No OSRM routes found');
+                }
+            } catch (error) {
+                console.warn('OSRM routing failed, falling back to Google Routes proxy:', error);
+                try {
+                    await calculateRouteGoogle(latVal, lngVal, modeStr, fallbackUrl);
+                } catch (err) {
+                    window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+                }
+            } finally {
+                setIsRouteLoading(false);
             }
-
-            if (routeData?.status === 'OK' && routeData?.polyline) {
-                const decodedPath = decodePolyline(routeData.polyline);
-                setRoutePath(decodedPath);
-                setShowRouteLine(true);
-                setRouteDistance(routeData.distanceText || null);
-                setRouteDuration(routeData.durationText || null);
-
-                // Fit map bounds to show the entire route, ensuring google maps library is loaded
-                if (window.google?.maps && mapRef.current && decodedPath.length > 0) {
-                    isFittingBoundsRef.current = true;
-                    const bounds = new google.maps.LatLngBounds();
-                    bounds.extend({ lat: userLocation.latitude, lng: userLocation.longitude });
-                    bounds.extend({ lat: latVal, lng: lngVal });
-                    decodedPath.forEach(p => bounds.extend(p));
-                    mapRef.current.fitBounds(bounds, { top: 60, bottom: 280, left: 40, right: 40 });
-                }
-            } else {
-                console.warn('All route attempts failed, falling back to external map:', routeData?.errorMessage || 'Unknown error');
+        } else {
+            try {
+                await calculateRouteGoogle(latVal, lngVal, modeStr, fallbackUrl);
+            } catch (error) {
                 window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+            } finally {
+                setIsRouteLoading(false);
             }
-        } catch (error) {
-            console.error('Error calculating route, falling back to external map:', error);
-            window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
-        } finally {
-            setIsRouteLoading(false);
         }
-    }, [userLocation, selectedMuseum, decodePolyline]);
+    }, [userLocation, selectedMuseum, mapProvider, calculateRouteGoogle, decodePolyline]);
 
     // Auto-estimate distance/time when place is selected or travel mode changes (without drawing line)
     useEffect(() => {
@@ -1668,7 +2160,7 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
     }, []);
 
     return (
-        <div className="pnb-page">
+        <div className={`pnb-page ${isDashboard ? 'pnb-page--dashboard' : ''}`}>
             {/* ===== MAP VIEW ===== */}
             {viewMode === 'map' ? (
                 <div className="pnb-map-container">
@@ -1707,11 +2199,51 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                             ))}
                         </div>
 
+                        {/* Hybrid Provider Controls */}
+                        {(isAuthenticated || isDashboard) && apiKey && (
+                            <div className="pnb-hybrid-toggles">
+                                <button
+                                    className={`pnb-chip ${mapProvider === 'openstreetmap' ? 'pnb-chip--active' : ''}`}
+                                    onClick={() => setMapProvider('openstreetmap')}
+                                >
+                                    🗺️ OSM (Free)
+                                </button>
+                                <button
+                                    className={`pnb-chip ${mapProvider === 'google' ? 'pnb-chip--active' : ''}`}
+                                    onClick={() => setMapProvider('google')}
+                                >
+                                    🌐 GMap
+                                </button>
+                            </div>
+                        )}
                     </div>
+
+                    {/* Quota Exceeded Warning Banner */}
+                    {quotaExceeded && (
+                        <div className="absolute top-[220px] left-1/2 -translate-x-1/2 z-[10] bg-slate-950/95 border border-amber-500/30 px-5 py-4 rounded-2xl shadow-2xl max-w-sm text-center flex flex-col items-center gap-3 backdrop-blur-md">
+                            <div className="flex items-center gap-2 text-amber-500 font-bold text-sm">
+                                <AlertCircle className="w-5 h-5" />
+                                <span>Batas Harian Google Maps Tercapai</span>
+                            </div>
+                            <span className="text-[12px] text-gray-300 leading-relaxed">
+                                Sistem secara otomatis beralih menggunakan database lokal PostGIS dan OpenStreetMap offline. Discovery tetap berjalan dengan performa terbaik dan tanpa kendala biaya.
+                            </span>
+                            <button
+                                className="px-4 py-1.5 rounded-lg text-xs font-bold text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 active:scale-[0.98] transition-all"
+                                onClick={() => setQuotaExceeded(false)}
+                            >
+                                Mengerti
+                            </button>
+                        </div>
+                    )}
+
+
 
                     {/* Map Area */}
                     <div className="pnb-map">
-                        {!apiKey ? (
+                        {mapProvider === 'openstreetmap' ? (
+                            <div ref={mapContainerRef} className="w-full h-full" style={{ zIndex: 1 }} />
+                        ) : !apiKey ? (
                             <div className="pnb-map-fallback flex flex-col items-center justify-center p-6 text-center h-full bg-slate-900 text-white">
                                 <AlertCircle className="w-12 h-12 text-slate-500 mb-4" />
                                 <h3 className="text-lg font-semibold mb-2">Google Maps Key Missing</h3>
@@ -1719,120 +2251,23 @@ function NearbyPageInner({ apiKey }: { apiKey: string }) {
                                     Please configure GOOGLE_MAPS_API_KEY in the backend environment.
                                 </p>
                             </div>
-                        ) : loadError ? (
-                            <div className="pnb-map-fallback flex flex-col items-center justify-center p-6 text-center h-full bg-slate-900 text-white">
-                                <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
-                                <h3 className="text-lg font-semibold mb-2">Failed to load Map</h3>
-                                <p className="text-slate-400 text-sm">{loadError.message}</p>
-                            </div>
-                        ) : !isLoaded ? (
-                            <div className="pnb-map-fallback flex items-center justify-center h-full bg-slate-900 text-white">
-                                <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
-                            </div>
                         ) : (
-                            <>
-                                <GoogleMap
-                                    mapContainerClassName="w-full h-full"
-                                    center={mapCenter}
-                                    zoom={12}
-                                    onLoad={onMapLoad}
-                                    onUnmount={onMapUnmount}
-                                    onIdle={handleMapIdle}
-                                    options={{
-                                        mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "DEMO_MAP_ID",
-                                        disableDefaultUI: true,
-                                    }}
-                                >
-                                    {/* User Location Marker & Pulser Halo */}
-                                    {userLocation && (
-                                        <>
-                                            {/* Google Maps AdvancedMarker Blue Dot */}
-                                            {mapInstance && (
-                                                <AdvancedMarker
-                                                    map={mapInstance}
-                                                    position={{ lat: userLocation.latitude, lng: userLocation.longitude }}
-                                                    title="Lokasi Anda"
-                                                    isUserLocation
-                                                />
-                                            )}
-                                            {/* High-Fidelity Expanding Radar Pulsing Halo */}
-                                            <CircleF
-                                                center={{ lat: userLocation.latitude, lng: userLocation.longitude }}
-                                                radius={radarRadius}
-                                                options={{
-                                                    fillColor: '#3B82F6',
-                                                    fillOpacity: Math.max(0.003, 0.22 * (1 - (radarRadius - 40) / 710)),
-                                                    strokeColor: '#3B82F6',
-                                                    strokeOpacity: Math.max(0.003, 0.48 * (1 - (radarRadius - 40) / 710)),
-                                                    strokeWeight: 1.1,
-                                                    clickable: false,
-                                                }}
-                                            />
-                                        </>
-                                    )}
-
-                                    {/* Place Markers (AdvancedMarkerElement — recommended) */}
-                                    {mapInstance && sortedPlaces
-                                        .filter((museum: any) => !showRouteLine || selectedMuseum?.id === museum.id)
-                                        .map((museum: any) => {
-                                            const mLat = museum.coordinates?.lat ?? museum.latitude;
-                                            const mLng = museum.coordinates?.lng ?? museum.longitude;
-                                            if (typeof mLat !== 'number' || typeof mLng !== 'number') return null;
-                                            const isActive = selectedMuseum?.id === museum.id;
-
-                                            return (
-                                                <AdvancedMarker
-                                                    key={museum.id}
-                                                    map={mapInstance}
-                                                    position={{ lat: mLat, lng: mLng }}
-                                                    title={museum.name}
-                                                    onClick={() => {
-                                                        selectPlace(museum, true);
-                                                        setSheetExpanded(false);
-                                                    }}
-                                                    isActive={isActive}
-                                                    placeType={museum.type}
-                                                />
-                                            );
-                                        })}
-
-                                    {/* InfoWindow tooltip for selected place */}
-                                    {selectedMuseum && (() => {
-                                        const sLat = selectedMuseum.coordinates?.lat ?? selectedMuseum.latitude;
-                                        const sLng = selectedMuseum.coordinates?.lng ?? selectedMuseum.longitude;
-                                        if (typeof sLat !== 'number' || typeof sLng !== 'number') return null;
-                                        return (
-                                            <InfoWindowF
-                                                position={{ lat: sLat, lng: sLng }}
-                                                options={{
-                                                    pixelOffset: new google.maps.Size(0, -40),
-                                                    disableAutoPan: true,
-                                                    maxWidth: 220,
-                                                }}
-                                                onCloseClick={() => {
-                                                    selectPlace(null);
-                                                }}
-                                            >
-                                                <div className="pnb-info-window">
-                                                    <strong>{selectedMuseum.name}</strong>
-                                                    <span className="pnb-info-window__type">{selectedMuseum.type === 'museum' ? '🏛️ Museum' : selectedMuseum.type === 'gallery' ? '🎨 Gallery' : '🏯 Heritage'}</span>
-                                                </div>
-                                            </InfoWindowF>
-                                        );
-                                    })()}
-
-                                     {showRouteLine && routePath.length > 0 && (
-                                         <PolylineF
-                                             path={routePath}
-                                             options={{
-                                                 strokeColor: '#4285F4',
-                                                 strokeOpacity: 0.9,
-                                                 strokeWeight: 5,
-                                             }}
-                                         />
-                                     )}
-                                </GoogleMap>
-                            </>
+                            <GoogleMapViewContainer
+                                apiKey={apiKey}
+                                mapCenter={mapCenter}
+                                onMapLoad={onMapLoad}
+                                onMapUnmount={onMapUnmount}
+                                handleMapIdle={handleMapIdle}
+                                userLocation={userLocation}
+                                radarRadius={radarRadius}
+                                sortedPlaces={sortedPlaces}
+                                showRouteLine={showRouteLine}
+                                selectedMuseum={selectedMuseum}
+                                selectPlace={selectPlace}
+                                setSheetExpanded={setSheetExpanded}
+                                routePath={routePath}
+                                mapInstance={mapInstance}
+                            />
                         )}
                     </div>
 

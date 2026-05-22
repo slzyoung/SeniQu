@@ -26,27 +26,16 @@
         return suppressPatterns.some(p => msg.includes(p));
       };
 
-      const wrapConsole = (method) => {
-        let realMethod = console[method];
-        Object.defineProperty(console, method, {
-          get() {
-            return function (...args) {
-              if (!shouldSuppress(args)) {
-                if (typeof realMethod === 'function') {
-                  realMethod.apply(console, args);
-                }
-              }
-            };
-          },
-          set(newMethod) {
-            realMethod = newMethod;
-          },
-          configurable: true,
-          enumerable: true
-        });
-      };
-
-      ['log', 'warn', 'error', 'info', 'debug'].forEach(wrapConsole);
+      ['log', 'warn', 'error', 'info', 'debug'].forEach(method => {
+        const original = console[method];
+        if (typeof original === 'function') {
+          console[method] = function (...args) {
+            if (!shouldSuppress(args)) {
+              original.apply(console, args);
+            }
+          };
+        }
+      });
     })();
   </script>
 

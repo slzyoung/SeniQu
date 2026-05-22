@@ -12,6 +12,7 @@ import {
     Body,
     Param,
     Query,
+    Req,
     UseGuards,
     ParseUUIDPipe,
     HttpStatus,
@@ -59,61 +60,93 @@ export class MuseumsController {
     @ApiQuery({ name: "lng", required: true, type: Number })
     @ApiQuery({ name: "radius", required: false, type: Number, description: "Radius in km (default: 50, max: 100)" })
     async findNearby(
-        @Query("lat") lat: number,
-        @Query("lng") lng: number,
+        @Query("lat") lat?: number,
+        @Query("lng") lng?: number,
+        @Query("latitude") latitude?: number,
+        @Query("longitude") longitude?: number,
         @Query("radius") radius?: number,
     ) {
-        const safeLat = Math.max(-90, Math.min(90, Number(lat) || 0));
-        const safeLng = Math.max(-180, Math.min(180, Number(lng) || 0));
+        const actualLat = lat ?? latitude ?? 0;
+        const actualLng = lng ?? longitude ?? 0;
+        const safeLat = Math.max(-90, Math.min(90, Number(actualLat) || 0));
+        const safeLng = Math.max(-180, Math.min(180, Number(actualLng) || 0));
         const safeRadius = Math.max(1, Math.min(100, Number(radius) || 50));
         return this.museumsService.findNearby(safeLat, safeLng, safeRadius)
     }
 
     @Public()
     @Get("search-nearby")
-    @Throttle({ default: { limit: 20, ttl: 60000 } })
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
     @ApiOperation({ summary: "Search nearby museums, galleries, and heritage sites using Google Places API" })
     @ApiQuery({ name: "lat", required: true, type: Number })
     @ApiQuery({ name: "lng", required: true, type: Number })
     @ApiQuery({ name: "radius", required: false, type: Number, description: "Radius in meters (default: 70000, max: 70000)" })
     @ApiQuery({ name: "query", required: false, type: String, description: "Search query for specific name/address matching" })
     async searchNearbyPlaces(
-        @Query("lat") lat: number,
-        @Query("lng") lng: number,
+        @Query("lat") lat?: number,
+        @Query("lng") lng?: number,
+        @Query("latitude") latitude?: number,
+        @Query("longitude") longitude?: number,
         @Query("radius") radius?: number,
         @Query("query") query?: string,
+        @Req() req?: any,
     ) {
-        const safeLat = Math.max(-90, Math.min(90, Number(lat) || 0));
-        const safeLng = Math.max(-180, Math.min(180, Number(lng) || 0));
+        const actualLat = lat ?? latitude ?? 0;
+        const actualLng = lng ?? longitude ?? 0;
+        const safeLat = Math.max(-90, Math.min(90, Number(actualLat) || 0));
+        const safeLng = Math.max(-180, Math.min(180, Number(actualLng) || 0));
         const safeRadius = Math.max(1000, Math.min(70000, Number(radius) || 70000));
         // SECURITY: Truncate query to prevent oversized search strings
         const safeQuery = query ? String(query).slice(0, 200) : undefined;
+        
+        // Extract client IP address safely
+        const clientIp = req ? (req.headers["x-forwarded-for"] || req.ip || req.socket?.remoteAddress || "unknown") : "unknown";
+        
         return this.museumsService.searchNearbyPlaces(
             safeLat,
             safeLng,
             safeRadius,
             safeQuery,
+            Array.isArray(clientIp) ? clientIp[0] : String(clientIp),
         );
     }
 
     @Public()
+    @Get("place-details/:placeId")
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
+    @ApiOperation({ summary: "Get detailed place information from Google Places API (New)" })
+    async getPlaceDetails(
+        @Param("placeId") placeId: string,
+        @Req() req?: any
+    ) {
+        // SECURITY: Sanitize path parameter to prevent injection
+        const safePlaceId = String(placeId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 100);
+        const clientIp = req ? (req.headers["x-forwarded-for"] || req.ip || req.socket?.remoteAddress || "unknown") : "unknown";
+        const ipStr = Array.isArray(clientIp) ? clientIp[0] : String(clientIp);
+        return this.museumsService.getPlaceDetails(safePlaceId, ipStr);
+    }
+
+    @Public()
     @Get("region-type")
-    @Throttle({ default: { limit: 10, ttl: 60000 } })
+    @Throttle({ default: { limit: 3, ttl: 60000 } })
     @ApiOperation({ summary: "Detect if coordinates are in a major city (50km) or regency/kabupaten area (100km)" })
     @ApiQuery({ name: "lat", required: true, type: Number })
     @ApiQuery({ name: "lng", required: true, type: Number })
     async detectRegionType(
         @Query("lat") lat: number,
         @Query("lng") lng: number,
+        @Req() req?: any
     ) {
         const safeLat = Math.max(-90, Math.min(90, Number(lat) || 0));
         const safeLng = Math.max(-180, Math.min(180, Number(lng) || 0));
-        return this.museumsService.detectRegionType(safeLat, safeLng);
+        const clientIp = req ? (req.headers["x-forwarded-for"] || req.ip || req.socket?.remoteAddress || "unknown") : "unknown";
+        const ipStr = Array.isArray(clientIp) ? clientIp[0] : String(clientIp);
+        return this.museumsService.detectRegionType(safeLat, safeLng, ipStr);
     }
 
     @Public()
     @Get("route")
-    @Throttle({ default: { limit: 10, ttl: 60000 } })
+    @Throttle({ default: { limit: 3, ttl: 60000 } })
     @ApiOperation({ summary: "Get routing directions from Google Maps API" })
     @ApiQuery({ name: "originLat", required: true, type: Number })
     @ApiQuery({ name: "originLng", required: true, type: Number })
@@ -126,6 +159,7 @@ export class MuseumsController {
         @Query("destLat") destLat: number,
         @Query("destLng") destLng: number,
         @Query("mode") mode?: string,
+        @Req() req?: any
     ) {
         // SECURITY: Validate and clamp coordinates to valid geo ranges
         const safeOriginLat = Math.max(-90, Math.min(90, Number(originLat) || 0));
@@ -137,18 +171,21 @@ export class MuseumsController {
         const safeMode = ALLOWED_MODES.includes(String(mode || '').toLowerCase())
             ? String(mode).toLowerCase()
             : 'driving';
+        const clientIp = req ? (req.headers["x-forwarded-for"] || req.ip || req.socket?.remoteAddress || "unknown") : "unknown";
+        const ipStr = Array.isArray(clientIp) ? clientIp[0] : String(clientIp);
         return this.museumsService.getRoute(
             safeOriginLat,
             safeOriginLng,
             safeDestLat,
             safeDestLng,
-            safeMode
+            safeMode,
+            ipStr
         );
     }
 
-    @Public()
     @Get("maps-config")
-    @Throttle({ default: { limit: 30, ttl: 60000 } })
+    @UseGuards(JwtAuthGuard)
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
     @ApiOperation({ summary: "Get Google Maps client configuration" })
     @ApiResponse({ status: 200, description: "Maps API key for client-side rendering" })
     async getMapsConfig() {
