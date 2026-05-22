@@ -6,6 +6,7 @@ import { ToastContainer } from '../ui/Toast';
 import { AuthModal } from '../AuthModal';
 import { useAuthModalStore } from '../../stores/useAuthModalStore';
 import { PrivyAuthBridge } from '../providers/PrivyAuthBridge';
+import { CookieConsent } from './CookieConsent';
 
 import { LoadingFallback } from './LoadingFallback';
 
@@ -32,6 +33,9 @@ export const GlobalLayout: React.FC = () => {
                 {/* Global UI Components that require Router Context */}
                 <GlobalSearchModal />
                 <ToastContainer />
+                
+                {/* Cookie Consent Banner */}
+                <CookieConsent />
 
                 {/* Global Auth Modal - Available on all pages */}
                 <AuthModal isOpen={isOpen} onClose={closeAuthModal} initialView={initialView} />

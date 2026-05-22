@@ -17,7 +17,11 @@ export class RequestIdMiddleware implements NestMiddleware {
             ; (req as any).requestId = requestId
 
         // Add to response headers
-        res.setHeader("X-Request-ID", requestId)
+        if (typeof res.header === "function") {
+            res.header("X-Request-ID", requestId)
+        } else if (typeof res.setHeader === "function") {
+            res.setHeader("X-Request-ID", requestId)
+        }
 
             // Add timestamp
             ; (req as any).requestTimestamp = Date.now()

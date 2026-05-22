@@ -3,8 +3,8 @@
  * Integrates Google Maps (if key present) and List View
  */
 
-import { useState, useEffect, useMemo } from 'react';
-import { GoogleMap, useLoadScript, Marker } from '@react-google-maps/api';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
 import { useQuery } from '@tanstack/react-query';
 import { museumService } from '../../../services/museumService';
 import { Card, CardContent } from '../../../components/ui';
@@ -15,16 +15,89 @@ import { ROUTES } from '../../../lib/constants';
 
 // Default center (Jakarta)
 const DEFAULT_CENTER = { lat: -6.2088, lng: 106.8456 };
-const LIBRARIES: ("places" | "geometry")[] = ["places"];
+const LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"];
+
+interface AdvancedMarkerProps {
+    map: google.maps.Map | null;
+    position: { lat: number; lng: number };
+    title?: string;
+    onClick?: () => void;
+    isUserLocation?: boolean;
+}
+
+function AdvancedMarker({ map, position, title, onClick, isUserLocation }: AdvancedMarkerProps) {
+    const onClickRef = useRef(onClick);
+    onClickRef.current = onClick;
+
+    useEffect(() => {
+        if (!map) return;
+        let marker: any = null;
+
+        const handleClick = () => {
+            onClickRef.current?.();
+        };
+
+        const initMarker = async () => {
+            try {
+                const { AdvancedMarkerElement, PinElement } = await google.maps.importLibrary("marker") as any;
+
+                const markerOptions: any = {
+                    map,
+                    position,
+                    title,
+                    gmpClickable: true,
+                };
+
+                if (isUserLocation) {
+                    const pin = new PinElement({
+                        background: '#3B82F6',
+                        borderColor: '#FFFFFF',
+                        scale: 0.8,
+                    });
+                    markerOptions.content = pin;
+                } else {
+                    const pin = new PinElement({
+                        background: '#D4AF37',
+                        borderColor: '#1A1B26',
+                        glyphColor: '#FFFFFF',
+                    });
+                    markerOptions.content = pin;
+                }
+
+                marker = new AdvancedMarkerElement(markerOptions);
+
+                if (onClick) {
+                    marker.addEventListener('gmp-click', handleClick);
+                }
+            } catch (error) {
+                console.error('Error creating AdvancedMarker:', error);
+            }
+        };
+
+        initMarker();
+
+        return () => {
+            if (marker) {
+                marker.removeEventListener('gmp-click', handleClick);
+                marker.map = null;
+            }
+        };
+    }, [map, position.lat, position.lng, title, isUserLocation]);
+
+    return null;
+}
+
 
 export function NearbyMuseumsMap() {
     const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
     const [locationError, setLocationError] = useState<string>('');
+    const [map, setMap] = useState<google.maps.Map | null>(null);
 
-    // Check for API Key
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+    // SECURITY: Only use VITE_GOOGLE_MAPS_KEY (Maps JavaScript API, restricted by HTTP referrer)
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY || '';
 
-    const { isLoaded, loadError } = useLoadScript({
+    const { isLoaded, loadError } = useJsApiLoader({
+        id: 'google-map-script',
         googleMapsApiKey: apiKey,
         libraries: LIBRARIES,
     });
@@ -34,15 +107,17 @@ export function NearbyMuseumsMap() {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
-                    setUserLocation({
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude
-                    });
+                    // SECURITY: Validate coordinate ranges to prevent injection/spoofing
+                    const lat = Math.max(-90, Math.min(90, position.coords.latitude));
+                    const lng = Math.max(-180, Math.min(180, position.coords.longitude));
+                    setUserLocation({ lat, lng });
                 },
                 (error) => {
                     console.error("Error getting location", error);
                     setLocationError("Could not retrieve your location. Showing default area.");
-                }
+                    // Do NOT set userLocation to Jakarta — leave null to show default map view without misleading marker
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
             );
         } else {
             setLocationError("Geolocation is not supported by this browser.");
@@ -55,14 +130,13 @@ export function NearbyMuseumsMap() {
     const { data: museums, isLoading } = useQuery({
         queryKey: ['museums', 'nearby', center],
         queryFn: async () => {
-            // If we have user location, use it. Otherwise uses default center.
             return museumService.getNearbyMuseums({
                 lat: center.lat,
                 lng: center.lng,
-                radius: 50 // 50km radius
+                radius: 70 // 70km radius
             });
         },
-        enabled: true, // Always fetch, even properly with default center
+        enabled: true,
     });
 
     // Render Map Content
@@ -73,7 +147,7 @@ export function NearbyMuseumsMap() {
                     <MapPin className="w-12 h-12 text-theme-muted mb-4" />
                     <h3 className="text-lg font-medium text-theme-text mb-2">Map Unavailable</h3>
                     <p className="text-theme-muted max-w-sm">
-                        Google Maps API key is missing. Please configure VITE_GOOGLE_MAPS_API_KEY in your environment.
+                        Google Maps API key is missing. Please configure VITE_GOOGLE_MAPS_KEY in your environment.
                     </p>
                 </div>
             );
@@ -102,50 +176,40 @@ export function NearbyMuseumsMap() {
                 mapContainerClassName="w-full h-96 rounded-xl border border-theme-border"
                 center={center}
                 zoom={12}
+                onLoad={(mapInstance) => setMap(mapInstance)}
+                onUnmount={() => setMap(null)}
                 options={{
+                    mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "DEMO_MAP_ID",
                     disableDefaultUI: false,
                     zoomControl: true,
-                    styles: [
-                        {
-                            "elementType": "geometry",
-                            "stylers": [{ "color": "#242f3e" }]
-                        },
-                        {
-                            "elementType": "labels.text.stroke",
-                            "stylers": [{ "color": "#242f3e" }]
-                        },
-                        {
-                            "elementType": "labels.text.fill",
-                            "stylers": [{ "color": "#746855" }]
-                        },
-                        // ... Simplified dark mode style
-                    ]
                 }}
             >
                 {/* User Marker */}
-                {userLocation && (
-                    <Marker
+                {userLocation && map && (
+                    <AdvancedMarker
+                        map={map}
                         position={userLocation}
-                        icon={{
-                            path: google.maps.SymbolPath.CIRCLE,
-                            scale: 8,
-                            fillColor: '#4285F4',
-                            fillOpacity: 1,
-                            strokeColor: 'white',
-                            strokeWeight: 2,
-                        }}
+                        title="Lokasi Anda"
+                        isUserLocation
                     />
                 )}
 
                 {/* Museum Markers */}
-                {museums?.map((museum) => (
-                    <Marker
-                        key={museum.id}
-                        position={{ lat: museum.coordinates.lat, lng: museum.coordinates.lng }}
-                        title={museum.name}
-                        onClick={() => window.location.href = ROUTES.GALLERY_MUSEUM.replace(':id', museum.id)}
-                    />
-                ))}
+                {map && museums?.map((museum) => {
+                    const coords = museum.coordinates as any;
+                    const lat = coords?.lat ?? coords?.latitude ?? (museum as any).latitude;
+                    const lng = coords?.lng ?? coords?.longitude ?? (museum as any).longitude;
+                    if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+                    return (
+                        <AdvancedMarker
+                            key={museum.id}
+                            map={map}
+                            position={{ lat, lng }}
+                            title={museum.name}
+                            onClick={() => window.location.href = ROUTES.GALLERY_MUSEUM.replace(':id', museum.id)}
+                        />
+                    );
+                })}
             </GoogleMap>
         );
     };

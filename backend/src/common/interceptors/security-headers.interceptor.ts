@@ -15,31 +15,45 @@ import { Response } from "express"
 @Injectable()
 export class SecurityHeadersInterceptor implements NestInterceptor {
     intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
-        const response = context.switchToHttp().getResponse<Response>()
+        const response = context.switchToHttp().getResponse<any>()
+
+        const setHeader = (res: any, name: string, value: string) => {
+            if (typeof res.header === "function") {
+                res.header(name, value)
+            } else if (typeof res.setHeader === "function") {
+                res.setHeader(name, value)
+            }
+        }
+
+        const removeHeader = (res: any, name: string) => {
+            if (typeof res.removeHeader === "function") {
+                res.removeHeader(name)
+            }
+        }
 
         // Anti-Hacking: Prevent MIME type sniffing
-        response.setHeader("X-Content-Type-Options", "nosniff")
+        setHeader(response, "X-Content-Type-Options", "nosniff")
         // Anti-Hacking: Prevent clickjacking
-        response.setHeader("X-Frame-Options", "DENY")
+        setHeader(response, "X-Frame-Options", "DENY")
         // Anti-Hacking: XSS protection (legacy browsers)
-        response.setHeader("X-XSS-Protection", "1; mode=block")
+        setHeader(response, "X-XSS-Protection", "1; mode=block")
         // Anti-Hacking: Control referrer info leakage
-        response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin")
+        setHeader(response, "Referrer-Policy", "strict-origin-when-cross-origin")
         // Anti-Hacking: Restrict browser features
-        response.setHeader("Permissions-Policy", "geolocation=(self), microphone=(self), camera=(self), payment=(), usb=()")
+        setHeader(response, "Permissions-Policy", "geolocation=(self), microphone=(self), camera=(self), payment=(), usb=()")
         // Anti-Hacking: Prevent cross-domain policy file loading
-        response.setHeader("X-Permitted-Cross-Domain-Policies", "none")
+        setHeader(response, "X-Permitted-Cross-Domain-Policies", "none")
         // Anti-Hacking: HSTS — force HTTPS connections
-        response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
+        setHeader(response, "Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
         // Anti-Chunking: Prevent caching of API responses containing sensitive data
-        response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
-        response.setHeader("Pragma", "no-cache")
-        response.setHeader("Expires", "0")
+        setHeader(response, "Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
+        setHeader(response, "Pragma", "no-cache")
+        setHeader(response, "Expires", "0")
         // Anti-Hacking: Prevent download sniffing in IE
-        response.setHeader("X-Download-Options", "noopen")
+        setHeader(response, "X-Download-Options", "noopen")
 
         // Remove server identification
-        response.removeHeader("X-Powered-By")
+        removeHeader(response, "X-Powered-By")
 
         return next.handle()
     }

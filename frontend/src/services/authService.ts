@@ -826,6 +826,34 @@ class AuthService {
             throw sanitizeError(error);
         }
     }
+
+    /**
+     * Request forgot password OTP (Step 1)
+     */
+    async forgotPasswordRequest(email: string): Promise<{ message: string; requiresOtp: boolean; email: string }> {
+        try {
+            const rawResponse = await apiPost<any>('/auth/forgot-password/request', { email }, {
+                headers: getSecurityHeaders(),
+            });
+            return rawResponse?.data || rawResponse;
+        } catch (error) {
+            throw sanitizeError(error);
+        }
+    }
+
+    /**
+     * Verify forgot password OTP and reset password (Step 2)
+     */
+    async forgotPasswordVerify(email: string, otp: string, newPassword: string): Promise<{ message: string }> {
+        try {
+            const rawResponse = await apiPost<any>('/auth/forgot-password/verify', { email, otp, newPassword }, {
+                headers: getSecurityHeaders(),
+            });
+            return rawResponse?.data || rawResponse;
+        } catch (error) {
+            throw sanitizeError(error);
+        }
+    }
 }
 
 // Export singleton instance

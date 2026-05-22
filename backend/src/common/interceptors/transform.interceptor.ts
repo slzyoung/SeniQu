@@ -23,28 +23,47 @@ export interface ApiResponse<T> {
 
 /**
  * Transform Interceptor
- * Wraps all successful responses in a standard format
+ * Wraps all successful responses in a standard format.
+ *
+ * IMPORTANT: Skips transformation for:
+ * - Redirect responses (3xx status codes) — e.g., OAuth callbacks
+ * - Handlers that use @Res() decorator (return undefined/null)
  */
 @Injectable()
 export class TransformInterceptor<T>
-    implements NestInterceptor<T, ApiResponse<T>> {
+    implements NestInterceptor<T, ApiResponse<T> | T> {
     intercept(
         context: ExecutionContext,
         next: CallHandler,
-    ): Observable<ApiResponse<T>> {
+    ): Observable<ApiResponse<T> | T> {
         const request = context.switchToHttp().getRequest()
+        const response = context.switchToHttp().getResponse()
 
         return next.handle().pipe(
-            map((data) => ({
-                success: true,
-                data,
-                meta: {
-                    timestamp: new Date().toISOString(),
-                    path: request.url,
-                    method: request.method,
-                    requestId: request.headers["x-request-id"],
-                },
-            })),
+            map((data) => {
+                // Skip transformation for redirect responses (OAuth callback)
+                const statusCode = response.statusCode || response.raw?.statusCode
+                if (statusCode >= 300 && statusCode < 400) {
+                    return data
+                }
+
+                // Skip transformation if handler used @Res() (data is undefined)
+                // This happens when the controller manually manages the response
+                if (data === undefined || data === null) {
+                    return data
+                }
+
+                return {
+                    success: true,
+                    data,
+                    meta: {
+                        timestamp: new Date().toISOString(),
+                        path: request.url,
+                        method: request.method,
+                        requestId: request.headers["x-request-id"],
+                    },
+                }
+            }),
         )
     }
 }

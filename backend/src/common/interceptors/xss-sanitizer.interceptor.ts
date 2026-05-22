@@ -16,7 +16,7 @@ import { BYPASS_SECURITY_KEY } from "../decorators/bypass-security.decorator"
 
 @Injectable()
 export class XssSanitizerInterceptor implements NestInterceptor {
-    constructor(private reflector: Reflector) {}
+    constructor(private reflector: Reflector) { }
     intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
         const bypassSecurity = this.reflector.getAllAndOverride<boolean>(BYPASS_SECURITY_KEY, [
             context.getHandler(),
@@ -68,7 +68,7 @@ export class XssSanitizerInterceptor implements NestInterceptor {
         if (typeof obj === "object") {
             const sanitized: any = {}
             for (const key in obj) {
-                if (obj.hasOwnProperty(key)) {
+                if (Object.prototype.hasOwnProperty.call(obj, key)) {
                     sanitized[this.sanitizeString(key)] = this.sanitizeObject(obj[key])
                 }
             }

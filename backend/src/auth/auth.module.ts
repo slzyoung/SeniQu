@@ -41,7 +41,7 @@ import { DatabaseModule } from "../database/database.module"
                 return {
                     secret: jwtSecret,
                     signOptions: {
-                        expiresIn: jwtExpiresIn || "7d",
+                        expiresIn: (jwtExpiresIn || "7d") as any,
                     },
                 }
             },

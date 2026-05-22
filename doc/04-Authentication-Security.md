@@ -164,6 +164,9 @@ sequenceDiagram
 | **Nonce** | Random UUID verified against Google ID token `nonce` claim to prevent replay attacks |
 | **Cookie** | Signed httpOnly, Secure, SameSite=Lax — client JS cannot read or tamper |
 | **Cleanup** | Cookie cleared after every callback, regardless of success or failure |
+| **Response Format Preservation** | NestJS `TransformInterceptor` dynamically detects 3xx status codes and `@Res()` handlers (returning undefined/null) to bypass `{ success: true, data: ... }` JSON wrapping on redirect requests |
+| **Resilience & Fail-Safe** | Multilayered safety net with outer try-catch guarantees a `302 Redirect` is always sent to the frontend with an encoded error parameter in the URL hash, preventing blank/hung screens |
+| **Non-blocking Wallet Provisioning** | Background/fire-and-forget sync/provisioning pattern for Privy embedded wallets prevents server latency or timeouts from blocking user authentication |
 
 ### 1.7 Privy Embedded Wallet (Auto-Sync & Verification)
 
@@ -253,12 +256,56 @@ JWT_REFRESH_SECRET=your-refresh-secret
 JWT_REFRESH_EXPIRES_IN=7d             // Refresh token: 7 days
 ```
 
+### 1.12 Google Maps API Key Security
+
+The Google Maps JavaScript API key requires special handling because it must be delivered to the browser for map rendering, but must not be statically embedded in the frontend JavaScript bundle.
+
+**Architecture:**
+
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant Frontend
+    participant Backend
+    participant Google
+
+    Browser->>Frontend: Load /nearby page
+    Frontend->>Backend: GET /api/v1/museums/maps-config
+    Backend->>Backend: Read GOOGLE_MAPS_API_KEY from process.env
+    Backend-->>Frontend: { apiKey: "AIzaSy..." }
+    Frontend->>Google: Load Maps JS SDK with key
+    
+    Note over Frontend: Route directions flow
+    Frontend->>Backend: GET /api/v1/museums/route?originLat=...&destLat=...
+    Backend->>Google: POST routes.googleapis.com (with server-side key)
+    Google-->>Backend: Encoded polyline + distance + duration
+    Backend-->>Frontend: Proxied response (key never sent to client)
+```
+
+**Security measures:**
+
+| Measure | Implementation |
+|---------|----------------|
+| **No Static Bundle Embedding** | API key is fetched at runtime via `GET /museums/maps-config`, never in `import.meta.env` for the nearby page |
+| **Rate-Limited Delivery** | Endpoint throttled to 30 req/60s via `@Throttle` |
+| **Route Proxy** | Route direction queries go through backend proxy (`/museums/route`), so the API key never appears in client-side network requests to Google |
+| **Environment Isolation** | `GOOGLE_MAPS_API_KEY` stored in `backend/.env`, which is in `.gitignore` and has never been committed |
+| **Git History Audit** | Verified with `git log --all -- backend/.env` — zero commits found |
+| **Frontend .env Separation** | Frontend `.env` contains only public-safe keys (Privy App ID, WalletConnect Project ID, API URL) |
+
+**Audit Results (2026-05-21):**
+- ✅ No hardcoded `AIzaSy*` patterns found in any `.ts`, `.tsx`, or `.js` file
+- ✅ No `GOCSPX-*`, `eyJhbG*`, or `xsmtpsib-*` credential patterns in frontend source
+- ✅ All `.env`, `.env.local`, `.env.production`, `.env.test` patterns are in `.gitignore`
+- ✅ Zero git history entries for any `.env` file (backend or frontend)
+- ✅ Google OAuth Client ID (public) is appropriately in frontend `.env` — this is safe per Google's documentation
+
 ## 2. Role-Based Access Control (RBAC)
 
 ### 2.1 User Roles
 
 | Role | Capabilities |
-|------|--------------|
+|------|--------------| 
 | `user` | Browse gallery, view artworks, basic access |
 | `collector` | Buy art, create collections, manage bookmarks |
 | `artist` | Upload artwork, view analytics, manage profile |
@@ -519,4 +566,8 @@ device_fingerprint VARCHAR(128)
 - [x] Single-use nonce anti-replay protection
 - [x] Device fingerprinting for wallet sessions
 - [x] Wallet connection rate limiting (with mobile persistence)
+- [x] Google Maps API key — runtime delivery, never in static bundle
+- [x] Route directions proxy — API key never sent to client
+- [x] Environment files (.env) — gitignored, never committed
+- [x] Git history audit — zero .env commits verified
 - [ ] Two-factor authentication (planned)

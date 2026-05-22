@@ -43,6 +43,11 @@ export interface CreateMuseumData {
 class MuseumService {
     private static instance: MuseumService;
 
+    /** SECURITY: TTL-based cache to prevent stale data and memory bloat */
+    private static readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+    private static readonly CACHE_MAX_SIZE = 20;
+    private searchCache = new Map<string, { data: any; expiresAt: number }>();
+
     private constructor() { }
 
     static getInstance(): MuseumService {
@@ -50,6 +55,17 @@ class MuseumService {
             MuseumService.instance = new MuseumService();
         }
         return MuseumService.instance;
+    }
+
+    /**
+     * Helper to safely extract array data from various wrapped API response shapes
+     */
+    private extractArrayData(res: any): any[] {
+        if (!res) return [];
+        if (Array.isArray(res)) return res;
+        if (res.data && Array.isArray(res.data)) return res.data;
+        if (res.data && res.data.data && Array.isArray(res.data.data)) return res.data.data;
+        return [];
     }
 
     /**
@@ -83,9 +99,11 @@ class MuseumService {
      */
     async getMuseums(filters: MuseumSearchFilters = {}): Promise<PaginatedResponse<Museum>> {
         const response = await apiGet<any>('/museums', { params: filters });
+        const dataArray = this.extractArrayData(response);
+        const meta = response?.data?.meta || response?.meta;
         return {
-            data: (response.data || []).map(this.mapDatabaseToMuseum),
-            meta: response.meta
+            data: dataArray.map(this.mapDatabaseToMuseum),
+            meta
         };
     }
 
@@ -93,8 +111,110 @@ class MuseumService {
      * Get nearby museums
      */
     async getNearbyMuseums(filters: NearbyFilters): Promise<Museum[]> {
-        const response = await apiGet<{ data: any[] }>('/museums/nearby', { params: filters });
-        return (response.data || []).map(this.mapDatabaseToMuseum);
+        const response = await apiGet<any>('/museums/nearby', { params: filters });
+        const dataArray = this.extractArrayData(response);
+        return dataArray.map(this.mapDatabaseToMuseum);
+    }
+
+    /**
+     * Get Google Maps API key from backend (secure)
+     */
+    async getMapsApiKey(): Promise<string> {
+        const response = await apiGet<any>('/museums/maps-config');
+        // apiGet already unwraps .data from axios, so response IS the controller return value
+        return response?.apiKey || response?.data?.apiKey || '';
+    }
+
+    /**
+     * Search nearby places via backend Google Places API (New)
+     * Returns museums, galleries, and heritage sites near given coordinates
+     *
+     * SECURITY:
+     * - Cache with TTL expiration (5 min) to prevent stale data
+     * - Cache key rounds coords to 4 decimals (~11m) to stabilize
+     * - Max 20 cache entries to limit memory usage
+     * - Coordinates and query are validated server-side
+     */
+    async searchNearbyPlaces(lat: number, lng: number, radius?: number, query?: string): Promise<{ places: any[]; region?: { isMajorCity: boolean; regionName: string; maxRadiusKm: number }; quotaExceeded?: boolean }> {
+        const rad = radius || 15000;
+        // round to 4 decimal places to stabilize cache keys against minor user movements (~11 meters)
+        const cacheKey = `${lat.toFixed(4)}_${lng.toFixed(4)}_${rad}_${query || ''}`;
+        
+        // SECURITY: Check cache with TTL validation
+        const cached = this.searchCache.get(cacheKey);
+        if (cached && Date.now() < cached.expiresAt) {
+            return cached.data;
+        }
+        // Evict expired entry if present
+        if (cached) {
+            this.searchCache.delete(cacheKey);
+        }
+
+        const response = await apiGet<any>('/museums/search-nearby', {
+            params: { lat, lng, radius: rad, query },
+        });
+        const places = response?.places || response?.data?.places || [];
+        const region = response?.region || response?.data?.region || undefined;
+        const quotaExceeded = response?.quotaExceeded || response?.data?.quotaExceeded || false;
+        
+        const result = { places, region, quotaExceeded };
+
+        // SECURITY: Evict oldest entries when cache exceeds max size
+        if (this.searchCache.size >= MuseumService.CACHE_MAX_SIZE) {
+            // Remove expired entries first
+            const now = Date.now();
+            for (const [key, entry] of this.searchCache) {
+                if (now >= entry.expiresAt) {
+                    this.searchCache.delete(key);
+                }
+            }
+            // If still full, remove the oldest entry
+            if (this.searchCache.size >= MuseumService.CACHE_MAX_SIZE) {
+                const firstKey = this.searchCache.keys().next().value;
+                if (firstKey) this.searchCache.delete(firstKey);
+            }
+        }
+        this.searchCache.set(cacheKey, {
+            data: result,
+            expiresAt: Date.now() + MuseumService.CACHE_TTL_MS,
+        });
+        
+        return result;
+    }
+
+    /**
+     * Detect if user is in a major city or kabupaten/regency area
+     * Uses Google Geocoding API on the backend to determine administrative area type
+     */
+    async detectRegionType(lat: number, lng: number): Promise<{ isMajorCity: boolean; regionName: string; maxRadiusKm: number }> {
+        try {
+            const response = await apiGet<any>('/museums/region-type', {
+                params: { lat, lng },
+            });
+            return {
+                isMajorCity: response?.isMajorCity ?? response?.data?.isMajorCity ?? false,
+                regionName: response?.regionName ?? response?.data?.regionName ?? 'Daerah',
+                maxRadiusKm: response?.maxRadiusKm ?? response?.data?.maxRadiusKm ?? 70,
+            };
+        } catch (error) {
+            console.warn('Region detection failed, defaulting to 70km:', error);
+            return { isMajorCity: false, regionName: 'Sekitar', maxRadiusKm: 70 };
+        }
+    }
+
+    /**
+     * Get route directions via backend proxy (solves client restriction settings)
+     */
+    async getRouteDirections(originLat: number, originLng: number, destLat: number, destLng: number, mode: string): Promise<any> {
+        return apiGet<any>('/museums/route', {
+            params: {
+                originLat,
+                originLng,
+                destLat,
+                destLng,
+                mode
+            }
+        });
     }
 
     /**
@@ -145,6 +265,15 @@ class MuseumService {
     async deleteMuseum(id: string): Promise<void> {
         return apiDelete(`/museums/${id}`);
     }
+
+    /**
+     * Get detailed Google Place info dynamically on-demand
+     */
+    async getPlaceDetails(placeId: string): Promise<any> {
+        const response = await apiGet<any>(`/museums/place-details/${placeId}`);
+        return response?.data || response;
+    }
 }
 
 export const museumService = MuseumService.getInstance();
+

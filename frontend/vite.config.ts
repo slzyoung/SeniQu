@@ -17,6 +17,10 @@ export default defineConfig({
     }),
   ],
   base: '/', // Ensure absolute paths
+  server: {
+    port: 5173,
+    strictPort: true,
+  },
   // define: { 'global': 'globalThis' } -> Removed to avoid conflict with vite-plugin-node-polyfills
   define: {
     // 'process.env': {} // Handled by plugin

@@ -15,12 +15,36 @@ Accessible to all visitors.
 - **Public Heritage Hub**: Browsable grid of all 12,000+ public artworks with filtering (Era, Medium, Ethnic Group).
 - **Museum & Gallery Geolocation**: Dedicated pages for 450+ institutions to showcase their collections, exhibition hours, and physical locations.
 - **Artwork Deep-Dive**: Zoomable high-res viewing, verified blockchain provenance, and "More like this" contextual engine.
+- **Featured Artworks Carousel**: A premium, horizontal snap-scrolling carousel that displays a curated list of Indonesian masterpieces.
+  - **Manual Navigators**: Sleek, absolute-positioned manual navigation arrows (`ChevronLeft`, `ChevronRight`) appear on hover.
+  - **Autoplay Engine**: Autoplays every 4.5 seconds with a smooth, CSS-accelerated transition.
+  - **Pause-on-Hover**: Intelligently pauses autoplay when the user hovers over the carousel, preventing interruptions.
+  - **Mobile Touch Optimization**: Supports native horizontal swipe-snapping for mobile and tablet browsers, showing partial adjacent cards to prompt discovery.
 
-### 1.3 Tourism Optimization
-- **Curated Cultural Routes**: Smart paths guiding tourists through historically linked physical heritage sites.
-- **Geolocation Discovery**: Finding "Nearby Cultural Hotspots" via PostGIS integration.
+### 1.3 Curated Collections
+- **Premium Carousel Display**: Curated Collections page features a matching horizontal swipe-snap scroll carousel with auto-swipe behavior.
+- **Aesthetic Header Integration**: Optimized top layout padding (narrowed from `pt-20` to `pt-12`) to align curations with the hamburger navbar menu.
+- **Unified Category Tabs**: Synchronized filter tabs with smooth Framer Motion `layoutId` active-indicator transitions.
 
-### 1.4 AI-Enhanced Cultural System
+### 1.4 Dynamic Geolocation & Interactive Routing (Nearby Module)
+- **Hybrid Mapping Architecture**: Implemented a multi-provider hybrid map system rendering OpenStreetMap (OSM) via Leaflet.js as the primary default and Google Maps as an optional togglable provider.
+  - **Lazy Script Loading**: Google Maps JavaScript SDK is only downloaded on-demand when the user activates the Google Maps provider toggle.
+  - **Universal Default**: Guest and authenticated users default to Leaflet OSM maps, eliminating map load charges for general browsing.
+- **Geocoding & Discovery**: Geolocation-enabled dashboard fetching nearby heritage hotspots, museums, and galleries within 15km using custom backend APIs. Defaults to free local PostGIS queries (`dataSource: 'local'`).
+- **Classic Blue Dot & Pulse Radar**: Renders user location dynamically.
+  - **Silky Smooth Radar**: Circle overlay pulses continuously up to a wide radius of 750 meters with custom-fade opacity calculations and a 12ms tick rate, yielding 83fps.
+- **Dynamic Route Directions**: Provides real-time directions from the user's location to the selected heritage site.
+  - **Secure Proxy Architecture**: Bypasses client-side API key exposure by sending coordinate queries to backend proxy routes.
+  - **Polyline Decoding & Rendering**: Decodes Google's Route polyline client-side and plots a premium blue navigation path (`#4285F4`, width 5) on the active map.
+  - **Auto-Viewport Fit**: Automatically calls map `fitBounds` with padding to dynamically frame both the user's location and the destination.
+- **Google Maps API Cost Mitigation**:
+  - **FieldMask Downgrade**: Strips photos and reviews from search queries to avoid Preferred pricing ($32.00/1k requests).
+  - **Single Center Lookup**: Restructures overlapping grids into 1 center query to achieve a 7x call volume reduction.
+  - **On-Demand Details Fetching**: Lazy-loads high-cost photos and reviews through `/place-details/:placeId` only on explicit card clicks.
+- **Consolidated Search Header**: Removed redundant floating navigation triggers (floating compass/map buttons) and embedded the Map Switcher directly into the search bar for an ultra-clean vertical height.
+- **Contrast-Preserving Filter Chips**: Fully custom-tailored active chips in light mode (e.g. "Heritage", "Museum") maintaining pure white text (`#fff !important`) even on hover, overcoming standard default overrides.
+
+### 1.5 AI-Enhanced Cultural System
 - **Generative Summaries**: AI creating fast, digestible narratives of complex historical artifacts.
 - **Multilingual Support**: Auto-translation of exhibition descriptions for international tourists.
 - **Smart Metadata Standardizer**: AI engine classifying unstructured institutional catalogs into the unified SeniQu database.

@@ -173,8 +173,10 @@ export class AuthService {
             }
         }
 
+        const fullyPopulatedUser = await this.usersService.findById(user.id)
+
         return {
-            user,
+            user: fullyPopulatedUser || user,
             ...tokens,
             isNewUser,
         }
@@ -447,8 +449,10 @@ export class AuthService {
 
         this.logger.log(`OTP verified — login complete for ${email}`)
 
+        const fullyPopulatedUser = await this.usersService.findById(user.id)
+
         return {
-            user,
+            user: fullyPopulatedUser || user,
             ...tokens,
             privyToken: privyToken || undefined,
         }
@@ -663,25 +667,38 @@ export class AuthService {
             })
             isNewUser = true
 
-            // Auto-create Privy Embedded Wallet (Deposit Wallet)
-            await this.privyService.createWithEmbeddedWallet({
+            // Auto-create Privy Embedded Wallet — FIRE AND FORGET (non-blocking)
+            // Don't let Privy API slowness block the OAuth redirect
+            this.privyService.createWithEmbeddedWallet({
                 email: user.email || undefined
-            })
+            }).catch(err => this.logger.warn(`[GoogleOAuth] Background Privy wallet creation failed: ${err.message}`))
         } else if (!user.googleId) {
             await this.usersService.updateGoogleId(user.id, googleProfile.googleId)
             user.googleId = googleProfile.googleId
         }
 
-        // Ensure existing users also get a wallet if they don't have one
-        await this.ensureEmbeddedWallet(user)
+        // Ensure existing users also get a wallet — FIRE AND FORGET (non-blocking)
+        // Wallet provisioning is NOT critical for the login redirect
+        this.ensureEmbeddedWallet(user).catch(err =>
+            this.logger.warn(`[GoogleOAuth] Background wallet sync failed for ${user.id}: ${err.message}`)
+        )
 
         const tokens = await this.generateTokens(user)
-        const privyToken = await this.privyService.getCustomAuthToken(user.id)
+
+        // Privy custom auth token — non-critical, wrap in try-catch
+        let privyToken: string | undefined
+        try {
+            privyToken = (await this.privyService.getCustomAuthToken(user.id)) || undefined
+        } catch (err) {
+            this.logger.warn(`[GoogleOAuth] Privy custom token failed: ${(err as any).message}`)
+        }
+
+        const fullyPopulatedUser = await this.usersService.findById(user.id)
 
         return {
-            user,
+            user: fullyPopulatedUser || user,
             ...tokens,
-            privyToken: privyToken || undefined,
+            privyToken,
             isNewUser,
         }
     }
@@ -742,7 +759,7 @@ export class AuthService {
         const accessToken = this.jwtService.sign(payload)
 
         const refreshToken = this.jwtService.sign(payload, {
-            expiresIn: this.configService.get<string>("auth.jwtRefreshExpiresIn"),
+            expiresIn: (this.configService.get<string>("auth.jwtRefreshExpiresIn") || "30d") as any,
         })
 
         return { accessToken, refreshToken }
@@ -834,5 +851,93 @@ export class AuthService {
         } catch {
             return false;
         }
+    }
+
+    /**
+     * Request password reset (Forgot Password Step 1)
+     */
+    async requestForgotPassword(email: string): Promise<{ message: string; requiresOtp: boolean; email: string }> {
+        const user = await this.usersService.findByEmail(email)
+        if (!user || !user.email) {
+            // Return a success-like message to prevent email enumeration, but with actual requested email format
+            const [localPart, domain] = email.split("@")
+            const masked = localPart ? `${localPart[0]}${'*'.repeat(Math.max(localPart.length - 1, 2))}@${domain}` : email
+            return { message: "OTP sent to your email", requiresOtp: true, email: masked }
+        }
+
+        if (!user.password) {
+            throw new BadRequestException("Your account uses social/wallet login. Please sign in using Google or your wallet.")
+        }
+
+        // Generate 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString()
+        const expiresAt = new Date(Date.now() + 5 * 60 * 1000)
+
+        const db = this.databaseService.getAdminClient()
+        await db.from("otp_codes").delete().eq("email", user.email).is("used_at", null)
+        await db.from("otp_codes").insert({
+            email: user.email,
+            code: otp,
+            expires_at: expiresAt.toISOString(),
+        })
+
+        await this.emailService.sendOtpEmail(user.email, otp, "change-password")
+        
+        const [localPart, domain] = user.email.split("@")
+        const maskedEmail = `${localPart[0]}${'*'.repeat(Math.max(localPart.length - 1, 2))}@${domain}`
+
+        this.logger.log(`Forgot password requested, OTP sent to ${user.email}`)
+        return { message: "OTP sent to your email", requiresOtp: true, email: maskedEmail }
+    }
+
+    /**
+     * Verify forgot password (Forgot Password Step 2)
+     */
+    async verifyForgotPassword(email: string, otp: string, newPassword: string): Promise<{ message: string }> {
+        const user = await this.usersService.findByEmail(email)
+        if (!user || !user.email) {
+            throw new BadRequestException("User not found")
+        }
+
+        const db = this.databaseService.getAdminClient()
+        const { data: otpRecord, error } = await db
+            .from("otp_codes")
+            .select("*")
+            .eq("email", user.email)
+            .eq("code", otp)
+            .is("used_at", null)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single()
+
+        if (error || !otpRecord) {
+            await db.from("otp_codes").update({ attempts: (otpRecord?.attempts || 0) + 1 }).eq("email", user.email).is("used_at", null)
+            throw new UnauthorizedException("Invalid OTP code.")
+        }
+
+        if (new Date(otpRecord.expires_at) < new Date()) {
+            throw new UnauthorizedException("OTP has expired.")
+        }
+
+        if (otpRecord.attempts >= 5) {
+            throw new UnauthorizedException("Too many attempts. Please request a new OTP.")
+        }
+
+        if (newPassword.length < 8) {
+            throw new BadRequestException("New password must be at least 8 characters")
+        }
+
+        await db.from("otp_codes").update({ used_at: new Date().toISOString() }).eq("id", otpRecord.id)
+
+        const hashedNew = await bcrypt.hash(newPassword, 12)
+        const { error: updateError } = await db.from("users").update({ password_hash: hashedNew, updated_at: new Date().toISOString() }).eq("id", user.id)
+
+        if (updateError) {
+            this.logger.error(`Failed to update password for user ${user.id}: ${updateError.message}`)
+            throw new BadRequestException("Failed to update password")
+        }
+
+        this.logger.log(`Password successfully reset for user ${user.id}`)
+        return { message: "Password reset successfully" }
     }
 }

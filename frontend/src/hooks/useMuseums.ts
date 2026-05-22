@@ -36,6 +36,7 @@ export function useNearbyMuseums(filters: NearbyFilters) {
         queryKey: museumKeys.nearby(filters),
         queryFn: () => museumService.getNearbyMuseums(filters),
         enabled: !!filters.lat && !!filters.lng,
+        staleTime: 1000 * 60 * 5, // 5 minutes — prevents refetch on mount/focus
     });
 }
 

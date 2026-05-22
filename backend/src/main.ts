@@ -2,9 +2,10 @@ import { NestFactory } from "@nestjs/core"
 import { ValidationPipe, Logger } from "@nestjs/common"
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger"
 import { ConfigService } from "@nestjs/config"
-import helmet from "helmet"
-import * as compression from "compression"
-import * as cookieParser from "cookie-parser"
+import {
+    FastifyAdapter,
+    NestFastifyApplication,
+} from "@nestjs/platform-fastify"
 import { AppModule } from "./app.module"
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter"
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor"
@@ -12,32 +13,40 @@ import { LoggingInterceptor } from "./common/interceptors/logging.interceptor"
 import { SecurityHeadersInterceptor } from "./common/interceptors/security-headers.interceptor"
 import { XssSanitizerInterceptor } from "./common/interceptors/xss-sanitizer.interceptor"
 import { Reflector } from "@nestjs/core"
-import * as express from "express"
 
 async function bootstrap() {
     const logger = new Logger("Bootstrap")
 
-    const app = await NestFactory.create(AppModule, {
-        logger: ["error", "warn", "log", "debug", "verbose"],
+    // ===========================================
+    // FASTIFY ADAPTER — High-performance HTTP
+    // ===========================================
+    const fastifyAdapter = new FastifyAdapter({
+        logger: false,
+        trustProxy: true,
+        bodyLimit: 50 * 1024 * 1024, // 50MB payload limit
     })
+
+    const app = await NestFactory.create<NestFastifyApplication>(
+        AppModule,
+        fastifyAdapter,
+        {
+            logger: ["error", "warn", "log", "debug", "verbose"],
+        },
+    )
 
     const configService = app.get(ConfigService)
 
     // ===========================================
-    // SECURITY MIDDLEWARE
+    // SECURITY MIDDLEWARE (Fastify Plugins)
     // ===========================================
 
     // Helmet for security headers (OWASP)
-    app.use(helmet({
-        contentSecurityPolicy: {
-            directives: {
-                defaultSrc: ["'self'"],
-                styleSrc: ["'self'", "'unsafe-inline'"],
-                imgSrc: ["'self'", "data:", "https:"],
-                scriptSrc: ["'self'"],
-            },
-        },
+    await app.register(require("@fastify/helmet"), {
+        // CSP disabled on API server — frontend (Netlify) handles CSP
+        // Having CSP on both API and frontend causes header conflicts
+        contentSecurityPolicy: false,
         crossOriginEmbedderPolicy: false,
+        crossOriginResourcePolicy: { policy: "cross-origin" },
         // Anti-Hacking: Force HTTPS via HSTS
         strictTransportSecurity: {
             maxAge: 31536000, // 1 year
@@ -46,7 +55,12 @@ async function bootstrap() {
         },
         // Anti-Hacking: Prevent server fingerprinting
         hidePoweredBy: true,
-    }))
+    })
+
+    // Response compression (gzip/brotli) — reduces bandwidth
+    await app.register(require("@fastify/compress"), {
+        threshold: 1024, // Only compress responses > 1KB
+    })
 
     // Cookie parser (with secret for signed cookies — used by OAuth flow)
     const cookieSecret = configService.get<string>("google.oauthCookieSecret")
@@ -54,17 +68,16 @@ async function bootstrap() {
         logger.error("OAUTH_COOKIE_SECRET is not set! Aborting for security.")
         process.exit(1)
     }
-    app.use(cookieParser(cookieSecret))
+    await app.register(require("@fastify/cookie"), {
+        secret: cookieSecret,
+    })
 
-    // Response compression (gzip/brotli) — reduces bandwidth for JSON-heavy endpoints
-    app.use(compression({
-        threshold: 1024, // Only compress responses > 1KB
-        level: 6, // Balanced compression level (1-9)
-    }))
-
-    // Trust proxy (required for secure cookies behind reverse proxies like Heroku/Railway/Render)
-    const expressApp = app.getHttpAdapter().getInstance();
-    expressApp.set('trust proxy', 1);
+    // Multipart support (file uploads — replaces Multer)
+    await app.register(require("@fastify/multipart"), {
+        limits: {
+            fileSize: 50 * 1024 * 1024, // 50MB
+        },
+    })
 
     // CORS configuration
     const rawAllowedOrigins = configService.get<string>("CORS_ORIGINS")?.split(",") || []
@@ -73,6 +86,7 @@ async function bootstrap() {
     const defaultOrigins = [
         "http://localhost:3001",
         "http://localhost:5173",
+        "http://localhost:5174",
         "https://seniquapp.netlify.app",
         "https://rpc.ankr.com/solana",
         "https://api.seniqu.art",
@@ -102,10 +116,6 @@ async function bootstrap() {
     // GLOBAL PIPES, FILTERS, INTERCEPTORS
     // ===========================================
 
-    // Anti-chunking: Increase payload size limits
-    app.use(express.json({ limit: "50mb" }))
-    app.use(express.urlencoded({ limit: "50mb", extended: true }))
-
     // Global validation pipe
     app.useGlobalPipes(
         new ValidationPipe({
@@ -134,7 +144,7 @@ async function bootstrap() {
     // ===========================================
 
     app.setGlobalPrefix("api/v1", {
-        exclude: [".well-known/(.*)"],
+        exclude: [".well-known/(.*)", "favicon.ico"],
     })
 
     // ===========================================
@@ -195,15 +205,16 @@ async function bootstrap() {
 
     const port = configService.get<number>("PORT") || 3001
 
-    await app.listen(port)
+    await app.listen(port, "0.0.0.0")
 
     logger.log(`
 ╔═══════════════════════════════════════════════════════════╗
-║                    🎨 SENIQU BACKEND                      ║
+║              🚀 SENIQU BACKEND (FASTIFY)                  ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Server running on: http://localhost:${port}                 ║
 ║  API Docs:          http://localhost:${port}/api/docs        ║
 ║  Environment:       ${configService.get("NODE_ENV") || "development"}                       ║
+║  Adapter:           Fastify (high-performance)            ║
 ╚═══════════════════════════════════════════════════════════╝
   `)
 }

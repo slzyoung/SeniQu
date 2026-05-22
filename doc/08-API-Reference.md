@@ -211,15 +211,97 @@ curl -X GET "http://localhost:3001/api/v1/wallet/transactions?page=1&limit=20&ty
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
 | GET | `/museums` | List verified museums | No |
-| GET | `/museums/:id` | Get museum by ID | No |
-| GET | `/museums/nearby` | Find nearby museums | No |
+| GET | `/museums/:slug` | Get museum by slug | No |
+| GET | `/museums/:id/artworks` | Get artworks in a museum | No |
+| GET | `/museums/nearby` | Find nearby museums (DB) | No |
+| GET | `/museums/maps-config` | Get Google Maps client API key | No |
+| GET | `/museums/search-nearby` | Proxy Google Places Nearby Search | No |
+| GET | `/museums/route` | Proxy Google Routes API v2 directions | No |
 | POST | `/museums` | Create museum | Institution |
 | PUT | `/museums/:id` | Update museum | Owner |
 | DELETE | `/museums/:id` | Delete museum | Admin |
 | PUT | `/museums/:id/verify` | Verify museum | Admin |
 | PUT | `/museums/:id/feature` | Feature museum | Admin |
 
-### Nearby Search
+### Maps Client Configuration
+
+Securely delivers the Google Maps JavaScript API key to the frontend at runtime. The key is never hardcoded in the frontend bundle.
+
+```bash
+GET /museums/maps-config
+```
+
+**Response:**
+```json
+{
+  "apiKey": "AIzaSy..."
+}
+```
+
+> **Rate Limit:** 30 requests per 60 seconds (`@Throttle`).
+
+### Nearby Places Search (Google Places Proxy)
+
+Proxies a request to Google Places API (New) to find museums, galleries, and heritage sites near the given coordinates. The Google API key never leaves the backend.
+
+```bash
+GET /museums/search-nearby?lat=-7.7956&lng=110.3695&radius=15000
+```
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `lat` | number | Yes | Latitude of the user |
+| `lng` | number | Yes | Longitude of the user |
+| `radius` | number | No | Search radius in meters (default: 15000) |
+
+**Response:**
+```json
+{
+  "places": [
+    {
+      "id": "ChIJ...",
+      "name": "Museum Sonobudoyo",
+      "lat": -7.8023,
+      "lng": 110.3649,
+      "address": "Jl. Trikora No.6, Yogyakarta",
+      "rating": 4.6,
+      "totalRatings": 15673,
+      "type": "museum"
+    }
+  ]
+}
+```
+
+### Route Directions (Google Routes API v2 Proxy)
+
+Computes driving directions between two points using Google Routes API v2. Returns an encoded polyline, distance, and duration. The frontend decodes the polyline and renders it on the map.
+
+```bash
+GET /museums/route?originLat=-7.7956&originLng=110.3695&destLat=-7.8023&destLng=110.3649
+```
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `originLat` | number | Yes | Origin latitude (user location) |
+| `originLng` | number | Yes | Origin longitude |
+| `destLat` | number | Yes | Destination latitude (museum) |
+| `destLng` | number | Yes | Destination longitude |
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "encodedPolyline": "_p~iF~ps|U_ulLnnqC...",
+    "distanceMeters": 3400,
+    "duration": "8 mins"
+  }
+}
+```
+
+> **Security:** The backend POSTs to `https://routes.googleapis.com/directions/v2:computeRoutes` using the server-side `GOOGLE_MAPS_API_KEY`. The API key is never exposed to the client.
+
+### Legacy Nearby Search
 
 ```bash
 GET /museums/nearby?lat=-6.2088&lng=106.8456&radius=25

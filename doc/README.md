@@ -20,6 +20,7 @@
 | 10 | [Cloudflare R2 Integration](./10-Cloudflare-R2-Integration.md) | S3-compatible storage, signed upload URLs, geo-distributed CDN asset delivery |
 | 11 | [Security Incident Response](./11-Security-Incident-Response.md) | Incident procedures, key rotation, and forensic auditing guidelines |
 | 12 | [Enterprise Admin Architecture](./12-Enterprise-Admin-Architecture.md) | Unified UI/UX, RBAC enhancements, and admin dashboard modernization |
+| 13 | [Hybrid Mapping & Cost Optimization](./13-Hybrid-Mapping-Cost-Optimization.md) | Architectural details on hybrid map rendering and budget-protection Google Maps API practices |
 
 ---
 
@@ -100,7 +101,8 @@ cd backend && npm run start:dev
 | Cloudflare R2 | S3-compatible geo-distributed asset storage |
 | Solana RPC | Blockchain transaction verification and indexing |
 | Privy | Embedded non-custodial wallets for mainstream user onboarding |
-| Google Maps API | Institution geolocation and nearby discovery |
+| Google Maps API | Institution geolocation, nearby discovery, route directions proxy |
+| Google Routes API v2 | Real-time driving directions with polyline encoding (server-side proxy) |
 
 ---
 
@@ -110,12 +112,16 @@ cd backend && npm run start:dev
 |----------|----------|
 | **Cultural Discovery** | Unified browsable hub of 12,000+ artworks, filterable by era, medium, ethnic group |
 | **Museum & Gallery Mapping** | PostGIS-powered geolocation of 450+ institutions with exhibition hours and directions |
+| **Interactive Route Navigation** | Real-time driving directions from user to heritage sites via Google Routes API v2 proxy, rendered as decoded polylines on the map |
+| **User Location Radar** | Google Maps-style blue dot with 750m expanding radar pulse animation (83fps, 12ms tick) |
+| **Premium Carousel UX** | Horizontal snap-scroll carousels for Featured Artworks & Curated Collections with autoplay, pause-on-hover, and overlay navigation arrows |
 | **AI Cultural Engine** | Auto-generated summaries, genre detection, multilingual translation, audio guides |
 | **Smart Tourism Routes** | Curated paths linking historically connected heritage sites |
 | **Proof of Art (PoA)** | Blockchain-verified provenance and certificates of authenticity |
 | **Institutional Dashboards** | Digitization wizard, visitor analytics, engagement metrics |
 | **Community Forum** | Threaded discussions for cultural enthusiasts |
 | **Mobile Notifications** | Real-time alerts for exhibitions, events, and cultural updates |
+| **Security Audit** | Zero-leak environment isolation, runtime API key delivery, git history auditing |
 
 ---
 

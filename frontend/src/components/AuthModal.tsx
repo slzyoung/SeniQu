@@ -28,7 +28,7 @@ interface AuthModalProps {
   initialView?: AuthView;
 }
 
-type AuthView = 'main' | 'email-login' | 'email-register' | 'wallet-select' | 'wallet-select-account' | 'otp-input' | 'email-verify-pending';
+type AuthView = 'main' | 'email-login' | 'email-register' | 'wallet-select' | 'wallet-select-account' | 'otp-input' | 'email-verify-pending' | 'forgot-password' | 'forgot-password-otp';
 
 type WalletType = 'metamask' | 'phantom' | 'solflare' | 'walletconnect';
 
@@ -51,8 +51,8 @@ function PasswordStrength({ password }: { password: string }) {
     if (/[^A-Za-z0-9]/.test(pwd)) score++;
 
     if (score <= 2) return { level: 1, label: 'Weak', color: 'bg-red-500' };
-    if (score <= 4) return { level: 2, label: 'Medium', color: 'bg-yellow-500' };
-    return { level: 3, label: 'Strong', color: 'bg-green-500' };
+    if (score <= 4) return { level: 2, label: 'Medium', color: 'bg-amber-500' };
+    return { level: 3, label: 'Strong', color: 'bg-emerald-500' };
   };
 
   const strength = getStrength(password);
@@ -60,8 +60,8 @@ function PasswordStrength({ password }: { password: string }) {
   if (!password) return null;
 
   return (
-    <div className="mt-1">
-      <div className="flex gap-1 mb-1">
+    <div className="mt-1.5">
+      <div className="flex gap-1 mb-1.5">
         {[1, 2, 3].map((i) => (
           <div
             key={i}
@@ -70,7 +70,7 @@ function PasswordStrength({ password }: { password: string }) {
           />
         ))}
       </div>
-      <span className={`text-xs ${strength.level === 1 ? 'text-red-400' : strength.level === 2 ? 'text-yellow-400' : 'text-green-400'}`}>
+      <span className={`text-xs font-semibold ${strength.level === 1 ? 'text-red-500 dark:text-red-400' : strength.level === 2 ? 'text-amber-500 dark:text-yellow-400' : 'text-emerald-600 dark:text-green-400'}`}>
         {strength.label} password
       </span>
     </div>
@@ -167,6 +167,16 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   const [otpResendCooldown, setOtpResendCooldown] = useState(0);
   const otpInputRefs = React.useRef<(HTMLInputElement | null)[]>([]);
 
+  // Forgot password state
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotOtpDigits, setForgotOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
+  const [forgotMaskedEmail, setForgotMaskedEmail] = useState('');
+  const [forgotResendCooldown, setForgotResendCooldown] = useState(0);
+  const forgotOtpInputRefs = React.useRef<(HTMLInputElement | null)[]>([]);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [forgotPasswordFocused, setForgotPasswordFocused] = useState(false);
+
   // Track modal open state for async operations
   const isOpenRef = React.useRef(isOpen);
 
@@ -191,6 +201,13 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     setOtpEmail('');
     setOtpMaskedEmail('');
     setOtpResendCooldown(0);
+    setForgotEmail('');
+    setForgotNewPassword('');
+    setForgotOtpDigits(['', '', '', '', '', '']);
+    setForgotMaskedEmail('');
+    setForgotResendCooldown(0);
+    setPasswordFocused(false);
+    setForgotPasswordFocused(false);
 
     // If we are partly authenticated in Privy but not Backend, Force Logout from Privy
     // This ensures next time user opens modal, they start fresh
@@ -678,6 +695,117 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     }
   }, [otpDigits]);
 
+  // Handle Forgot Password Request (Step 1)
+  const handleForgotPasswordRequest = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail) return;
+    setIsLoading(true);
+    setErrors({});
+
+    try {
+      const response = await authService.forgotPasswordRequest(forgotEmail);
+      setForgotMaskedEmail(response.email);
+      setForgotOtpDigits(['', '', '', '', '', '']);
+      setView('forgot-password-otp');
+      toast.success('Reset Code Sent', response.message || 'OTP code sent successfully.');
+      setForgotResendCooldown(60);
+    } catch (error: any) {
+      const msg = error.message || 'Failed to request password reset.';
+      setErrors({ general: msg });
+      toast.error('Request Failed', msg);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [forgotEmail, toast]);
+
+  // Handle Forgot Password Verify & Reset (Step 2)
+  const handleForgotPasswordVerify = useCallback(async (otpCode: string) => {
+    if (otpCode.length !== 6) return;
+    if (forgotNewPassword.length < 8) {
+      setErrors({ newPassword: 'Password must be at least 8 characters' });
+      toast.error('Weak Password', 'Password must be at least 8 characters');
+      return;
+    }
+    setIsLoading(true);
+    setErrors({});
+
+    try {
+      await authService.forgotPasswordVerify(forgotEmail, otpCode, forgotNewPassword);
+      toast.success('Success', 'Password has been reset successfully. Please sign in.');
+      // Reset forgot state
+      setForgotEmail('');
+      setForgotNewPassword('');
+      setForgotOtpDigits(['', '', '', '', '', '']);
+      setView('email-login');
+    } catch (error: any) {
+      const msg = error.message || 'Failed to reset password. Invalid or expired OTP.';
+      setErrors({ general: msg });
+      toast.error('Reset Failed', msg);
+      setForgotOtpDigits(['', '', '', '', '', '']);
+      forgotOtpInputRefs.current[0]?.focus();
+    } finally {
+      setIsLoading(false);
+    }
+  }, [forgotEmail, forgotNewPassword, toast]);
+
+  // Handle Forgot OTP resend
+  const handleResendForgotOtp = useCallback(async () => {
+    if (forgotResendCooldown > 0) return;
+    try {
+      await authService.forgotPasswordRequest(forgotEmail);
+      toast.success('Code Resent', 'A new reset code has been sent to your email.');
+      setForgotResendCooldown(60);
+      setForgotOtpDigits(['', '', '', '', '', '']);
+      forgotOtpInputRefs.current[0]?.focus();
+    } catch (error: any) {
+      toast.error('Resend Failed', error.message || 'Failed to resend code.');
+    }
+  }, [forgotEmail, forgotResendCooldown, toast]);
+
+  // Forgot password OTP resend cooldown timer
+  useEffect(() => {
+    if (forgotResendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setForgotResendCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [forgotResendCooldown]);
+
+  // Handle Forgot OTP digit input
+  const handleForgotOtpChange = useCallback((index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    const newDigits = [...forgotOtpDigits];
+    newDigits[index] = value.slice(-1);
+    setForgotOtpDigits(newDigits);
+
+    if (value && index < 5) {
+      forgotOtpInputRefs.current[index + 1]?.focus();
+    }
+
+    const fullOtp = newDigits.join('');
+    if (fullOtp.length === 6) {
+      handleForgotPasswordVerify(fullOtp);
+    }
+  }, [forgotOtpDigits, handleForgotPasswordVerify]);
+
+  // Handle Forgot OTP paste
+  const handleForgotOtpPaste = useCallback((e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length === 6) {
+      const digits = pasted.split('');
+      setForgotOtpDigits(digits);
+      handleForgotPasswordVerify(pasted);
+    }
+  }, [handleForgotPasswordVerify]);
+
+  // Handle Forgot OTP backspace
+  const handleForgotOtpKeyDown = useCallback((index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !forgotOtpDigits[index] && index > 0) {
+      forgotOtpInputRefs.current[index - 1]?.focus();
+    }
+  }, [forgotOtpDigits]);
+
   // Google Icon SVG
   const GoogleIcon = () => (
     <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -708,17 +836,17 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     return (
       <>
         {/* Header */}
-        <div className="px-8 pt-10 pb-6 text-center">
+        <div className="px-5 sm:px-8 pt-10 pb-6 text-center">
           <h2 className="text-3xl font-serif font-bold text-theme-text mb-2">
             Welcome to <span className="text-amber-600 dark:text-gold italic">SeniQu</span>
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 text-sm">
+          <p className="text-theme-muted text-sm">
             Sign in to preserve and collect digital heritage.
           </p>
         </div>
 
         {/* Auth Options */}
-        <div className="px-8 pb-10 space-y-5">
+        <div className="px-5 sm:px-8 pb-10 space-y-5">
           {/* Error Message */}
           {errors.general && (
             <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm animate-in fade-in slide-in-from-top-1">
@@ -738,27 +866,27 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
             ) : (
               <>
                 <div className="p-0.5 bg-white rounded-full"><GoogleIcon /></div>
-                <span className="font-semibold tracking-wide">Continue with Google</span>
+                <span className="font-semibold tracking-wide text-sm">Continue with Google</span>
               </>
             )}
           </button>
 
           {/* Divider */}
           <div className="flex items-center gap-3 py-2">
-            <div className="h-px flex-1 bg-theme-border/60"></div>
-            <span className="text-[11px] uppercase tracking-widest font-semibold text-gray-500 dark:text-gray-400">
+            <div className="h-px flex-1 bg-theme-border opacity-60"></div>
+            <span className="text-[11px] uppercase tracking-widest font-bold text-theme-muted">
               OR
             </span>
-            <div className="h-px flex-1 bg-theme-border/60"></div>
+            <div className="h-px flex-1 bg-theme-border opacity-60"></div>
           </div>
 
           {/* Email Login */}
           <button
             onClick={() => switchView('email-login')}
             disabled={isLoading || isWalletBusy}
-            className="w-full flex items-center justify-center gap-3 bg-theme-elevated/30 border border-theme-border text-theme-text py-3 rounded-xl font-medium hover:bg-theme-elevated/50 hover:border-theme-muted transition-all disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-3 bg-black/[0.03] dark:bg-white/[0.03] border border-theme-border text-theme-text py-3 rounded-xl font-semibold hover:bg-black/[0.06] dark:hover:bg-white/[0.06] transition-all disabled:opacity-50 text-sm"
           >
-            <Mail className="w-5 h-5" />
+            <Mail className="w-5 h-5 text-theme-muted" />
             <span>Sign in with Email</span>
           </button>
 
@@ -768,7 +896,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
               <div className="h-px flex-1 bg-gradient-to-r from-transparent via-theme-border to-transparent" />
               <div className="flex items-center gap-1.5 text-amber-600 dark:text-gold/80">
                 <Wallet className="w-3.5 h-3.5" />
-                <span className="text-xs font-medium tracking-wider uppercase">Connect Wallet</span>
+                <span className="text-xs font-semibold tracking-wider uppercase">Connect Wallet</span>
               </div>
               <div className="h-px flex-1 bg-gradient-to-r from-transparent via-theme-border to-transparent" />
             </div>
@@ -802,13 +930,13 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                     className={`group relative flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all duration-300 w-full h-[88px]
                         ${isActive
                         ? 'bg-gold/10 border-gold shadow-[0_0_15px_rgba(255,215,0,0.1)]'
-                        : 'bg-theme-elevated/30 border-theme-border hover:border-gold/50 hover:bg-theme-elevated/50'
+                        : 'bg-black/[0.02] dark:bg-white/[0.02] border-theme-border hover:border-gold/50 hover:bg-black/[0.05] dark:hover:bg-white/[0.05]'
                       }
                         ${isWalletBusy && !isActive ? 'opacity-30 blur-[1px]' : ''}
                       `}
                   >
                     {/* Wallet Icon */}
-                    <div className={`w-8 h-8 rounded-lg bg-theme-bg/50 border border-theme-border/50 flex items-center justify-center transition-transform duration-300 ${!isWalletBusy ? 'group-hover:scale-110' : ''}`}>
+                    <div className={`w-8 h-8 rounded-lg bg-theme-bg bg-opacity-50 border border-theme-border flex items-center justify-center transition-transform duration-300 ${!isWalletBusy ? 'group-hover:scale-110' : ''}`}>
                       <img
                         src={wallet.logo}
                         alt={wallet.name}
@@ -819,7 +947,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
                     {/* Wallet Name */}
                     <div className="w-full flex flex-col items-center">
-                      <span className={`font-medium text-xs tracking-tight transition-colors truncate max-w-full ${isActive ? 'text-amber-600 dark:text-gold' : 'text-gray-700 dark:text-gray-300 group-hover:text-theme-text'}`}>
+                      <span className={`font-semibold text-[10px] tracking-tight transition-colors truncate max-w-full ${isActive ? 'text-amber-600 dark:text-gold' : 'text-theme-muted group-hover:text-theme-text'}`}>
                         {wallet.name.replace(' (Reown)', '')}
                       </span>
                     </div>
@@ -845,27 +973,27 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   const renderEmailLoginView = () => (
     <>
       {/* Header with Back Button */}
-      <div className="px-8 pt-8 pb-6">
+      <div className="px-5 sm:px-8 pt-6 sm:pt-8 pb-4">
         <button
           onClick={() => switchView('main')}
-          className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-4"
+          className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-3"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span className="text-sm">Back</span>
+          <span className="text-xs sm:text-sm font-medium">Back</span>
         </button>
-        <h2 className="text-2xl font-serif font-bold text-theme-text mb-2">
+        <h2 className="text-xl sm:text-2xl font-serif font-bold text-theme-text mb-1">
           Sign in with Email
         </h2>
-        <p className="text-theme-muted text-sm">
+        <p className="text-theme-muted text-xs sm:text-sm">
           Enter your email and password to continue.
         </p>
       </div>
 
       {/* Login Form */}
-      <form onSubmit={handleEmailLogin} className="px-8 pb-10 space-y-4">
+      <form onSubmit={handleEmailLogin} className="px-5 sm:px-8 pb-8 sm:pb-10 space-y-4">
         {/* General Error */}
         {errors.general && (
-          <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+          <div className="flex items-center gap-2 p-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs sm:text-sm">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{errors.general}</span>
           </div>
@@ -873,48 +1001,57 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
         {/* Email Input */}
         <div>
-          <label className="block text-sm font-medium text-theme-text mb-2">Email</label>
+          <label className="block text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">Email</label>
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-muted" />
+            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-muted" />
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               required
-              className={`w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.email ? 'border-red-500' : 'border-theme-border'
-                } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
+              className={`w-full pl-11 pr-4 py-3 bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] focus:bg-theme-bg border ${errors.email ? 'border-red-500' : 'border-theme-border'
+                } rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200`}
             />
           </div>
           {errors.email && (
-            <p className="mt-1 text-xs text-red-400">{errors.email}</p>
+            <p className="mt-1.5 text-xs text-red-400 font-medium">{errors.email}</p>
           )}
         </div>
 
         {/* Password Input */}
         <div>
-          <label className="block text-sm font-medium text-theme-text mb-2">Password</label>
+          <div className="flex justify-between items-center mb-1.5">
+            <label className="block text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-theme-muted">Password</label>
+            <button
+              type="button"
+              onClick={() => switchView('forgot-password')}
+              className="text-xs text-gold hover:underline font-semibold"
+            >
+              Forgot password?
+            </button>
+          </div>
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-muted" />
+            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-muted" />
             <input
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
-              className={`w-full pl-11 pr-12 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.password ? 'border-red-500' : 'border-theme-border'
-                } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
+              className={`w-full pl-11 pr-11 py-3 bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] focus:bg-theme-bg border ${errors.password ? 'border-red-500' : 'border-theme-border'
+                } rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200`}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-text"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-text transition-colors"
             >
               {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
           {errors.password && (
-            <p className="mt-1 text-xs text-red-400">{errors.password}</p>
+            <p className="mt-1.5 text-xs text-red-400 font-medium">{errors.password}</p>
           )}
         </div>
 
@@ -922,7 +1059,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full flex items-center justify-center gap-2 bg-gold text-theme-bg py-3.5 rounded-xl font-medium hover:bg-gold/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-gold text-charcoal py-3 sm:py-3.5 rounded-xl font-semibold hover:from-amber-600 hover:to-gold transition-all active:scale-[0.98] shadow-md hover:shadow-gold/10 disabled:opacity-50 disabled:cursor-not-allowed text-sm tracking-wide"
         >
           {isLoading ? (
             <Loader2 className="w-5 h-5 animate-spin" />
@@ -935,12 +1072,12 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
         </button>
 
         {/* Register Link */}
-        <p className="text-center text-sm text-theme-muted">
+        <p className="text-center text-xs sm:text-sm text-theme-muted pt-1">
           Don't have an account?{' '}
           <button
             type="button"
             onClick={() => switchView('email-register')}
-            className="text-gold hover:underline"
+            className="text-gold hover:underline font-semibold"
           >
             Sign up
           </button>
@@ -953,27 +1090,27 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   const renderEmailRegisterView = () => (
     <>
       {/* Header with Back Button */}
-      <div className="px-8 pt-8 pb-6">
+      <div className="px-5 sm:px-8 pt-5 sm:pt-6 pb-2">
         <button
           onClick={() => switchView('email-login')}
-          className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-4"
+          className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-2.5"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span className="text-sm">Back to login</span>
+          <span className="text-xs sm:text-sm font-medium">Back to login</span>
         </button>
-        <h2 className="text-2xl font-serif font-bold text-theme-text mb-2">
+        <h2 className="text-xl sm:text-2xl font-serif font-bold text-theme-text mb-1">
           Create Account
         </h2>
-        <p className="text-theme-muted text-sm">
-          Join SeniQu to start your art collection journey.
+        <p className="text-theme-muted text-xs leading-relaxed">
+          Join SeniQu to start your digital art heritage journey.
         </p>
       </div>
 
       {/* Register Form */}
-      <form onSubmit={handleEmailRegister} className="px-8 pb-10 space-y-4">
+      <form onSubmit={handleEmailRegister} className="px-5 sm:px-8 pb-8 space-y-4">
         {/* General Error */}
         {errors.general && (
-          <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+          <div className="flex items-center gap-2 p-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{errors.general}</span>
           </div>
@@ -981,32 +1118,35 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
         {/* Display Name Input */}
         <div>
-          <label className="block text-sm font-medium text-theme-text mb-2">
-            Display Name <span className="text-red-400">*</span>
+          <label className="block text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">
+            Display Name <span className="text-red-500 font-bold">*</span>
           </label>
           <input
             type="text"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Your name"
+            placeholder="Your full name"
             required
             minLength={2}
             maxLength={50}
-            className={`w-full px-4 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.displayName ? 'border-red-500' : 'border-theme-border'
-              } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
+            className={`w-full px-4 py-3 bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] focus:bg-theme-bg border ${errors.displayName ? 'border-red-500' : 'border-theme-border'
+              } rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200`}
           />
           {errors.displayName && (
-            <p className="mt-1 text-xs text-red-400">{errors.displayName}</p>
+            <p className="mt-1.5 text-xs text-red-400 font-medium">{errors.displayName}</p>
           )}
         </div>
 
         {/* Username Input */}
         <div>
-          <label className="block text-sm font-medium text-theme-text mb-2">
-            Username <span className="text-red-400">*</span>
-          </label>
+          <div className="flex justify-between items-center mb-1.5">
+            <label className="block text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-theme-muted">
+              Username <span className="text-red-500 font-bold">*</span>
+            </label>
+            <span className="text-[10px] text-theme-muted font-medium">a-z, 0-9, _ only</span>
+          </div>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-muted">@</span>
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-theme-muted text-base sm:text-sm font-semibold select-none">@</span>
             <input
               type="text"
               value={username}
@@ -1015,81 +1155,96 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
               required
               minLength={3}
               maxLength={20}
-              className={`w-full pl-8 pr-4 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.username ? 'border-red-500' : 'border-theme-border'
-                } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
+              className={`w-full pl-8 pr-4 py-3 bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] focus:bg-theme-bg border ${errors.username ? 'border-red-500' : 'border-theme-border'
+                } rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200`}
             />
           </div>
-          <p className="mt-1 text-xs text-theme-muted">Lowercase letters, numbers, and underscores only</p>
           {errors.username && (
-            <p className="mt-1 text-xs text-red-400">{errors.username}</p>
+            <p className="mt-1.5 text-xs text-red-400 font-medium">{errors.username}</p>
           )}
         </div>
 
         {/* Email Input */}
         <div>
-          <label className="block text-sm font-medium text-theme-text mb-2">Email</label>
+          <label className="block text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">Email</label>
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-muted" />
+            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-muted" />
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               required
-              className={`w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.email ? 'border-red-500' : 'border-theme-border'
-                } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
+              className={`w-full pl-11 pr-4 py-3 bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] focus:bg-theme-bg border ${errors.email ? 'border-red-500' : 'border-theme-border'
+                } rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200`}
             />
           </div>
           {errors.email && (
-            <p className="mt-1 text-xs text-red-400">{errors.email}</p>
+            <p className="mt-1.5 text-xs text-red-400 font-medium">{errors.email}</p>
           )}
         </div>
 
         {/* Password Input */}
         <div>
-          <label className="block text-sm font-medium text-theme-text mb-2">Password</label>
+          <label className="block text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">Password</label>
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-muted" />
+            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-muted" />
             <input
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onFocus={() => setPasswordFocused(true)}
+              onBlur={() => setPasswordFocused(false)}
               placeholder="••••••••"
               required
-              className={`w-full pl-11 pr-12 py-3 bg-gray-50 dark:bg-theme-elevated border ${errors.password ? 'border-red-500' : 'border-theme-border'
-                } rounded-xl text-theme-text placeholder-theme-muted focus:outline-none focus:ring-2 focus:ring-gold/50`}
+              className={`w-full pl-11 pr-11 py-3 bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] focus:bg-theme-bg border ${errors.password ? 'border-red-500' : 'border-theme-border'
+                } rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200`}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-text"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-text transition-colors"
             >
               {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
           {errors.password && (
-            <p className="mt-1 text-xs text-red-400">{errors.password}</p>
+            <p className="mt-1.5 text-xs text-red-400 font-medium">{errors.password}</p>
           )}
           <PasswordStrength password={password} />
         </div>
 
-        {/* Password Requirements */}
-        <div className="text-xs text-theme-muted bg-theme-elevated/30 p-3 rounded-xl">
-          <p className="font-medium mb-1">Password requirements:</p>
-          <ul className="space-y-0.5 ml-3 list-disc">
-            <li className={password.length >= 8 ? 'text-green-400' : ''}>At least 8 characters</li>
-            <li className={/[A-Z]/.test(password) ? 'text-green-400' : ''}>One uppercase letter</li>
-            <li className={/[a-z]/.test(password) ? 'text-green-400' : ''}>One lowercase letter</li>
-            <li className={/[0-9]/.test(password) ? 'text-green-400' : ''}>One number</li>
-            <li className={/[^A-Za-z0-9]/.test(password) ? 'text-green-400' : ''}>One special character</li>
-          </ul>
-        </div>
+        {/* Password Requirements - Focus Triggered Grid for Mobile Neatness */}
+        {passwordFocused && (
+          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px] sm:text-xs text-theme-muted bg-black/[0.03] dark:bg-white/[0.03] p-3 rounded-xl border border-theme-border animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className={`flex items-center gap-1.5 ${password.length >= 8 ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${password.length >= 8 ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+              <span>Min. 8 characters</span>
+            </div>
+            <div className={`flex items-center gap-1.5 ${/[A-Z]/.test(password) ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${/[A-Z]/.test(password) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+              <span>Uppercase letter</span>
+            </div>
+            <div className={`flex items-center gap-1.5 ${/[a-z]/.test(password) ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${/[a-z]/.test(password) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+              <span>Lowercase letter</span>
+            </div>
+            <div className={`flex items-center gap-1.5 ${/[0-9]/.test(password) ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${/[0-9]/.test(password) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+              <span>One number</span>
+            </div>
+            <div className={`flex items-center gap-1.5 ${/[^A-Za-z0-9]/.test(password) ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${/[^A-Za-z0-9]/.test(password) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+              <span>Special char</span>
+            </div>
+          </div>
+        )}
 
         {/* Submit Button */}
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full flex items-center justify-center gap-2 bg-gold text-theme-bg py-3.5 rounded-xl font-medium hover:bg-gold/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-gold text-charcoal py-3 sm:py-3.5 rounded-xl font-semibold hover:from-amber-600 hover:to-gold transition-all active:scale-[0.98] shadow-md hover:shadow-gold/10 disabled:opacity-50 disabled:cursor-not-allowed text-sm tracking-wide"
         >
           {isLoading ? (
             <Loader2 className="w-5 h-5 animate-spin" />
@@ -1102,17 +1257,217 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
         </button>
 
         {/* Login Link */}
-        <p className="text-center text-sm text-theme-muted">
+        <p className="text-center text-xs text-theme-muted pt-0.5">
           Already have an account?{' '}
           <button
             type="button"
             onClick={() => switchView('email-login')}
-            className="text-gold hover:underline"
+            className="text-gold hover:underline font-semibold"
           >
             Sign in
           </button>
         </p>
       </form>
+    </>
+  );
+
+  // Render forgot password form (Step 1)
+  const renderForgotPasswordView = () => (
+    <>
+      {/* Header with Back Button */}
+      <div className="px-5 sm:px-8 pt-6 sm:pt-8 pb-4">
+        <button
+          onClick={() => switchView('email-login')}
+          className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-3"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span className="text-xs sm:text-sm font-medium">Back to login</span>
+        </button>
+        <h2 className="text-xl sm:text-2xl font-serif font-bold text-theme-text mb-1">
+          Reset Password
+        </h2>
+        <p className="text-theme-muted text-xs sm:text-sm leading-relaxed">
+          Enter your email to receive a 6-digit recovery code.
+        </p>
+      </div>
+
+      {/* Forgot Password Form */}
+      <form onSubmit={handleForgotPasswordRequest} className="px-5 sm:px-8 pb-8 sm:pb-10 space-y-4">
+        {/* General Error */}
+        {errors.general && (
+          <div className="flex items-center gap-2 p-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs sm:text-sm">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{errors.general}</span>
+          </div>
+        )}
+
+        {/* Email Input */}
+        <div>
+          <label className="block text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">Email</label>
+          <div className="relative">
+            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-muted" />
+            <input
+              type="email"
+              value={forgotEmail}
+              onChange={(e) => setForgotEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              className="w-full pl-11 pr-4 py-3 bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] focus:bg-theme-bg border border-theme-border rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200"
+            />
+          </div>
+        </div>
+
+        {/* Submit Button */}
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-gold text-charcoal py-3 sm:py-3.5 rounded-xl font-semibold hover:from-amber-600 hover:to-gold transition-all active:scale-[0.98] shadow-md hover:shadow-gold/10 disabled:opacity-50 disabled:cursor-not-allowed text-sm tracking-wide"
+        >
+          {isLoading ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <>
+              <span>Send Recovery Code</span>
+              <CheckCircle className="w-4 h-4" />
+            </>
+          )}
+        </button>
+      </form>
+    </>
+  );
+
+  // Render forgot password OTP and new password form (Step 2)
+  const renderForgotPasswordOtpView = () => (
+    <>
+      {/* Header with Back Button */}
+      <div className="px-5 sm:px-8 pt-6 sm:pt-8 pb-4">
+        <button
+          onClick={() => switchView('forgot-password')}
+          className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-3"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span className="text-xs sm:text-sm font-medium">Back</span>
+        </button>
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 flex items-center justify-center border border-amber-500/20 flex-shrink-0">
+            <KeyRound className="w-5 h-5 text-amber-500" />
+          </div>
+          <div>
+            <h2 className="text-lg sm:text-xl font-serif font-bold text-theme-text">Enter Reset Code</h2>
+            <p className="text-theme-muted text-xs truncate max-w-[240px]">Sent to {forgotMaskedEmail}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-5 sm:px-8 pb-8 sm:pb-10 space-y-4">
+        {/* General Error */}
+        {errors.general && (
+          <div className="flex items-center gap-2 p-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{errors.general}</span>
+          </div>
+        )}
+
+        {/* New Password Input */}
+        <div>
+          <label className="block text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1.5">New Password</label>
+          <div className="relative">
+            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-muted" />
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={forgotNewPassword}
+              onChange={(e) => setForgotNewPassword(e.target.value)}
+              onFocus={() => setForgotPasswordFocused(true)}
+              onBlur={() => setForgotPasswordFocused(false)}
+              placeholder="••••••••"
+              required
+              className="w-full pl-11 pr-11 py-3 bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] focus:bg-theme-bg border border-theme-border rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-text transition-colors"
+            >
+              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </button>
+          </div>
+          {forgotPasswordFocused && (
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px] sm:text-xs text-theme-muted bg-black/[0.03] dark:bg-white/[0.03] p-3 rounded-xl border border-theme-border mt-2.5 animate-in fade-in duration-200">
+              <div className={`flex items-center gap-1.5 ${forgotNewPassword.length >= 8 ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${forgotNewPassword.length >= 8 ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+                <span>Min. 8 characters</span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${/[A-Z]/.test(forgotNewPassword) ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${/[A-Z]/.test(forgotNewPassword) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+                <span>Uppercase letter</span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${/[a-z]/.test(forgotNewPassword) ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${/[a-z]/.test(forgotNewPassword) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+                <span>Lowercase letter</span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${/[0-9]/.test(forgotNewPassword) ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${/[0-9]/.test(forgotNewPassword) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+                <span>One number</span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${/[^A-Za-z0-9]/.test(forgotNewPassword) ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${/[^A-Za-z0-9]/.test(forgotNewPassword) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+                <span>Special char</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* OTP Inputs */}
+        <div className="pt-2">
+          <label className="block text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-theme-muted mb-2 text-center">6-Digit Reset Code</label>
+          <div className="flex justify-center gap-2 sm:gap-3" onPaste={handleForgotOtpPaste}>
+            {forgotOtpDigits.map((digit, index) => (
+              <input
+                key={index}
+                ref={(el) => { forgotOtpInputRefs.current[index] = el; }}
+                type="text"
+                inputMode="numeric"
+                maxLength={1}
+                value={digit}
+                onChange={(e) => handleForgotOtpChange(index, e.target.value)}
+                onKeyDown={(e) => handleForgotOtpKeyDown(index, e)}
+                autoFocus={index === 0}
+                disabled={isLoading}
+                className={`w-9 h-11 sm:w-10 sm:h-12 text-center text-lg sm:text-xl font-bold bg-black/[0.03] dark:bg-white/[0.03] border-2 ${
+                  digit ? 'border-gold text-amber-600 dark:text-gold' : 'border-theme-border'
+                } rounded-xl text-theme-text focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-all`}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Loading indicator */}
+        {isLoading && (
+          <div className="flex items-center justify-center gap-2 text-amber-500 text-xs sm:text-sm">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Verifying & resetting...</span>
+          </div>
+        )}
+
+        {/* Timer + Resend */}
+        <div className="text-center pt-2">
+          <p className="text-theme-muted text-xs mb-1.5">
+            Code expires in <span className="text-amber-500 font-semibold">5 minutes</span>
+          </p>
+          {forgotResendCooldown > 0 ? (
+            <p className="text-theme-muted text-xs">
+              Resend code in <span className="text-amber-500 font-mono font-semibold">{forgotResendCooldown}s</span>
+            </p>
+          ) : (
+            <button
+              onClick={handleResendForgotOtp}
+              className="text-amber-600 dark:text-gold hover:underline text-xs font-semibold transition-colors"
+            >
+              Resend Code
+            </button>
+          )}
+        </div>
+      </div>
     </>
   );
 
@@ -1124,7 +1479,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     return (
       <>
         {/* Header */}
-        <div className="px-8 pt-10 pb-4">
+        <div className="px-5 sm:px-8 pt-10 pb-4">
           <button
             onClick={() => {
               manualWallet.reset();
@@ -1141,7 +1496,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
           <p className="text-theme-muted text-sm">
             Choose your preferred wallet to sign in.
           </p>
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="text-xs px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-400 font-medium border border-purple-500/20">
               Solana
             </span>
@@ -1153,7 +1508,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
         </div>
 
         {/* Wallet Options */}
-        <div className="px-8 pb-8 space-y-3">
+        <div className="px-5 sm:px-8 pb-8 space-y-3">
           {/* Connection Status */}
           <AnimatePresence>
             {(manualWallet.state !== 'idle') && (
@@ -1191,10 +1546,10 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                 disabled={isWalletBusy && !isActive}
                 className={`w-full flex items-center gap-4 p-4 border rounded-xl transition-all duration-200 group ${isActive && isWalletBusy
                   ? 'bg-gold/5 border-gold/40'
-                  : 'bg-theme-elevated/50 border-theme-border hover:border-gold/40 hover:bg-gold/5'
+                  : 'bg-black/[0.02] dark:bg-white/[0.02] border-theme-border hover:border-gold/40 hover:bg-gold/5'
                   } ${isWalletBusy && !isActive ? 'opacity-40 cursor-not-allowed' : ''}`}
               >
-                <div className={`w-10 h-10 rounded-xl bg-theme-surface flex items-center justify-center flex-shrink-0 transition-transform ${!isWalletBusy ? 'group-hover:scale-110' : ''
+                <div className={`w-10 h-10 rounded-xl bg-theme-bg bg-opacity-50 border border-theme-border flex items-center justify-center flex-shrink-0 transition-transform ${!isWalletBusy ? 'group-hover:scale-110' : ''
                   }`}>
                   <img
                     src={wallet.logo}
@@ -1203,7 +1558,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                   />
                 </div>
                 <div className="flex-1 text-left">
-                  <p className={`font-medium transition-colors ${isActive && isWalletBusy ? 'text-gold' : 'text-theme-text group-hover:text-gold'
+                  <p className={`font-semibold text-sm transition-colors ${isActive && isWalletBusy ? 'text-gold' : 'text-theme-text group-hover:text-gold'
                     }`}>
                     {wallet.name}
                   </p>
@@ -1219,7 +1574,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                       <span className="text-[10px] text-green-400 font-medium">Installed</span>
                     )}
                     <div className={`w-2 h-2 rounded-full ${installed || wallet.id === 'walletconnect'
-                      ? 'bg-green-500/50 group-hover:bg-green-500'
+                      ? 'bg-green-500'
                       : 'bg-theme-muted/30'
                       } transition-colors`} />
                   </div>
@@ -1228,9 +1583,9 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
             );
           })}
 
-          <div className="flex items-center gap-2 pt-2">
-            <ShieldCheck className="w-3.5 h-3.5 text-theme-muted" />
-            <p className="text-xs text-theme-muted">
+          <div className="flex items-start gap-2 pt-2">
+            <ShieldCheck className="w-4 h-4 text-theme-muted mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-theme-muted leading-relaxed">
               You'll be asked to sign a message to verify ownership. No funds will be moved.
             </p>
           </div>
@@ -1239,7 +1594,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     );
   };
 
-  // Render account selection view — with loading + chain badges + security notice
+  // Render wallet selection view — with loading + chain badges + security notice
   const renderWalletAccountSelectView = () => {
     const isConnecting = manualWallet.state === 'connecting';
     const isProcessing = manualWallet.state === 'requesting-nonce' || manualWallet.state === 'awaiting-signature' || manualWallet.state === 'verifying';
@@ -1251,7 +1606,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     return (
       <>
         {/* Header */}
-        <div className="px-8 pt-10 pb-4">
+        <div className="px-5 sm:px-8 pt-10 pb-4">
           <button
             onClick={() => {
               manualWallet.reset();
@@ -1269,7 +1624,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
           <div className="flex items-center gap-3 mb-3">
             {activeWallet && (
-              <div className="w-10 h-10 rounded-xl bg-theme-surface flex items-center justify-center border border-theme-border/50">
+              <div className="w-10 h-10 rounded-xl bg-theme-bg bg-opacity-50 flex items-center justify-center border border-theme-border">
                 <img src={activeWallet.logo} alt={activeWallet.name} className="w-6 h-6" loading="eager" />
               </div>
             )}
@@ -1277,7 +1632,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
               <h2 className="text-2xl font-serif font-bold text-theme-text">
                 {isConnecting ? 'Connecting...' : 'Select'} <span className="text-gold italic">{isConnecting ? '' : 'Account'}</span>
               </h2>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex flex-wrap items-center gap-2 mt-1">
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${chainColor}`}>
                   {chainLabel}
                 </span>
@@ -1295,7 +1650,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
           )}
         </div>
 
-        <div className="px-8 pb-8 space-y-3">
+        <div className="px-5 sm:px-8 pb-8 space-y-3">
           {/* Connection / Auth Status */}
           <AnimatePresence mode="wait">
             {(manualWallet.state !== 'idle' && manualWallet.state !== 'connected' && manualWallet.state !== 'error') && (
@@ -1322,7 +1677,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                     switchView('main');
                   }
                 }}
-                className="w-full py-2.5 text-sm font-medium text-gold border border-gold/30 rounded-xl hover:bg-gold/5 transition-colors"
+                className="w-full py-2.5 text-sm font-semibold text-gold border border-gold/30 rounded-xl hover:bg-gold/5 transition-colors"
               >
                 Try Again
               </button>
@@ -1339,9 +1694,9 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
               <div className="w-16 h-16 rounded-2xl bg-gold/5 border border-gold/20 flex items-center justify-center">
                 <Loader2 className="w-8 h-8 text-gold animate-spin" />
               </div>
-              <div className="text-center">
-                <p className="text-sm text-theme-text font-medium">Connecting to {activeWallet?.name}...</p>
-                <p className="text-xs text-theme-muted mt-1">Please approve the connection in your wallet</p>
+              <div className="text-center px-4">
+                <p className="text-sm text-theme-text font-semibold">Connecting to {activeWallet?.name}...</p>
+                <p className="text-xs text-theme-muted mt-1 leading-relaxed">Please approve the connection in your wallet</p>
               </div>
             </motion.div>
           )}
@@ -1361,9 +1716,9 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                     }
                   }}
                   disabled={isProcessing}
-                  className="w-full flex items-center gap-4 p-4 border rounded-xl transition-all duration-200 bg-theme-elevated/30 border-theme-border hover:border-gold/40 hover:bg-gold/5 text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full flex items-center gap-4 p-4 border rounded-xl transition-all duration-200 bg-black/[0.02] dark:bg-white/[0.02] border-theme-border hover:border-gold/40 hover:bg-gold/5 text-left group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-theme-surface flex items-center justify-center flex-shrink-0 border border-theme-border/50">
+                  <div className="w-10 h-10 rounded-xl bg-theme-bg bg-opacity-50 flex items-center justify-center flex-shrink-0 border border-theme-border">
                     {activeWallet ? (
                       <img src={activeWallet.logo} alt="" className="w-6 h-6" />
                     ) : (
@@ -1371,7 +1726,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-theme-text font-mono text-sm">
+                    <p className="font-semibold text-theme-text font-mono text-sm">
                       {account.slice(0, 6)}...{account.slice(-4)}
                     </p>
                     <p className="text-xs text-theme-muted mt-0.5 flex items-center gap-1.5">
@@ -1394,10 +1749,10 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
           {/* Security notice */}
           {hasAccounts && !isConnecting && manualWallet.state !== 'error' && (
-            <div className="flex items-center gap-2 pt-2">
-              <ShieldCheck className="w-3.5 h-3.5 text-green-500/70" />
-              <p className="text-[11px] text-theme-muted">
-                You'll sign a verification message only. <span className="text-green-400/80 font-medium">No funds will be moved.</span>
+            <div className="flex items-start gap-2 pt-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-500/70 mt-0.5 flex-shrink-0" />
+              <p className="text-[11px] text-theme-muted leading-relaxed">
+                You'll sign a verification message only. <span className="text-emerald-600 dark:text-green-400 font-semibold">No funds will be moved.</span>
               </p>
             </div>
           )}
@@ -1422,7 +1777,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
           />
 
           {/* Modal Container */}
-          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6 pointer-events-none">
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-6 pointer-events-none">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1453,16 +1808,18 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                   {view === 'main' && renderMainView()}
                   {view === 'email-login' && renderEmailLoginView()}
                   {view === 'email-register' && renderEmailRegisterView()}
+                  {view === 'forgot-password' && renderForgotPasswordView()}
+                  {view === 'forgot-password-otp' && renderForgotPasswordOtpView()}
                   {view === 'otp-input' && (
                     <>
                       {/* OTP Input View */}
-                      <div className="px-8 pt-8 pb-6">
+                      <div className="px-5 sm:px-8 pt-8 pb-6">
                         <button
                           onClick={() => switchView('email-login')}
                           className="flex items-center gap-2 text-theme-muted hover:text-theme-text transition-colors mb-4"
                         >
                           <ArrowLeft className="w-4 h-4" />
-                          <span className="text-sm">Back</span>
+                          <span className="text-xs sm:text-sm font-medium">Back</span>
                         </button>
                         <div className="flex items-center gap-3 mb-3">
                           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 flex items-center justify-center border border-amber-500/20">
@@ -1475,7 +1832,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                         </div>
                       </div>
 
-                      <div className="px-8 pb-10 space-y-6">
+                      <div className="px-5 sm:px-8 pb-10 space-y-6">
                         {/* Error */}
                         {errors.general && (
                           <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
@@ -1485,7 +1842,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                         )}
 
                         {/* OTP Inputs */}
-                        <div className="flex justify-center gap-3" onPaste={handleOtpPaste}>
+                        <div className="flex justify-center gap-2 sm:gap-3" onPaste={handleOtpPaste}>
                           {otpDigits.map((digit, index) => (
                             <input
                               key={index}
@@ -1498,8 +1855,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                               onKeyDown={(e) => handleOtpKeyDown(index, e)}
                               autoFocus={index === 0}
                               disabled={isLoading}
-                              className={`w-12 h-14 text-center text-2xl font-bold bg-gray-50 dark:bg-theme-elevated border-2 ${
-                                digit ? 'border-amber-500/60 text-amber-600 dark:text-gold' : 'border-theme-border'
+                              className={`w-9 h-11 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-bold bg-black/[0.03] dark:bg-white/[0.03] border-2 ${
+                                digit ? 'border-gold text-amber-600 dark:text-gold' : 'border-theme-border'
                               } rounded-xl text-theme-text focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-all`}
                             />
                           ))}
@@ -1537,7 +1894,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                   {view === 'email-verify-pending' && (
                     <>
                       {/* Email Verification Pending View */}
-                      <div className="px-8 py-16 text-center">
+                      <div className="px-5 sm:px-8 py-12 sm:py-16 text-center">
                         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-500/20 to-emerald-500/10 flex items-center justify-center border border-green-500/20 mx-auto mb-6">
                           <MailCheck className="w-10 h-10 text-green-500" />
                         </div>
@@ -1556,7 +1913,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                         </p>
                         <button
                           onClick={() => switchView('email-login')}
-                          className="w-full bg-gradient-to-r from-amber-600 to-amber-700 text-white py-3 rounded-xl font-semibold hover:from-amber-700 hover:to-amber-800 transition-all shadow-lg"
+                          className="w-full bg-gradient-to-r from-amber-500 to-gold text-charcoal py-3 rounded-xl font-semibold hover:from-amber-600 hover:to-gold transition-all active:scale-[0.98] shadow-md hover:shadow-gold/10"
                         >
                           Back to Sign In
                         </button>
@@ -1573,14 +1930,14 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
               </AnimatePresence>
 
               {/* Footer */}
-              <div className="px-8 py-4 bg-theme-elevated/30 border-t border-theme-border text-center backdrop-blur-sm">
-                <p className="text-xs text-gray-600 dark:text-gray-400">
+              <div className="px-5 sm:px-8 py-4 bg-black/[0.03] dark:bg-white/[0.03] border-t border-theme-border text-center backdrop-blur-sm">
+                <p className="text-xs text-theme-muted leading-relaxed">
                   By continuing, you agree to our{' '}
-                  <a href="/terms" className="font-medium text-amber-700 dark:text-gold hover:underline">
+                  <a href="/terms" className="font-semibold text-amber-700 dark:text-gold hover:underline">
                     Terms of Service
                   </a>{' '}
                   and{' '}
-                  <a href="/privacy" className="font-medium text-amber-700 dark:text-gold hover:underline">
+                  <a href="/privacy" className="font-semibold text-amber-700 dark:text-gold hover:underline">
                     Privacy Policy
                   </a>
                   .
