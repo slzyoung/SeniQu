@@ -1024,6 +1024,120 @@ export class MuseumsService {
     }
 
     /**
+     * Scrape place brief history (summary extract) from Wikipedia (100% FREE)
+     * and cache/load it to/from the database.
+     */
+    async scrapePlaceSummary(placeName: string): Promise<{ title: string; extract: string; url: string; thumbnail?: string } | null> {
+        try {
+            const queryName = placeName.trim();
+            if (!queryName) return null;
+
+            // 1. Check database first to see if we already have it cached
+            const { data: matched, error: dbError } = await this.supabase
+                .from('institutions')
+                .select('id, name, slug, description, cover_image_url')
+                .ilike('name', queryName)
+                .limit(1);
+
+            let existingInstitution: any = null;
+            if (!dbError && matched && matched.length > 0) {
+                existingInstitution = matched[0];
+                const desc = existingInstitution.description;
+                // If it's already cached and is NOT the default address fallback
+                if (desc && desc.length > 50 && !desc.startsWith('Tempat bersejarah/budaya:')) {
+                    this.logger.log(`[WIKI_CACHE] Cache hit in DB for "${queryName}".`);
+                    return {
+                        title: existingInstitution.name,
+                        extract: desc,
+                        url: `https://id.wikipedia.org/wiki/${encodeURIComponent(existingInstitution.name)}`,
+                        thumbnail: existingInstitution.cover_image_url || null,
+                    };
+                }
+            }
+
+            let result: { title: string; extract: string; url: string; thumbnail?: string } | null = null;
+
+            // Step 1: Query Indonesian Wikipedia search
+            const idUrl = `https://id.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(queryName)}&gsrlimit=1&prop=extracts|pageimages|info&exintro=1&explaintext=1&inprop=url&pithumbsize=800&format=json&origin=*`;
+            
+            let response = await fetch(idUrl, {
+                headers: {
+                    'User-Agent': 'SeniQu-WebApp/1.0 (https://seniqu.art; contact@seniqu.art)',
+                },
+            });
+            
+            if (response.ok) {
+                const data = await response.json() as any;
+                if (data?.query?.pages) {
+                    const pages = Object.values(data.query.pages) as any[];
+                    if (pages.length > 0) {
+                        const page = pages[0];
+                        if (page.extract) {
+                            result = {
+                                title: page.title,
+                                extract: page.extract,
+                                url: page.fullurl || `https://id.wikipedia.org/?curid=${page.pageid}`,
+                                thumbnail: page.thumbnail?.source || null,
+                            };
+                        }
+                    }
+                }
+            }
+
+            // Step 2: Query English Wikipedia search as fallback
+            if (!result) {
+                const enUrl = `https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(queryName)}&gsrlimit=1&prop=extracts|pageimages|info&exintro=1&explaintext=1&inprop=url&pithumbsize=800&format=json&origin=*`;
+                response = await fetch(enUrl, {
+                    headers: {
+                        'User-Agent': 'SeniQu-WebApp/1.0 (https://seniqu.art; contact@seniqu.art)',
+                    },
+                });
+
+                if (response.ok) {
+                    const data = await response.json() as any;
+                    if (data?.query?.pages) {
+                        const pages = Object.values(data.query.pages) as any[];
+                        if (pages.length > 0) {
+                            const page = pages[0];
+                            if (page.extract) {
+                                result = {
+                                    title: page.title,
+                                    extract: page.extract,
+                                    url: page.fullurl || `https://en.wikipedia.org/?curid=${page.pageid}`,
+                                    thumbnail: page.thumbnail?.source || null,
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Cache back to database if found
+            if (result && existingInstitution) {
+                const updateData: any = { description: result.extract };
+                if (!existingInstitution.cover_image_url && result.thumbnail) {
+                    updateData.cover_image_url = result.thumbnail;
+                }
+                const { error: updateError } = await this.supabase
+                    .from('institutions')
+                    .update(updateData)
+                    .eq('id', existingInstitution.id);
+
+                if (updateError) {
+                    this.logger.error(`[WIKI_CACHE] Failed to write cache back for "${queryName}": ${updateError.message}`);
+                } else {
+                    this.logger.log(`[WIKI_CACHE] Successfully cached Wikipedia extract for "${queryName}" in DB.`);
+                }
+            }
+
+            return result;
+        } catch (error: any) {
+            this.logger.warn(`[SCRAPER] Failed to scrape Wikipedia summary for "${placeName}": ${error.message}`);
+        }
+        return null;
+    }
+
+    /**
      * Ingests Google Places results into the local PostgreSQL institutions database.
      * Runs asynchronously in the background to prevent blocking the API response.
      */

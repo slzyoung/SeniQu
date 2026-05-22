@@ -303,6 +303,19 @@ class MuseumService {
         const response = await apiGet<any>(`/museums/place-details/${placeId}`);
         return response?.data || response;
     }
+
+    /**
+     * Get brief history / summary of a place from Wikipedia
+     */
+    async getWikipediaSummary(name: string): Promise<{ title: string; extract: string; url: string; thumbnail?: string } | null> {
+        try {
+            const response = await apiGet<any>(`/museums/wikipedia-summary`, { params: { name } });
+            return response?.data || response;
+        } catch (error) {
+            console.error('[MUSEUM_SERVICE] Failed to fetch Wikipedia summary:', error);
+            return null;
+        }
+    }
 }
 
 export const museumService = MuseumService.getInstance();

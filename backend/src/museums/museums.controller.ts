@@ -127,6 +127,18 @@ export class MuseumsController {
     }
 
     @Public()
+    @Get("wikipedia-summary")
+    @Throttle({ default: { limit: 10, ttl: 60000 } })
+    @ApiOperation({ summary: "Get Wikipedia page summary (brief history) for a place" })
+    @ApiQuery({ name: "name", required: true, type: String })
+    async getWikipediaSummary(
+        @Query("name") name: string
+    ) {
+        const safeName = String(name).slice(0, 100);
+        return this.museumsService.scrapePlaceSummary(safeName);
+    }
+
+    @Public()
     @Get("region-type")
     @Throttle({ default: { limit: 3, ttl: 60000 } })
     @ApiOperation({ summary: "Detect if coordinates are in a major city (50km) or regency/kabupaten area (100km)" })

@@ -50,6 +50,9 @@ import {
     ChevronLeft,
     ChevronRight,
     ArrowUpDown,
+    BookOpen,
+    ChevronDown,
+    ChevronUp,
 } from 'lucide-react';
 import { useTheme } from '../../../../hooks/useTheme';
 import { useAuthStore } from '../../../../stores/useAuthStore';
@@ -284,6 +287,44 @@ function MuseumDetailSheet({
     showRouteLine?: boolean;
     onClearRoute?: () => void;
 }) {
+    const [wikiData, setWikiData] = useState<{ title: string; extract: string; url: string; thumbnail?: string } | null>(null);
+    const [isWikiLoading, setIsWikiLoading] = useState(false);
+    const [wikiExpanded, setWikiExpanded] = useState(false);
+    const [wikiError, setWikiError] = useState<string | null>(null);
+
+    useEffect(() => {
+        setWikiData(null);
+        setWikiExpanded(false);
+        setIsWikiLoading(false);
+        setWikiError(null);
+    }, [museum?.id]);
+
+    const handleFetchWiki = async () => {
+        if (wikiData) {
+            setWikiExpanded(!wikiExpanded);
+            return;
+        }
+
+        setIsWikiLoading(true);
+        setWikiError(null);
+        try {
+            const res = await museumService.getWikipediaSummary(museum.name);
+            if (res && res.extract) {
+                setWikiData(res);
+                setWikiExpanded(true);
+            } else {
+                setWikiError('Sejarah singkat tidak ditemukan untuk tempat ini.');
+                setTimeout(() => setWikiError(null), 4000);
+            }
+        } catch (error) {
+            console.error('[WIKI_FETCH] Failed:', error);
+            setWikiError('Gagal memuat sejarah singkat dari Wikipedia.');
+            setTimeout(() => setWikiError(null), 4000);
+        } finally {
+            setIsWikiLoading(false);
+        }
+    };
+
     const crowdColor = museum.crowdLevel?.includes('Busy')
         ? 'pnb-badge--red'
         : museum.crowdLevel?.includes('Moderate')
@@ -371,6 +412,63 @@ function MuseumDetailSheet({
                             <span className="pnb-status-pill__label">NEAREST ROUTE</span>
                             <span className="pnb-status-pill__value">{distance} ({duration})</span>
                         </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Wikipedia History Section */}
+            <div className="pnb-wiki-history">
+                {!wikiExpanded ? (
+                    <button
+                        className="pnb-wiki-history-trigger"
+                        onClick={handleFetchWiki}
+                        disabled={isWikiLoading}
+                        aria-label="Toggle Wikipedia History"
+                    >
+                        {isWikiLoading ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                        ) : (
+                            <BookOpen className="w-4 h-4 text-blue-500" />
+                        )}
+                        <span>{isWikiLoading ? 'Mencari sejarah...' : 'Baca Sejarah Singkat (Wikipedia)'}</span>
+                        <ChevronDown className="w-4 h-4 ml-auto text-slate-400" />
+                    </button>
+                ) : (
+                    <div className="pnb-wiki-history-card">
+                        <div className="pnb-wiki-history-card__header">
+                            <BookOpen className="w-4 h-4 text-blue-500" style={{ flexShrink: 0 }} />
+                            <span className="pnb-wiki-history-card__title">Sejarah: {wikiData?.title}</span>
+                            <button
+                                className="pnb-wiki-history-card__close"
+                                onClick={() => setWikiExpanded(false)}
+                                aria-label="Close Wikipedia History"
+                            >
+                                <ChevronUp className="w-4 h-4" />
+                            </button>
+                        </div>
+                        {wikiData?.thumbnail && (
+                            <div className="pnb-wiki-history-card__image-container">
+                                <img src={wikiData.thumbnail} alt={wikiData.title} className="pnb-wiki-history-card__image" />
+                            </div>
+                        )}
+                        <p className="pnb-wiki-history-card__text">{wikiData?.extract}</p>
+                        {wikiData?.url && (
+                            <a
+                                href={wikiData.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="pnb-wiki-history-card__link"
+                            >
+                                Baca selengkapnya di Wikipedia
+                                <ExternalLink className="w-3 h-3" />
+                            </a>
+                        )}
+                    </div>
+                )}
+                {wikiError && (
+                    <div className="pnb-wiki-history-error">
+                        <AlertCircle className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
+                        <span>{wikiError}</span>
                     </div>
                 )}
             </div>
@@ -1180,6 +1278,7 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
     // Refs for Leaflet Map and Overlay elements
     const mapContainerRef = useRef<HTMLDivElement | null>(null);
     const leafletMapRef = useRef<L.Map | null>(null);
+    const [leafletMap, setLeafletMap] = useState<L.Map | null>(null);
     const userMarkerRef = useRef<L.Marker | null>(null);
     const userAccuracyCircleRef = useRef<L.Circle | null>(null);
     const markersRef = useRef<globalThis.Map<string, L.Marker>>(new globalThis.Map());
@@ -1377,7 +1476,7 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
     useEffect(() => {
         if (mapProvider !== 'openstreetmap') return;
         if (!mapContainerRef.current) return;
-        if (leafletMapRef.current) return;
+        if (leafletMap) return;
 
         const map = L.map(mapContainerRef.current, {
             zoomControl: false,
@@ -1393,29 +1492,37 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
         }).addTo(map);
 
         leafletMapRef.current = map;
+        setLeafletMap(map);
 
         setTimeout(() => {
             map.invalidateSize();
         }, 200);
 
         return () => {
-            if (leafletMapRef.current) {
-                leafletMapRef.current.remove();
-                leafletMapRef.current = null;
+            if (map) {
+                map.remove();
             }
+            leafletMapRef.current = null;
+            setLeafletMap(null);
+
+            // Clear markers refs since they are bound to the destroyed map
+            if (userMarkerRef.current) userMarkerRef.current = null;
+            if (userAccuracyCircleRef.current) userAccuracyCircleRef.current = null;
+            markersRef.current.clear();
+            if (routePolylineRef.current) routePolylineRef.current = null;
         };
-    }, [mapProvider, theme]);
+    }, [mapProvider, theme, viewMode]);
 
     // Update center of Leaflet map
     useEffect(() => {
-        if (mapProvider === 'openstreetmap' && leafletMapRef.current) {
-            leafletMapRef.current.setView([mapCenter.lat, mapCenter.lng]);
+        if (mapProvider === 'openstreetmap' && leafletMap) {
+            leafletMap.setView([mapCenter.lat, mapCenter.lng]);
         }
-    }, [mapCenter, mapProvider]);
+    }, [mapCenter, mapProvider, leafletMap]);
 
     // Handle user location blue dot and halo on Leaflet
     useEffect(() => {
-        const map = leafletMapRef.current;
+        const map = leafletMap;
         if (!map || !userLocation || mapProvider !== 'openstreetmap') return;
 
         const latLng = L.latLng(userLocation.latitude, userLocation.longitude);
@@ -1450,11 +1557,11 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                 interactive: false,
             }).addTo(map);
         }
-    }, [userLocation, radarRadius, mapProvider]);
+    }, [userLocation, radarRadius, mapProvider, leafletMap]);
 
     // Sync markers on Leaflet
     useEffect(() => {
-        const map = leafletMapRef.current;
+        const map = leafletMap;
         if (!map || mapProvider !== 'openstreetmap') return;
 
         markersRef.current.forEach(m => m.remove());
@@ -1503,11 +1610,11 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
 
             markersRef.current.set(museum.id, marker);
         });
-    }, [sortedPlaces, selectedMuseum?.id, showRouteLine, mapProvider, selectPlace]);
+    }, [sortedPlaces, selectedMuseum?.id, showRouteLine, mapProvider, selectPlace, leafletMap]);
 
     // Handle polyline for directions route on Leaflet
     useEffect(() => {
-        const map = leafletMapRef.current;
+        const map = leafletMap;
         if (!map || mapProvider !== 'openstreetmap') return;
 
         if (routePolylineRef.current) {
@@ -1527,7 +1634,7 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                 padding: [50, 50]
             });
         }
-    }, [routePath, showRouteLine, mapProvider]);
+    }, [routePath, showRouteLine, mapProvider, leafletMap]);
 
     // Map Load Handlers
     const onMapLoad = useCallback((map: google.maps.Map) => {
