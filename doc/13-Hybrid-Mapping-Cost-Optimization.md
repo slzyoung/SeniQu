@@ -118,15 +118,11 @@ To prevent quota scraping, key extraction, or billing exhaustion, we partitioned
 
 ## 5. UI Alignment and Rendering Fixes
 - **Leaflet Marker Centering:** To prevent text emojis (`🏛️`, `🎨`, `🏯`) inside custom Leaflet HTML `divIcon` pins from inheriting the `-45deg` parent rotation (which caused tilted icons), we wrapped them inside a `<span>` element. This enables the CSS selector `.leaflet-gold-pin-marker > *` to target the text node parent wrapper and rotate it back by `45deg`, rendering all markers upright and perfectly centered on the map.
-- **Reactive Map Reinitialization:** When toggling view modes (Map to List and back), the map container DOM element is unmounted and recreated. We added `viewMode` to the Leaflet map initialization hook's dependency array and transitioned the ref instance to a reactive state `leafletMap`. This forces Leaflet to clean up old detached markers/polylines and instantiate a fresh map when returning to map view, preventing blank screen rendering.
-
----
-
-## 6. Free Place Image Scraping & Caching Architecture
-To completely eliminate reliance on Google's expensive Place Photos API (which raises Place Details calls to the Preferred Billing tier at $32/1,000 requests), SeniQu implements an autonomous, zero-cost image scraping and caching pipeline:
+- **Reactive Map Reinitialization:** When toggling view modes (Map to List and back), the map container DOM element is unmounted and recreated. We added `viewMode` to the Leaflet map initialization hook's dependency array and transitioned the ref instance to a reactive state `leafletMap`. This forces Leaflet to clean up old detached markers/polylines and instantiate a fresh map when returning to map view, preventing blank s## 6. Free Place Image & Wikipedia Summary Scraping & Caching Architecture
+To completely eliminate reliance on Google's expensive Place Photos and Place Details APIs (which raise calls to the Preferred Billing tier at $32/1,000 requests), SeniQu implements an autonomous, zero-cost image scraping and Wikipedia summary caching pipeline:
 
 ```
-    [ Google searchNearbyPlaces API (No photos) ]
+    [ Google searchNearbyPlaces API (No photos/reviews) ]
                        |
                        v
          [ Ingest to Local Database ]
@@ -136,27 +132,46 @@ To completely eliminate reliance on Google's expensive Place Photos API (which r
                        |        - Custom User-Agent & Rate-limit delay (200ms)
                        |
                        v
-         [ Store cover_image_url in DB ]
+    +---------------------------------------+
+    |  DB Cache Lookup (`institutions`)     |
+    |  - If valid summary exists -> Return  |
+    |  - If empty/fallback -> Scrape Wiki   |
+    +------------------+--------------------+
+                       |
+                       v
+         [ Update description & cover ]
                        |
            +-----------+-----------+
            |                       |
-     [ Map to API ]          [ Sync Existing ]
-  - Search results fetch    - Background task backfills
-    database image directly   existing places missing images
+     [ Map to API ]          [ Frontend Sheet ]
+  - Search results fetch    - "Sejarah Singkat" button
+    database image directly   fetches on-demand, expands
+                            - Displays text, image & link
 ```
 
-### A. Wikipedia Search API Scraper
-The backend implements `scrapePlaceImage(placeName: string)` to query Wikipedia's search engine:
-1. **Indonesian Wikipedia Search (`id.wikipedia.org`)**: Formulates search query utilizing generator options (`generator=search&gsrlimit=1&prop=pageimages&pithumbsize=800`).
-2. **English Wikipedia Search Fallback (`en.wikipedia.org`)**: Triggers search as a fallback if the Indonesian query returns no thumbnail.
+### A. Wikipedia Search & Summary API Scraper
+The backend implements `scrapePlaceImage(placeName: string)` and `scrapePlaceSummary(placeName: string)` to query Wikipedia's open search engine:
+1. **Indonesian Wikipedia Search (`id.wikipedia.org`)**: Formulates search query utilizing generator options (`generator=search&gsrlimit=1&prop=extracts|pageimages|info&exintro=1&explaintext=1&inprop=url&pithumbsize=800`).
+2. **English Wikipedia Search Fallback (`en.wikipedia.org`)**: Triggers search as a fallback if the Indonesian query returns no extract or thumbnail.
 3. **Billing Risk**: **$0.00**. Wikipedia's API requires no API keys, has no billing thresholds, and allows public caching of assets under Creative Commons licenses.
 
-### B. Database Integration & Image Caching
-* **Newly Ingested Places**: As new destinations are identified from raw Google API results, they are inserted into the database. During insertion, their Wikipedia images are scraped and cached in the `cover_image_url` column.
-* **Background Image Backfill**: For existing database places that currently lack cover images, the ingestion pipeline automatically runs a background task that scrapes Wikipedia images and updates the records asynchronously without blocking the client.
+### B. Database Integration & Caching Layer (0ms Latency)
+* **Pre-Query Check**: Before calling the Wikipedia API, the backend queries the local database's `institutions` table for a case-insensitive match on the place name.
+* **Cache Resolution**: If a record is found and its `description` column contains a valid text (longer than 50 characters and not starting with the placeholder `"Tempat bersejarah/budaya:"`), it returns this cached description and the saved `cover_image_url` instantly as the Wikipedia summary, reducing external API latency to zero.
+* **Cache Write-Back**: If the summary is not cached (placeholder or empty), the backend queries Wikipedia. On success, the backend updates the database record's `description` with the Wikipedia extract, and updates the `cover_image_url` if it was previously empty.
 * **Immediate Search Result Augmentation**: The `/search-nearby` endpoint queries the database for matching slugs of the search results. If matching places already have a `cover_image_url` saved, the URL is attached to `photos: [cover_image_url]` immediately, bypassing any need for future image scraping.
 
-### C. Frontend Image Fallback Handling
+### C. Frontend Integration & Premium UI
+* **Inline Toggle Button**: In the details sheet (`MuseumDetailSheet` in `PublicNearbyPage.tsx`), a beautiful button **"Baca Sejarah Singkat (Wikipedia)"** is placed next to the status badges.
+* **Dynamic Loading & Cache Hits**: Clicking this triggers an asynchronous request to `/api/v1/museums/wikipedia-summary?name=...`. It displays a loading spinner and handles fallbacks gracefully.
+* **Expanding Glassmorphic Card**: On success, the bottom sheet expands and renders a beautiful dashed-border blue-tinted card containing:
+  - **Wiki Title**: Page title from Wikipedia.
+  - **Wiki Thumbnail Image**: Scraped image inside a shaded rounded-corner card.
+  - **Wiki Extract**: Full brief history text.
+  - **Wikipedia Direct Link**: Clickable link to read the full Wikipedia article.
+* **Auto-Resets**: To maintain UI correctness, the Wikipedia states (summary data, expansion, and error) automatically reset when the user switches to a different museum pin.
+
+### D. Frontend Image Fallback Handling
 In the database mapper (`mapDatabaseToMuseum` in `museumService.ts`):
 * Previously, empty JSONB defaults (`data.images` defaulting to `[]`) evaluated as truthy, blocking the database `cover_image_url` fallback from rendering, resulting in blank/gray preview cards.
 * Fixed the mapper logic to verify array length: `const parsedImages = (data.images && data.images.length > 0) ? data.images : [data.cover_image_url].filter(Boolean)`. This guarantees that if a local or Wikipedia scraped image exists in `cover_image_url`, it renders instantly.
@@ -167,9 +182,10 @@ In the database mapper (`mapDatabaseToMuseum` in `museumService.ts`):
 **Yes.** The system is structurally protected from billing spikes and keeps costs strictly near $0.00/month:
 
 1. **No Google Places Photos API Calls**: Image scraping relies entirely on Wikipedia's free REST API. No Google Photo references are ever requested in backend masks, completely eliminating the $7.00 - $32.00/1k pricing tier.
-2. **Strict Daily Hard Quotas**: Google Search and Details backend endpoints are protected by IP rate limits and global hard quotas (30 requests/day). This caps maximum monthly GCP exposure to under $40, which is entirely absorbed by Google's **$200.00 free monthly credit**.
-3. **OpenStreetMap Default**: 95%+ of normal user mapping queries rely on OpenStreetMap tile servers via Leaflet. The Google Maps JS SDK is only loaded on-demand for authenticated users who manually toggle it on, preventing map load charges for general visitors.
-4. **Free Routing and Geocoding**: High-volume queries for routing (directions) and region detection use OSRM and Nominatim engines, bypassing Google Routes and Geocoding APIs entirely at zero cost.
+2. **Wikipedia Summary Caching**: The dynamic summary scraper uses Wikipedia Extracts, which are free. The database caching layer ensures that most summary requests hit the local database, eliminating Wikipedia API latency and traffic.
+3. **Strict Daily Hard Quotas**: Google Search and Details backend endpoints are protected by IP rate limits and global hard quotas (30 requests/day). This caps maximum monthly GCP exposure to under $40, which is entirely absorbed by Google's **$200.00 free monthly credit**.
+4. **OpenStreetMap Default**: 95%+ of normal user mapping queries rely on OpenStreetMap tile servers via Leaflet. The Google Maps JS SDK is only loaded on-demand for authenticated users who manually toggle it on, preventing map load charges for general visitors.
+5. **Free Routing and Geocoding**: High-volume queries for routing (directions) and region detection use OSRM and Nominatim engines, bypassing Google Routes and Geocoding APIs entirely at zero cost.
 
 ---
 
@@ -180,12 +196,63 @@ In the database mapper (`mapDatabaseToMuseum` in `museumService.ts`):
 | **`PublicNearbyPage.tsx`** | `PublicNearbyPage` | Uses `useAuthStore` to conditionally fetch Google Maps API key only when authenticated, bypassing requests for guest users. |
 | **`PublicNearbyPage.tsx`** | `NearbyPageInner` | Dynamically hides map selection controls and defaults to OpenStreetMap for guest users. Defaults mapProvider to OSM for logged-in users to save load costs. |
 | **`PublicNearbyPage.tsx`** | Leaflet Hooks | Adds `viewMode` to initialization dependency array and uses state-bound `leafletMap` to prevent blank map renders on toggle. |
+| **`PublicNearbyPage.tsx`** | `MuseumDetailSheet` | Integrates Wikipedia summary fetch state hooks, event handler, inline toggle button, and expandable glassmorphic card. |
 | **`museumService.ts`** | `getPlaceDetails` | Client API client method for detailed place lookups. |
+| **`museumService.ts`** | `getWikipediaSummary` | Frontend service client method to query backend Wikipedia summary. |
 | **`museumService.ts`** | `mapDatabaseToMuseum` | Correctly resolves `images` fallbacks and parses multiple database coordinate formats. |
+| **`museums.controller.ts`** | `getWikipediaSummary` | Rate-limited NestJS route `/wikipedia-summary` which proxies to Wikipedia scraper. |
 | **`museums.controller.ts`** | `getMapsConfig` | Secured NestJS route using `@UseGuards(JwtAuthGuard)` to prevent client-key leakage. |
 | **`museums.controller.ts`** | `searchNearbyPlaces`, `getPlaceDetails`, `getRoute` | Public, rate-limited and cached proxy NestJS routes. |
 | **`museums.service.ts`** | `searchNearbyPlaces` | Budget-hardened search query with optimized FieldMask, single center query, local PostGIS fallback, and Memory Cache. Maps database cover images to Google response search results. |
 | **`museums.service.ts`** | `scrapePlaceImage` | Scrapes representative images from Indonesian/English Wikipedia search APIs for free. |
+| **`museums.service.ts`** | `scrapePlaceSummary` | Scrapes summary extracts, URLs, titles, and images from Indonesian/English Wikipedia. Integrates local database cache checks and writes. |
 | **`museums.service.ts`** | `ingestPlacesToDatabase` | Upserts public places and triggers Wikipedia scraping for new entries and existing entries lacking images in the background. |
 | **`museums.service.ts`** | `getPlaceDetails` | Fetches full place details (with reviews/photos) on-demand. |
+
+---
+
+## 9. Future Developer Guidelines: Rules for Adding Scraped Features
+
+When extending SeniQu or adding new features that require scraping/fetching data from third-party APIs (e.g., ticket prices, event lists, virtual tours, or social media links), developers **MUST** follow these design patterns to maintain high performance and low costs:
+
+### A. The "Cache-Aside" (DB-First) Design Pattern
+Every scraper feature must check the database before executing any network requests:
+1. **Lookup**: Query Supabase/PostgreSQL first using a unique key (e.g., `slug`, `place_id`, or `hash`).
+2. **Evaluate Cache Validity**:
+   * If a record exists and is complete (i.e., not a fallback placeholder like `"Tempat bersejarah/budaya:"`), return it immediately.
+   * If a record is stale (exceeded TTL) or empty, proceed to the scraping logic.
+3. **Write-Back**: Always update the local database with the newly scraped content so subsequent users hit the local database instead.
+
+### B. State-of-the-Art (Mutakhir) Latency & Cost Optimization Techniques
+
+To keep performance near **0ms** for the end-user while keeping external request volume low, utilize these techniques:
+
+#### 1. Stale-While-Revalidate (SWR) Caching
+Instead of making the user wait for the Wikipedia/external API query to complete:
+* Serve the expired/existing database cache to the user **instantly**.
+* Trigger the scraper asynchronously in the background to fetch fresh data and update the database.
+* The next visitor gets the updated content instantly.
+
+#### 2. Background Queue & Worker Architecture (BullMQ)
+For heavy scraping tasks (e.g., scraping galleries of 50 images):
+* Never scrape synchronously during a HTTP request.
+* Push a job to a Redis/BullMQ queue.
+* Respond to the client immediately with a "Loading/Processing" state.
+* The background worker fetches the resources, updates the PostgreSQL database, and uses **Supabase Realtime** or WebSockets to broadcast the new data to the frontend.
+
+#### 3. Public/Open-Source API Primacy
+Always prioritize free, open sources before resorting to proprietary platforms:
+* **Cultural Metadata / General History**: Wikipedia Extracts API (`id.wikipedia.org`), Wikidata, DBpedia.
+* **Geocoding & Maps Routing**: OpenStreetMap (Nominatim), Open Source Routing Machine (OSRM).
+* **Open Database License Assets**: Internet Archive, Wikimedia Commons.
+* **Scraper Etiquette**: Always supply a distinct `User-Agent` string (containing app name and contact email) and implement a rate-limiting delay (e.g., `200ms`) between calls to prevent IP blocking.
+
+#### 4. JSONB Column Strategy
+To avoid making database migrations for every new scraped feature, utilize PostgreSQL's **`JSONB`** columns (like `images`, `opening_hours` in `institutions`).
+* Save complex JSON payloads directly.
+* Query/index them using GIN indices for highly efficient lookups.
+
+#### 5. Frontend Debounce Protection
+Ensure that all interactive frontend components that trigger backend queries (such as map panning, search autocomplete, or category filtering) are wrapped in a **debounce hook (300ms - 500ms)**. This prevents double-clicks or fast scroll gestures from spamming requests.
+
 
