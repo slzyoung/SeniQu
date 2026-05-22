@@ -1,5 +1,18 @@
 // API Configuration and Route Constants
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+const getApiBaseUrl = () => {
+    if (import.meta.env.VITE_API_URL) {
+        return import.meta.env.VITE_API_URL;
+    }
+    if (typeof window !== 'undefined') {
+        const hostname = window.location.hostname;
+        if (hostname === 'seniqu.art' || hostname === 'www.seniqu.art' || hostname === 'seniquapp.netlify.app') {
+            return 'https://api.seniqu.art/api/v1';
+        }
+    }
+    return 'http://localhost:3001/api/v1';
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 // Security Configuration from Environment
 export const SECURITY_CONFIG = {
