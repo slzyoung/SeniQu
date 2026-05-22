@@ -205,19 +205,49 @@ export class MuseumsService {
      * Helper to perform local fallback search using PostGIS
      */
     private async performLocalFallbackSearch(lat: number, lng: number, radiusMeters: number, query?: string): Promise<any[]> {
-        const localResponse = await this.findNearby(lat, lng, radiusMeters / 1000);
-        let localPlaces = (localResponse.data || []).map((m: any) => ({
-            id: m.id,
-            name: m.name,
-            address: m.address?.street || m.address?.city || '',
-            latitude: (m.coordinates as any)?.lat ?? (m.coordinates as any)?.latitude,
-            longitude: (m.coordinates as any)?.lng ?? (m.coordinates as any)?.longitude,
-            rating: m.rating || 5.0,
-            reviewCount: m.artworksCount || 0,
-            type: m.type || 'museum',
-            photos: [],
-            reviews: [],
-        }));
+        const { data, error } = await this.supabase
+            .from("institutions")
+            .select("id, name, slug, description, type, street, city, province, logo_url, cover_image_url, is_verified, is_featured, rating, total_artworks, location")
+            .eq("is_verified", true);
+
+        if (error || !data) {
+            this.logger.error(`Local fallback search failed: ${error?.message || 'No data'}`);
+            return [];
+        }
+
+        const radiusKm = radiusMeters / 1000;
+        
+        let localPlaces = data
+            .map((m: any) => {
+                let latitude = 0;
+                let longitude = 0;
+                if (m.location && typeof m.location === 'object' && m.location.coordinates) {
+                    [longitude, latitude] = m.location.coordinates;
+                } else if (m.location && typeof m.location === 'string') {
+                    const match = m.location.match(/POINT\(([^ ]+)\s+([^)]+)\)/);
+                    if (match) {
+                        longitude = parseFloat(match[1]);
+                        latitude = parseFloat(match[2]);
+                    }
+                }
+
+                return {
+                    id: m.id,
+                    name: m.name,
+                    address: m.street || m.city || '',
+                    latitude,
+                    longitude,
+                    rating: Number(m.rating) || 5.0,
+                    reviewCount: m.total_artworks || 0,
+                    type: m.type || 'museum',
+                    photos: m.cover_image_url ? [m.cover_image_url] : [],
+                    reviews: [],
+                };
+            })
+            .filter((p: any) => {
+                const distance = this.haversineDistance(lat, lng, p.latitude, p.longitude);
+                return distance <= radiusKm;
+            });
 
         if (query && query.trim().length > 0) {
             const q = query.toLowerCase().trim();
@@ -226,6 +256,12 @@ export class MuseumsService {
                 p.address.toLowerCase().includes(q)
             );
         }
+
+        localPlaces.sort((a, b) => 
+            this.haversineDistance(lat, lng, a.latitude, a.longitude) -
+            this.haversineDistance(lat, lng, b.latitude, b.longitude)
+        );
+
         return localPlaces;
     }
 
@@ -547,6 +583,32 @@ export class MuseumsService {
         const heritage = filtered.filter(p => p.type === 'heritage').slice(0, 150);
 
         const capped = [...museums, ...galleries, ...heritage];
+
+        // Check database for existing cover images to return in the current search response
+        try {
+            const slugs = capped.map((p) => `g-${p.id}`);
+            const { data: dbPlaces } = await this.supabase
+                .from('institutions')
+                .select('slug, cover_image_url')
+                .in('slug', slugs);
+
+            if (dbPlaces && dbPlaces.length > 0) {
+                const dbImageMap = new Map<string, string>(
+                    dbPlaces
+                        .filter((row) => row.cover_image_url)
+                        .map((row) => [row.slug, row.cover_image_url])
+                );
+
+                for (const p of capped) {
+                    const slug = `g-${p.id}`;
+                    if (dbImageMap.has(slug)) {
+                        p.photos = [dbImageMap.get(slug)];
+                    }
+                }
+            }
+        } catch (dbErr: any) {
+            this.logger.warn(`Failed to fetch cover images from database for search response: ${dbErr.message}`);
+        }
 
         this.logger.log(`Nearby: ${centers.length} grids → ${allPlaces.length} raw → ${filtered.length} within ${radiusKm}km (capped breakdown: ${museums.length} museums, ${galleries.length} galleries, ${heritage.length} heritage)`);
 
@@ -912,6 +974,56 @@ export class MuseumsService {
     }
 
     /**
+     * Scrape place image from Wikipedia (100% FREE fallback)
+     */
+    async scrapePlaceImage(placeName: string): Promise<string | null> {
+        try {
+            const queryName = placeName.trim();
+            if (!queryName) return null;
+
+            // Step 1: Query Indonesian Wikipedia search
+            const idUrl = `https://id.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(queryName)}&gsrlimit=1&prop=pageimages&pithumbsize=800&format=json&origin=*`;
+            
+            let response = await fetch(idUrl, {
+                headers: {
+                    'User-Agent': 'SeniQu-WebApp/1.0 (https://seniqu.art; contact@seniqu.art)',
+                },
+            });
+            
+            if (response.ok) {
+                const data = await response.json() as any;
+                if (data?.query?.pages) {
+                    const pages = Object.values(data.query.pages) as any[];
+                    if (pages.length > 0 && pages[0].thumbnail?.source) {
+                        return pages[0].thumbnail.source;
+                    }
+                }
+            }
+
+            // Step 2: Query English Wikipedia search as fallback
+            const enUrl = `https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(queryName)}&gsrlimit=1&prop=pageimages&pithumbsize=800&format=json&origin=*`;
+            response = await fetch(enUrl, {
+                headers: {
+                    'User-Agent': 'SeniQu-WebApp/1.0 (https://seniqu.art; contact@seniqu.art)',
+                },
+            });
+
+            if (response.ok) {
+                const data = await response.json() as any;
+                if (data?.query?.pages) {
+                    const pages = Object.values(data.query.pages) as any[];
+                    if (pages.length > 0 && pages[0].thumbnail?.source) {
+                        return pages[0].thumbnail.source;
+                    }
+                }
+            }
+        } catch (error: any) {
+            this.logger.warn(`[SCRAPER] Failed to scrape Wikipedia image for "${placeName}": ${error.message}`);
+        }
+        return null;
+    }
+
+    /**
      * Ingests Google Places results into the local PostgreSQL institutions database.
      * Runs asynchronously in the background to prevent blocking the API response.
      */
@@ -939,10 +1051,10 @@ export class MuseumsService {
                 const adminId = this.systemAdminId;
                 const slugs = places.map((p) => `g-${p.id}`);
 
-                // 2. Query existing slugs to prevent overwriting claimed or pre-existing institutions
+                // 2. Query existing slugs and check if cover_image_url is missing
                 const { data: existing, error: existingError } = await this.supabase
                     .from('institutions')
-                    .select('slug')
+                    .select('slug, cover_image_url')
                     .in('slug', slugs);
 
                 if (existingError) {
@@ -950,45 +1062,84 @@ export class MuseumsService {
                     return;
                 }
 
-                const existingSlugs = new Set((existing || []).map((row) => row.slug));
-                const newPlaces = places.filter((p) => !existingSlugs.has(`g-${p.id}`));
+                const existingMap = new Map<string, string | null>(
+                    (existing || []).map((row) => [row.slug, row.cover_image_url])
+                );
 
-                if (newPlaces.length === 0) {
-                    this.logger.log(`[INGEST] All ${places.length} places already exist in the database. Ingestion skipped.`);
+                const newPlaces = places.filter((p) => !existingMap.has(`g-${p.id}`));
+                const missingImagePlaces = places.filter((p) => {
+                    const slug = `g-${p.id}`;
+                    return existingMap.has(slug) && !existingMap.get(slug);
+                });
+
+                if (newPlaces.length === 0 && missingImagePlaces.length === 0) {
+                    this.logger.log(`[INGEST] All ${places.length} places already exist with images in database. Ingestion skipped.`);
                     return;
                 }
 
-                this.logger.log(`[INGEST] Ingesting ${newPlaces.length} new public places into database...`);
+                // A. Insert new places and scrape Wikipedia images
+                if (newPlaces.length > 0) {
+                    this.logger.log(`[INGEST] Ingesting ${newPlaces.length} new public places into database...`);
+                    const upsertData = [];
+                    for (const p of newPlaces) {
+                        const city = this.extractCityFromAddress(p.address);
+                        const province = this.extractProvinceFromAddress(p.address);
+                        const slug = `g-${p.id}`;
 
-                const upsertData = newPlaces.map((p) => {
-                    const city = this.extractCityFromAddress(p.address);
-                    const province = this.extractProvinceFromAddress(p.address);
-                    const slug = `g-${p.id}`;
+                        const cover_image_url = await this.scrapePlaceImage(p.name);
+                        // Small delay to respect rate limit
+                        await new Promise((resolve) => setTimeout(resolve, 200));
 
-                    return {
-                        owner_id: adminId,
-                        name: p.name,
-                        slug,
-                        type: p.type || 'museum',
-                        city,
-                        province,
-                        country: 'Indonesia',
-                        location: `POINT(${p.longitude} ${p.latitude})`,
-                        is_verified: true,
-                        is_featured: false,
-                        rating: p.rating || 0.0,
-                        description: p.address ? `Tempat bersejarah/budaya: ${p.address}` : '',
-                    };
-                });
+                        upsertData.push({
+                            owner_id: adminId,
+                            name: p.name,
+                            slug,
+                            type: p.type || 'museum',
+                            city,
+                            province,
+                            country: 'Indonesia',
+                            location: `POINT(${p.longitude} ${p.latitude})`,
+                            is_verified: true,
+                            is_featured: false,
+                            rating: p.rating || 0.0,
+                            description: p.address ? `Tempat bersejarah/budaya: ${p.address}` : '',
+                            cover_image_url,
+                        });
+                    }
 
-                const { error: insertError } = await this.supabase
-                    .from('institutions')
-                    .insert(upsertData);
+                    const { error: insertError } = await this.supabase
+                        .from('institutions')
+                        .insert(upsertData);
 
-                if (insertError) {
-                    this.logger.error(`[INGEST] Failed to insert new public places: ${insertError.message}`);
-                } else {
-                    this.logger.log(`[INGEST] Successfully ingested ${newPlaces.length} new places.`);
+                    if (insertError) {
+                        this.logger.error(`[INGEST] Failed to insert new public places: ${insertError.message}`);
+                    } else {
+                        this.logger.log(`[INGEST] Successfully ingested ${newPlaces.length} new places.`);
+                    }
+                }
+
+                // B. Backfill missing images for existing places
+                if (missingImagePlaces.length > 0) {
+                    this.logger.log(`[INGEST] Backfilling images for ${missingImagePlaces.length} existing places...`);
+                    for (const p of missingImagePlaces) {
+                        const slug = `g-${p.id}`;
+                        const cover_image_url = await this.scrapePlaceImage(p.name);
+                        // Small delay to respect rate limit
+                        await new Promise((resolve) => setTimeout(resolve, 200));
+
+                        if (cover_image_url) {
+                            const { error: updateError } = await this.supabase
+                                .from('institutions')
+                                .update({ cover_image_url })
+                                .eq('slug', slug);
+
+                            if (updateError) {
+                                this.logger.error(`[INGEST] Failed to update cover image for ${slug}: ${updateError.message}`);
+                            } else {
+                                this.logger.log(`[INGEST] Successfully updated cover image for "${p.name}".`);
+                            }
+                        }
+                    }
                 }
             } catch (err: any) {
                 this.logger.error(`[INGEST] Error running background database ingestion: ${err.message}`);

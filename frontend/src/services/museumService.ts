@@ -68,31 +68,61 @@ class MuseumService {
         return [];
     }
 
+    private parseLocation = (data: any): { lat: number; lng: number } => {
+        if (!data) return { lat: 0, lng: 0 };
+        
+        // 1. Check if already has coordinates object
+        if (data.coordinates && typeof data.coordinates.lat === 'number') {
+            return { lat: data.coordinates.lat, lng: data.coordinates.lng };
+        }
+        
+        // 2. Check if location is GeoJSON
+        if (data.location && typeof data.location === 'object' && data.location.coordinates) {
+            const [lng, lat] = data.location.coordinates;
+            return { lat: Number(lat) || 0, lng: Number(lng) || 0 };
+        }
+        
+        // 3. Check if location is WKT string e.g. "POINT(110.378 -7.789)"
+        if (data.location && typeof data.location === 'string') {
+            const match = data.location.match(/POINT\(([^ ]+)\s+([^)]+)\)/);
+            if (match) {
+                const lng = parseFloat(match[1]);
+                const lat = parseFloat(match[2]);
+                return { lat: isNaN(lat) ? 0 : lat, lng: isNaN(lng) ? 0 : lng };
+            }
+        }
+        
+        return { lat: 0, lng: 0 };
+    };
+
     /**
      * Helper to map DB response to Museum interface
      */
-    private mapDatabaseToMuseum(data: any): Museum {
+    private mapDatabaseToMuseum = (data: any): Museum => {
+        const parsedImages = (data.images && data.images.length > 0)
+            ? data.images
+            : [data.cover_image_url].filter(Boolean);
+
         return {
             id: data.id,
             name: data.name,
             description: data.description,
             address: data.address || {
-                street: '',
-                city: data.city,
-                province: data.province,
-                postalCode: data.postal_code,
-                country: data.country
+                street: data.street || '',
+                city: data.city || 'Nearby',
+                province: data.province || '',
+                postalCode: data.postal_code || '',
+                country: data.country || 'Indonesia'
             },
-            coordinates: data.coordinates || { lat: 0, lng: 0 },
-            images: data.images || [data.cover_image_url].filter(Boolean) || [],
+            coordinates: this.parseLocation(data),
+            images: parsedImages.length > 0 ? parsedImages : [],
             artworksCount: data.total_artworks || 0,
             rating: data.rating,
             openingHours: data.opening_hours,
             contactInfo: data.contact_info,
             isVerified: data.is_verified,
-            // Add other fields if necessary
         };
-    }
+    };
 
     /**
      * Get all verified museums/galleries
