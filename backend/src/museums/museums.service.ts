@@ -20,6 +20,7 @@ import { SearchMuseumDto } from "./dto/search-museum.dto"
 export class MuseumsService {
     private readonly logger = new Logger(MuseumsService.name)
     private readonly supabase: SupabaseClient
+    private systemAdminId: string | null = null;
 
     /** Server-side cache to prevent duplicate Google Places API calls */
     private readonly placesCache = new Map<string, { data: any; expiresAt: number }>();
@@ -551,6 +552,9 @@ export class MuseumsService {
 
         const result = { places: capped, region: regionInfo };
 
+        // === Ingest new places to database asynchronously ===
+        this.ingestPlacesToDatabase(capped);
+
         // === Write to server-side cache ===
         // Evict oldest entries if cache is full
         if (this.placesCache.size >= this.PLACES_CACHE_MAX_SIZE) {
@@ -905,6 +909,132 @@ export class MuseumsService {
             this.logger.warn('Client restricted Google Maps key is not configured in backend .env');
         }
         return { apiKey };
+    }
+
+    /**
+     * Ingests Google Places results into the local PostgreSQL institutions database.
+     * Runs asynchronously in the background to prevent blocking the API response.
+     */
+    private ingestPlacesToDatabase(places: any[]) {
+        if (!places || places.length === 0) return;
+
+        // Perform upserts in a background promise
+        Promise.resolve().then(async () => {
+            try {
+                // 1. Resolve and cache system admin user ID
+                if (!this.systemAdminId) {
+                    const { data: users, error: userError } = await this.supabase
+                        .from('users')
+                        .select('id')
+                        .eq('role', 'admin')
+                        .limit(1);
+
+                    if (userError || !users || users.length === 0) {
+                        this.logger.warn(`[INGEST] Skipping ingestion: No admin user found to own public places.`);
+                        return;
+                    }
+                    this.systemAdminId = users[0].id;
+                }
+
+                const adminId = this.systemAdminId;
+                const slugs = places.map((p) => `g-${p.id}`);
+
+                // 2. Query existing slugs to prevent overwriting claimed or pre-existing institutions
+                const { data: existing, error: existingError } = await this.supabase
+                    .from('institutions')
+                    .select('slug')
+                    .in('slug', slugs);
+
+                if (existingError) {
+                    this.logger.error(`[INGEST] Failed to verify existing slugs: ${existingError.message}`);
+                    return;
+                }
+
+                const existingSlugs = new Set((existing || []).map((row) => row.slug));
+                const newPlaces = places.filter((p) => !existingSlugs.has(`g-${p.id}`));
+
+                if (newPlaces.length === 0) {
+                    this.logger.log(`[INGEST] All ${places.length} places already exist in the database. Ingestion skipped.`);
+                    return;
+                }
+
+                this.logger.log(`[INGEST] Ingesting ${newPlaces.length} new public places into database...`);
+
+                const upsertData = newPlaces.map((p) => {
+                    const city = this.extractCityFromAddress(p.address);
+                    const province = this.extractProvinceFromAddress(p.address);
+                    const slug = `g-${p.id}`;
+
+                    return {
+                        owner_id: adminId,
+                        name: p.name,
+                        slug,
+                        type: p.type || 'museum',
+                        city,
+                        province,
+                        country: 'Indonesia',
+                        location: `POINT(${p.longitude} ${p.latitude})`,
+                        is_verified: true,
+                        is_featured: false,
+                        rating: p.rating || 0.0,
+                        description: p.address ? `Tempat bersejarah/budaya: ${p.address}` : '',
+                    };
+                });
+
+                const { error: insertError } = await this.supabase
+                    .from('institutions')
+                    .insert(upsertData);
+
+                if (insertError) {
+                    this.logger.error(`[INGEST] Failed to insert new public places: ${insertError.message}`);
+                } else {
+                    this.logger.log(`[INGEST] Successfully ingested ${newPlaces.length} new places.`);
+                }
+            } catch (err: any) {
+                this.logger.error(`[INGEST] Error running background database ingestion: ${err.message}`);
+            }
+        });
+    }
+
+    /**
+     * Parse city name from Indonesian address string.
+     */
+    private extractCityFromAddress(address: string): string {
+        if (!address) return 'Sekitar';
+        
+        const cityMatch = address.match(/(?:Kota|Kabupaten)\s+([A-Za-z\s]+?)(?:,|$)/i);
+        if (cityMatch && cityMatch[1]) {
+            return cityMatch[1].trim();
+        }
+
+        const parts = address.split(',').map(p => p.trim());
+        if (parts.length > 2) {
+            const potentialCity = parts[parts.length - 2];
+            if (!/^\d+$/.test(potentialCity)) {
+                return potentialCity;
+            }
+            if (parts.length > 3) {
+                return parts[parts.length - 3];
+            }
+        }
+        return 'Sekitar';
+    }
+
+    /**
+     * Parse province name or fallback.
+     */
+    private extractProvinceFromAddress(address: string): string {
+        if (!address) return 'Indonesia';
+        
+        const parts = address.split(',').map(p => p.trim());
+        if (parts.length > 1) {
+            const provincePart = parts[parts.length - 2];
+            const cleaned = provincePart.replace(/\d+/g, '').trim();
+            if (cleaned.length > 3) {
+                return cleaned;
+            }
+        }
+        return 'Indonesia';
     }
 
     /**
