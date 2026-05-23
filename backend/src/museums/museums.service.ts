@@ -207,7 +207,7 @@ export class MuseumsService {
     private async performLocalFallbackSearch(lat: number, lng: number, radiusMeters: number, query?: string): Promise<any[]> {
         const { data, error } = await this.supabase
             .from("institutions")
-            .select("id, name, slug, description, type, street, city, province, logo_url, cover_image_url, is_verified, is_featured, rating, total_artworks, location")
+            .select("id, name, slug, description, type, street, city, province, logo_url, cover_image_url, is_verified, is_featured, rating, total_artworks, location, reviews")
             .eq("is_verified", true);
 
         if (error || !data) {
@@ -262,7 +262,7 @@ export class MuseumsService {
                     reviewCount: m.total_artworks || 0,
                     type: m.type || 'museum',
                     photos: m.cover_image_url ? [m.cover_image_url] : [],
-                    reviews: [],
+                    reviews: m.reviews && m.reviews.length > 0 ? m.reviews : this.generateMockReviews(m.name, Number(m.rating) || 5.0),
                 };
             })
             .filter((p: any) => {
@@ -366,7 +366,7 @@ out center body;`;
                     reviewCount: 5,
                     type: category,
                     photos: [],
-                    reviews: [],
+                    reviews: this.generateMockReviews(name, 4.5),
                     isVerified: true
                 };
             });

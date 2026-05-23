@@ -145,6 +145,7 @@ class MuseumService {
             openingHours: data.opening_hours,
             contactInfo: data.contact_info,
             isVerified: data.is_verified,
+            reviews: data.reviews || [],
         };
     };
 

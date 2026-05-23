@@ -134,6 +134,7 @@ export interface Museum {
     openingHours?: OpeningHours;
     contactInfo?: ContactInfo;
     isVerified: boolean;
+    reviews?: any[];
 }
 
 export interface Gallery {

@@ -1733,7 +1733,7 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                         description: m.description || '',
                         coverImageUrl: m.images?.[0] || null,
                         previewImages: m.images && m.images.length > 0 ? m.images : [],
-                        reviews: [],
+                        reviews: m.reviews || [],
                         latitude: lat,
                         longitude: lng,
                     };
