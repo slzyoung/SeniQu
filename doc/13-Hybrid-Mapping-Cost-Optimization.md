@@ -120,7 +120,7 @@ With Leaflet/PostGIS as default data source for guest visitors, real-world usage
 | `/route` | 3 | Public (Rate Limited) |
 | `/maps-config` | 5 | **JwtAuthGuard** (Strict) |
 
-- **Seamless Fallback:** When any Google Maps API limit is exceeded, or if the user is unauthenticated and quota is met, the client/server falls back to the local PostGIS spatial database (100% free). The application remains fully functional.
+- **Seamless Fallback:** When any Google Maps API limit is exceeded, or if the user is unauthenticated and quota is met, the client/server falls back to the local PostGIS spatial database (100% free). If the local database has no records for the searched coordinates, the system queries the **OpenStreetMap Overpass API** as a dynamic zero-cost fallback, retrieves all museums/galleries/heritage sites, and automatically ingests them into the local database for future search hits. The application remains fully functional and auto-ingests new cities.
 
 ---
 

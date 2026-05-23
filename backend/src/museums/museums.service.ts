@@ -287,6 +287,200 @@ export class MuseumsService {
     }
 
     /**
+     * Helper to perform OpenStreetMap Overpass search as a zero-cost backup
+     */
+    private async performOverpassFallbackSearch(lat: number, lng: number, radiusMeters: number, query?: string): Promise<any[]> {
+        const queryStr = `[out:json][timeout:25];
+(
+  node["tourism"="museum"](around:${radiusMeters},${lat},${lng});
+  way["tourism"="museum"](around:${radiusMeters},${lat},${lng});
+  node["tourism"="gallery"](around:${radiusMeters},${lat},${lng});
+  way["tourism"="gallery"](around:${radiusMeters},${lat},${lng});
+  node["historic"](around:${radiusMeters},${lat},${lng});
+  way["historic"](around:${radiusMeters},${lat},${lng});
+);
+out center body;`;
+
+        const urls = [
+            'https://overpass.nchc.org.tw/api/interpreter',
+            'https://overpass-api.de/api/interpreter',
+            'https://overpass.kumi.systems/api/interpreter'
+        ];
+
+        let elements: any[] = [];
+        let successUrl = '';
+        
+        for (const url of urls) {
+            try {
+                this.logger.log(`[OVERPASS] Fetching fallback locations from mirror: ${url}`);
+                const res = await fetch(url, {
+                    method: 'POST',
+                    body: 'data=' + encodeURIComponent(queryStr),
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'User-Agent': 'SeniQuApp/1.0 (contact@seniqu.art)'
+                    },
+                    signal: AbortSignal.timeout(12000) // 12s timeout
+                });
+
+                if (res.ok) {
+                    const data = await res.json() as any;
+                    elements = data.elements || [];
+                    successUrl = url;
+                    break;
+                } else {
+                    this.logger.warn(`[OVERPASS] Mirror returned HTTP ${res.status}: ${url}`);
+                }
+            } catch (e) {
+                this.logger.warn(`[OVERPASS] Failed to query mirror ${url}: ${e.message}`);
+            }
+        }
+
+        if (elements.length === 0) {
+            this.logger.warn(`[OVERPASS] No elements returned from any Overpass mirrors`);
+            return [];
+        }
+
+        this.logger.log(`[OVERPASS] Successfully retrieved ${elements.length} elements from ${successUrl}`);
+
+        const mappedPlaces = elements
+            .filter((el: any) => el.tags && el.tags.name)
+            .map((el: any) => {
+                const name = el.tags.name;
+                const latitude = el.lat || el.center?.lat || 0;
+                const longitude = el.lon || el.center?.lon || 0;
+                const category = el.tags.tourism === 'gallery' ? 'gallery' : (el.tags.historic ? 'heritage' : 'museum');
+                const address = [
+                    el.tags['addr:street'],
+                    el.tags['addr:city'],
+                    el.tags['addr:province'] || el.tags['addr:state']
+                ].filter(Boolean).join(', ') || 'Indonesia';
+
+                return {
+                    id: `osm-${el.id}`,
+                    name,
+                    address,
+                    latitude,
+                    longitude,
+                    rating: 4.5,
+                    reviewCount: 5,
+                    type: category,
+                    photos: [],
+                    reviews: [],
+                    isVerified: true
+                };
+            });
+
+        // Filter by search query if present
+        let filteredPlaces = mappedPlaces;
+        if (query && query.trim().length > 0) {
+            const q = query.toLowerCase().trim();
+            filteredPlaces = filteredPlaces.filter((p: any) =>
+                p.name.toLowerCase().includes(q) ||
+                p.address.toLowerCase().includes(q)
+            );
+        }
+
+        // Sort by distance
+        filteredPlaces.sort((a, b) =>
+            this.haversineDistance(lat, lng, a.latitude, a.longitude) -
+            this.haversineDistance(lat, lng, b.latitude, b.longitude)
+        );
+
+        // Background ingestion: ingest these OSM places into our DB so they are cached locally!
+        if (filteredPlaces.length > 0) {
+            this.ingestOSMPlacesToDatabase(filteredPlaces);
+        }
+
+        return filteredPlaces;
+    }
+
+    /**
+     * Ingest OSM fallback places into local database in the background
+     */
+    private ingestOSMPlacesToDatabase(places: any[]) {
+        if (!places || places.length === 0) return;
+
+        Promise.resolve().then(async () => {
+            try {
+                if (!this.systemAdminId) {
+                    const { data: users, error: userError } = await this.supabase
+                        .from('users')
+                        .select('id')
+                        .eq('role', 'admin')
+                        .limit(1);
+
+                    if (userError || !users || users.length === 0) {
+                        this.logger.warn(`[INGEST-OSM] Skipping ingestion: No admin user found to own public places.`);
+                        return;
+                    }
+                    this.systemAdminId = users[0].id;
+                }
+
+                const adminId = this.systemAdminId;
+                const slugs = places.map((p) => p.id);
+
+                const { data: existing, error: existingError } = await this.supabase
+                    .from('institutions')
+                    .select('slug')
+                    .in('slug', slugs);
+
+                if (existingError) {
+                    this.logger.error(`[INGEST-OSM] Failed to verify existing slugs: ${existingError.message}`);
+                    return;
+                }
+
+                const existingSet = new Set((existing || []).map((row) => row.slug));
+                const newPlaces = places.filter((p) => !existingSet.has(p.id));
+
+                if (newPlaces.length === 0) {
+                    this.logger.log(`[INGEST-OSM] All ${places.length} OSM places already exist in database.`);
+                    return;
+                }
+
+                this.logger.log(`[INGEST-OSM] Ingesting ${newPlaces.length} new OSM places into database...`);
+                const upsertData = [];
+                for (const p of newPlaces) {
+                    const city = this.extractCityFromAddress(p.address);
+                    const province = this.extractProvinceFromAddress(p.address);
+                    const slug = p.id;
+
+                    const cover_image_url = await this.scrapePlaceImage(p.name);
+                    await new Promise((resolve) => setTimeout(resolve, 200));
+
+                    upsertData.push({
+                        owner_id: adminId,
+                        name: p.name,
+                        slug,
+                        type: p.type || 'museum',
+                        city,
+                        province,
+                        country: 'Indonesia',
+                        location: `POINT(${p.longitude} ${p.latitude})`,
+                        is_verified: true,
+                        is_featured: false,
+                        rating: p.rating || 4.5,
+                        description: p.address ? `Tempat bersejarah/budaya: ${p.address}` : '',
+                        cover_image_url,
+                    });
+                }
+
+                const { error: insertError } = await this.supabase
+                    .from('institutions')
+                    .insert(upsertData);
+
+                if (insertError) {
+                    this.logger.error(`[INGEST-OSM] Failed to insert new OSM places: ${insertError.message}`);
+                } else {
+                    this.logger.log(`[INGEST-OSM] Successfully ingested ${newPlaces.length} new OSM places.`);
+                }
+            } catch (err: any) {
+                this.logger.error(`[INGEST-OSM] Error running background database ingestion: ${err.message}`);
+            }
+        });
+    }
+
+    /**
      * Search nearby places using Google Places API (New)
      * POST https://places.googleapis.com/v1/places:searchNearby
      *
@@ -332,8 +526,12 @@ export class MuseumsService {
         const clientIp = ip || 'unknown';
         const budget = this.checkAndIncrementBudget('search', clientIp);
         if (!budget.allowed) {
-            this.logger.warn(`[SEARCH] Budget exceeded for IP ${clientIp}: ${budget.reason}. Falling back to local PostGIS.`);
-            const localPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, query);
+            this.logger.warn(`[SEARCH] Budget exceeded for IP ${clientIp}: ${budget.reason}. Falling back to local PostGIS + OSM.`);
+            let localPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, query);
+            if (localPlaces.length === 0) {
+                this.logger.log(`[SEARCH] Local database empty. Running OSM Overpass search fallback.`);
+                localPlaces = await this.performOverpassFallbackSearch(safeLat, safeLng, safeRadius, query);
+            }
             return { places: localPlaces, region: regionInfo, quotaExceeded: true };
         }
 
@@ -578,8 +776,12 @@ export class MuseumsService {
         }
 
         if (googleApiFailed) {
-            this.logger.warn(`Google Places API request failed (403/401/429). Initiating local PostGIS fallback.`);
-            const localPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, query);
+            this.logger.warn(`Google Places API request failed (403/401/429). Initiating local PostGIS + OSM fallback.`);
+            let localPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, query);
+            if (localPlaces.length === 0) {
+                this.logger.log(`[SEARCH] Local database empty. Running OSM Overpass search fallback.`);
+                localPlaces = await this.performOverpassFallbackSearch(safeLat, safeLng, safeRadius, query);
+            }
             return { places: localPlaces, region: regionInfo, quotaExceeded: true };
         }
 
