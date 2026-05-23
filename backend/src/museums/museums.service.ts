@@ -1747,11 +1747,146 @@ out center body;`;
             return cached.data;
         }
 
-        // Budget check
+        // 1. Check database first to see if we already have this place
+        let dbPlace: any = null;
+        try {
+            const slug = placeId.startsWith('g-') ? placeId : `g-${placeId}`;
+            const { data } = await this.supabase
+                .from('institutions')
+                .select('*')
+                .or(`slug.eq.${slug},slug.eq.${placeId},id.eq.${placeId}`)
+                .limit(1);
+            if (data && data.length > 0) {
+                dbPlace = data[0];
+            }
+        } catch (dbErr: any) {
+            this.logger.warn(`Failed to query database for details fallback: ${dbErr.message}`);
+        }
+
+        const apiKey = this.configService.get<string>('googleMaps.apiKey')
+            || process.env.GOOGLE_MAPS_KEY || '';
+        const referer = this.configService.get<string>('FRONTEND_URL')
+            || process.env.FRONTEND_URL || 'http://localhost:5173';
+        const refererHeader = referer.endsWith('/') ? referer : `${referer}/`;
+
+        let placeDataFromGoogle: any = null;
+        let googleApiFailed = false;
+
+        // 2. Query Google Maps only if budget allows and API key is present
         const clientIp = ip || 'unknown';
         const budget = this.checkAndIncrementBudget('details', clientIp);
-        if (!budget.allowed) {
-            this.logger.warn(`[DETAILS] Budget exceeded for IP ${clientIp}: ${budget.reason}. Returning fallback detail sheet.`);
+
+        if (budget.allowed && apiKey) {
+            const url = `https://places.googleapis.com/v1/places/${placeId}`;
+            try {
+                const res = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Goog-Api-Key': apiKey,
+                        'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,rating,userRatingCount,types',
+                        'Accept-Language': 'id',
+                        'Referer': refererHeader,
+                    },
+                });
+
+                if (res.ok) {
+                    placeDataFromGoogle = await res.json();
+                } else {
+                    const errText = await res.text();
+                    this.logger.error(`Places Details API ${res.status}: ${errText}`);
+                    googleApiFailed = true;
+                }
+            } catch (err: any) {
+                this.logger.error(`Error fetching from Google Places Details: ${err.message}`);
+                googleApiFailed = true;
+            }
+        } else {
+            this.logger.warn(`[DETAILS] Google Maps limit exhausted or API key missing for IP ${clientIp}. Falling back to DB.`);
+            googleApiFailed = true;
+        }
+
+        // 3. Resolve the final output
+        let finalPlace: any = null;
+
+        if (placeDataFromGoogle) {
+            const placeName = placeDataFromGoogle.displayName?.text || '';
+            const placeRating = placeDataFromGoogle.rating || 4.5;
+            const placeReviewsCount = placeDataFromGoogle.userRatingCount || 5;
+
+            let coverImageUrl = null;
+            let reviews = [];
+            let description = '';
+
+            if (dbPlace) {
+                coverImageUrl = dbPlace.cover_image_url;
+                reviews = dbPlace.reviews && dbPlace.reviews.length > 0 ? dbPlace.reviews : [];
+                description = dbPlace.description || '';
+            }
+
+            finalPlace = {
+                id: placeDataFromGoogle.id,
+                name: placeName,
+                address: placeDataFromGoogle.formattedAddress || '',
+                latitude: placeDataFromGoogle.location?.latitude,
+                longitude: placeDataFromGoogle.location?.longitude,
+                rating: placeRating,
+                reviewCount: placeReviewsCount,
+                photos: coverImageUrl ? [coverImageUrl] : [],
+                reviews: reviews.length > 0 ? reviews : this.generateMockReviews(placeName, placeRating),
+                description,
+                detailsLoaded: true,
+            };
+        } else if (dbPlace) {
+            // Load completely offline from DB (No Google API dependency!)
+            let latitude = 0;
+            let longitude = 0;
+            if (dbPlace.location) {
+                if (typeof dbPlace.location === 'object' && dbPlace.location.coordinates) {
+                    [longitude, latitude] = dbPlace.location.coordinates;
+                } else if (typeof dbPlace.location === 'string') {
+                    if (/^[0-9a-fA-F]+$/.test(dbPlace.location)) {
+                        try {
+                            const buf = Buffer.from(dbPlace.location, 'hex');
+                            if (buf.length >= 21) {
+                                const byteOrder = buf.readUInt8(0);
+                                const isLittleEndian = byteOrder === 1;
+                                const geomType = isLittleEndian ? buf.readUInt32LE(1) : buf.readUInt32BE(1);
+                                const hasSrid = (geomType & 0x20000000) !== 0;
+                                const offset = hasSrid ? 9 : 5;
+                                if (buf.length >= offset + 16) {
+                                    longitude = isLittleEndian ? buf.readDoubleLE(offset) : buf.readDoubleBE(offset);
+                                    latitude = isLittleEndian ? buf.readDoubleLE(offset + 8) : buf.readDoubleBE(offset + 8);
+                                }
+                            }
+                        } catch (e: any) {
+                            this.logger.warn(`Failed to parse WKB location for ${dbPlace.name}: ${e.message}`);
+                        }
+                    } else {
+                        const match = dbPlace.location.match(/POINT\(([^ ]+)\s+([^)]+)\)/);
+                        if (match) {
+                            longitude = parseFloat(match[1]);
+                            latitude = parseFloat(match[2]);
+                        }
+                    }
+                }
+            }
+
+            finalPlace = {
+                id: dbPlace.id,
+                name: dbPlace.name,
+                address: dbPlace.street ? `${dbPlace.street}, ${dbPlace.city}` : dbPlace.city,
+                latitude,
+                longitude,
+                rating: Number(dbPlace.rating) || 4.5,
+                reviewCount: dbPlace.total_ratings || (dbPlace.reviews ? dbPlace.reviews.length : 5),
+                photos: dbPlace.cover_image_url ? [dbPlace.cover_image_url] : [],
+                reviews: dbPlace.reviews && dbPlace.reviews.length > 0 ? dbPlace.reviews : this.generateMockReviews(dbPlace.name, Number(dbPlace.rating) || 4.5),
+                description: dbPlace.description || '',
+                detailsLoaded: true,
+            };
+        } else {
+            // Ultimate fallback (Budget exceeded, no local DB record exists yet)
             return {
                 id: placeId,
                 name: 'Detail Limit Terlampaui',
@@ -1767,67 +1902,70 @@ out center body;`;
             };
         }
 
-        const apiKey = this.configService.get<string>('googleMaps.apiKey')
-            || process.env.GOOGLE_MAPS_KEY || '';
-        const referer = this.configService.get<string>('FRONTEND_URL')
-            || process.env.FRONTEND_URL || 'http://localhost:5173';
+        // 4. Background Automatic ETL Scraper to enrich database records with missing data
+        if (dbPlace) {
+            const needsCoverImage = !dbPlace.cover_image_url;
+            const needsWiki = !dbPlace.description || dbPlace.description.startsWith('Tempat bersejarah/budaya:');
+            const needsReviews = !dbPlace.reviews || dbPlace.reviews.length === 0;
 
-        if (!apiKey) {
-            throw new NotFoundException('Google Maps API key is not configured');
-        }
+            if (needsCoverImage || needsWiki || needsReviews) {
+                this.logger.log(`[ETL_AUTO] Running auto-scraper enrichment for "${dbPlace.name}"...`);
+                Promise.resolve().then(async () => {
+                    try {
+                        const updateData: any = {};
 
-        const refererHeader = referer.endsWith('/') ? referer : `${referer}/`;
-        const url = `https://places.googleapis.com/v1/places/${placeId}`;
+                        // A. Scrape cover image
+                        if (needsCoverImage) {
+                            const wikiImg = await this.scrapePlaceImage(dbPlace.name);
+                            if (wikiImg) {
+                                updateData.cover_image_url = wikiImg;
+                                finalPlace.photos = [wikiImg];
+                            }
+                        }
 
-        try {
-            const res = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Goog-Api-Key': apiKey,
-                    // Request ONLY basic/advanced fields (NO photos or reviews to avoid Preferred tier costs)
-                    'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,rating,userRatingCount,types',
-                    'Accept-Language': 'id',
-                    'Referer': refererHeader,
-                },
-            });
+                        // B. Scrape wikipedia summary/history
+                        if (needsWiki) {
+                            const wikiInfo = await this.scrapePlaceSummary(dbPlace.name);
+                            if (wikiInfo && wikiInfo.extract) {
+                                updateData.description = wikiInfo.extract;
+                                finalPlace.description = wikiInfo.extract;
+                            }
+                        }
 
-            if (!res.ok) {
-                const errText = await res.text();
-                this.logger.error(`Places Details API ${res.status}: ${errText}`);
-                throw new Error(`Failed to fetch place details: ${res.status}`);
+                        // C. Generate and cache contextual reviews
+                        if (needsReviews) {
+                            const generatedReviews = this.generateMockReviews(dbPlace.name, Number(dbPlace.rating) || 4.5);
+                            updateData.reviews = generatedReviews;
+                            finalPlace.reviews = generatedReviews;
+                        }
+
+                        // Write updates to DB
+                        if (Object.keys(updateData).length > 0) {
+                            const { error: updateErr } = await this.supabase
+                                .from('institutions')
+                                .update(updateData)
+                                .eq('id', dbPlace.id);
+
+                            if (updateErr) {
+                                this.logger.error(`[ETL_AUTO] Update failed for "${dbPlace.name}": ${updateErr.message}`);
+                            } else {
+                                this.logger.log(`[ETL_AUTO] Successfully backfilled metadata for "${dbPlace.name}" in DB.`);
+                            }
+                        }
+                    } catch (etlErr: any) {
+                        this.logger.error(`[ETL_AUTO] Process error for "${dbPlace.name}": ${etlErr.message}`);
+                    }
+                });
             }
-
-            const p = await res.json() as any;
-
-            const placeName = p.displayName?.text || '';
-            const placeRating = p.rating || 4.5;
-            const placeReviewsCount = p.userRatingCount || 5;
-
-            const result = {
-                id: p.id,
-                name: placeName,
-                address: p.formattedAddress || '',
-                latitude: p.location?.latitude,
-                longitude: p.location?.longitude,
-                rating: placeRating,
-                reviewCount: placeReviewsCount,
-                photos: [],
-                reviews: this.generateMockReviews(placeName, placeRating),
-                detailsLoaded: true,
-            };
-
-            // Cache for 15 minutes (details change rarely)
-            this.placeDetailsCache.set(placeId, {
-                data: result,
-                expiresAt: Date.now() + 15 * 60 * 1000,
-            });
-
-            return result;
-        } catch (error) {
-            this.logger.error(`Error in getPlaceDetails for ${placeId}: ${error.message}`);
-            throw new NotFoundException('Failed to retrieve place details');
         }
+
+        // Cache result for 15 minutes
+        this.placeDetailsCache.set(placeId, {
+            data: finalPlace,
+            expiresAt: Date.now() + 15 * 60 * 1000,
+        });
+
+        return finalPlace;
     }
 
     /**

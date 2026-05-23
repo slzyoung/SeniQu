@@ -219,9 +219,35 @@ function sanitizeInput(input: string, maxLength = 100): string {
 }
 
 /** High-performance Lazy Image with blur-in and skeleton shimmer effect */
-function LazyImage({ src, alt, className = "w-full h-full object-cover" }: { src: string; alt: string; className?: string }) {
+function LazyImage({ 
+    src, 
+    alt, 
+    type = 'museum', 
+    className = "w-full h-full object-cover" 
+}: { 
+    src: string | null | undefined; 
+    alt: string; 
+    type?: string; 
+    className?: string; 
+}) {
     const [isLoaded, setIsLoaded] = useState(false);
     const [error, setError] = useState(false);
+
+    // Reset states when src changes to prevent state leakage across recycled cards
+    useEffect(() => {
+        setIsLoaded(false);
+        setError(false);
+    }, [src]);
+
+    // Choose local fallback image based on place category (100% offline & zero-cost)
+    let localFallback = '/images/museum/Museumullensentalu.jpg';
+    if (type === 'gallery') {
+        localFallback = '/images/gallery/galerinasionalindonesia.jpg';
+    } else if (type === 'museum') {
+        localFallback = '/images/museum/museumnasionalindonesia.png';
+    }
+
+    const displaySrc = error || !src ? localFallback : src;
 
     return (
         <div className="relative w-full h-full overflow-hidden bg-slate-800/40 rounded-inherit">
@@ -229,12 +255,12 @@ function LazyImage({ src, alt, className = "w-full h-full object-cover" }: { src
                 <div className="absolute inset-0 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 animate-pulse" />
             )}
             <img
-                src={error ? 'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=200&h=200&fit=crop' : src}
+                src={displaySrc}
                 alt={alt}
                 loading="lazy"
                 onLoad={() => setIsLoaded(true)}
                 onError={() => setError(true)}
-                className={`${className} transition-all duration-700 ease-out ${isLoaded ? 'opacity-100 scale-100 blur-0' : 'opacity-0 scale-95 blur-md'}`}
+                className={`${className} transition-all duration-700 ease-out ${(isLoaded || error) ? 'opacity-100 scale-100 blur-0' : 'opacity-0 scale-95 blur-md'}`}
             />
         </div>
     );
@@ -562,7 +588,7 @@ function MuseumDetailSheet({
                     <div className="pnb-preview__scroll animate-scrollbar">
                         {(museum.previewImages || [museum.coverImageUrl]).map((img: string, i: number) => (
                             <div key={i} className="pnb-preview__thumb" onClick={() => onPhotoClick(i)}>
-                                <LazyImage src={img} alt={`Preview ${i + 1}`} />
+                                <LazyImage src={img} alt={`Preview ${i + 1}`} type={museum.type} />
                             </div>
                         ))}
                     </div>
@@ -969,8 +995,9 @@ function MuseumListCard({
         >
             <div className="pnb-list-card__img">
                 <LazyImage
-                    src={museum.coverImageUrl || 'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=200&h=200&fit=crop'}
+                    src={museum.coverImageUrl}
                     alt={museum.name}
+                    type={museum.type}
                 />
                 {museum.isVerified && <span className="pnb-list-card__verified">✓</span>}
             </div>
@@ -1316,8 +1343,8 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                             if (prev && prev.id === museum.id) {
                                 return {
                                     ...prev,
-                                    photos: details.photos || [],
-                                    previewImages: details.photos || [],
+                                    photos: details.photos && details.photos.length > 0 ? details.photos : prev.photos || [],
+                                    previewImages: details.photos && details.photos.length > 0 ? details.photos : prev.previewImages || [],
                                     coverImageUrl: details.photos?.[0] || prev.coverImageUrl,
                                     reviews: details.reviews || [],
                                     detailsLoaded: true,
@@ -1704,8 +1731,8 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                         waitTime,
                         isVerified: m.isVerified || false,
                         description: m.description || '',
-                        coverImageUrl: m.images?.[0] || 'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=400&h=300&fit=crop',
-                        previewImages: m.images || [],
+                        coverImageUrl: m.images?.[0] || null,
+                        previewImages: m.images && m.images.length > 0 ? m.images : [],
                         reviews: [],
                         latitude: lat,
                         longitude: lng,
@@ -1747,13 +1774,6 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                     const reviewCount = place.reviewCount || 12;
                     const waitTime = rating > 4.5 ? '~15 mins' : '~5 mins';
                     const crowdLevel = reviewCount > 300 ? 'Busy' : reviewCount > 100 ? 'Moderate traffic' : 'Not crowded';
-                    const fallbackPhotos = [
-                        'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=400&h=300&fit=crop',
-                        'https://images.unsplash.com/photo-1596436889106-be35e843f974?w=400&h=300&fit=crop',
-                        'https://images.unsplash.com/photo-1604999333679-b86d54738315?w=400&h=300&fit=crop',
-                        'https://images.unsplash.com/photo-1566121318599-23fcf93f4bf3?w=400&h=300&fit=crop',
-                    ];
-                    const previewImages = place.photos && place.photos.length > 0 ? place.photos : fallbackPhotos;
                     let type = place.type || 'heritage';
                     if (place.name) {
                         const nameLower = place.name.toLowerCase();
@@ -1821,6 +1841,14 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                         }
                     }
 
+                    const validPhotos = (place.photos || []).filter((p: any) => typeof p === 'string' && p.trim() !== '');
+                    const fallbackPhoto = type === 'gallery'
+                        ? '/images/gallery/galerinasionalindonesia.jpg'
+                        : type === 'museum'
+                            ? '/images/museum/museumnasionalindonesia.png'
+                            : '/images/museum/Museumullensentalu.jpg';
+                    const previewImages = validPhotos.length > 0 ? validPhotos : [fallbackPhoto];
+
                     return {
                         id: place.id || Math.random().toString(),
                         name: place.name || 'Heritage Destination',
@@ -1835,7 +1863,7 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                         waitTime,
                         isVerified: true,
                         description: place.address || 'Registered tourism destination.',
-                        coverImageUrl: previewImages[0],
+                        coverImageUrl: validPhotos.length > 0 ? validPhotos[0] : null,
                         previewImages,
                         reviews: place.reviews || [],
                         latitude: place.latitude,

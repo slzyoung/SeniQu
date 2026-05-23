@@ -40,7 +40,7 @@ Accessible to all visitors.
 - **Google Maps API Cost Mitigation**:
   - **FieldMask Downgrade**: Strips photos and reviews from search queries to avoid Preferred pricing ($32.00/1k requests).
   - **Single Center Lookup**: Restructures overlapping grids into 1 center query to achieve a 7x call volume reduction.
-  - **On-Demand Details Fetching**: Lazy-loads high-cost photos and reviews through `/place-details/:placeId` only on explicit card clicks.
+  - **On-Demand Details Fetching**: Lazy-loads photos and reviews through `/place-details/:placeId` only on explicit card clicks. If Google limits are exhausted or APIs fail, details are served directly from the database, and an asynchronous background ETL scraper automatically enriches the database record with Wikipedia summaries, images, and generated reviews.
 - **Consolidated Search Header**: Removed redundant floating navigation triggers (floating compass/map buttons) and embedded the Map Switcher directly into the search bar for an ultra-clean vertical height.
 - **Contrast-Preserving Filter Chips**: Fully custom-tailored active chips in light mode (e.g. "Heritage", "Museum") maintaining pure white text (`#fff !important`) even on hover, overcoming standard default overrides.
 

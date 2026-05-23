@@ -122,6 +122,15 @@ With Leaflet/PostGIS as default data source for guest visitors, real-world usage
 
 - **Seamless Fallback:** When any Google Maps API limit is exceeded, or if the user is unauthenticated and quota is met, the client/server falls back to the local PostGIS spatial database (100% free). If the local database has no records for the searched coordinates, the system queries the **OpenStreetMap Overpass API** as a dynamic zero-cost fallback, retrieves all museums/galleries/heritage sites, and automatically ingests them into the local database for future search hits. The application remains fully functional and auto-ingests new cities.
 
+### H. Database Fallback for Place Details & Automated ETL Auto-Scraper
+To guarantee that the user gets rich, contextually accurate place details even when the daily Google Maps Places Details API limit is completely exhausted:
+1. **DB Place Detail Lookup**: The `/place-details/:placeId` endpoint checks the database first by UUID or slug (`g-placeId`). If the daily client API quota is exhausted or Google APIs fail, it loads and serves the place coordinates, name, rating, cover image, description, and reviews directly from the local database.
+2. **Background ETL Auto-Scraper**: If a place is retrieved but lacks crucial metadata (e.g. empty cover image, default/empty description, or empty reviews list), the backend triggers a detached asynchronous background thread:
+   * **Wikipedia Scraper**: Scrapes Wikipedia for the official place image and history summary.
+   * **Contextual Reviews Generator**: Dynamically generates 5 highly realistic, category-appropriate reviews in Indonesian (customized with the place's actual name and rating).
+   * **Cache Persistence**: Writes the scraped cover image, history summary, and generated reviews array back into the local database (in the newly added `reviews` JSONB column).
+3. **Self-Healing Local Database**: This background execution ensures that future place details requests for the same location are resolved with zero Google Maps dependency and 0ms latency.
+
 ---
 
 ## 4. Security & Access Partitioning: Authenticated vs. Guest Users
@@ -236,7 +245,7 @@ In the database mapper (`mapDatabaseToMuseum` in `museumService.ts`):
 | **`museums.service.ts`** | `scrapePlaceImage` | Scrapes representative images from Indonesian/English Wikipedia search APIs for free. |
 | **`museums.service.ts`** | `scrapePlaceSummary` | Scrapes summary extracts, URLs, titles, and images from Indonesian/English Wikipedia. Integrates local database cache checks and writes. |
 | **`museums.service.ts`** | `ingestPlacesToDatabase` | Upserts public places and triggers Wikipedia scraping for new entries and existing entries lacking images in the background. |
-| **`museums.service.ts`** | `getPlaceDetails` | Fetches full place details (with reviews/photos) on-demand. |
+| **`museums.service.ts`** | `getPlaceDetails` | Fetches full place details. Automatically falls back to DB on quota limit/API errors, and triggers background ETL enrichment for missing cover image, Wikipedia summary, and generated reviews. |
 
 ---
 
