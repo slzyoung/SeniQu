@@ -1,6 +1,6 @@
 import { ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { ROLES, ROUTES, UserRole } from './constants';
+import { ROLES, ROUTES } from './constants';
 
 /**
  * Merge Tailwind classes securely
@@ -163,3 +163,31 @@ export function extractPagination(data: unknown): { total: number; page: number;
         totalPages: (obj.totalPages as number) || (obj.pages as number) || 1,
     };
 }
+
+/**
+ * Decode HTML entities in a string (e.g. &amp; -> &)
+ */
+export function decodeHTML(str: string | null | undefined): string {
+    if (!str) return '';
+    // Use DOMParser if available to decode safely
+    if (typeof window !== 'undefined' && typeof DOMParser !== 'undefined') {
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(str, 'text/html');
+            return doc.body.textContent || '';
+        } catch (e) {
+            // fallback
+        }
+    }
+    // Simple regex fallback
+    return str
+        .replace(/&amp;/g, '&')
+        .replace(/&amp/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#039;/g, "'")
+        .replace(/&#x27;/g, "'")
+        .replace(/&#x39;/g, "'");
+}
+

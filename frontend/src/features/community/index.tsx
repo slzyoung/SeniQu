@@ -25,7 +25,7 @@ import {
     MessageCircle,
     Send,
 } from 'lucide-react';
-import { extractArray } from '../../lib/utils';
+import { extractArray, decodeHTML } from '../../lib/utils';
 import { uploadFile } from '../../lib/api';
 import { compressImage } from '../../lib/imageCompressor';
 import {
@@ -90,7 +90,7 @@ export function CommunityForum() {
     });
 
     const threads = (threadsData?.data || []).filter(thread =>
-        thread.title.toLowerCase().includes(searchQuery.toLowerCase())
+        decodeHTML(thread.title).toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     const featuredThread = threads.find((t: any) => t.mediaUrl || t.media_url || t.isFeatured || t.is_featured);
@@ -177,13 +177,13 @@ export function CommunityForum() {
                             {(featuredThread.mediaType) === 'video' ? (
                                 <video src={featuredThread.mediaUrl} muted className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                             ) : (
-                                <img src={featuredThread.mediaUrl} alt={featuredThread.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                                <img src={featuredThread.mediaUrl} alt={decodeHTML(featuredThread.title)} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
                             )}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent flex flex-col justify-end p-5">
                                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/90 text-charcoal text-[10px] font-bold uppercase tracking-wider w-fit mb-2">
                                     <Sparkles className="w-3 h-3" /> Featured
                                 </div>
-                                <h3 className="font-serif font-bold text-lg sm:text-xl text-white leading-snug mb-1.5">{featuredThread.title}</h3>
+                                <h3 className="font-serif font-bold text-lg sm:text-xl text-white leading-snug line-clamp-2 mb-1.5">{decodeHTML(featuredThread.title)}</h3>
                                 <div className="flex items-center gap-2 text-white/60 text-xs">
                                     <Avatar name={featuredThread.author?.displayName || 'User'} src={featuredThread.author?.avatarUrl} size="xs" className="w-5 h-5" />
                                     <span>{featuredThread.author?.displayName || 'Anonymous'}</span>
@@ -226,7 +226,7 @@ export function CommunityForum() {
                                                     <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">Pinned</span>
                                                 )}
                                             </div>
-                                            <h3 className="font-serif font-bold text-base sm:text-lg text-gray-900 dark:text-white leading-snug line-clamp-2 mb-1 hover:text-amber-600 dark:hover:text-gold transition-colors">{thread.title}</h3>
+                                            <h3 className="font-serif font-bold text-base sm:text-lg text-gray-900 dark:text-white leading-snug line-clamp-2 mb-1 hover:text-amber-600 dark:hover:text-gold transition-colors">{decodeHTML(thread.title)}</h3>
                                             {thread.content && (
                                                 <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed mb-2">{thread.content}</p>
                                             )}
@@ -436,7 +436,7 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
 // ============================================
 
 function EditThreadModalPublic({ onClose, thread }: { onClose: () => void, thread: any }) {
-    const [title, setTitle] = useState(thread.title || '');
+    const [title, setTitle] = useState(decodeHTML(thread.title) || '');
     const [content, setContent] = useState(thread.content || '');
     const updateThread = useUpdateThread();
     const toast = useToast();
@@ -869,9 +869,8 @@ export function ThreadView() {
                         </div>
                     </div>
 
-                    {/* Thread Title */}
-                    <h1 className="font-serif text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-4 leading-snug">
-                        {thread.title}
+                    <h1 className="font-serif text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-4 leading-snug break-words">
+                        {decodeHTML(thread.title)}
                     </h1>
 
                     {/* Content */}

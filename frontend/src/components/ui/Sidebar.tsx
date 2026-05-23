@@ -125,7 +125,7 @@ export function Sidebar({
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
+            <nav className={`flex-1 py-4 px-3 space-y-6 ${sidebarCollapsed ? 'overflow-visible' : 'overflow-y-auto'}`}>
                 {sections.map((section, sectionIndex) => (
                     <div key={sectionIndex}>
                         {section.title && !sidebarCollapsed && (
@@ -143,7 +143,7 @@ export function Sidebar({
                                                 onClick={() => toggleExpand(item.id)}
                                                 className={`
                                                     w-full flex items-center gap-3 px-3 py-2.5 rounded-xl
-                                                    transition-all duration-200
+                                                    transition-all duration-200 group relative
                                                     ${isParentActive(item)
                                                         ? 'bg-gold/10 text-gold'
                                                         : 'text-theme-muted hover:text-theme-text hover:bg-theme-elevated'
@@ -151,7 +151,7 @@ export function Sidebar({
                                                 `}
                                             >
                                                 {item.icon}
-                                                {!sidebarCollapsed && (
+                                                {!sidebarCollapsed ? (
                                                     <>
                                                         <span className="flex-1 text-left text-sm font-medium">
                                                             {item.label}
@@ -161,6 +161,18 @@ export function Sidebar({
                                                                 }`}
                                                         />
                                                     </>
+                                                ) : (
+                                                    <span className="
+                                                        absolute left-20 top-1/2 -translate-y-1/2 z-50
+                                                        pointer-events-none opacity-0 translate-x-2
+                                                        group-hover:opacity-100 group-hover:translate-x-0
+                                                        transition-all duration-200 ease-out
+                                                        bg-theme-elevated border border-theme-border text-theme-text
+                                                        text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xl
+                                                        whitespace-nowrap
+                                                    ">
+                                                        {item.label}
+                                                    </span>
                                                 )}
                                             </button>
 
@@ -206,7 +218,7 @@ export function Sidebar({
                                         >
                                             {item.icon}
 
-                                            {!sidebarCollapsed && (
+                                            {!sidebarCollapsed ? (
                                                 <>
                                                     <span className="flex-1 text-sm font-medium">
                                                         {item.label}
@@ -217,6 +229,18 @@ export function Sidebar({
                                                         </span>
                                                     )}
                                                 </>
+                                            ) : (
+                                                <span className="
+                                                    absolute left-20 top-1/2 -translate-y-1/2 z-50
+                                                    pointer-events-none opacity-0 translate-x-2
+                                                    group-hover:opacity-100 group-hover:translate-x-0
+                                                    transition-all duration-200 ease-out
+                                                    bg-theme-elevated border border-theme-border text-theme-text
+                                                    text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xl
+                                                    whitespace-nowrap
+                                                ">
+                                                    {item.label}
+                                                </span>
                                             )}
                                         </NavLink>
                                     )}

@@ -171,13 +171,13 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
                         <motion.div
                             className="relative cursor-pointer overflow-hidden rounded-[4px] p-[1px] group"
                             initial={{ opacity: 0.85 }}
-                            whileHover={{ 
+                            whileHover={{
                                 opacity: 1, y: -2, scale: 1.05,
                                 filter: "drop-shadow(0 4px 12px rgba(20, 241, 149, 0.3))"
                             }}
                             whileTap={{ scale: 0.95 }}
-                            onClick={(e: React.MouseEvent) => { 
-                                e.stopPropagation(); window.open('https://solana.com', '_blank'); 
+                            onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation(); window.open('https://solana.com', '_blank');
                             }}
                         >
                             <div className="absolute inset-[-150%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_0%,transparent_50%,#9945FF_70%,#14F195_100%)] opacity-70 group-hover:opacity-100 transition-opacity duration-300" />
@@ -290,6 +290,20 @@ function MobileNavItem({
                             w-2.5 h-2.5 rounded-full bg-red-500 border border-theme-surface
                         " />
                     )}
+
+                    {/* Tooltip on hover (only for devices with hover support) */}
+                    <span className="
+                        absolute left-20 top-1/2 -translate-y-1/2 z-50
+                        pointer-events-none opacity-0 translate-x-2
+                        group-hover:opacity-100 group-hover:translate-x-0
+                        transition-all duration-200 ease-out
+                        bg-theme-elevated border border-theme-border text-theme-text
+                        text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xl
+                        whitespace-nowrap
+                        hidden [@media(hover:hover)]:block
+                    ">
+                        {item.label}
+                    </span>
                 </>
             )}
         </NavLink>

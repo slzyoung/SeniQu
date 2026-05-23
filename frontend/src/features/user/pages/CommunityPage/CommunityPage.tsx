@@ -26,7 +26,7 @@ import { Button, Avatar } from '../../../../components/ui';
 import { useNavigate } from 'react-router-dom';
 import { useForumCategories, useForumThreads, useTrendingThreads, useCreateThread } from '../../../../hooks/useForum';
 import { useAuthStore } from '../../../../stores/useAuthStore';
-import { extractArray } from '../../../../lib/utils';
+import { extractArray, decodeHTML } from '../../../../lib/utils';
 import { uploadFile } from '../../../../lib/api';
 import { compressImage } from '../../../../lib/imageCompressor';
 import { useToast } from '../../../../stores/useNotificationStore';
@@ -81,7 +81,7 @@ function FeaturedThreadCard({ thread, onClick }: { thread: any; onClick: () => v
                     <Sparkles className="w-3 h-3" />
                     Featured Discussion
                 </div>
-                <h3 className="featured-title">{thread.title}</h3>
+                <h3 className="featured-title">{decodeHTML(thread.title)}</h3>
                 <div className="featured-meta">
                     <Avatar
                         name={authorName}
@@ -133,7 +133,7 @@ function ThreadCard({ thread, index }: { thread: any; index: number }) {
                     )}
                 </div>
 
-                <h3 className="thread-title">{thread.title}</h3>
+                <h3 className="thread-title">{decodeHTML(thread.title)}</h3>
 
                 {thread.content && (
                     <p className="thread-excerpt">{thread.content}</p>
@@ -624,7 +624,7 @@ export function CommunityPage() {
                                     >
                                         <span className="trending-rank">{index + 1}</span>
                                         <div className="flex-1 min-w-0">
-                                            <p className="trending-title">{thread.title}</p>
+                                            <p className="trending-title">{decodeHTML(thread.title)}</p>
                                             <p className="trending-replies">{thread.replyCount || 0} replies</p>
                                         </div>
                                     </div>
