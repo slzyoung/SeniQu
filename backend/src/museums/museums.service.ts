@@ -221,13 +221,34 @@ export class MuseumsService {
             .map((m: any) => {
                 let latitude = 0;
                 let longitude = 0;
-                if (m.location && typeof m.location === 'object' && m.location.coordinates) {
-                    [longitude, latitude] = m.location.coordinates;
-                } else if (m.location && typeof m.location === 'string') {
-                    const match = m.location.match(/POINT\(([^ ]+)\s+([^)]+)\)/);
-                    if (match) {
-                        longitude = parseFloat(match[1]);
-                        latitude = parseFloat(match[2]);
+                if (m.location) {
+                    if (typeof m.location === 'object' && m.location.coordinates) {
+                        [longitude, latitude] = m.location.coordinates;
+                    } else if (typeof m.location === 'string') {
+                        if (/^[0-9a-fA-F]+$/.test(m.location)) {
+                            try {
+                                const buf = Buffer.from(m.location, 'hex');
+                                if (buf.length >= 21) {
+                                    const byteOrder = buf.readUInt8(0);
+                                    const isLittleEndian = byteOrder === 1;
+                                    const geomType = isLittleEndian ? buf.readUInt32LE(1) : buf.readUInt32BE(1);
+                                    const hasSrid = (geomType & 0x20000000) !== 0;
+                                    const offset = hasSrid ? 9 : 5;
+                                    if (buf.length >= offset + 16) {
+                                        longitude = isLittleEndian ? buf.readDoubleLE(offset) : buf.readDoubleBE(offset);
+                                        latitude = isLittleEndian ? buf.readDoubleLE(offset + 8) : buf.readDoubleBE(offset + 8);
+                                    }
+                                }
+                            } catch (e) {
+                                this.logger.warn(`Failed to parse WKB location for ${m.name}: ${e.message}`);
+                            }
+                        } else {
+                            const match = m.location.match(/POINT\(([^ ]+)\s+([^)]+)\)/);
+                            if (match) {
+                                longitude = parseFloat(match[1]);
+                                latitude = parseFloat(match[2]);
+                            }
+                        }
                     }
                 }
 
@@ -282,12 +303,25 @@ export class MuseumsService {
         const GOOGLE_MAX_RADIUS = 50000;
         const safeRadius = Math.min(Math.max(1000, Number(radiusMeters) || MAX_RADIUS_M), MAX_RADIUS_M);
 
+        const regionInfo = { isMajorCity: false, regionName: 'Sekitar', maxRadiusKm: MAX_RADIUS_KM };
+
+        // === 0. Database-First / Cache-Aside Search ===
+        // Always query the local database first. If we have matching verified places in our database,
+        // return them immediately. This bypasses the Google Places API call entirely, saving money and avoiding quota limits.
+        try {
+            const localPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, query);
+            if (localPlaces && localPlaces.length > 0) {
+                this.logger.log(`[SEARCH] Local database HIT: Found ${localPlaces.length} places within ${safeRadius / 1000}km. Bypassing Google API.`);
+                return { places: localPlaces, region: regionInfo, quotaExceeded: false };
+            }
+        } catch (dbErr) {
+            this.logger.error(`[SEARCH] Database-first check failed: ${dbErr.message}`);
+        }
+
         const apiKey = this.configService.get<string>('googleMaps.apiKey')
             || process.env.GOOGLE_MAPS_KEY || '';
         const referer = this.configService.get<string>('FRONTEND_URL')
             || process.env.FRONTEND_URL || 'http://localhost:5173';
-
-        const regionInfo = { isMajorCity: false, regionName: 'Sekitar', maxRadiusKm: MAX_RADIUS_KM };
 
         if (!apiKey) {
             this.logger.warn('GOOGLE_MAPS_KEY is not configured');

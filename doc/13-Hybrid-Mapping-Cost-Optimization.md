@@ -36,21 +36,44 @@ SeniQu uses a hybrid structure that combines the open-source Leaflet map engine 
 
 ---
 
-## 3. Google Maps API Budget Hardening (Backend)
+## 3. Google Maps API Budget Hardening & Database-First Search (Backend)
 
-When the user explicitly triggers an online search (online fallback search), the NestJS backend uses several techniques to minimize costs:
+SeniQu implements a strict **Database-First / Cache-Aside** retrieval flow combined with coordinate parsing fixes and request optimization techniques to protect the Google Maps API budget:
 
-### A. FieldMask Category Downgrade (Search)
+### A. Database-First Search Strategy
+Previously, the `/museums/search-nearby` endpoint queried the Google Places API directly on every page load unless the daily global quota (30 requests/day) was exceeded. This resulted in frequent daily limit reached dialogs on production.
+
+To resolve this, we refactored the search flow to prioritize local data:
+1. **Local Database Check**: Every nearby search request first queries the local `institutions` table using PostGIS bounding box filters.
+2. **Database HIT**: If matching verified institutions are found within the requested radius (e.g. Jakarta, Bali where data has been scraped/ingested), they are returned immediately. The Google Places API call is **completely bypassed**, resulting in **$0.00 cost** and **0ms external API latency**.
+3. **Google API Fallback**: Only if the database search returns zero results does the backend proceed to check the daily budget, query the Google Places API, return the online results, and asynchronously cache/ingest them into the local database for future search hits.
+
+### B. PostGIS WKB Hex Coordinate Parsing Fix
+When the backend fell back to the local database search, it failed to parse the geography coordinates.
+- **The Bug**: Supabase returns PostGIS `geography` type columns as hex-encoded Well-Known Binary (WKB/EWKB) strings (e.g., `0101000020E6100000...`). The backend only parsed GeoJSON objects or WKT strings (`POINT(lng lat)`). Because WKB hex strings did not match, all coordinates parsed as `(0, 0)`, which were then filtered out as being outside the user's search radius. This caused the map to appear blank (no markers) when Google API limits were hit.
+- **The Fix**: We implemented a robust WKB hex parser using standard Node.js `Buffer` that decodes endianness, geom type, SRID offsets, and extracts correct longitude/latitude:
+  ```typescript
+  const buf = Buffer.from(m.location, 'hex');
+  const byteOrder = buf.readUInt8(0);
+  const isLittleEndian = byteOrder === 1;
+  const geomType = isLittleEndian ? buf.readUInt32LE(1) : buf.readUInt32BE(1);
+  const hasSrid = (geomType & 0x20000000) !== 0;
+  const offset = hasSrid ? 9 : 5;
+  longitude = isLittleEndian ? buf.readDoubleLE(offset) : buf.readDoubleBE(offset);
+  latitude = isLittleEndian ? buf.readDoubleLE(offset + 8) : buf.readDoubleBE(offset + 8);
+  ```
+
+### C. FieldMask Category Downgrade (Search)
 Standard search calls (`places:searchNearby` and `places:searchText`) now use a restricted FieldMask:
 ```http
 X-Goog-FieldMask: places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.types
 ```
 By removing `places.photos` and `places.reviews`, search queries are billed under the **Advanced** tier ($20.00/1,000 requests) or **Basic** tier ($7.00/1,000 requests if ratings are removed), down from the $32.00/1,000 Preferred tier.
 
-### B. Single-Center Coordinate Query (7x Request Reduction)
+### D. Single-Center Coordinate Query (7x Request Reduction)
 We removed the multi-center grid generation logic for broad radius searches. The backend now queries **only the user's center coordinate** instead of up to 7 overlapping sub-centers. This provides a direct 7x reduction in raw query volume.
 
-### C. Complete Elimination of Google Places Preferred Tier
+### E. Complete Elimination of Google Places Preferred Tier
 To ensure monthly GCP costs remain under $20/month (easily covered by Google's $200 free credit tier), we completely removed `photos` and `reviews` fields from all backend Places calls (both search and details):
 - **GCP Call Fields Mask:**
 ```http
@@ -59,13 +82,13 @@ X-Goog-FieldMask: id,displayName,formattedAddress,location,rating,userRatingCoun
 - **0% Preferred Charges:** This downgrades all Place Details calls from the Preferred tier ($25.00/1k) to the Advanced/Basic tier ($7.00 - $17.00/1k), making charges negligible.
 - **Free Link for Photos & Reviews:** In the frontend detail sheet, we added a direct link button ("Info Lengkap") pointing to the place on Google Maps. When clicked, it opens Google Maps where the user can view photos, full reviews, street view, and opening hours for free.
 
-### D. Server-Side Details Caching
+### F. Server-Side Details Caching
 Place details and search results are cached using server-side TTL memory maps:
 - **Search Queries Cache:** 3-minute TTL (resolution: 0.001 degrees lat/lng grid).
 - **Place Details Cache:** 15-minute TTL.
 This prevents duplicate calls for frequently clicked locations.
 
-### E. Strict Daily Quota and IP Rate Limiting — Cost-Hardened (All Endpoints)
+### G. Strict Daily Quota and IP Rate Limiting — Cost-Hardened (All Endpoints)
 To guarantee monthly costs stay **under $50** (or $0 with Google's $200 free credit), we enforced a comprehensive multi-layer rate limiting system covering **every** endpoint, tightening global daily limits to **30 requests/day** for Google APIs:
 
 #### Open-Source Replacements (Eliminates 2 Google APIs):
@@ -116,9 +139,15 @@ To prevent quota scraping, key extraction, or billing exhaustion, we partitioned
 
 ---
 
-## 5. UI Alignment and Rendering Fixes
+## 5. UI Alignment, Type Safety, and Rendering Fixes
 - **Leaflet Marker Centering:** To prevent text emojis (`🏛️`, `🎨`, `🏯`) inside custom Leaflet HTML `divIcon` pins from inheriting the `-45deg` parent rotation (which caused tilted icons), we wrapped them inside a `<span>` element. This enables the CSS selector `.leaflet-gold-pin-marker > *` to target the text node parent wrapper and rotate it back by `45deg`, rendering all markers upright and perfectly centered on the map.
-- **Reactive Map Reinitialization:** When toggling view modes (Map to List and back), the map container DOM element is unmounted and recreated. We added `viewMode` to the Leaflet map initialization hook's dependency array and transitioned the ref instance to a reactive state `leafletMap`. This forces Leaflet to clean up old detached markers/polylines and instantiate a fresh map when returning to map view, preventing blank s## 6. Free Place Image & Wikipedia Summary Scraping & Caching Architecture
+- **Reactive Map Reinitialization:** When toggling view modes (Map to List and back), the map container DOM element is unmounted and recreated. We added `viewMode` to the Leaflet map initialization hook's dependency array and transitioned the ref instance to a reactive state `leafletMap`. This forces Leaflet to clean up old detached markers/polylines and instantiate a fresh map when returning to map view, preventing blank screens.
+- **Frontend WKB Coordinate Parsing:** Updated `parseLocation` in the frontend `museumService.ts` to decode hex-encoded WKB/EWKB PostGIS geometries using standard browser-compatible `Uint8Array` and `DataView` operations. This ensures that coordinate details queried directly via Supabase endpoints map to correct values instead of falling back to `(0, 0)`.
+- **TypeScript Coordinates Collision Resolution:** Moved local `Coordinates` and `Address` interface declarations to the top of `types.ts` to prevent name collision with the global browser DOM type `Coordinates`. This resolves compilation errors when returning coordinates from helper methods.
+
+---
+
+## 6. Free Place Image & Wikipedia Summary Scraping & Caching Architecture
 To completely eliminate reliance on Google's expensive Place Photos and Place Details APIs (which raise calls to the Preferred Billing tier at $32/1,000 requests), SeniQu implements an autonomous, zero-cost image scraping and Wikipedia summary caching pipeline:
 
 ```
