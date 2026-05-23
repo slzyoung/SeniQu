@@ -21,6 +21,7 @@
 | 11 | [Security Incident Response](./11-Security-Incident-Response.md) | Incident procedures, key rotation, and forensic auditing guidelines |
 | 12 | [Enterprise Admin Architecture](./12-Enterprise-Admin-Architecture.md) | Unified UI/UX, RBAC enhancements, and admin dashboard modernization |
 | 13 | [Hybrid Mapping & Cost Optimization](./13-Hybrid-Mapping-Cost-Optimization.md) | Architectural details on hybrid map rendering and budget-protection Google Maps API practices |
+| 14 | [Geolocation Detection & Testing](./14-Geolocation-Testing-Guide.md) | Technical explanation of IP-based geolocation issues and developer testing instructions |
 
 ---
 
