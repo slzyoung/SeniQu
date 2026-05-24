@@ -3,13 +3,14 @@
  * Immersive cultural heritage explorer with city-based navigation
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search,
     SlidersHorizontal,
     ChevronRight,
+    ChevronLeft,
     MapPin,
     Landmark,
     Compass,
@@ -25,6 +26,7 @@ import { useArtworks } from '../../../../hooks/useArtworks';
 import { useMuseums } from '../../../../hooks/useMuseums';
 import { extractArray } from '../../../../lib/utils';
 import { ROUTES } from '../../../../lib/constants';
+import { CITY_WHITELIST } from '../../../../features/gallery/data/citiesRegistry';
 import './UserDashboard.css';
 
 // ============================================================
@@ -40,50 +42,40 @@ interface CityData {
     featured?: boolean;
 }
 
-const HERITAGE_CITIES: CityData[] = [
-    {
-        id: 'jakarta',
-        name: 'Jakarta',
-        description: 'Where colonial history meets modern arts. Explore the Old Town\'s colonial architecture and galleries.',
-        badge: 'CAPITAL CITY',
-        image: 'https://images.unsplash.com/photo-1555899434-94d1368aa7af?w=1200&q=80',
-        featured: true,
-    },
-    {
-        id: 'yogyakarta',
-        name: 'Yogyakarta',
-        description: 'The heart of Javanese culture and their royal heritage.',
-        badge: 'HERITAGE HUB',
-        image: 'https://images.unsplash.com/photo-1596402184320-417e7178b2cd?w=1200&q=80',
-    },
-    {
-        id: 'bali',
-        name: 'Bali',
-        description: 'Island of arts, temples, and living traditions.',
-        badge: 'SPIRITUAL ISLE',
-        image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=1200&q=80',
-    },
-    {
-        id: 'bandung',
-        name: 'Bandung',
-        description: 'Known for its Art Deco architecture and creative energy.',
-        badge: 'ART DECO CITY',
-        image: 'https://images.unsplash.com/photo-1580481072645-022f17cc738b?w=1200&q=80',
-    },
-    {
-        id: 'surabaya',
-        name: 'Surabaya',
-        description: 'The hero city with a rich maritime and trade heritage.',
-        badge: 'HERO CITY',
-        image: 'https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?w=1200&q=80',
-    },
-    {
-        id: 'semarang',
-        name: 'Semarang',
-        description: 'Explore Dutch colonial history and the vibrant Chinatown heritage.',
-        image: 'https://images.unsplash.com/photo-1545259741-2ea3ebf61fa3?w=1200&q=80',
-    },
-];
+const CITIES_REGIONAL_KEYWORDS: Record<string, string[]> = {
+    jakarta: ['jawa', 'dki', 'capital', 'jabodetabek', 'java', 'pusat', 'selatan', 'barat', 'timur', 'utara'],
+    yogyakarta: ['jawa', 'diy', 'jogja', 'java', 'sleman', 'bantul', 'gunungkidul', 'kulon progo'],
+    bali: ['bali', 'denpasar', 'nusra', 'nusa tenggara', 'badung', 'ubud', 'gianyar'],
+    bandung: ['jawa', 'jabar', 'jawa barat', 'java', 'lembang'],
+    surabaya: ['jawa', 'jatim', 'jawa timur', 'java', 'madura'],
+    semarang: ['jawa', 'jateng', 'jawa tengah', 'java', 'ungaran', 'ambarawa', 'lawang sewu'],
+    medan: ['sumatera', 'sumatra', 'sumut', 'sumatera utara'],
+    makassar: ['sulawesi', 'sulsel', 'sulawesi selatan', 'ujung pandang'],
+    palembang: ['sumatera', 'sumatra', 'sumsel', 'sumatera selatan'],
+    solo: ['jawa', 'surakarta', 'jateng', 'jawa tengah', 'java'],
+    malang: ['jawa', 'jatim', 'jawa timur', 'java', 'batu'],
+    balikpapan: ['kalimantan', 'kaltim', 'kalimantan timur', 'borneo'],
+    samarinda: ['kalimantan', 'kaltim', 'kalimantan timur', 'borneo'],
+    manado: ['sulawesi', 'sulut', 'sulawesi utara', 'bunaken'],
+    pontianak: ['kalimantan', 'kalbar', 'kalimantan barat', 'borneo'],
+    aceh: ['sumatera', 'sumatra', 'nad', 'banda aceh'],
+    lampung: ['sumatera', 'sumatra', 'bandar lampung']
+};
+
+const HERITAGE_CITIES: CityData[] = Object.entries(CITY_WHITELIST).map(([id, meta]) => ({
+    id,
+    name: meta.name,
+    description: meta.description,
+    image: id === 'bandung' ? '/images/city/bandung.jpg' :
+           id === 'semarang' ? '/images/city/semarang.jpg' :
+           meta.image,
+    badge: id === 'jakarta' ? 'CAPITAL CITY' :
+           id === 'yogyakarta' ? 'HERITAGE HUB' :
+           id === 'bali' ? 'SPIRITUAL ISLE' :
+           id === 'bandung' ? 'ART DECO CITY' :
+           id === 'surabaya' ? 'HERO CITY' : undefined,
+    featured: id === 'jakarta',
+}));
 
 const HERO_IMAGE = 'https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?w=1800&q=85';
 
@@ -206,6 +198,10 @@ export function UserDashboard() {
     const navigate = useNavigate();
     const { data: user } = useCurrentUser();
     const [searchQuery, setSearchQuery] = useState('');
+    const [page, setPage] = useState(0);
+    const [direction, setDirection] = useState(1); // 1 for next, -1 for prev
+
+    const PAGE_SIZE = 7;
 
     // Fetch real data from API
     const { data: museumsData, isLoading: museumsLoading } = useMuseums({ limit: 8 });
@@ -219,18 +215,51 @@ export function UserDashboard() {
         return extractArray(raw);
     }, [museumsData]);
 
-    // Filter cities based on search
+    // Filter cities based on search (including regional keywords)
     const filteredCities = useMemo(() => {
         if (!searchQuery.trim()) return HERITAGE_CITIES;
         const q = searchQuery.toLowerCase();
-        return HERITAGE_CITIES.filter(
-            (c) =>
-                c.name.toLowerCase().includes(q) ||
-                c.description.toLowerCase().includes(q)
-        );
+        return HERITAGE_CITIES.filter((c) => {
+            const nameMatch = c.name.toLowerCase().includes(q);
+            const descMatch = c.description.toLowerCase().includes(q);
+            const kw = CITIES_REGIONAL_KEYWORDS[c.id] || [];
+            const keywordMatch = kw.some(k => k.toLowerCase().includes(q));
+            return nameMatch || descMatch || keywordMatch;
+        });
     }, [searchQuery]);
 
-    const totalDistricts = museums.length + HERITAGE_CITIES.length;
+    // Reset page to 0 when search query changes
+    useEffect(() => {
+        setPage(0);
+    }, [searchQuery]);
+
+    const pageCount = Math.ceil(filteredCities.length / PAGE_SIZE);
+
+    // Paginate displayed cities
+    const displayedCities = useMemo(() => {
+        if (searchQuery.trim()) {
+            return filteredCities; // Show all matches
+        }
+        const start = page * PAGE_SIZE;
+        return filteredCities.slice(start, start + PAGE_SIZE);
+    }, [filteredCities, searchQuery, page]);
+
+    const totalDistricts = museums.length + filteredCities.length;
+
+    const slideVariants = {
+        enter: (direction: number) => ({
+            x: direction > 0 ? 120 : -120,
+            opacity: 0
+        }),
+        center: {
+            x: 0,
+            opacity: 1
+        },
+        exit: (direction: number) => ({
+            x: direction < 0 ? 120 : -120,
+            opacity: 0
+        })
+    };
 
     return (
         <motion.div
@@ -316,24 +345,91 @@ export function UserDashboard() {
                     </button>
                 </div>
 
-                <div className="heritage-cities">
-                    {filteredCities.map((city, i) => (
-                        <CityCard
-                            key={city.id}
-                            city={city}
-                            index={i}
-                            onClick={() => navigate(`/gallery/city/${city.id}`)}
-                        />
-                    ))}
-                    {filteredCities.length === 0 && (
-                        <div className="heritage-empty" style={{ gridColumn: '1 / -1' }}>
-                            <MapPin className="heritage-empty__icon" />
-                            <p className="heritage-empty__text">
-                                No cities match &quot;{searchQuery}&quot;
-                            </p>
-                        </div>
-                    )}
+                <div style={{ position: 'relative', overflow: 'hidden', minHeight: '380px', width: '100%' }}>
+                    <AnimatePresence mode="wait" custom={direction}>
+                        <motion.div
+                            key={page}
+                            custom={direction}
+                            variants={slideVariants}
+                            initial="enter"
+                            animate="center"
+                            exit="exit"
+                            transition={{ duration: 0.35, ease: 'easeInOut' }}
+                            className="heritage-cities"
+                        >
+                            {displayedCities.map((city, i) => (
+                                <CityCard
+                                    key={city.id}
+                                    city={city}
+                                    index={i}
+                                    onClick={() => navigate(`/gallery/city/${city.id}`)}
+                                />
+                            ))}
+                            {displayedCities.length === 0 && (
+                                <div className="heritage-empty" style={{ gridColumn: '1 / -1' }}>
+                                    <MapPin className="heritage-empty__icon" />
+                                    <p className="heritage-empty__text">
+                                        No cities match &quot;{searchQuery}&quot;
+                                    </p>
+                                </div>
+                            )}
+                        </motion.div>
+                    </AnimatePresence>
                 </div>
+
+                {/* Elegant mobile-first Pagination controls for showing 7 cities at a time */}
+                {!searchQuery.trim() && pageCount > 1 && (
+                    <div className="flex items-center justify-between mt-8 w-full px-4 max-w-md mx-auto">
+                        {/* Previous Page */}
+                        <button
+                            onClick={() => {
+                                if (page > 0) {
+                                    setDirection(-1);
+                                    setPage(prev => prev - 1);
+                                }
+                            }}
+                            disabled={page === 0}
+                            className={`p-2.5 rounded-full border border-theme-border/60 text-theme-text/80 hover:text-gold hover:border-gold transition-all active:scale-95 cursor-pointer ${
+                                page === 0 ? 'opacity-30 pointer-events-none' : ''
+                            }`}
+                        >
+                            <ChevronLeft className="w-5 h-5" />
+                        </button>
+
+                        {/* Page Indicators */}
+                        <div className="flex gap-2">
+                            {Array.from({ length: pageCount }).map((_, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => {
+                                        setDirection(idx > page ? 1 : -1);
+                                        setPage(idx);
+                                    }}
+                                    className={`w-2.5 h-2.5 rounded-full transition-all duration-300 cursor-pointer ${
+                                        page === idx ? 'bg-gold w-6' : 'bg-theme-text/20 hover:bg-theme-text/40'
+                                    }`}
+                                />
+                            ))}
+                        </div>
+
+                        {/* Show More (Next Page) */}
+                        <button
+                            onClick={() => {
+                                if (page < pageCount - 1) {
+                                    setDirection(1);
+                                    setPage(prev => prev + 1);
+                                } else {
+                                    setDirection(-1);
+                                    setPage(0);
+                                }
+                            }}
+                            className="px-5 py-2.5 rounded-full border border-gold/40 text-xs font-semibold text-gold hover:border-gold active:scale-95 transition-all duration-300 flex items-center gap-1.5 cursor-pointer"
+                        >
+                            {page === pageCount - 1 ? 'Show First 7' : 'Show More (7)'}
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* ====== CURATED GALLERIES ====== */}
