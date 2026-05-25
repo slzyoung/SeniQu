@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useUsers, useCreateAdminUser, useUpdateUserRole, useDeleteUser } from '../../../hooks/useAdmin';
 import { PageContainer } from '../../../components/common/DashboardLayout';
-import { Card, CardContent, Button, Avatar, Modal, Input, Select, Badge } from '../../../components/ui';
+import { Button, Avatar, Modal, Input, Select, Badge } from '../../../components/ui';
 import { formatDate, extractArray, extractPagination } from '../../../lib/utils';
 import {
-    Loader2, Search, MoreVertical, Plus, Building2, Image as ImageIcon,
+    Loader2, Search, MoreVertical, Building2,
     Shield, Mail, Calendar, CheckCircle2, XCircle, UserPlus, Crown,
     Palette, Lock, Eye, ChevronLeft, ChevronRight, Hash, Trash2, Edit
 } from 'lucide-react';
@@ -31,6 +31,7 @@ function RoleBadge({ role }: { role: string }) {
         super_admin: { bg: 'bg-gradient-to-r from-red-500 to-rose-600', text: 'text-white', icon: Crown },
         admin: { bg: 'bg-gradient-to-r from-purple-500 to-indigo-600', text: 'text-white', icon: Shield },
         artist: { bg: 'bg-gradient-to-r from-emerald-400 to-teal-500', text: 'text-white', icon: Palette },
+        collector: { bg: 'bg-gradient-to-r from-amber-400 to-orange-500', text: 'text-white', icon: Crown },
         user: { bg: 'bg-gray-100 border border-gray-200', text: 'text-gray-600', icon: Eye },
     };
     const cfg = map[role] || map.user;
@@ -156,11 +157,12 @@ export function AdminManagement() {
                 </div>
 
                 {/* ── Role Summary Cards ── */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
                     {[
                         { label: 'Total Users', value: meta?.total || users.length, filter: 'all', color: 'from-gray-600 to-gray-800', bg: 'bg-gray-50' },
                         { label: 'Admins', value: (roleCounts['admin'] || 0) + (roleCounts['super_admin'] || 0), filter: 'admin', color: 'from-purple-500 to-indigo-600', bg: 'bg-purple-50' },
                         { label: 'Artists', value: roleCounts['artist'] || 0, filter: 'artist', color: 'from-emerald-500 to-teal-600', bg: 'bg-emerald-50' },
+                        { label: 'Collectors', value: roleCounts['collector'] || 0, filter: 'collector', color: 'from-amber-500 to-orange-600', bg: 'bg-amber-50' },
                         { label: 'Regular', value: roleCounts['user'] || 0, filter: 'user', color: 'from-blue-400 to-blue-600', bg: 'bg-blue-50' },
                     ].map((c, i) => (
                         <motion.button key={c.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
@@ -292,14 +294,15 @@ export function AdminManagement() {
                             <label className="text-sm font-bold text-gray-700">Assign New Role</label>
                             <Select
                                 value={editRoleUser.newRole}
-                                onChange={(e) => setEditRoleUser({ ...editRoleUser, newRole: e.target.value })}
-                                fullWidth
-                            >
-                                <option value="user">User / Collector</option>
-                                <option value="artist">Artist</option>
-                                <option value="admin">Administrator (Institution)</option>
-                                <option value="super_admin">Super Admin</option>
-                            </Select>
+                                onChange={(val) => setEditRoleUser({ ...editRoleUser, newRole: val as string })}
+                                options={[
+                                    { label: 'Regular User', value: 'user' },
+                                    { label: 'Collector', value: 'collector' },
+                                    { label: 'Artist / Creator', value: 'artist' },
+                                    { label: 'Administrator (Institution)', value: 'admin' },
+                                    { label: 'Super Admin', value: 'super_admin' },
+                                ]}
+                            />
                             <p className="text-xs text-gray-500 mt-1">Changing this role will immediately affect the user's access level across the platform.</p>
                         </div>
 

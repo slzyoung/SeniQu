@@ -10,7 +10,9 @@ import {
     Loader2, 
     ExternalLink, 
     Palette, 
-    ChevronRight 
+    ChevronRight,
+    Star,
+    MessageCircle
 } from 'lucide-react';
 import { CityMetadata } from '../data/citiesRegistry';
 
@@ -220,6 +222,65 @@ export const PlaceDetailsView: React.FC<PlaceDetailsViewProps> = ({
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Star Divider Accent */}
+                <div className="my-6 flex items-center justify-center gap-2">
+                    <div className="h-[1px] bg-theme-border/50 flex-grow max-w-[80px]" />
+                    <span className="text-[#CBA36D] text-xs">✦</span>
+                    <div className="h-[1px] bg-theme-border/50 flex-grow max-w-[80px]" />
+                </div>
+
+                {/* Google Maps Reviews Section */}
+                <div className="text-left">
+                    <h3 className="text-xs font-bold tracking-wider text-theme-text uppercase mb-1 flex items-center gap-1">
+                        <MessageCircle className="w-4 h-4 text-gold" />
+                        Ulasan Google Maps
+                    </h3>
+                    <p className="text-[9px] text-theme-muted mb-4 leading-normal">
+                        Pendapat langsung dari pengunjung di Google Maps.
+                    </p>
+
+                    {selectedPlace.reviews && selectedPlace.reviews.length > 0 ? (
+                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-theme-border scrollbar-track-transparent">
+                            {selectedPlace.reviews.map((review: any, i: number) => (
+                                <div 
+                                    key={i} 
+                                    className="p-3 rounded-2xl bg-black/20 dark:bg-white/5 border border-theme-border/40 flex flex-col gap-1.5"
+                                >
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-bold text-theme-text font-sans">
+                                            {review.author}
+                                        </span>
+                                        <span className="text-[8px] text-theme-muted">
+                                            {review.time}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-0.5">
+                                        {Array.from({ length: 5 }).map((_, si) => (
+                                            <Star
+                                                key={si}
+                                                className={`w-3 h-3 ${si < review.rating ? 'fill-gold text-gold' : 'text-theme-muted'}`}
+                                            />
+                                        ))}
+                                    </div>
+
+                                    {review.text && (
+                                        <p className="text-[10.5px] text-theme-text/80 font-sans leading-relaxed text-justify">
+                                            {review.text}
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="py-6 text-center border border-dashed border-theme-border/60 rounded-2xl">
+                            <MessageCircle className="w-7 h-7 text-theme-muted opacity-40 mx-auto mb-2" />
+                            <p className="text-[11px] text-theme-text font-bold">Belum Ada Ulasan</p>
+                            <p className="text-[9px] text-theme-muted mt-0.5">Ulasan Google Maps tidak tersedia untuk lokasi ini.</p>
                         </div>
                     )}
                 </div>

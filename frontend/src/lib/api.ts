@@ -297,12 +297,31 @@ export async function apiDelete<T>(
 
 export async function uploadFile(
     file: File,
-    folder: 'artworks' | 'avatars' | 'videos' | 'collections' | 'general' = 'general',
-    onProgress?: (progress: number) => void
+    folder:
+        | "artworks"
+        | "avatars"
+        | "videos"
+        | "collections"
+        | "general"
+        | "artist-profiles"
+        | "creator-profiles"
+        | "artist-banners"
+        | "creator-banners"
+        | "collector-profiles"
+        | "collector-banners" = "general",
+    onProgress?: (progress: number) => void,
+    scopeId?: string,
+    city?: string
 ): Promise<{ key: string; url: string; size: number; contentType: string }> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('folder', folder);
+    if (scopeId) {
+        formData.append('scopeId', scopeId);
+    }
+    if (city) {
+        formData.append('city', city);
+    }
 
     const response = await api.post('/storage/upload', formData, {
         headers: {

@@ -33,11 +33,28 @@ const ALLOWED_VIDEO_TYPES = [
     "video/quicktime",
 ]
 
-const ALLOWED_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES]
+const ALLOWED_AUDIO_TYPES = [
+    "audio/mpeg",
+    "audio/mp3",
+    "audio/wav",
+    "audio/ogg",
+    "audio/aac",
+    "audio/x-m4a",
+    "audio/mp4",
+]
+
+const ALLOWED_TYPES = [
+    ...ALLOWED_IMAGE_TYPES,
+    ...ALLOWED_VIDEO_TYPES,
+    ...ALLOWED_AUDIO_TYPES,
+    "application/pdf",
+]
 
 // Max file sizes
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024  // 10 MB
-const MAX_VIDEO_SIZE = 100 * 1024 * 1024 // 100 MB
+const MAX_IMAGE_SIZE = 15 * 1024 * 1024  // 15 MB
+const MAX_VIDEO_SIZE = 150 * 1024 * 1024 // 150 MB
+const MAX_AUDIO_SIZE = 50 * 1024 * 1024  // 50 MB
+const MAX_GENERAL_SIZE = 25 * 1024 * 1024 // 25 MB
 
 @Injectable()
 export class StorageService implements OnModuleInit {
@@ -55,7 +72,7 @@ export class StorageService implements OnModuleInit {
         const accountId = this.configService.get<string>("r2.accountId")
         const accessKeyId = this.configService.get<string>("r2.accessKeyId")
         const secretAccessKey = this.configService.get<string>("r2.secretAccessKey")
-        this.bucketName = this.configService.get<string>("r2.bucketName") || "seniqu-assets"
+        this.bucketName = this.configService.get<string>("r2.bucketName") || "seniqu"
         this.publicUrl = this.configService.get<string>("r2.publicUrl") || ""
 
         if (!accountId || !accessKeyId || !secretAccessKey) {
@@ -79,20 +96,125 @@ export class StorageService implements OnModuleInit {
     }
 
     /**
-     * Upload a file to R2 (or return Base64 for avatars)
+     * Map logical folders to enterprise-grade structured R2 bucket paths with tenant isolation
+     */
+    private mapFolderToPath(folder: string, scopeId?: string, city?: string): string {
+        const mapping: Record<string, string> = {
+            avatars: "users/profile-images",
+            "profile-images": "users/profile-images",
+            artworks: "artworks/images",
+            thumbnails: "artworks/thumbnails",
+            "ar-markers": "artworks/ar-markers",
+            "audio-guides": "artworks/audio-guides",
+            videos: "artworks/video-previews",
+            "video-previews": "artworks/video-previews",
+            museums: "museums/images",
+            "ai-outputs": "ai/processed",
+            static: "assets/static",
+            collections: "collections/covers",
+            "artist-profiles": "artists/profiles",
+            "creator-profiles": "artists/profiles",
+            "artist-banners": "artists/banners",
+            "creator-banners": "artists/banners",
+            "collector-profiles": "collectors/profiles",
+            "collector-banners": "collectors/banners",
+            general: "general",
+        }
+        let basePath = mapping[folder.toLowerCase()] || folder
+
+        if (scopeId) {
+            const cleanScope = scopeId.trim().toLowerCase()
+            if (city) {
+                const cleanCity = city.trim().toLowerCase().replace(/\s+/g, "-")
+                basePath = `${basePath}/${cleanCity}/${cleanScope}`
+            } else {
+                basePath = `${basePath}/${cleanScope}`
+            }
+        } else if (city) {
+            const cleanCity = city.trim().toLowerCase().replace(/\s+/g, "-")
+            basePath = `${basePath}/${cleanCity}`
+        }
+
+        return basePath
+    }
+
+    /**
+     * Upload a file to R2 with automatic path organization and image optimization
      */
     async uploadFile(
         file: Express.Multer.File,
         folder = "general",
+        scopeId?: string,
+        city?: string,
     ): Promise<UploadResult> {
         this.validateFile(file)
+        this.ensureClientReady()
 
-        // ─── Image Processing Pipeline ───────────────────
+        const targetFolder = this.mapFolderToPath(folder, scopeId, city)
+        const fileUuid = uuidv4()
+        const isImage = ALLOWED_IMAGE_TYPES.includes(file.mimetype)
+
+        // ─── Case A: Artwork Upload with Automated Multi-size Variants ───
+        if (folder === "artworks" && isImage && this.imageProcessor.canProcess(file.mimetype)) {
+            try {
+                this.logger.log(`🎨 Processing artwork image upload with multi-variant generation...`)
+                const variants = await this.imageProcessor.generateVariants(
+                    file.buffer,
+                    file.mimetype,
+                    "artworks"
+                )
+
+                // Define keys for each variant using same UUID for easy maintenance
+                const cleanScope = scopeId ? scopeId.trim().toLowerCase() : ""
+                const cleanCity = city ? city.trim().toLowerCase().replace(/\s+/g, "-") : ""
+                const scopePath = cleanScope ? (cleanCity ? `${cleanCity}/${cleanScope}/` : `${cleanScope}/`) : ""
+
+                const originalKey = `${targetFolder}/${fileUuid}.webp`
+                const mediumKey = `artworks/mediums/${scopePath}${fileUuid}.webp`
+                const thumbnailKey = `artworks/thumbnails/${scopePath}${fileUuid}.webp`
+
+                // Upload variants in parallel to R2
+                await Promise.all([
+                    this.uploadToR2(originalKey, variants.original.buffer, "image/webp"),
+                    this.uploadToR2(mediumKey, variants.medium.buffer, "image/webp"),
+                    this.uploadToR2(thumbnailKey, variants.thumbnail.buffer, "image/webp"),
+                ])
+
+                const originalUrl = this.buildPublicUrl(originalKey)
+                const mediumUrl = this.buildPublicUrl(mediumKey)
+                const thumbnailUrl = this.buildPublicUrl(thumbnailKey)
+
+                this.logger.log(
+                    `✅ Artwork upload success: Original (${this.formatSize(variants.original.size)}), ` +
+                    `Medium (${this.formatSize(variants.medium.size)}), ` +
+                    `Thumbnail (${this.formatSize(variants.thumbnail.size)})`
+                )
+
+                return {
+                    key: originalKey,
+                    url: originalUrl,
+                    size: variants.original.size,
+                    contentType: "image/webp",
+                    mediumKey,
+                    mediumUrl,
+                    thumbnailKey,
+                    thumbnailUrl,
+                }
+            } catch (err: any) {
+                this.logger.error(`Failed to generate/upload artwork variants: ${err.message}. Falling back to single optimized image...`)
+                if (err instanceof BadRequestException) {
+                    throw err;
+                }
+            }
+        }
+
+        // ─── Case B: Standard Single Asset Upload ───
         let processedBuffer = file.buffer
         let processedMimetype = file.mimetype
         let processedExt = this.getExtension(file.originalname)
 
-        if (this.imageProcessor.canProcess(file.mimetype)) {
+        // Process images (resize, compress, strip metadata, convert to WebP)
+        if (isImage && this.imageProcessor.canProcess(file.mimetype)) {
             const processed = await this.imageProcessor.processImage(
                 file.buffer,
                 file.mimetype,
@@ -103,40 +225,13 @@ export class StorageService implements OnModuleInit {
             processedExt = processed.extension
         }
 
-        // Bypass CDN for avatars and store directly as Base64 in database
-        if (folder === "avatars") {
-            const base64Data = processedBuffer.toString('base64');
-            const dataUri = `data:${processedMimetype};base64,${base64Data}`;
-            const key = `avatars/${uuidv4()}`;
-            
-            this.logger.log(`Avatar processed as Base64 data URI (${this.formatSize(processedBuffer.length)})`);
-            
-            return {
-                key,
-                url: dataUri,
-                size: processedBuffer.length,
-                contentType: processedMimetype,
-            };
-        }
-
-        this.ensureClientReady()
-
-        const key = `${folder}/${uuidv4()}${processedExt}`
+        const key = `${targetFolder}/${fileUuid}${processedExt}`
 
         try {
-            await this.s3Client.send(
-                new PutObjectCommand({
-                    Bucket: this.bucketName,
-                    Key: key,
-                    Body: processedBuffer,
-                    ContentType: processedMimetype,
-                    CacheControl: "public, max-age=31536000, immutable",
-                }),
-            )
-
+            await this.uploadToR2(key, processedBuffer, processedMimetype)
             const url = this.buildPublicUrl(key)
 
-            this.logger.log(`Uploaded ${key} (${this.formatSize(processedBuffer.length)})`)
+            this.logger.log(`Uploaded single asset ${key} (${this.formatSize(processedBuffer.length)})`)
 
             return {
                 key,
@@ -144,12 +239,18 @@ export class StorageService implements OnModuleInit {
                 size: processedBuffer.length,
                 contentType: processedMimetype,
             }
-        } catch (error) {
+        } catch (error: any) {
+            const env = this.configService.get<string>("nodeEnv")
+            if (env === "production") {
+                this.logger.error(`R2 CDN Upload failed for ${key} in production: ${error.message}`)
+                throw new InternalServerErrorException(`Storage upload failed: ${error.message}`)
+            }
+
             this.logger.warn(`R2 CDN Upload failed for ${key}: ${error.message}. Falling back to Base64 database storage!`)
             
-            // Fallback: Convert file to Base64 and store directly in DB
-            const base64Data = processedBuffer.toString('base64');
-            const dataUri = `data:${processedMimetype};base64,${base64Data}`;
+            // Fallback: Convert file to Base64 data URI to prevent backend crash
+            const base64Data = processedBuffer.toString("base64")
+            const dataUri = `data:${processedMimetype};base64,${base64Data}`
             
             return {
                 key,
@@ -158,6 +259,21 @@ export class StorageService implements OnModuleInit {
                 contentType: processedMimetype,
             }
         }
+    }
+
+    /**
+     * Send object buffer to Cloudflare R2 bucket
+     */
+    private async uploadToR2(key: string, body: Buffer, contentType: string): Promise<void> {
+        await this.s3Client.send(
+            new PutObjectCommand({
+                Bucket: this.bucketName,
+                Key: key,
+                Body: body,
+                ContentType: contentType,
+                CacheControl: "public, max-age=31536000, immutable",
+            }),
+        )
     }
 
     /**
@@ -174,7 +290,7 @@ export class StorageService implements OnModuleInit {
                 }),
             )
             this.logger.log(`Deleted ${key}`)
-        } catch (error) {
+        } catch (error: any) {
             this.logger.error(`Delete failed for ${key}: ${error.message}`)
             throw new InternalServerErrorException("File deletion failed.")
         }
@@ -220,8 +336,14 @@ export class StorageService implements OnModuleInit {
             )
         }
 
-        const isVideo = ALLOWED_VIDEO_TYPES.includes(file.mimetype)
-        const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE
+        let maxSize = MAX_GENERAL_SIZE
+        if (ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
+            maxSize = MAX_IMAGE_SIZE
+        } else if (ALLOWED_VIDEO_TYPES.includes(file.mimetype)) {
+            maxSize = MAX_VIDEO_SIZE
+        } else if (ALLOWED_AUDIO_TYPES.includes(file.mimetype)) {
+            maxSize = MAX_AUDIO_SIZE
+        }
 
         if (file.size > maxSize) {
             throw new BadRequestException(

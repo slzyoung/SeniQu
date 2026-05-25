@@ -16,6 +16,7 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 const ALLOWED_MIMES = [
     'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/avif',
     'video/mp4', 'video/webm', 'video/quicktime',
+    'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/aac', 'audio/mp3', 'audio/x-m4a', 'audio/mp4',
     'application/pdf',
 ]
 
@@ -37,7 +38,26 @@ export class StorageController {
                 file: { type: "string", format: "binary", description: "File to upload" },
                 folder: {
                     type: "string",
-                    enum: ["artworks", "avatars", "videos", "collections", "general"],
+                    enum: [
+                        "artworks",
+                        "avatars",
+                        "videos",
+                        "collections",
+                        "general",
+                        "profile-images",
+                        "museums",
+                        "ar-markers",
+                        "audio-guides",
+                        "video-previews",
+                        "ai-outputs",
+                        "static",
+                        "artist-profiles",
+                        "creator-profiles",
+                        "artist-banners",
+                        "creator-banners",
+                        "collector-profiles",
+                        "collector-banners"
+                    ],
                     default: "general",
                 },
             },
@@ -61,9 +81,11 @@ export class StorageController {
         // Read the file buffer
         const buffer = await data.toBuffer()
 
-        // Extract folder from fields
+        // Extract folder, scopeId, and city from fields
         const fields = data.fields as Record<string, any>
         const folder = fields?.folder?.value || "general"
+        const scopeId = fields?.scopeId?.value || undefined
+        const city = fields?.city?.value || undefined
 
         // Create a compatible file object for the storage service
         const file = {
@@ -73,7 +95,7 @@ export class StorageController {
             size: buffer.length,
         }
 
-        return this.storageService.uploadFile(file as any, folder)
+        return this.storageService.uploadFile(file as any, folder, scopeId, city)
     }
 
     @Delete(":key")

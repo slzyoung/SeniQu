@@ -276,6 +276,34 @@ export function CityRegions() {
         return counts;
     }, [places, regionsList]);
 
+    // Dynamically resolve region card images using real place cover images from Google Maps/DB
+    const regionImages = useMemo(() => {
+        const images: Record<string, string> = {};
+        regionsList.forEach(reg => {
+            const placeWithImage = places.find(place => {
+                const img = place.cover_image_url || (place.photos && place.photos[0]);
+                if (!img) return false;
+
+                const address = (place.address || '').toLowerCase();
+                const name = (place.name || '').toLowerCase();
+                const cityField = (place.city || '').toLowerCase();
+
+                return reg.keywords.some(keyword =>
+                    address.includes(keyword) ||
+                    name.includes(keyword) ||
+                    cityField.includes(keyword)
+                );
+            });
+
+            if (placeWithImage) {
+                images[reg.id] = placeWithImage.cover_image_url || placeWithImage.photos[0];
+            } else {
+                images[reg.id] = reg.image;
+            }
+        });
+        return images;
+    }, [places, regionsList]);
+
     // Filtered by active region
     const regionPlaces = useMemo(() => {
         let result = places;
@@ -455,12 +483,23 @@ export function CityRegions() {
         setCollectionLoading(true);
         setCollectionArtworks([]);
 
+        let detailedPlace = place;
+        try {
+            const details = await museumService.getPlaceDetails(place.id);
+            if (details) {
+                detailedPlace = details;
+                setSelectedPlace(details);
+            }
+        } catch (error) {
+            console.error('[DETAILS_FETCH] Error:', error);
+        }
+
         // Autoload Wikipedia History detail
-        const id = place.id;
+        const id = detailedPlace.id;
         if (!wikiDataMap[id]) {
             setWikiLoadingId(id);
             try {
-                const res = await museumService.getWikipediaSummary(place.name);
+                const res = await museumService.getWikipediaSummary(detailedPlace.name);
                 if (res && res.extract) {
                     setWikiDataMap(prev => ({ ...prev, [id]: res }));
                 } else {
@@ -559,6 +598,7 @@ export function CityRegions() {
                             cityMetadata={cityMetadata}
                             regionsList={regionsList}
                             regionStats={regionStats}
+                            regionImages={regionImages}
                             onSelectRegion={handleSelectRegion}
                             onBack={() => navigate('/')}
                         />

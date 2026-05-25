@@ -23,7 +23,7 @@ async function bootstrap() {
     const fastifyAdapter = new FastifyAdapter({
         logger: false,
         trustProxy: true,
-        bodyLimit: 50 * 1024 * 1024, // 50MB payload limit
+        bodyLimit: 150 * 1024 * 1024, // 150MB payload limit
     })
 
     const app = await NestFactory.create<NestFastifyApplication>(
@@ -75,7 +75,7 @@ async function bootstrap() {
     // Multipart support (file uploads — replaces Multer)
     await app.register(require("@fastify/multipart"), {
         limits: {
-            fileSize: 50 * 1024 * 1024, // 50MB
+            fileSize: 150 * 1024 * 1024, // 150MB
         },
     })
 

@@ -254,6 +254,7 @@ export class MuseumsService {
 
                 return {
                     id: m.id,
+                    slug: m.slug,
                     name: m.name,
                     address: m.street || m.city || '',
                     latitude,
@@ -506,6 +507,14 @@ out center body;`;
             const localPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, query);
             if (localPlaces && localPlaces.length > 0) {
                 this.logger.log(`[SEARCH] Local database HIT: Found ${localPlaces.length} places within ${safeRadius / 1000}km. Bypassing Google API.`);
+                
+                // Trigger background enrichment for any local places missing cover images
+                const placesWithoutImage = localPlaces.filter(p => !p.photos || p.photos.length === 0);
+                if (placesWithoutImage.length > 0) {
+                    this.logger.log(`[SEARCH] Triggering background enrichment for ${placesWithoutImage.length} local places missing cover images...`);
+                    this.backfillMissingLocalImages(placesWithoutImage);
+                }
+
                 return { places: localPlaces, region: regionInfo, quotaExceeded: false };
             }
         } catch (dbErr) {
@@ -563,7 +572,7 @@ out center body;`;
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Goog-Api-Key': apiKey,
-                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.types',
+                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.types,places.photos',
                         'Accept-Language': 'id',
                         'Referer': refererHeader,
                     },
@@ -625,7 +634,7 @@ out center body;`;
                             rating: p.rating,
                             reviewCount: p.userRatingCount,
                             type: category,
-                            photos: [],
+                            photos: p.photos || [],
                             reviews: [],
                         };
                     });
@@ -682,7 +691,7 @@ out center body;`;
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Goog-Api-Key': apiKey,
-                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.types',
+                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.types,places.photos',
                         'Accept-Language': 'id',
                         'Referer': refererHeader,
                     },
@@ -752,7 +761,7 @@ out center body;`;
                             rating: p.rating,
                             reviewCount: p.userRatingCount,
                             type: category,
-                            photos: [],
+                            photos: p.photos || [],
                             reviews: [],
                         };
                     });
@@ -828,22 +837,38 @@ out center body;`;
                 .select('slug, cover_image_url')
                 .in('slug', slugs);
 
+            const dbImageMap = new Map<string, string>();
             if (dbPlaces && dbPlaces.length > 0) {
-                const dbImageMap = new Map<string, string>(
-                    dbPlaces
-                        .filter((row) => row.cover_image_url)
-                        .map((row) => [row.slug, row.cover_image_url])
-                );
-
-                for (const p of capped) {
-                    const slug = `g-${p.id}`;
-                    if (dbImageMap.has(slug)) {
-                        p.photos = [dbImageMap.get(slug)];
+                for (const row of dbPlaces) {
+                    if (row.cover_image_url) {
+                        dbImageMap.set(row.slug, row.cover_image_url);
                     }
                 }
             }
+
+            // Resolve images in parallel for places that don't have them in the DB yet
+            const resolvePromises = capped.map(async (p) => {
+                const slug = `g-${p.id}`;
+                if (dbImageMap.has(slug)) {
+                    p.photos = [dbImageMap.get(slug)];
+                } else if (p.photos && p.photos.length > 0 && typeof p.photos[0] === 'object' && p.photos[0].name) {
+                    // Resolve from Google Places photo media API
+                    const resolvedUrl = await this.fetchGooglePlacePhotoUrl(p.photos[0].name, apiKey);
+                    if (resolvedUrl) {
+                        p.photos = [resolvedUrl];
+                        // Also set cover_image_url to save it in database during ingestion
+                        p.cover_image_url = resolvedUrl;
+                    } else {
+                        p.photos = [];
+                    }
+                } else {
+                    p.photos = [];
+                }
+            });
+
+            await Promise.all(resolvePromises);
         } catch (dbErr: any) {
-            this.logger.warn(`Failed to fetch cover images from database for search response: ${dbErr.message}`);
+            this.logger.warn(`Failed to fetch/resolve cover images for search response: ${dbErr.message}`);
         }
 
         this.logger.log(`Nearby: ${centers.length} grids → ${allPlaces.length} raw → ${filtered.length} within ${radiusKm}km (capped breakdown: ${museums.length} museums, ${galleries.length} galleries, ${heritage.length} heritage)`);
@@ -1401,10 +1426,10 @@ out center body;`;
                 const adminId = this.systemAdminId;
                 const slugs = places.map((p) => `g-${p.id}`);
 
-                // 2. Query existing slugs and check if cover_image_url is missing
+                // 2. Query existing slugs and check if cover_image_url or reviews are missing
                 const { data: existing, error: existingError } = await this.supabase
                     .from('institutions')
-                    .select('slug, cover_image_url')
+                    .select('slug, cover_image_url, reviews')
                     .in('slug', slugs);
 
                 if (existingError) {
@@ -1412,22 +1437,29 @@ out center body;`;
                     return;
                 }
 
-                const existingMap = new Map<string, string | null>(
-                    (existing || []).map((row) => [row.slug, row.cover_image_url])
+                const existingMap = new Map<string, { coverImageUrl: string | null; hasReviews: boolean }>(
+                    (existing || []).map((row) => [
+                        row.slug,
+                        {
+                            coverImageUrl: row.cover_image_url,
+                            hasReviews: !!(row.reviews && row.reviews.length > 0),
+                        }
+                    ])
                 );
 
                 const newPlaces = places.filter((p) => !existingMap.has(`g-${p.id}`));
-                const missingImagePlaces = places.filter((p) => {
+                const missingMetadataPlaces = places.filter((p) => {
                     const slug = `g-${p.id}`;
-                    return existingMap.has(slug) && !existingMap.get(slug);
+                    const state = existingMap.get(slug);
+                    return state && (!state.coverImageUrl || !state.hasReviews);
                 });
 
-                if (newPlaces.length === 0 && missingImagePlaces.length === 0) {
-                    this.logger.log(`[INGEST] All ${places.length} places already exist with images in database. Ingestion skipped.`);
+                if (newPlaces.length === 0 && missingMetadataPlaces.length === 0) {
+                    this.logger.log(`[INGEST] All ${places.length} places already exist with metadata in database. Ingestion skipped.`);
                     return;
                 }
 
-                // A. Insert new places and scrape Wikipedia images
+                // A. Insert new places and scrape GMaps details & Wikipedia summary
                 if (newPlaces.length > 0) {
                     this.logger.log(`[INGEST] Ingesting ${newPlaces.length} new public places into database...`);
                     const upsertData = [];
@@ -1436,9 +1468,11 @@ out center body;`;
                         const province = this.extractProvinceFromAddress(p.address);
                         const slug = `g-${p.id}`;
 
-                        const cover_image_url = await this.scrapePlaceImage(p.name);
-                        // Small delay to respect rate limit
-                        await new Promise((resolve) => setTimeout(resolve, 200));
+                        // Enrich metadata asynchronously (photos/reviews from Google, history/summary from Wikipedia)
+                        const metadata = await this.enrichPlaceMetadata(p.id, p.name);
+                        
+                        // Anti-throttle delay: 500ms between Google/Wiki calls
+                        await new Promise((resolve) => setTimeout(resolve, 500));
 
                         upsertData.push({
                             owner_id: adminId,
@@ -1452,8 +1486,9 @@ out center body;`;
                             is_verified: true,
                             is_featured: false,
                             rating: p.rating || 0.0,
-                            description: p.address ? `Tempat bersejarah/budaya: ${p.address}` : '',
-                            cover_image_url,
+                            description: metadata.description || (p.address ? `Tempat bersejarah/budaya: ${p.address}` : ''),
+                            cover_image_url: metadata.coverImageUrl || null,
+                            reviews: metadata.reviews || [],
                         });
                     }
 
@@ -1468,33 +1503,176 @@ out center body;`;
                     }
                 }
 
-                // B. Backfill missing images for existing places
-                if (missingImagePlaces.length > 0) {
-                    this.logger.log(`[INGEST] Backfilling images for ${missingImagePlaces.length} existing places...`);
-                    for (const p of missingImagePlaces) {
+                // B. Backfill missing metadata (images, reviews, wiki description) for existing places
+                if (missingMetadataPlaces.length > 0) {
+                    this.logger.log(`[INGEST] Backfilling metadata for ${missingMetadataPlaces.length} existing places...`);
+                    for (const p of missingMetadataPlaces) {
                         const slug = `g-${p.id}`;
-                        const cover_image_url = await this.scrapePlaceImage(p.name);
-                        // Small delay to respect rate limit
-                        await new Promise((resolve) => setTimeout(resolve, 200));
+                        
+                        // Get the existing DB record to find its ID
+                        const { data: dbRow } = await this.supabase
+                            .from('institutions')
+                            .select('id')
+                            .eq('slug', slug)
+                            .limit(1);
 
-                        if (cover_image_url) {
-                            const { error: updateError } = await this.supabase
-                                .from('institutions')
-                                .update({ cover_image_url })
-                                .eq('slug', slug);
-
-                            if (updateError) {
-                                this.logger.error(`[INGEST] Failed to update cover image for ${slug}: ${updateError.message}`);
-                            } else {
-                                this.logger.log(`[INGEST] Successfully updated cover image for "${p.name}".`);
-                            }
+                        if (dbRow && dbRow.length > 0) {
+                            await this.enrichPlaceMetadata(p.id, p.name, dbRow[0].id);
                         }
+                        
+                        // Anti-throttle delay
+                        await new Promise((resolve) => setTimeout(resolve, 500));
                     }
                 }
             } catch (err: any) {
                 this.logger.error(`[INGEST] Error running background database ingestion: ${err.message}`);
             }
         });
+    }
+
+    /**
+     * Triggers background metadata enrichment for local database places that are missing cover images.
+     */
+    private backfillMissingLocalImages(places: any[]) {
+        Promise.resolve().then(async () => {
+            const apiKey = this.configService.get<string>('googleMaps.apiKey')
+                || process.env.GOOGLE_MAPS_KEY || '';
+            if (!apiKey) return;
+
+            for (const p of places) {
+                if (p.slug && p.slug.startsWith('g-')) {
+                    const googlePlaceId = p.slug.substring(2);
+                    this.logger.log(`[BACKFILL] Enriching local place "${p.name}" (${googlePlaceId}) in background...`);
+                    try {
+                        await this.enrichPlaceMetadata(googlePlaceId, p.name, p.id);
+                    } catch (err: any) {
+                        this.logger.error(`[BACKFILL] Failed to enrich "${p.name}": ${err.message}`);
+                    }
+                    // Anti-throttle delay: 500ms between calls
+                    await new Promise((resolve) => setTimeout(resolve, 500));
+                }
+            }
+        });
+    }
+
+    /**
+     * Helper to resolve a Google Place photo resource name to a static redirect URL.
+     * Follows the HTTP redirect to avoid exposing our Google API Key in client responses.
+     */
+    async fetchGooglePlacePhotoUrl(photoName: string, apiKey: string): Promise<string | null> {
+        if (!photoName || !apiKey) return null;
+        try {
+            const url = `https://places.googleapis.com/v1/${photoName}/media?key=${apiKey}&maxHeightPx=800`;
+            const res = await fetch(url, {
+                method: 'GET',
+                redirect: 'follow', // Follow the redirect to obtain the lh3.googleusercontent.com static URL
+            });
+            if (res.ok) {
+                return res.url;
+            }
+        } catch (error) {
+            this.logger.warn(`Failed to resolve Google Places photo URL for ${photoName}: ${error.message}`);
+        }
+        return null;
+    }
+
+    /**
+     * Enrich a database place record with Google Maps details (photos, reviews) and Wikipedia summary.
+     * Implements rate limiting/delay (anti-throttling) and robust fallbacks.
+     */
+    async enrichPlaceMetadata(placeId: string, placeName: string, dbId?: string): Promise<{ coverImageUrl?: string; reviews?: any[]; description?: string }> {
+        const apiKey = this.configService.get<string>('googleMaps.apiKey')
+            || process.env.GOOGLE_MAPS_KEY || '';
+        const referer = this.configService.get<string>('FRONTEND_URL')
+            || process.env.FRONTEND_URL || 'http://localhost:5173';
+        const refererHeader = referer.endsWith('/') ? referer : `${referer}/`;
+
+        const result: { coverImageUrl?: string; reviews?: any[]; description?: string } = {};
+
+        // 1. Fetch Google Maps Details (Photos and Reviews)
+        if (apiKey && placeId && !placeId.startsWith('osm-')) {
+            const url = `https://places.googleapis.com/v1/places/${placeId}`;
+            try {
+                const res = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Goog-Api-Key': apiKey,
+                        'X-Goog-FieldMask': 'photos,reviews',
+                        'Accept-Language': 'id',
+                        'Referer': refererHeader,
+                    },
+                });
+
+                if (res.ok) {
+                    const placeData = await res.json() as any;
+                    
+                    // Parse Google Maps photo
+                    if (placeData.photos && placeData.photos.length > 0) {
+                        const staticPhotoUrl = await this.fetchGooglePlacePhotoUrl(placeData.photos[0].name, apiKey);
+                        if (staticPhotoUrl) {
+                            result.coverImageUrl = staticPhotoUrl;
+                        }
+                    }
+
+                    // Parse Google Maps reviews
+                    if (placeData.reviews && placeData.reviews.length > 0) {
+                        result.reviews = placeData.reviews.map((r: any) => ({
+                            author: r.authorAttribution?.displayName || 'Pengunjung',
+                            rating: r.rating || 5,
+                            text: r.text?.text || '',
+                            time: r.relativePublishTimeDescription || 'Baru-baru ini',
+                        }));
+                    }
+                }
+            } catch (err: any) {
+                this.logger.warn(`[ENRICH] Failed to fetch Google details for "${placeName}" (${placeId}): ${err.message}`);
+            }
+        }
+
+        // 2. Fallback for cover image to Wikipedia if Google failed/didn't have photos
+        if (!result.coverImageUrl) {
+            const wikiImg = await this.scrapePlaceImage(placeName);
+            if (wikiImg) {
+                result.coverImageUrl = wikiImg;
+            }
+        }
+
+        // 3. Fallback for reviews if Google failed/didn't have reviews
+        if (!result.reviews || result.reviews.length === 0) {
+            result.reviews = this.generateMockReviews(placeName, 4.5);
+        }
+
+        // 4. Fetch Wikipedia history/summary
+        const wikiInfo = await this.scrapePlaceSummary(placeName);
+        if (wikiInfo && wikiInfo.extract) {
+            result.description = wikiInfo.extract;
+        }
+
+        // 5. Save back to database if dbId is provided
+        if (dbId && (result.coverImageUrl || result.reviews || result.description)) {
+            try {
+                const updateData: any = {};
+                if (result.coverImageUrl) updateData.cover_image_url = result.coverImageUrl;
+                if (result.reviews) updateData.reviews = result.reviews;
+                if (result.description) updateData.description = result.description;
+
+                const { error: updateErr } = await this.supabase
+                    .from('institutions')
+                    .update(updateData)
+                    .eq('id', dbId);
+
+                if (updateErr) {
+                    this.logger.error(`[ENRICH] Failed to update database for "${placeName}": ${updateErr.message}`);
+                } else {
+                    this.logger.log(`[ENRICH] Successfully enriched database record for "${placeName}".`);
+                }
+            } catch (dbErr: any) {
+                this.logger.error(`[ENRICH] Database update exception for "${placeName}": ${dbErr.message}`);
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -1784,7 +1962,7 @@ out center body;`;
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Goog-Api-Key': apiKey,
-                        'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,rating,userRatingCount,types',
+                        'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,rating,userRatingCount,types,photos,reviews',
                         'Accept-Language': 'id',
                         'Referer': refererHeader,
                     },
@@ -1808,20 +1986,34 @@ out center body;`;
 
         // 3. Resolve the final output
         let finalPlace: any = null;
+        let coverImageUrl = null;
+        let reviews = [];
 
         if (placeDataFromGoogle) {
             const placeName = placeDataFromGoogle.displayName?.text || '';
             const placeRating = placeDataFromGoogle.rating || 4.5;
             const placeReviewsCount = placeDataFromGoogle.userRatingCount || 5;
-
-            let coverImageUrl = null;
-            let reviews = [];
             let description = '';
 
             if (dbPlace) {
                 coverImageUrl = dbPlace.cover_image_url;
                 reviews = dbPlace.reviews && dbPlace.reviews.length > 0 ? dbPlace.reviews : [];
                 description = dbPlace.description || '';
+            }
+
+            // Resolve cover image from Google if not in DB
+            if (!coverImageUrl && placeDataFromGoogle.photos && placeDataFromGoogle.photos.length > 0) {
+                coverImageUrl = await this.fetchGooglePlacePhotoUrl(placeDataFromGoogle.photos[0].name, apiKey);
+            }
+
+            // Resolve reviews from Google if not in DB
+            if (reviews.length === 0 && placeDataFromGoogle.reviews && placeDataFromGoogle.reviews.length > 0) {
+                reviews = placeDataFromGoogle.reviews.map((r: any) => ({
+                    author: r.authorAttribution?.displayName || 'Pengunjung',
+                    rating: r.rating || 5,
+                    text: r.text?.text || '',
+                    time: r.relativePublishTimeDescription || 'Baru-baru ini',
+                }));
             }
 
             finalPlace = {
@@ -1904,6 +2096,7 @@ out center body;`;
 
         // 4. Background Automatic ETL Scraper to enrich database records with missing data
         if (dbPlace) {
+            const googleId = dbPlace.slug.startsWith('g-') ? dbPlace.slug.substring(2) : dbPlace.id;
             const needsCoverImage = !dbPlace.cover_image_url;
             const needsWiki = !dbPlace.description || dbPlace.description.startsWith('Tempat bersejarah/budaya:');
             const needsReviews = !dbPlace.reviews || dbPlace.reviews.length === 0;
@@ -1914,16 +2107,20 @@ out center body;`;
                     try {
                         const updateData: any = {};
 
-                        // A. Scrape cover image
+                        // A. Cover Image: use resolved coverImageUrl from details api if available, otherwise fetch/scrape
                         if (needsCoverImage) {
-                            const wikiImg = await this.scrapePlaceImage(dbPlace.name);
-                            if (wikiImg) {
-                                updateData.cover_image_url = wikiImg;
-                                finalPlace.photos = [wikiImg];
+                            if (coverImageUrl) {
+                                updateData.cover_image_url = coverImageUrl;
+                            } else {
+                                const enrichment = await this.enrichPlaceMetadata(googleId, dbPlace.name);
+                                if (enrichment.coverImageUrl) {
+                                    updateData.cover_image_url = enrichment.coverImageUrl;
+                                    finalPlace.photos = [enrichment.coverImageUrl];
+                                }
                             }
                         }
 
-                        // B. Scrape wikipedia summary/history
+                        // B. Wikipedia History/Summary
                         if (needsWiki) {
                             const wikiInfo = await this.scrapePlaceSummary(dbPlace.name);
                             if (wikiInfo && wikiInfo.extract) {
@@ -1932,11 +2129,21 @@ out center body;`;
                             }
                         }
 
-                        // C. Generate and cache contextual reviews
+                        // C. Reviews: use resolved reviews from details api if available, otherwise fetch/scrape
                         if (needsReviews) {
-                            const generatedReviews = this.generateMockReviews(dbPlace.name, Number(dbPlace.rating) || 4.5);
-                            updateData.reviews = generatedReviews;
-                            finalPlace.reviews = generatedReviews;
+                            if (reviews && reviews.length > 0) {
+                                updateData.reviews = reviews;
+                            } else {
+                                const enrichment = await this.enrichPlaceMetadata(googleId, dbPlace.name);
+                                if (enrichment.reviews && enrichment.reviews.length > 0) {
+                                    updateData.reviews = enrichment.reviews;
+                                    finalPlace.reviews = enrichment.reviews;
+                                } else {
+                                    const generatedReviews = this.generateMockReviews(dbPlace.name, Number(dbPlace.rating) || 4.5);
+                                    updateData.reviews = generatedReviews;
+                                    finalPlace.reviews = generatedReviews;
+                                }
+                            }
                         }
 
                         // Write updates to DB
@@ -1973,38 +2180,68 @@ out center body;`;
      */
     private generateMockReviews(placeName: string, rating: number = 4.5): any[] {
         const name = placeName || 'tempat ini';
-        const reviews = [
-            {
-                author: "Budi Santoso",
-                rating: 5,
-                text: `Koleksi sejarah di ${name} sangat lengkap dan terawat dengan baik. Sangat edukatif untuk anak-anak sekolah dan keluarga.`,
-                time: "1 minggu yang lalu"
-            },
-            {
-                author: "Siti Rahma",
-                rating: 4,
-                text: "Tempatnya bersih, penataan koleksinya juga rapi dan estetik. Pemandu museumnya ramah dan penjelasannya sangat jelas.",
-                time: "3 hari yang lalu"
-            },
-            {
-                author: "Aditya Wijaya",
-                rating: 5,
-                text: `Salah satu destinasi budaya terbaik di kota ini. Wajib dikunjungi untuk belajar sejarah lokal ${name} lebih mendalam.`,
-                time: "2 minggu yang lalu"
-            },
-            {
-                author: "Dewi Lestari",
-                rating: Math.max(3, Math.floor(rating)),
-                text: "Fasilitasnya cukup memadai, ada spot foto yang bagus juga. Tiket masuk sangat terjangkau untuk semua kalangan.",
-                time: "1 bulan yang lalu"
-            },
-            {
-                author: "Rian Hidayat",
-                rating: 5,
-                text: "Sangat terkesan dengan pelestarian benda bersejarah di sini. Suasananya tenang, nyaman, dan penuh edukasi.",
-                time: "2 bulan yang lalu"
-            }
+        
+        const firstNames = [
+            "Budi", "Siti", "Aditya", "Dewi", "Rian", "Andi", "Ahmad", "Rina", "Hendra", "Mega",
+            "Joko", "Sri", "Eko", "Rudi", "Agus", "Yanto", "Bambang", "Wati", "Kartika", "Denny",
+            "Fajar", "Gita", "Dina", "Hadi", "Indra", "Kurniawan", "Laras", "Mulyono", "Novi", "Putra"
         ];
+        const lastNames = [
+            "Santoso", "Rahma", "Wijaya", "Lestari", "Hidayat", "Pratama", "Saputra", "Wulandari", "Kurnia", "Sari",
+            "Setiawan", "Utomo", "Gunawan", "Susanto", "Nugroho", "Hidayatullah", "Kusuma", "Siregar", "Nasution", "Lubis"
+        ];
+        
+        const positiveReviews = [
+            `Sangat terkesan berkunjung ke ${name}. Tempatnya sangat edukatif dan terawat dengan baik.`,
+            `Koleksi budaya dan sejarah di ${name} sangat lengkap. Penataan ruang pamerannya rapi.`,
+            `Destinasi wisata edukasi yang luar biasa di kota ini. Wajib dikunjungi bersama keluarga.`,
+            `Suasananya tenang dan nyaman sekali untuk belajar sejarah dan kebudayaan nusantara.`,
+            `Karya seni dan benda bersejarah yang dipamerkan di ${name} benar-benar bernilai tinggi.`,
+            `Petugas dan pemandu wisatanya sangat ramah serta memberikan penjelasan dengan sangat detail.`,
+            `Tempatnya bersih, tertata dengan baik, dan suasananya kental akan nilai sejarah.`
+        ];
+        
+        const neutralReviews = [
+            `Fasilitas di ${name} cukup lengkap, mulai dari toilet hingga area istirahat. Harga tiket masuknya juga terjangkau.`,
+            `Lokasinya strategis dan mudah ditemukan. Hanya saja tempat parkir agak terbatas saat akhir pekan.`,
+            `Tempat yang bagus untuk foto-foto estetik sekaligus menambah wawasan sejarah lokal.`,
+            `Secara keseluruhan sangat memuaskan, disarankan datang pagi hari agar tidak terlalu ramai.`
+        ];
+
+        const reviews = [];
+        const count = 5;
+        
+        for (let i = 0; i < count; i++) {
+            const first = firstNames[(i * 7 + name.length) % firstNames.length];
+            const last = lastNames[(i * 11 + name.length) % lastNames.length];
+            const authorName = `${first} ${last}`;
+            
+            const posIdx1 = (i * 3 + name.length) % positiveReviews.length;
+            const posIdx2 = (i * 5 + name.length + 2) % positiveReviews.length;
+            const neuIdx = (i * 4 + name.length) % neutralReviews.length;
+            
+            let text = "";
+            if (i % 2 === 0) {
+                text = `${positiveReviews[posIdx1]} ${neutralReviews[neuIdx]}`;
+            } else {
+                text = `${positiveReviews[posIdx1]} ${positiveReviews[posIdx2]}`;
+            }
+
+            let r = 5;
+            if (i === 1) r = 4;
+            else if (i === 3) r = Math.max(3, Math.floor(rating));
+            
+            const times = ["3 hari yang lalu", "1 minggu yang lalu", "2 minggu yang lalu", "1 bulan yang lalu", "3 bulan yang lalu"];
+            const time = times[i % times.length];
+
+            reviews.push({
+                author: authorName,
+                rating: r,
+                text,
+                time
+            });
+        }
+        
         return reviews;
     }
 

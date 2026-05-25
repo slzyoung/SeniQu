@@ -22,6 +22,10 @@ export interface Artwork {
     primaryImageUrl: string
     images?: string
     thumbnailUrl?: string
+    arMarkerUrl?: string
+    audioGuideUrl?: string
+    videoPreviewUrl?: string
+    aiProcessedUrl?: string
     status: "draft" | "pending_review" | "published" | "archived" | "rejected"
     isForSale?: boolean
     price?: number
@@ -193,6 +197,31 @@ export class ArtworksService {
     }
 
     private mapToArtwork(data: any): Artwork {
+        let parsedImages: string | undefined = undefined;
+        let thumbnailUrl = data.thumbnail_url || undefined;
+        let arMarkerUrl = undefined;
+        let audioGuideUrl = undefined;
+        let videoPreviewUrl = undefined;
+        let aiProcessedUrl = undefined;
+
+        if (data.images) {
+            try {
+                const imgData = typeof data.images === 'string' ? JSON.parse(data.images) : data.images;
+                if (imgData && typeof imgData === 'object' && !Array.isArray(imgData)) {
+                    thumbnailUrl = imgData.thumbnail_url || thumbnailUrl;
+                    arMarkerUrl = imgData.ar_marker_url;
+                    audioGuideUrl = imgData.audio_guide_url;
+                    videoPreviewUrl = imgData.video_preview_url;
+                    aiProcessedUrl = imgData.ai_processed_url;
+                    parsedImages = imgData.additional_images ? JSON.stringify(imgData.additional_images) : undefined;
+                } else {
+                    parsedImages = typeof data.images === 'string' ? data.images : JSON.stringify(data.images);
+                }
+            } catch (e) {
+                parsedImages = typeof data.images === 'string' ? data.images : JSON.stringify(data.images);
+            }
+        }
+
         return {
             id: data.id,
             title: data.title,
@@ -210,8 +239,12 @@ export class ArtworksService {
             period: data.period,
             yearCreated: data.year_created,
             primaryImageUrl: data.primary_image_url,
-            images: data.images,
-            thumbnailUrl: data.thumbnail_url,
+            images: parsedImages,
+            thumbnailUrl,
+            arMarkerUrl,
+            audioGuideUrl,
+            videoPreviewUrl,
+            aiProcessedUrl,
             status: data.status,
             isForSale: data.is_for_sale,
             price: data.price,

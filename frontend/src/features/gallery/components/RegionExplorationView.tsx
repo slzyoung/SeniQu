@@ -7,6 +7,7 @@ interface RegionExplorationViewProps {
     cityMetadata: CityMetadata;
     regionsList: RegionDetail[];
     regionStats: Record<string, number>;
+    regionImages?: Record<string, string>;
     onSelectRegion: (regionId: string) => void;
     onBack: () => void;
 }
@@ -15,6 +16,7 @@ export const RegionExplorationView: React.FC<RegionExplorationViewProps> = ({
     cityMetadata,
     regionsList,
     regionStats,
+    regionImages = {},
     onSelectRegion,
     onBack,
 }) => {
@@ -57,7 +59,7 @@ export const RegionExplorationView: React.FC<RegionExplorationViewProps> = ({
                     >
                         {/* Card Cover image */}
                         <img
-                            src={reg.image}
+                            src={regionImages[reg.id] || reg.image}
                             alt={reg.name}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                             onError={(e) => {
