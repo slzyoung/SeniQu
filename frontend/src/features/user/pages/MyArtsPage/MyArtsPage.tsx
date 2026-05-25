@@ -19,13 +19,13 @@ import './MyArtsPage.css';
 // ============================================================
 
 const ART_IMAGES = {
-    hero1: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/800px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg',
-    hero2: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/VanGogh-starry_night_ballance1.jpg/1280px-VanGogh-starry_night_ballance1.jpg',
-    hero3: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/1280px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg',
-    art1: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg/1280px-Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg',
-    art2: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/800px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg',
-    art3: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/VanGogh-starry_night_ballance1.jpg/1280px-VanGogh-starry_night_ballance1.jpg',
-    art4: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Johannes_Vermeer_-_Het_meisje_met_de_parel.jpg/800px-Johannes_Vermeer_-_Het_meisje_met_de_parel.jpg',
+    hero1: 'https://cdn.seniqu.art/assets/static/demo/monalisa.webp',
+    hero2: 'https://cdn.seniqu.art/assets/static/demo/starrynight.webp',
+    hero3: 'https://cdn.seniqu.art/assets/static/demo/starrynight_detail.webp',
+    art1: 'https://cdn.seniqu.art/assets/static/demo/venus.webp',
+    art2: 'https://cdn.seniqu.art/assets/static/demo/monalisa.webp',
+    art3: 'https://cdn.seniqu.art/assets/static/demo/starrynight.webp',
+    art4: 'https://cdn.seniqu.art/assets/static/demo/pearlearring.webp',
 };
 
 const MOCK_ARTWORKS = [

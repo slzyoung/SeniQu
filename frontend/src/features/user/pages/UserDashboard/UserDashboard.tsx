@@ -75,7 +75,7 @@ const HERITAGE_CITIES: CityData[] = Object.entries(CITY_WHITELIST).map(([id, met
     featured: id === 'jakarta',
 }));
 
-const HERO_IMAGE = 'https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?w=1800&q=85';
+const HERO_IMAGE = 'https://cdn.seniqu.art/assets/static/hero/bromo.webp';
 
 // ============================================================
 // HELPER FUNCTIONS
