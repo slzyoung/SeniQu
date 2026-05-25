@@ -293,4 +293,6 @@ To avoid making database migrations for every new scraped feature, utilize Postg
 #### 5. Frontend Debounce Protection
 Ensure that all interactive frontend components that trigger backend queries (such as map panning, search autocomplete, or category filtering) are wrapped in a **debounce hook (300ms - 500ms)**. This prevents double-clicks or fast scroll gestures from spamming requests.
 
-
+---
+*Document Version: 1.2.0*
+*Last Updated: 2026-05-26*
