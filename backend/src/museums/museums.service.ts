@@ -15,6 +15,7 @@ import { ConfigService } from "@nestjs/config"
 import { CreateMuseumDto } from "./dto/create-museum.dto"
 import { UpdateMuseumDto } from "./dto/update-museum.dto"
 import { SearchMuseumDto } from "./dto/search-museum.dto"
+import { StorageService } from "../storage/storage.service"
 
 @Injectable()
 export class MuseumsService {
@@ -124,7 +125,10 @@ export class MuseumsService {
         return { allowed: true };
     }
 
-    constructor(private configService: ConfigService) {
+    constructor(
+        private readonly configService: ConfigService,
+        private readonly storageService: StorageService,
+    ) {
         this.supabase = createClient(
             this.configService.get<string>("SUPABASE_URL")!,
             this.configService.get<string>("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -446,7 +450,10 @@ out center body;`;
                     const province = this.extractProvinceFromAddress(p.address);
                     const slug = p.id;
 
-                    const cover_image_url = await this.scrapePlaceImage(p.name);
+                    let cover_image_url = await this.scrapePlaceImage(p.name);
+                    if (cover_image_url) {
+                        cover_image_url = await this.uploadExternalImageToR2(cover_image_url, "museums");
+                    }
                     await new Promise((resolve) => setTimeout(resolve, 200));
 
                     upsertData.push({
@@ -855,9 +862,10 @@ out center body;`;
                     // Resolve from Google Places photo media API
                     const resolvedUrl = await this.fetchGooglePlacePhotoUrl(p.photos[0].name, apiKey);
                     if (resolvedUrl) {
-                        p.photos = [resolvedUrl];
+                        const r2Url = await this.uploadExternalImageToR2(resolvedUrl, "museums");
+                        p.photos = [r2Url];
                         // Also set cover_image_url to save it in database during ingestion
-                        p.cover_image_url = resolvedUrl;
+                        p.cover_image_url = r2Url;
                     } else {
                         p.photos = [];
                     }
@@ -1611,7 +1619,8 @@ out center body;`;
                     if (placeData.photos && placeData.photos.length > 0) {
                         const staticPhotoUrl = await this.fetchGooglePlacePhotoUrl(placeData.photos[0].name, apiKey);
                         if (staticPhotoUrl) {
-                            result.coverImageUrl = staticPhotoUrl;
+                            const r2Url = await this.uploadExternalImageToR2(staticPhotoUrl, "museums");
+                            result.coverImageUrl = r2Url;
                         }
                     }
 
@@ -1634,7 +1643,8 @@ out center body;`;
         if (!result.coverImageUrl) {
             const wikiImg = await this.scrapePlaceImage(placeName);
             if (wikiImg) {
-                result.coverImageUrl = wikiImg;
+                const r2Url = await this.uploadExternalImageToR2(wikiImg, "museums");
+                result.coverImageUrl = r2Url;
             }
         }
 
@@ -2003,7 +2013,17 @@ out center body;`;
 
             // Resolve cover image from Google if not in DB
             if (!coverImageUrl && placeDataFromGoogle.photos && placeDataFromGoogle.photos.length > 0) {
-                coverImageUrl = await this.fetchGooglePlacePhotoUrl(placeDataFromGoogle.photos[0].name, apiKey);
+                const staticUrl = await this.fetchGooglePlacePhotoUrl(placeDataFromGoogle.photos[0].name, apiKey);
+                if (staticUrl) {
+                    coverImageUrl = await this.uploadExternalImageToR2(staticUrl, "museums");
+                    // Proactively save this cover_image_url back to DB to avoid double fetching next time!
+                    if (dbPlace) {
+                        await this.supabase
+                            .from('institutions')
+                            .update({ cover_image_url: coverImageUrl })
+                            .eq('id', dbPlace.id);
+                    }
+                }
             }
 
             // Resolve reviews from Google if not in DB
@@ -2254,5 +2274,41 @@ out center body;`;
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/(^-|-$)/g, "")
             + "-" + Date.now().toString(36)
+    }
+
+    /**
+     * Download an external image, optimize it using Sharp, and upload it to R2 CDN.
+     * Returns our own public R2 URL.
+     */
+    async uploadExternalImageToR2(externalUrl: string, folder = "museums"): Promise<string> {
+        if (!externalUrl) return externalUrl;
+        const r2PublicUrl = this.configService.get<string>('R2_PUBLIC_URL') || '';
+        if (r2PublicUrl && externalUrl.startsWith(r2PublicUrl)) {
+            return externalUrl;
+        }
+        try {
+            this.logger.log(`[R2-PROXY] Proxying external image to R2: ${externalUrl}`);
+            const res = await fetch(externalUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+                }
+            });
+            if (!res.ok) throw new Error(`Status ${res.status}`);
+            const buffer = Buffer.from(await res.arrayBuffer());
+            const contentType = res.headers.get('content-type') || 'image/jpeg';
+            
+            const file = {
+                buffer,
+                originalname: `external-image`,
+                mimetype: contentType,
+                size: buffer.length
+            };
+
+            const uploadResult = await this.storageService.uploadFile(file as any, folder);
+            return uploadResult.url;
+        } catch (err: any) {
+            this.logger.error(`[R2-PROXY] Failed to upload external image to R2: ${err.message}`);
+            return externalUrl; // Fallback to external URL
+        }
     }
 }

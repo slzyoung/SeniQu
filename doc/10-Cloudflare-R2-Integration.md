@@ -16,6 +16,8 @@ With the R2 CDN integration and the new End-to-End Image Processing Pipeline:
 3. **Storage Upload**: The highly optimized binary is uploaded to Cloudflare R2 securely.
 4. **Storage Endpoint**: Returns the generated CDN URL (Public R2 URL).
 5. **Database**: Saves only the lightweight URL string. The optimized WebP images are then served directly from the CDN edge.
+6. **Google Maps & External Photo Proxying**: When resolving place photos from Google Places API or fetching fallback images from Wikipedia, the backend downloads the external image buffer, optimizes it to WebP via Sharp, uploads it to R2 CDN, and stores our `cdn.seniqu.art` URL in the database. This prevents exposing API keys, eliminates cross-site linkage, and guarantees fast page loads.
+7. **Static City Assets Migration**: Static city cover images and Unsplash fallbacks are migrated to `assets/static/cities/[city-id].webp` on R2 CDN, allowing the frontend (`ExploreCities` and `UserDashboard`) to retrieve pre-optimized edge-cached assets.
 
 ---
 
@@ -83,6 +85,7 @@ The `StorageService` provides standard AWS-S3 compatible directives (`PutObjectC
   - Small grid thumbnails WebP in `artworks/thumbnails/`
   
   All keys and CDN URLs are resolved and returned in the single upload response payload.
+- **External Image Proxying**: `uploadExternalImageToR2(externalUrl, folder)` allows background services (such as `MuseumsService`) to programmatically download external images (e.g. Google Places photos or Wikipedia fallbacks), run them through the Sharp optimization pipeline, and store them inside R2 CDN, returning a CDN URL.
 
 ### 3.2. `ImageProcessingService` (`image-processing.service.ts`)
 A dedicated service utilizing `sharp` for enterprise-grade media manipulation.

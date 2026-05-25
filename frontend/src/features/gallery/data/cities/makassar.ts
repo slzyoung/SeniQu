@@ -3,7 +3,7 @@ import { CityMetadata, RegionDetail } from '../types';
 export const metadata: CityMetadata = {
     "name": "Makassar",
     "description": "Gerbang Indonesia Timur yang bersejarah dengan Benteng Rotterdam, tradisi bahari suku Phinisi, dan museum cagar budaya Kerajaan Gowa-Tallo.",
-    "image": "/images/city/makassar.jpg",
+    "image": "https://cdn.seniqu.art/assets/static/cities/makassar.webp",
     "lat": -5.1476,
     "lng": 119.414,
     "radius": 30000
@@ -26,7 +26,7 @@ export const regions: RegionDetail[] = [
             "somba opu"
         ],
         "description": "Benteng Rotterdam, Pantai Losari, dan Museum Kota Makassar.",
-        "image": "/images/city/makassar.jpg"
+        "image": "https://cdn.seniqu.art/assets/static/cities/makassar.webp"
     },
     {
         "id": "gowa",
@@ -37,6 +37,6 @@ export const regions: RegionDetail[] = [
             "malino"
         ],
         "description": "Museum Balla Lompoa bekas istana Kerajaan Gowa dan makam Sultan Hasanuddin.",
-        "image": "/images/city/makassar.jpg"
+        "image": "https://cdn.seniqu.art/assets/static/cities/makassar.webp"
     }
 ];

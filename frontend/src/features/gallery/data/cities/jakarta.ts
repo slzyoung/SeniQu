@@ -3,7 +3,7 @@ import { CityMetadata, RegionDetail } from '../types';
 export const metadata: CityMetadata = {
     "name": "Jakarta",
     "description": "Pusat kebudayaan modern Indonesia yang memadukan sejarah kolonial Kota Tua dengan perkembangan seni kontemporer kelas dunia.",
-    "image": "https://images.unsplash.com/photo-1555899434-94d1368aa7af?w=1200&q=80",
+    "image": "https://cdn.seniqu.art/assets/static/cities/jakarta.webp",
     "lat": -6.2088,
     "lng": 106.8456,
     "radius": 45000
@@ -25,7 +25,7 @@ export const regions: RegionDetail[] = [
             "cempaka putih",
             "johar baru"
         ],
-        "image": "https://images.unsplash.com/photo-1588668214407-6ea9a6d8c26e?w=800&q=80"
+        "image": "https://cdn.seniqu.art/assets/static/cities/jakarta.webp"
     },
     {
         "id": "barat",
@@ -44,7 +44,7 @@ export const regions: RegionDetail[] = [
             "kota tua",
             "fatahillah"
         ],
-        "image": "https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?w=800&q=80"
+        "image": "https://cdn.seniqu.art/assets/static/cities/jakarta.webp"
     },
     {
         "id": "selatan",
@@ -64,7 +64,7 @@ export const regions: RegionDetail[] = [
             "kemang",
             "pondok indah"
         ],
-        "image": "https://images.unsplash.com/photo-1570544820287-0b11ae3ee3eb?w=800&q=80"
+        "image": "https://cdn.seniqu.art/assets/static/cities/jakarta.webp"
     },
     {
         "id": "utara",
@@ -83,7 +83,7 @@ export const regions: RegionDetail[] = [
             "sunda kelapa",
             "bahari"
         ],
-        "image": "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=800&q=80"
+        "image": "https://cdn.seniqu.art/assets/static/cities/jakarta.webp"
     },
     {
         "id": "timur",
@@ -103,6 +103,6 @@ export const regions: RegionDetail[] = [
             "rawamangun",
             "mini indonesia"
         ],
-        "image": "https://images.unsplash.com/photo-1508009603885-50cf7c579365?w=800&q=80"
+        "image": "https://cdn.seniqu.art/assets/static/cities/jakarta.webp"
     }
 ];

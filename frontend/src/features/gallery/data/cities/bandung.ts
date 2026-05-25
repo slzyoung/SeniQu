@@ -3,7 +3,7 @@ import { CityMetadata, RegionDetail } from '../types';
 export const metadata: CityMetadata = {
     "name": "Bandung",
     "description": "Paris van Java yang kaya akan arsitektur warisan kolonial Art Deco, komunitas seni rupa kontemporer, dan industri kreatif anak muda.",
-    "image": "/images/city/bandung.jpg",
+    "image": "https://cdn.seniqu.art/assets/static/cities/bandung.webp",
     "lat": -6.9175,
     "lng": 107.6191,
     "radius": 35000
@@ -29,7 +29,7 @@ export const regions: RegionDetail[] = [
             "geologi"
         ],
         "description": "Museum Geologi, Jalan Braga, Selasar Sunaryo.",
-        "image": "https://images.unsplash.com/photo-1626266842868-07977ab7e2c8?w=800&q=80"
+        "image": "https://cdn.seniqu.art/assets/static/cities/bandung.webp"
     },
     {
         "id": "barat",
@@ -44,7 +44,7 @@ export const regions: RegionDetail[] = [
             "stone garden"
         ],
         "description": "Wisata alam pegunungan Lembang dan Observatorium Bosscha.",
-        "image": "https://images.unsplash.com/photo-1542385151-efd9000785a0?w=800&q=80"
+        "image": "https://cdn.seniqu.art/assets/static/cities/bandung.webp"
     },
     {
         "id": "kabupaten",
@@ -59,6 +59,6 @@ export const regions: RegionDetail[] = [
             "dayeuhkolot"
         ],
         "description": "Kawah Putih Ciwidey, perkebunan teh, dan cagar budaya Priangan.",
-        "image": "https://images.unsplash.com/photo-1582294435985-78e72750e395?w=800&q=80"
+        "image": "https://cdn.seniqu.art/assets/static/cities/bandung.webp"
     }
 ];

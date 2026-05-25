@@ -20,9 +20,7 @@ const HERITAGE_CITIES: CityData[] = Object.entries(CITY_WHITELIST).map(([id, met
   id,
   name: meta.name,
   description: meta.description,
-  image: id === 'bandung' ? '/images/city/bandung.jpg' :
-         id === 'semarang' ? '/images/city/semarang.jpg' :
-         meta.image,
+  image: meta.image,
   badge: id === 'jakarta' ? 'CAPITAL CITY' :
          id === 'yogyakarta' ? 'HERITAGE HUB' :
          id === 'bali' ? 'SPIRITUAL ISLE' :
