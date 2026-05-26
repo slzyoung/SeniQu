@@ -12,9 +12,20 @@ Accessible to all visitors.
 - **Mobile Notifications**: Real-time alerts with read/unread status for upcoming exhibitions.
 
 ### 1.2 Interactive & Immersive Experience (Gallery Module)
-- **Public Heritage Hub**: Browsable grid of all 12,000+ public artworks with filtering (Era, Medium, Ethnic Group).
+- **Public Heritage Hub**: Browsable grid of all 12,000+ public artworks with advanced Nusantara heritage filtering.
+  - **Expandable Filter Panel**: Collapsible panel with three filter dimensions — **Era/Period** (Pre-Historic, Hindu-Buddhist, Islamic Sultanate, Colonial, Post-Independence, Contemporary), **Medium/Material** (Canvas, Batik Textile, Wood Carving, Wayang Kulit, Stone Relic, Digital Art), and **Origin Region** (Sumatra, Java, Kalimantan, Sulawesi, Nusa Tenggara, Papua, Bali).
+  - **Active Filter Pills**: When the filter panel is collapsed, active filters appear as dismissible gold pill tags below the toolbar.
+  - **Filter Count Badge**: The Filters button displays a real-time count of active filter dimensions.
 - **Museum & Gallery Geolocation**: Dedicated pages for 450+ institutions to showcase their collections, exhibition hours, and physical locations.
-- **Artwork Deep-Dive**: Zoomable high-res viewing, verified blockchain provenance, and "More like this" contextual engine.
+- **Artwork Deep-Dive** (`ArtworkView`):
+  - **AI Genre & Style Insights Panel**: Computer vision pipeline classification with animated confidence progress bars (e.g., `Modernism 94%`, `Expressionism 78%`).
+  - **Proof of Art (PoA) Provenance Timeline**: Step-by-step blockchain provenance tracker — Masterpiece Creation → Institutional Verification → On-chain Registration.
+  - **Interactive Web3 Privy Checkout Modal**: 4-step purchase flow — Wallet Connection → Cryptographic Nonce Signing (OWASP A7 replay prevention) → Transaction Confirmation with gas estimation → Success with Etherscan transaction hash link.
+  - Zoomable high-res viewing and "More like this" contextual engine.
+- **Artwork Card Enhancements**:
+  - **AI Genre Tag Badges**: Each card displays `Cpu`-prefixed genre classification chips.
+  - **PoA Shield Indicator**: Cards with blockchain-verified artworks display a `ShieldCheck PoA` badge.
+  - **Collector Pricing**: Cards show ETH price for listed artworks or view count for non-listed ones.
 - **Featured Artworks Carousel**: A premium, horizontal snap-scrolling carousel that displays a curated list of Indonesian masterpieces.
   - **Manual Navigators**: Sleek, absolute-positioned manual navigation arrows (`ChevronLeft`, `ChevronRight`) appear on hover.
   - **Autoplay Engine**: Autoplays every 4.5 seconds with a smooth, CSS-accelerated transition.
