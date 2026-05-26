@@ -50,6 +50,9 @@ import {
     ChevronLeft,
     ChevronRight,
     ArrowUpDown,
+    BookOpen,
+    ChevronDown,
+    ChevronUp,
 } from 'lucide-react';
 import { useTheme } from '../../../../hooks/useTheme';
 import { useAuthStore } from '../../../../stores/useAuthStore';
@@ -216,9 +219,35 @@ function sanitizeInput(input: string, maxLength = 100): string {
 }
 
 /** High-performance Lazy Image with blur-in and skeleton shimmer effect */
-function LazyImage({ src, alt, className = "w-full h-full object-cover" }: { src: string; alt: string; className?: string }) {
+function LazyImage({ 
+    src, 
+    alt, 
+    type = 'museum', 
+    className = "w-full h-full object-cover" 
+}: { 
+    src: string | null | undefined; 
+    alt: string; 
+    type?: string; 
+    className?: string; 
+}) {
     const [isLoaded, setIsLoaded] = useState(false);
     const [error, setError] = useState(false);
+
+    // Reset states when src changes to prevent state leakage across recycled cards
+    useEffect(() => {
+        setIsLoaded(false);
+        setError(false);
+    }, [src]);
+
+    // Choose local fallback image based on place category (100% offline & zero-cost)
+    let localFallback = '/images/museum/Museumullensentalu.jpg';
+    if (type === 'gallery') {
+        localFallback = '/images/gallery/galerinasionalindonesia.jpg';
+    } else if (type === 'museum') {
+        localFallback = '/images/museum/museumnasionalindonesia.png';
+    }
+
+    const displaySrc = error || !src ? localFallback : src;
 
     return (
         <div className="relative w-full h-full overflow-hidden bg-slate-800/40 rounded-inherit">
@@ -226,12 +255,12 @@ function LazyImage({ src, alt, className = "w-full h-full object-cover" }: { src
                 <div className="absolute inset-0 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 animate-pulse" />
             )}
             <img
-                src={error ? 'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=200&h=200&fit=crop' : src}
+                src={displaySrc}
                 alt={alt}
                 loading="lazy"
                 onLoad={() => setIsLoaded(true)}
                 onError={() => setError(true)}
-                className={`${className} transition-all duration-700 ease-out ${isLoaded ? 'opacity-100 scale-100 blur-0' : 'opacity-0 scale-95 blur-md'}`}
+                className={`${className} transition-all duration-700 ease-out ${(isLoaded || error) ? 'opacity-100 scale-100 blur-0' : 'opacity-0 scale-95 blur-md'}`}
             />
         </div>
     );
@@ -284,6 +313,44 @@ function MuseumDetailSheet({
     showRouteLine?: boolean;
     onClearRoute?: () => void;
 }) {
+    const [wikiData, setWikiData] = useState<{ title: string; extract: string; url: string; thumbnail?: string } | null>(null);
+    const [isWikiLoading, setIsWikiLoading] = useState(false);
+    const [wikiExpanded, setWikiExpanded] = useState(false);
+    const [wikiError, setWikiError] = useState<string | null>(null);
+
+    useEffect(() => {
+        setWikiData(null);
+        setWikiExpanded(false);
+        setIsWikiLoading(false);
+        setWikiError(null);
+    }, [museum?.id]);
+
+    const handleFetchWiki = async () => {
+        if (wikiData) {
+            setWikiExpanded(!wikiExpanded);
+            return;
+        }
+
+        setIsWikiLoading(true);
+        setWikiError(null);
+        try {
+            const res = await museumService.getWikipediaSummary(museum.name);
+            if (res && res.extract) {
+                setWikiData(res);
+                setWikiExpanded(true);
+            } else {
+                setWikiError('Sejarah singkat tidak ditemukan untuk tempat ini.');
+                setTimeout(() => setWikiError(null), 4000);
+            }
+        } catch (error) {
+            console.error('[WIKI_FETCH] Failed:', error);
+            setWikiError('Gagal memuat sejarah singkat dari Wikipedia.');
+            setTimeout(() => setWikiError(null), 4000);
+        } finally {
+            setIsWikiLoading(false);
+        }
+    };
+
     const crowdColor = museum.crowdLevel?.includes('Busy')
         ? 'pnb-badge--red'
         : museum.crowdLevel?.includes('Moderate')
@@ -371,6 +438,63 @@ function MuseumDetailSheet({
                             <span className="pnb-status-pill__label">NEAREST ROUTE</span>
                             <span className="pnb-status-pill__value">{distance} ({duration})</span>
                         </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Wikipedia History Section */}
+            <div className="pnb-wiki-history">
+                {!wikiExpanded ? (
+                    <button
+                        className="pnb-wiki-history-trigger"
+                        onClick={handleFetchWiki}
+                        disabled={isWikiLoading}
+                        aria-label="Toggle Wikipedia History"
+                    >
+                        {isWikiLoading ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                        ) : (
+                            <BookOpen className="w-4 h-4 text-blue-500" />
+                        )}
+                        <span>{isWikiLoading ? 'Mencari sejarah...' : 'Baca Sejarah Singkat (Wikipedia)'}</span>
+                        <ChevronDown className="w-4 h-4 ml-auto text-slate-400" />
+                    </button>
+                ) : (
+                    <div className="pnb-wiki-history-card">
+                        <div className="pnb-wiki-history-card__header">
+                            <BookOpen className="w-4 h-4 text-blue-500" style={{ flexShrink: 0 }} />
+                            <span className="pnb-wiki-history-card__title">Sejarah: {wikiData?.title}</span>
+                            <button
+                                className="pnb-wiki-history-card__close"
+                                onClick={() => setWikiExpanded(false)}
+                                aria-label="Close Wikipedia History"
+                            >
+                                <ChevronUp className="w-4 h-4" />
+                            </button>
+                        </div>
+                        {wikiData?.thumbnail && (
+                            <div className="pnb-wiki-history-card__image-container">
+                                <img src={wikiData.thumbnail} alt={wikiData.title} className="pnb-wiki-history-card__image" />
+                            </div>
+                        )}
+                        <p className="pnb-wiki-history-card__text">{wikiData?.extract}</p>
+                        {wikiData?.url && (
+                            <a
+                                href={wikiData.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="pnb-wiki-history-card__link"
+                            >
+                                Baca selengkapnya di Wikipedia
+                                <ExternalLink className="w-3 h-3" />
+                            </a>
+                        )}
+                    </div>
+                )}
+                {wikiError && (
+                    <div className="pnb-wiki-history-error">
+                        <AlertCircle className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
+                        <span>{wikiError}</span>
                     </div>
                 )}
             </div>
@@ -464,7 +588,7 @@ function MuseumDetailSheet({
                     <div className="pnb-preview__scroll animate-scrollbar">
                         {(museum.previewImages || [museum.coverImageUrl]).map((img: string, i: number) => (
                             <div key={i} className="pnb-preview__thumb" onClick={() => onPhotoClick(i)}>
-                                <LazyImage src={img} alt={`Preview ${i + 1}`} />
+                                <LazyImage src={img} alt={`Preview ${i + 1}`} type={museum.type} />
                             </div>
                         ))}
                     </div>
@@ -871,8 +995,9 @@ function MuseumListCard({
         >
             <div className="pnb-list-card__img">
                 <LazyImage
-                    src={museum.coverImageUrl || 'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=200&h=200&fit=crop'}
+                    src={museum.coverImageUrl}
                     alt={museum.name}
+                    type={museum.type}
                 />
                 {museum.isVerified && <span className="pnb-list-card__verified">✓</span>}
             </div>
@@ -1180,6 +1305,7 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
     // Refs for Leaflet Map and Overlay elements
     const mapContainerRef = useRef<HTMLDivElement | null>(null);
     const leafletMapRef = useRef<L.Map | null>(null);
+    const [leafletMap, setLeafletMap] = useState<L.Map | null>(null);
     const userMarkerRef = useRef<L.Marker | null>(null);
     const userAccuracyCircleRef = useRef<L.Circle | null>(null);
     const markersRef = useRef<globalThis.Map<string, L.Marker>>(new globalThis.Map());
@@ -1217,8 +1343,8 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                             if (prev && prev.id === museum.id) {
                                 return {
                                     ...prev,
-                                    photos: details.photos || [],
-                                    previewImages: details.photos || [],
+                                    photos: details.photos && details.photos.length > 0 ? details.photos : prev.photos || [],
+                                    previewImages: details.photos && details.photos.length > 0 ? details.photos : prev.previewImages || [],
                                     coverImageUrl: details.photos?.[0] || prev.coverImageUrl,
                                     reviews: details.reviews || [],
                                     detailsLoaded: true,
@@ -1377,7 +1503,7 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
     useEffect(() => {
         if (mapProvider !== 'openstreetmap') return;
         if (!mapContainerRef.current) return;
-        if (leafletMapRef.current) return;
+        if (leafletMap) return;
 
         const map = L.map(mapContainerRef.current, {
             zoomControl: false,
@@ -1393,29 +1519,37 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
         }).addTo(map);
 
         leafletMapRef.current = map;
+        setLeafletMap(map);
 
         setTimeout(() => {
             map.invalidateSize();
         }, 200);
 
         return () => {
-            if (leafletMapRef.current) {
-                leafletMapRef.current.remove();
-                leafletMapRef.current = null;
+            if (map) {
+                map.remove();
             }
+            leafletMapRef.current = null;
+            setLeafletMap(null);
+
+            // Clear markers refs since they are bound to the destroyed map
+            if (userMarkerRef.current) userMarkerRef.current = null;
+            if (userAccuracyCircleRef.current) userAccuracyCircleRef.current = null;
+            markersRef.current.clear();
+            if (routePolylineRef.current) routePolylineRef.current = null;
         };
-    }, [mapProvider, theme]);
+    }, [mapProvider, theme, viewMode]);
 
     // Update center of Leaflet map
     useEffect(() => {
-        if (mapProvider === 'openstreetmap' && leafletMapRef.current) {
-            leafletMapRef.current.setView([mapCenter.lat, mapCenter.lng]);
+        if (mapProvider === 'openstreetmap' && leafletMap) {
+            leafletMap.setView([mapCenter.lat, mapCenter.lng]);
         }
-    }, [mapCenter, mapProvider]);
+    }, [mapCenter, mapProvider, leafletMap]);
 
     // Handle user location blue dot and halo on Leaflet
     useEffect(() => {
-        const map = leafletMapRef.current;
+        const map = leafletMap;
         if (!map || !userLocation || mapProvider !== 'openstreetmap') return;
 
         const latLng = L.latLng(userLocation.latitude, userLocation.longitude);
@@ -1450,11 +1584,11 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                 interactive: false,
             }).addTo(map);
         }
-    }, [userLocation, radarRadius, mapProvider]);
+    }, [userLocation, radarRadius, mapProvider, leafletMap]);
 
     // Sync markers on Leaflet
     useEffect(() => {
-        const map = leafletMapRef.current;
+        const map = leafletMap;
         if (!map || mapProvider !== 'openstreetmap') return;
 
         markersRef.current.forEach(m => m.remove());
@@ -1503,11 +1637,11 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
 
             markersRef.current.set(museum.id, marker);
         });
-    }, [sortedPlaces, selectedMuseum?.id, showRouteLine, mapProvider, selectPlace]);
+    }, [sortedPlaces, selectedMuseum?.id, showRouteLine, mapProvider, selectPlace, leafletMap]);
 
     // Handle polyline for directions route on Leaflet
     useEffect(() => {
-        const map = leafletMapRef.current;
+        const map = leafletMap;
         if (!map || mapProvider !== 'openstreetmap') return;
 
         if (routePolylineRef.current) {
@@ -1527,7 +1661,7 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                 padding: [50, 50]
             });
         }
-    }, [routePath, showRouteLine, mapProvider]);
+    }, [routePath, showRouteLine, mapProvider, leafletMap]);
 
     // Map Load Handlers
     const onMapLoad = useCallback((map: google.maps.Map) => {
@@ -1597,9 +1731,9 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                         waitTime,
                         isVerified: m.isVerified || false,
                         description: m.description || '',
-                        coverImageUrl: m.images?.[0] || 'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=400&h=300&fit=crop',
-                        previewImages: m.images || [],
-                        reviews: [],
+                        coverImageUrl: m.images?.[0] || null,
+                        previewImages: m.images && m.images.length > 0 ? m.images : [],
+                        reviews: m.reviews || [],
                         latitude: lat,
                         longitude: lng,
                     };
@@ -1640,13 +1774,6 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                     const reviewCount = place.reviewCount || 12;
                     const waitTime = rating > 4.5 ? '~15 mins' : '~5 mins';
                     const crowdLevel = reviewCount > 300 ? 'Busy' : reviewCount > 100 ? 'Moderate traffic' : 'Not crowded';
-                    const fallbackPhotos = [
-                        'https://images.unsplash.com/photo-1580139446632-ec0e21067462?w=400&h=300&fit=crop',
-                        'https://images.unsplash.com/photo-1596436889106-be35e843f974?w=400&h=300&fit=crop',
-                        'https://images.unsplash.com/photo-1604999333679-b86d54738315?w=400&h=300&fit=crop',
-                        'https://images.unsplash.com/photo-1566121318599-23fcf93f4bf3?w=400&h=300&fit=crop',
-                    ];
-                    const previewImages = place.photos && place.photos.length > 0 ? place.photos : fallbackPhotos;
                     let type = place.type || 'heritage';
                     if (place.name) {
                         const nameLower = place.name.toLowerCase();
@@ -1714,6 +1841,14 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                         }
                     }
 
+                    const validPhotos = (place.photos || []).filter((p: any) => typeof p === 'string' && p.trim() !== '');
+                    const fallbackPhoto = type === 'gallery'
+                        ? '/images/gallery/galerinasionalindonesia.jpg'
+                        : type === 'museum'
+                            ? '/images/museum/museumnasionalindonesia.png'
+                            : '/images/museum/Museumullensentalu.jpg';
+                    const previewImages = validPhotos.length > 0 ? validPhotos : [fallbackPhoto];
+
                     return {
                         id: place.id || Math.random().toString(),
                         name: place.name || 'Heritage Destination',
@@ -1728,7 +1863,7 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                         waitTime,
                         isVerified: true,
                         description: place.address || 'Registered tourism destination.',
-                        coverImageUrl: previewImages[0],
+                        coverImageUrl: validPhotos.length > 0 ? validPhotos[0] : null,
                         previewImages,
                         reviews: place.reviews || [],
                         latitude: place.latitude,

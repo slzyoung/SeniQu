@@ -30,6 +30,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { Avatar } from './Avatar';
 import { useNotifications } from '../../hooks/useNotifications';
 import axios from 'axios';
+import { API_BASE_URL } from '../../lib/constants';
 
 interface HeaderProps {
     title?: string;
@@ -89,7 +90,7 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
         setLoadingHistory(true);
         try {
             const token = localStorage.getItem('auth-token');
-            const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/users/me/marketplace-history?limit=5`, {
+            const res = await axios.get(`${API_BASE_URL}/users/me/marketplace-history?limit=5`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setHistory(res.data);

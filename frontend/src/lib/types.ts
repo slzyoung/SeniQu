@@ -107,6 +107,20 @@ export interface Artist {
     socialLinks?: SocialLinks;
 }
 
+// Address & Coordinates Types
+export interface Coordinates {
+    lat: number;
+    lng: number;
+}
+
+export interface Address {
+    street: string;
+    city: string;
+    province: string;
+    postalCode: string;
+    country: string;
+}
+
 // Museum & Gallery Types
 export interface Museum {
     id: string;
@@ -120,6 +134,7 @@ export interface Museum {
     openingHours?: OpeningHours;
     contactInfo?: ContactInfo;
     isVerified: boolean;
+    reviews?: any[];
 }
 
 export interface Gallery {
@@ -134,18 +149,6 @@ export interface Gallery {
     isVerified: boolean;
 }
 
-export interface Address {
-    street: string;
-    city: string;
-    province: string;
-    postalCode: string;
-    country: string;
-}
-
-export interface Coordinates {
-    lat: number;
-    lng: number;
-}
 
 export interface OpeningHours {
     monday?: string;

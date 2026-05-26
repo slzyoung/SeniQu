@@ -68,31 +68,86 @@ class MuseumService {
         return [];
     }
 
+    private parseLocation = (data: any): { lat: number; lng: number } => {
+        if (!data) return { lat: 0, lng: 0 };
+
+        // 1. Check if already has coordinates object
+        if (data.coordinates && typeof data.coordinates.lat === 'number') {
+            return { lat: data.coordinates.lat, lng: data.coordinates.lng };
+        }
+
+        // 2. Check if location is GeoJSON
+        if (data.location && typeof data.location === 'object' && data.location.coordinates) {
+            const [lng, lat] = data.location.coordinates;
+            return { lat: Number(lat) || 0, lng: Number(lng) || 0 };
+        }
+
+        // 3. Check if location is WKT string e.g. "POINT(110.378 -7.789)"
+        if (data.location && typeof data.location === 'string') {
+            if (/^[0-9a-fA-F]+$/.test(data.location)) {
+                try {
+                    const hex = data.location;
+                    const bytes = new Uint8Array(hex.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
+                    if (bytes.length >= 21) {
+                        const isLittleEndian = bytes[0] === 1;
+                        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+                        // Read geometry type (4 bytes starting at index 1)
+                        const geomType = view.getUint32(1, isLittleEndian);
+                        const hasSrid = (geomType & 0x20000000) !== 0;
+                        const offset = hasSrid ? 9 : 5;
+
+                        if (bytes.length >= offset + 16) {
+                            const lng = view.getFloat64(offset, isLittleEndian);
+                            const lat = view.getFloat64(offset + 8, isLittleEndian);
+                            return { lat: isNaN(lat) ? 0 : lat, lng: isNaN(lng) ? 0 : lng };
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to parse WKB hex location:', e);
+                }
+            } else {
+                const match = data.location.match(/POINT\(([^ ]+)\s+([^)]+)\)/);
+                if (match) {
+                    const lng = parseFloat(match[1]);
+                    const lat = parseFloat(match[2]);
+                    return { lat: isNaN(lat) ? 0 : lat, lng: isNaN(lng) ? 0 : lng };
+                }
+            }
+        }
+
+        return { lat: 0, lng: 0 };
+    };
+
     /**
      * Helper to map DB response to Museum interface
      */
-    private mapDatabaseToMuseum(data: any): Museum {
+    private mapDatabaseToMuseum = (data: any): Museum => {
+        const parsedImages = (data.images && data.images.length > 0)
+            ? data.images
+            : [data.cover_image_url].filter(Boolean);
+
         return {
             id: data.id,
             name: data.name,
             description: data.description,
             address: data.address || {
-                street: '',
-                city: data.city,
-                province: data.province,
-                postalCode: data.postal_code,
-                country: data.country
+                street: data.street || '',
+                city: data.city || 'Nearby',
+                province: data.province || '',
+                postalCode: data.postal_code || '',
+                country: data.country || 'Indonesia'
             },
-            coordinates: data.coordinates || { lat: 0, lng: 0 },
-            images: data.images || [data.cover_image_url].filter(Boolean) || [],
+            coordinates: this.parseLocation(data),
+            images: parsedImages.length > 0 ? parsedImages : [],
             artworksCount: data.total_artworks || 0,
             rating: data.rating,
             openingHours: data.opening_hours,
             contactInfo: data.contact_info,
             isVerified: data.is_verified,
-            // Add other fields if necessary
+            reviews: data.reviews || [],
         };
-    }
+    };
 
     /**
      * Get all verified museums/galleries
@@ -139,7 +194,7 @@ class MuseumService {
         const rad = radius || 15000;
         // round to 4 decimal places to stabilize cache keys against minor user movements (~11 meters)
         const cacheKey = `${lat.toFixed(4)}_${lng.toFixed(4)}_${rad}_${query || ''}`;
-        
+
         // SECURITY: Check cache with TTL validation
         const cached = this.searchCache.get(cacheKey);
         if (cached && Date.now() < cached.expiresAt) {
@@ -156,7 +211,7 @@ class MuseumService {
         const places = response?.places || response?.data?.places || [];
         const region = response?.region || response?.data?.region || undefined;
         const quotaExceeded = response?.quotaExceeded || response?.data?.quotaExceeded || false;
-        
+
         const result = { places, region, quotaExceeded };
 
         // SECURITY: Evict oldest entries when cache exceeds max size
@@ -178,7 +233,7 @@ class MuseumService {
             data: result,
             expiresAt: Date.now() + MuseumService.CACHE_TTL_MS,
         });
-        
+
         return result;
     }
 
@@ -272,6 +327,19 @@ class MuseumService {
     async getPlaceDetails(placeId: string): Promise<any> {
         const response = await apiGet<any>(`/museums/place-details/${placeId}`);
         return response?.data || response;
+    }
+
+    /**
+     * Get brief history / summary of a place from Wikipedia
+     */
+    async getWikipediaSummary(name: string): Promise<{ title: string; extract: string; url: string; thumbnail?: string } | null> {
+        try {
+            const response = await apiGet<any>(`/museums/wikipedia-summary`, { params: { name } });
+            return response?.data || response;
+        } catch (error) {
+            console.error('[MUSEUM_SERVICE] Failed to fetch Wikipedia summary:', error);
+            return null;
+        }
     }
 }
 
