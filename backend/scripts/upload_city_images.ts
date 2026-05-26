@@ -37,6 +37,10 @@ const cities = [
     { id: 'solo', source: '../../frontend/public/images/city/solo.jpg' },
     { id: 'surabaya', source: 'https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?w=1200&q=80' },
     { id: 'yogyakarta', source: 'https://images.unsplash.com/photo-1596402184320-417e7178b2cd?w=1200&q=80' },
+    { id: 'cirebon', source: '../../frontend/public/images/city/cirebon.jpg' },
+    { id: 'padang', source: '../../frontend/public/images/city/padang.jpeg' },
+    { id: 'banjarmasin', source: '../../frontend/public/images/city/banjarmasin.jpeg' },
+    { id: 'mataram', source: '../../frontend/public/images/city/mataram.jpeg' },
 ];
 
 async function run() {

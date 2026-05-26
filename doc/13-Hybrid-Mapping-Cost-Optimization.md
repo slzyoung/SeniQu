@@ -138,6 +138,16 @@ To prevent Server-Side Request Forgery (SSRF) vulnerabilities when fetching exte
 - **SSRF Blocklist**: The `isPrivateIP` validator blocks standard loopback (`127.0.0.1`, `::1`), private ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), link-local (`169.254.0.0/16`, `fe80::/10`), CGNAT/shared space (`100.64.0.0/10`), multicast (`224.0.0.0/4`), and reserved addresses.
 - **Background Execution Validation**: Any image retrieval/download logic verifies that the destination is a public address space before initiating fetching.
 
+### J. Automated Database Ingestion & City Seeding Engine (`seed_cities_from_gmaps.ts`)
+To populate new cities with genuine, high-quality local destination data without relying on manual database entries, we implemented an automated seeding engine:
+1. **Target Area Coordinates & Radius Filtering**: The seeder is initialized with specific coordinates and radius parameters (e.g. Cirebon, Padang, Banjarmasin, Mataram).
+2. **Clean-Slate Wipe**: It deletes existing dummy/placeholder entries for the target city using case-insensitive SQL operators (`ilike`).
+3. **Category-Mutually-Exclusive Querying**: It executes Google Places `searchNearby` queries targeting `museum`, `gallery`, and `heritage` place-type sets.
+4. **Referer Verification Bypass**: Requests are made using the application's configured `Referer` domain (e.g., `http://localhost:5173/` or production domain) to comply with the restricted Google API key policy.
+5. **Anti-Throttling Delay**: A sequential 2.5-second sleep interval is introduced between processing each place to prevent GCP API key throttling.
+6. **Graceful Duplicate Handling (Upsert)**: Discovered items are written to the `institutions` table using PostgreSQL `upsert` matching on the unique `slug` constraint.
+7. **Autodetect & Fallback Media Handling**: Fetches the first Google Place Photo URL, downloads and resizes it to 1200x800 WebP via Sharp, and uploads it to the R2 CDN. If a photo is unavailable from Google, it automatically falls back to Wikipedia Page Image retrieval.
+
 ---
 
 ## 4. Security & Access Partitioning: Authenticated vs. Guest Users
@@ -224,6 +234,15 @@ In the database mapper (`mapDatabaseToMuseum` in `museumService.ts`):
 * Previously, empty JSONB defaults (`data.images` defaulting to `[]`) evaluated as truthy, blocking the database `cover_image_url` fallback from rendering, resulting in blank/gray preview cards.
 * Fixed the mapper logic to verify array length: `const parsedImages = (data.images && data.images.length > 0) ? data.images : [data.cover_image_url].filter(Boolean)`. This guarantees that if a local or Wikipedia scraped image exists in `cover_image_url`, it renders instantly.
 
+### E. Landmark-Based City Cover Scraper (`fetch_city_images_gmaps.ts`)
+To solve the issue of mismatched or generic city cover images (e.g. Unsplash placeholders showing unrelated food/person items for cities like Padang or Banjarmasin):
+1. **Specific Representative Landmark Mapping**: Configures a localized landmark for each city (e.g. Cirebon = Keraton Kasepuhan, Padang = Masjid Raya Sumatera Barat, Banjarmasin = Menara Pandang/Floating Market, Mataram = Islamic Center NTB).
+2. **Dual-Strategy Image Resolution**:
+   - **Google Places Search**: First queries Google Places Text Search (`places:searchText`) for the landmark using `places.id,places.displayName,places.photos` to find public photo handles and download them.
+   - **Wikipedia Fallback**: If the restricted API key returns no photos, the script queries Wikipedia's Page Image API for the landmark page thumbnail.
+3. **Image Optimization**: Downloads the resolved landmark image, resizes it to a standardized 1200x800 resolution via `sharp`, and optimizes it as a WebP image.
+4. **Direct CDN Hosting**: Overwrites the R2 storage key `assets/static/cities/${cityId}.webp`, updating the frontend cards immediately.
+
 ---
 
 ## 7. Cost Validation: Is it Still 100% Free / Very Cheap?
@@ -256,6 +275,8 @@ In the database mapper (`mapDatabaseToMuseum` in `museumService.ts`):
 | **`museums.service.ts`** | `scrapePlaceSummary` | Scrapes summary extracts, URLs, titles, and images from Indonesian/English Wikipedia. Integrates local database cache checks and writes. |
 | **`museums.service.ts`** | `ingestPlacesToDatabase` | Upserts public places and triggers Wikipedia scraping for new entries and existing entries lacking images in the background. |
 | **`museums.service.ts`** | `getPlaceDetails` | Fetches full place details. Automatically falls back to DB on quota limit/API errors, and triggers background ETL enrichment for missing cover image, Wikipedia summary, and generated reviews. |
+| **`seed_cities_from_gmaps.ts`** | Seeding script | Ingests genuine places matching categories (museum, gallery, heritage) for Cirebon, Padang, Banjarmasin, and Mataram. Handles Google referer policy, wipes dummy data, and triggers WebP image uploads. |
+| **`fetch_city_images_gmaps.ts`** | Image scraper | Scraping script utilizing Google Places TextSearch and Wikipedia fallback APIs to resolve and upload optimized city landmark cover images (1200x800 WebP) to R2 CDN. |
 
 ---
 

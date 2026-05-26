@@ -3,7 +3,7 @@ import { CityMetadata, RegionDetail } from '../types';
 export const metadata: CityMetadata = {
     "name": "Cirebon",
     "description": "Kota Wali dengan akulturasi budaya Sunda, Jawa, Arab, dan Tiongkok serta keraton bersejarah dan sentra batik Megamendung.",
-    "image": "https://cdn.seniqu.art/assets/static/cities/cirebon.webp",
+    "image": "https://cdn.seniqu.art/assets/static/cities/cirebon.webp?v=local",
     "lat": -6.7320,
     "lng": 108.5555,
     "radius": 25000
@@ -25,7 +25,7 @@ export const regions: RegionDetail[] = [
             "kanoman",
             "kacirebonan"
         ],
-        "image": "https://cdn.seniqu.art/assets/static/cities/cirebon.webp"
+        "image": "https://cdn.seniqu.art/assets/static/cities/cirebon.webp?v=local"
     },
     {
         "id": "kabupaten",
@@ -41,6 +41,6 @@ export const regions: RegionDetail[] = [
             "astana",
             "palimanan"
         ],
-        "image": "https://cdn.seniqu.art/assets/static/cities/cirebon.webp"
+        "image": "https://cdn.seniqu.art/assets/static/cities/cirebon.webp?v=local"
     }
 ];

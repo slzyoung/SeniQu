@@ -3,7 +3,7 @@ import { CityMetadata, RegionDetail } from '../types';
 export const metadata: CityMetadata = {
     "name": "Banjarmasin",
     "description": "Kota Seribu Sungai dengan pasar terapung tradisional, peninggalan Kesultanan Banjar, dan pusat batu permata Martapura.",
-    "image": "https://cdn.seniqu.art/assets/static/cities/banjarmasin.webp",
+    "image": "https://cdn.seniqu.art/assets/static/cities/banjarmasin.webp?v=local",
     "lat": -3.3166,
     "lng": 114.5901,
     "radius": 25000
@@ -24,17 +24,17 @@ export const regions: RegionDetail[] = [
             "banjar utara",
             "banjar selatan"
         ],
-        "image": "https://cdn.seniqu.art/assets/static/cities/banjarmasin.webp"
+        "image": "https://cdn.seniqu.art/assets/static/cities/banjarmasin.webp?v=local"
     },
     {
         "id": "martapura",
         "name": "Martapura",
-        "description": "Kota serambi makkah Kalimantan Selatan dan pusat kerajinan intan permata.",
+        "description": "Kota serambi makkah Kalimantan Selatan and pusat kerajinan intan permata.",
         "keywords": [
             "martapura",
             "banjarbaru",
             "cempaka"
         ],
-        "image": "https://cdn.seniqu.art/assets/static/cities/banjarmasin.webp"
+        "image": "https://cdn.seniqu.art/assets/static/cities/banjarmasin.webp?v=local"
     }
 ];

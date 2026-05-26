@@ -3,7 +3,7 @@ import { CityMetadata, RegionDetail } from '../types';
 export const metadata: CityMetadata = {
     "name": "Padang",
     "description": "Pusat budaya Minangkabau di pesisir barat Sumatra dengan arsitektur rumah gadang yang indah dan museum Adityawarman.",
-    "image": "https://cdn.seniqu.art/assets/static/cities/padang.webp",
+    "image": "https://cdn.seniqu.art/assets/static/cities/padang.webp?v=local",
     "lat": -0.9471,
     "lng": 100.4172,
     "radius": 30000
@@ -25,7 +25,7 @@ export const regions: RegionDetail[] = [
             "gadang",
             "muaro"
         ],
-        "image": "https://cdn.seniqu.art/assets/static/cities/padang.webp"
+        "image": "https://cdn.seniqu.art/assets/static/cities/padang.webp?v=local"
     },
     {
         "id": "sekitarnya",
@@ -37,6 +37,6 @@ export const regions: RegionDetail[] = [
             "sicincin",
             "anai"
         ],
-        "image": "https://cdn.seniqu.art/assets/static/cities/padang.webp"
+        "image": "https://cdn.seniqu.art/assets/static/cities/padang.webp?v=local"
     }
 ];
