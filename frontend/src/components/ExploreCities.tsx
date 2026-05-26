@@ -80,9 +80,12 @@ export function ExploreCities() {
   const pageCount = Math.ceil(HERITAGE_CITIES.length / PAGE_SIZE);
 
   const displayedCities = useMemo(() => {
+    if (!isAuthenticated) {
+      return HERITAGE_CITIES.slice(0, PAGE_SIZE);
+    }
     const start = page * PAGE_SIZE;
     return HERITAGE_CITIES.slice(start, start + PAGE_SIZE);
-  }, [page]);
+  }, [page, isAuthenticated]);
 
   const slideVariants = {
     enter: (direction: number) => ({
@@ -108,7 +111,13 @@ export function ExploreCities() {
         </div>
         <button
           className="landing-section__see-all"
-          onClick={() => navigate('/gallery/nearby')}
+          onClick={() => {
+            if (isAuthenticated) {
+              navigate('/gallery/nearby');
+            } else {
+              openAuthModal();
+            }
+          }}
         >
           View All Districts <ChevronRight style={{ width: 14, height: 14 }} />
         </button>
@@ -131,7 +140,13 @@ export function ExploreCities() {
                 key={city.id}
                 city={city}
                 index={i}
-                onClick={() => navigate(`/gallery/city/${city.id}`)}
+                onClick={() => {
+                  if (isAuthenticated) {
+                    navigate(`/gallery/city/${city.id}`);
+                  } else {
+                    openAuthModal();
+                  }
+                }}
               />
             ))}
           </motion.div>
@@ -139,7 +154,7 @@ export function ExploreCities() {
       </div>
 
       {/* Elegant mobile-first Pagination controls for showing 7 cities at a time */}
-      {pageCount > 1 && (
+      {isAuthenticated && pageCount > 1 && (
         <div className="flex items-center justify-between mt-8 w-full px-4 max-w-md mx-auto">
           {/* Previous Page */}
           <button
