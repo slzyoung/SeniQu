@@ -1774,59 +1774,69 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                     const reviewCount = place.reviewCount || 12;
                     const waitTime = rating > 4.5 ? '~15 mins' : '~5 mins';
                     const crowdLevel = reviewCount > 300 ? 'Busy' : reviewCount > 100 ? 'Moderate traffic' : 'Not crowded';
-                    let type = place.type || 'heritage';
+                    let type = place.type;
+                    if (type !== 'museum' && type !== 'gallery' && type !== 'heritage') {
+                        type = 'heritage';
+                        if (place.name) {
+                            const nameLower = place.name.toLowerCase();
+                            
+                            // 1. Tourism, Destination & Heritage keyword check
+                            if (
+                                nameLower.includes('wisata') ||
+                                nameLower.includes('pariwisata') ||
+                                nameLower.includes('tourism') ||
+                                nameLower.includes('tourist') ||
+                                nameLower.includes('destination') ||
+                                nameLower.includes('destinasi') ||
+                                nameLower.includes('candi') ||
+                                nameLower.includes('temple') ||
+                                nameLower.includes('palace') ||
+                                nameLower.includes('kraton') ||
+                                nameLower.includes('benteng') ||
+                                nameLower.includes('fort') ||
+                                nameLower.includes('taman') ||
+                                nameLower.includes('park') ||
+                                nameLower.includes('monument') ||
+                                nameLower.includes('monumen') ||
+                                nameLower.includes('pantai') ||
+                                nameLower.includes('beach') ||
+                                nameLower.includes('danau') ||
+                                nameLower.includes('lake') ||
+                                nameLower.includes('gunung') ||
+                                nameLower.includes('mountain') ||
+                                nameLower.includes('bukit') ||
+                                nameLower.includes('hill') ||
+                                nameLower.includes('air terjun') ||
+                                nameLower.includes('waterfall') ||
+                                nameLower.includes('curug') ||
+                                nameLower.includes('kebun') ||
+                                nameLower.includes('zoo') ||
+                                nameLower.includes('aquarium') ||
+                                nameLower.includes('budaya') ||
+                                nameLower.includes('culture') ||
+                                nameLower.includes('teater') ||
+                                nameLower.includes('theater') ||
+                                nameLower.includes('masjid') ||
+                                nameLower.includes('mosque') ||
+                                nameLower.includes('gereja') ||
+                                nameLower.includes('church') ||
+                                nameLower.includes('vihara') ||
+                                nameLower.includes('pura') ||
+                                nameLower.includes('klenteng')
+                            ) {
+                                type = 'heritage';
+                            } else if (nameLower.includes('museum') || nameLower.includes('musium')) {
+                                type = 'museum';
+                            } else if (nameLower.includes('gallery') || nameLower.includes('galeri')) {
+                                type = 'gallery';
+                            }
+                        }
+                    }
+                    
+                    // Hotel filter override (galleries/museums in hotels go to heritage)
                     if (place.name) {
                         const nameLower = place.name.toLowerCase();
-                        
-                        // 1. Tourism, Destination & Heritage keyword check
-                        if (
-                            nameLower.includes('wisata') ||
-                            nameLower.includes('pariwisata') ||
-                            nameLower.includes('tourism') ||
-                            nameLower.includes('tourist') ||
-                            nameLower.includes('destination') ||
-                            nameLower.includes('destinasi') ||
-                            nameLower.includes('candi') ||
-                            nameLower.includes('temple') ||
-                            nameLower.includes('palace') ||
-                            nameLower.includes('kraton') ||
-                            nameLower.includes('benteng') ||
-                            nameLower.includes('fort') ||
-                            nameLower.includes('taman') ||
-                            nameLower.includes('park') ||
-                            nameLower.includes('monument') ||
-                            nameLower.includes('monumen') ||
-                            nameLower.includes('pantai') ||
-                            nameLower.includes('beach') ||
-                            nameLower.includes('danau') ||
-                            nameLower.includes('lake') ||
-                            nameLower.includes('gunung') ||
-                            nameLower.includes('mountain') ||
-                            nameLower.includes('bukit') ||
-                            nameLower.includes('hill') ||
-                            nameLower.includes('air terjun') ||
-                            nameLower.includes('waterfall') ||
-                            nameLower.includes('curug') ||
-                            nameLower.includes('kebun') ||
-                            nameLower.includes('zoo') ||
-                            nameLower.includes('aquarium') ||
-                            nameLower.includes('budaya') ||
-                            nameLower.includes('culture') ||
-                            nameLower.includes('teater') ||
-                            nameLower.includes('theater') ||
-                            nameLower.includes('masjid') ||
-                            nameLower.includes('mosque') ||
-                            nameLower.includes('gereja') ||
-                            nameLower.includes('church') ||
-                            nameLower.includes('vihara') ||
-                            nameLower.includes('pura') ||
-                            nameLower.includes('klenteng')
-                        ) {
-                            type = 'heritage';
-                        }
-                        
-                        // 2. Hotel filter override (galleries in hotels go to heritage)
-                        else if (type === 'gallery') {
+                        if (type === 'gallery' || type === 'museum') {
                             if (
                                 nameLower.includes('hotel') ||
                                 nameLower.includes('suites') ||

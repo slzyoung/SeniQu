@@ -40,13 +40,14 @@ SeniQu uses a hybrid structure that combines the open-source Leaflet map engine 
 
 SeniQu implements a strict **Database-First / Cache-Aside** retrieval flow combined with coordinate parsing fixes and request optimization techniques to protect the Google Maps API budget:
 
-### A. Database-First Search Strategy
+### A. Database-First Search Strategy & Active Search Flow
 Previously, the `/museums/search-nearby` endpoint queried the Google Places API directly on every page load unless the daily global quota (30 requests/day) was exceeded. This resulted in frequent daily limit reached dialogs on production.
 
-To resolve this, we refactored the search flow to prioritize local data:
-1. **Local Database Check**: Every nearby search request first queries the local `institutions` table using PostGIS bounding box filters.
-2. **Database HIT**: If matching verified institutions are found within the requested radius (e.g. Jakarta, Bali where data has been scraped/ingested), they are returned immediately. The Google Places API call is **completely bypassed**, resulting in **$0.00 cost** and **0ms external API latency**.
-3. **Google API Fallback**: Only if the database search returns zero results does the backend proceed to check the daily budget, query the Google Places API, return the online results, and asynchronously cache/ingest them into the local database for future search hits.
+To resolve this, we refactored the search flow to prioritize local data and real-time discoverability:
+1. **Local Database Check for Fallbacks**: If the user is close to their limit or Google API requests fail, the backend performs a PostGIS fallback search.
+2. **Active Search Flow**: If quota is available, the backend queries the Google Places API to dynamically find and discover all matching places. This ensures new areas can be discovered in real-time.
+3. **Background Ingestion & R2 Hosting**: Discovered places are immediately pushed to a background worker queue (`ingestPlacesToDatabase`) which processes them with a **1000ms sequential delay** to prevent throttling. It resolves the cover image, uploads it securely to **Cloudflare R2 CDN**, scrapes the Wikipedia summary, and persists them into the Supabase database.
+4. **Subsequent Cache/DB Hits**: Once ingested, cover images and descriptions are loaded from the database directly on future searches, reducing subsequent Places API costs to zero.
 
 ### B. PostGIS WKB Hex Coordinate Parsing Fix
 When the backend fell back to the local database search, it failed to parse the geography coordinates.
@@ -127,9 +128,15 @@ To guarantee that the user gets rich, contextually accurate place details even w
 1. **DB Place Detail Lookup**: The `/place-details/:placeId` endpoint checks the database first by UUID or slug (`g-placeId`). If the daily client API quota is exhausted or Google APIs fail, it loads and serves the place coordinates, name, rating, cover image, description, and reviews directly from the local database.
 2. **Background ETL Auto-Scraper**: If a place is retrieved but lacks crucial metadata (e.g. empty cover image, default/empty description, or empty reviews list), the backend triggers a detached asynchronous background thread:
    * **Wikipedia Scraper**: Scrapes Wikipedia for the official place image and history summary.
+   * **R2 CDN Photo Mirroring**: For any external image URLs resolved from Google or Wikipedia, the backend mirrors them to our private Cloudflare R2 bucket.
    * **Contextual Reviews Generator**: Dynamically generates 5 highly realistic, category-appropriate reviews in Indonesian (customized with the place's actual name and rating).
-   * **Cache Persistence**: Writes the scraped cover image, history summary, and generated reviews array back into the local database (in the newly added `reviews` JSONB column).
+   * **Cache Persistence**: Writes the scraped cover image R2 URL, history summary, and generated reviews array back into the local database (in the newly added `reviews` JSONB column).
 3. **Self-Healing Local Database**: This background execution ensures that future place details requests for the same location are resolved with zero Google Maps dependency and 0ms latency.
+
+### I. Private IP & SSRF Protection Hardening
+To prevent Server-Side Request Forgery (SSRF) vulnerabilities when fetching external images from Google Places or Wikipedia to upload to Cloudflare R2, we implemented strict IP filtering:
+- **SSRF Blocklist**: The `isPrivateIP` validator blocks standard loopback (`127.0.0.1`, `::1`), private ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), link-local (`169.254.0.0/16`, `fe80::/10`), CGNAT/shared space (`100.64.0.0/10`), multicast (`224.0.0.0/4`), and reserved addresses.
+- **Background Execution Validation**: Any image retrieval/download logic verifies that the destination is a public address space before initiating fetching.
 
 ---
 
@@ -149,6 +156,9 @@ To prevent quota scraping, key extraction, or billing exhaustion, we partitioned
 ---
 
 ## 5. UI Alignment, Type Safety, and Rendering Fixes
+- **Unified Place-Type Classification**: We aligned place type classification across the application:
+  - **Backend**: Implemented `determinePlaceType` in the backend service, which matches types (e.g., `art_gallery`, `museum`, `tourist_attraction`, `church`) and name keywords against a strict ruleset. Lodging overrides are active (e.g., galleries inside hotels are classified as `heritage` to prevent misclassification).
+  - **Frontend**: Updated `PublicNearbyPage.tsx` to trust the `place.type` returned by the backend, falling back to client-side classification keywords only if the type is not preset by the server. This prevents mismatching types or icon/preview mismatches on the map.
 - **Leaflet Marker Centering:** To prevent text emojis (`🏛️`, `🎨`, `🏯`) inside custom Leaflet HTML `divIcon` pins from inheriting the `-45deg` parent rotation (which caused tilted icons), we wrapped them inside a `<span>` element. This enables the CSS selector `.leaflet-gold-pin-marker > *` to target the text node parent wrapper and rotate it back by `45deg`, rendering all markers upright and perfectly centered on the map.
 - **Reactive Map Reinitialization:** When toggling view modes (Map to List and back), the map container DOM element is unmounted and recreated. We added `viewMode` to the Leaflet map initialization hook's dependency array and transitioned the ref instance to a reactive state `leafletMap`. This forces Leaflet to clean up old detached markers/polylines and instantiate a fresh map when returning to map view, preventing blank screens.
 - **Frontend WKB Coordinate Parsing:** Updated `parseLocation` in the frontend `museumService.ts` to decode hex-encoded WKB/EWKB PostGIS geometries using standard browser-compatible `Uint8Array` and `DataView` operations. This ensures that coordinate details queried directly via Supabase endpoints map to correct values instead of falling back to `(0, 0)`.
