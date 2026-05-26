@@ -17,6 +17,10 @@ import { metadata as manadoMetadata, regions as manadoRegions } from './cities/m
 import { metadata as pontianakMetadata, regions as pontianakRegions } from './cities/pontianak';
 import { metadata as acehMetadata, regions as acehRegions } from './cities/aceh';
 import { metadata as lampungMetadata, regions as lampungRegions } from './cities/lampung';
+import { metadata as cirebonMetadata, regions as cirebonRegions } from './cities/cirebon';
+import { metadata as padangMetadata, regions as padangRegions } from './cities/padang';
+import { metadata as banjarmasinMetadata, regions as banjarmasinRegions } from './cities/banjarmasin';
+import { metadata as mataramMetadata, regions as mataramRegions } from './cities/mataram';
 
 export * from './types';
 
@@ -37,7 +41,11 @@ export const CITY_WHITELIST: Record<string, CityMetadata> = {
     manado: manadoMetadata,
     pontianak: pontianakMetadata,
     aceh: acehMetadata,
-    lampung: lampungMetadata
+    lampung: lampungMetadata,
+    cirebon: cirebonMetadata,
+    padang: padangMetadata,
+    banjarmasin: banjarmasinMetadata,
+    mataram: mataramMetadata
 };
 
 export const CITY_REGIONS_MAP: Record<string, RegionDetail[]> = {
@@ -57,7 +65,11 @@ export const CITY_REGIONS_MAP: Record<string, RegionDetail[]> = {
     manado: manadoRegions,
     pontianak: pontianakRegions,
     aceh: acehRegions,
-    lampung: lampungRegions
+    lampung: lampungRegions,
+    cirebon: cirebonRegions,
+    padang: padangRegions,
+    banjarmasin: banjarmasinRegions,
+    mataram: mataramRegions
 };
 
 /**
