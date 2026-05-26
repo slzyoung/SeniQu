@@ -206,23 +206,6 @@ export function ExploreCities() {
           </button>
         </div>
       )}
-
-      {/* Explore More CTA for non-authenticated users */}
-      {!isAuthenticated && (
-        <div className="mt-8 flex justify-center w-full">
-          <motion.button
-            onClick={() => openAuthModal()}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="group relative overflow-hidden px-8 py-3.5 rounded-2xl bg-gradient-to-r from-gold/10 to-gold/5 border border-gold/40 text-gold font-bold text-xs tracking-wider uppercase shadow-[0_4px_20px_rgba(201,168,76,0.1)] hover:shadow-[0_8px_30px_rgba(201,168,76,0.25)] hover:border-gold hover:scale-[1.02] active:scale-95 transition-all duration-300 flex items-center gap-2.5 cursor-pointer"
-          >
-            <span className="absolute inset-0 bg-gold/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-md" />
-            <span className="relative z-10">Explore More</span>
-            <ArrowRight className="w-4 h-4 relative z-10 transition-transform duration-300 group-hover:translate-x-1" />
-          </motion.button>
-        </div>
-      )}
     </div>
   );
 }

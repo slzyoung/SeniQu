@@ -1436,7 +1436,17 @@ out center body;`;
                 }
 
                 const adminId = this.systemAdminId;
-                const slugs = places.map((p) => `g-${p.id}`);
+                
+                // Map Google Place IDs to seed slugs to prevent duplicating them
+                const PLACE_ID_TO_SEED_SLUG: Record<string, string> = {
+                    'ChIJTwoHg49Xei4R7sU-xBpDEJ0': 'museum-sonobudoyo-74',
+                    'ChIJi_JxtdT1aS4R7Vhgb1ZBFaQ': 'museum-nasional',
+                    'ChIJV_3rrx33aS4R9vCzPVkjlvE': 'macan-museum',
+                    'ChIJpZUM-zL0aS4RqDE5R5aunFo': 'national-gallery-indonesia',
+                    'ChIJuQp5_QJeei4RcSZ5sDVg_qM': 'ullen-sentalu-museum'
+                };
+                const getSlug = (placeId: string) => PLACE_ID_TO_SEED_SLUG[placeId] || `g-${placeId}`;
+                const slugs = places.map((p) => getSlug(p.id));
 
                 // 2. Query existing slugs and check if cover_image_url or reviews are missing
                 const { data: existing, error: existingError } = await this.supabase
@@ -1459,9 +1469,9 @@ out center body;`;
                     ])
                 );
 
-                const newPlaces = places.filter((p) => !existingMap.has(`g-${p.id}`));
+                const newPlaces = places.filter((p) => !existingMap.has(getSlug(p.id)));
                 const missingMetadataPlaces = places.filter((p) => {
-                    const slug = `g-${p.id}`;
+                    const slug = getSlug(p.id);
                     const state = existingMap.get(slug);
                     return state && (!state.coverImageUrl || !state.hasReviews);
                 });
@@ -1478,7 +1488,7 @@ out center body;`;
                     for (const p of newPlaces) {
                         const city = this.extractCityFromAddress(p.address);
                         const province = this.extractProvinceFromAddress(p.address);
-                        const slug = `g-${p.id}`;
+                        const slug = getSlug(p.id);
 
                         // Enrich metadata asynchronously (photos/reviews from Google, history/summary from Wikipedia)
                         const metadata = await this.enrichPlaceMetadata(p.id, p.name);
@@ -1519,7 +1529,7 @@ out center body;`;
                 if (missingMetadataPlaces.length > 0) {
                     this.logger.log(`[INGEST] Backfilling metadata for ${missingMetadataPlaces.length} existing places...`);
                     for (const p of missingMetadataPlaces) {
-                        const slug = `g-${p.id}`;
+                        const slug = getSlug(p.id);
                         
                         // Get the existing DB record to find its ID
                         const { data: dbRow } = await this.supabase
@@ -1551,9 +1561,23 @@ out center body;`;
                 || process.env.GOOGLE_MAPS_KEY || '';
             if (!apiKey) return;
 
+            const SEED_SLUG_TO_PLACE_ID: Record<string, string> = {
+                'museum-sonobudoyo-74': 'ChIJTwoHg49Xei4R7sU-xBpDEJ0',
+                'museum-nasional': 'ChIJi_JxtdT1aS4R7Vhgb1ZBFaQ',
+                'macan-museum': 'ChIJV_3rrx33aS4R9vCzPVkjlvE',
+                'national-gallery-indonesia': 'ChIJpZUM-zL0aS4RqDE5R5aunFo',
+                'ullen-sentalu-museum': 'ChIJuQp5_QJeei4RcSZ5sDVg_qM'
+            };
+
             for (const p of places) {
+                let googlePlaceId: string | null = null;
                 if (p.slug && p.slug.startsWith('g-')) {
-                    const googlePlaceId = p.slug.substring(2);
+                    googlePlaceId = p.slug.substring(2);
+                } else if (p.slug && SEED_SLUG_TO_PLACE_ID[p.slug]) {
+                    googlePlaceId = SEED_SLUG_TO_PLACE_ID[p.slug];
+                }
+
+                if (googlePlaceId) {
                     this.logger.log(`[BACKFILL] Enriching local place "${p.name}" (${googlePlaceId}) in background...`);
                     try {
                         await this.enrichPlaceMetadata(googlePlaceId, p.name, p.id);
