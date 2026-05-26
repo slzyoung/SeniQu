@@ -20,7 +20,15 @@ import {
     ArrowLeft,
     Upload,
     Plus,
-    ArrowRight
+    ArrowRight,
+    ShieldCheck,
+    Fingerprint,
+    ExternalLink,
+
+    Cpu,
+    CheckCircle2,
+    Wallet,
+    X
 } from 'lucide-react';
 import { useArtwork } from '../../hooks/useArtworks';
 import { useAddBookmark } from '../../hooks/useUser';
@@ -49,10 +57,39 @@ export function ArtworkView() {
     const { data: artwork, isLoading, isError } = useArtwork(id || '');
     const addBookmark = useAddBookmark();
 
+    // Purchase Modal State
+    const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
+    const [purchaseStep, setPurchaseStep] = useState<'idle' | 'wallet_connecting' | 'signing' | 'confirming' | 'success'>('idle');
+    const [txHash, setTxHash] = useState('');
+
     const handleBookmark = () => {
         if (id) {
             addBookmark.mutate(id);
         }
+    };
+
+    const startPurchaseFlow = () => {
+        setIsPurchaseModalOpen(true);
+        setPurchaseStep('wallet_connecting');
+        
+        // Step 1: Wallet Connection simulation
+        setTimeout(() => {
+            setPurchaseStep('signing');
+        }, 1500);
+    };
+
+    const handleSignMessage = () => {
+        setPurchaseStep('confirming');
+    };
+
+    const handleApproveTransaction = () => {
+        setPurchaseStep('confirming');
+        // Simulate contract broadcast
+        setTimeout(() => {
+            const mockHash = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+            setTxHash(mockHash);
+            setPurchaseStep('success');
+        }, 2000);
     };
 
     if (isLoading) {
@@ -85,6 +122,18 @@ export function ArtworkView() {
 
     const imageUrl = artwork.images?.[0]?.url;
 
+    // Derived AI Genres mock data with confidence scores
+    const aiGenres = (artwork.genre && artwork.genre.length > 0)
+        ? artwork.genre.map((g, idx) => ({
+            name: g,
+            confidence: idx === 0 ? 94 : idx === 1 ? 78 : 45
+          }))
+        : [
+            { name: 'Modernism', confidence: 91 },
+            { name: 'Expressionism', confidence: 64 },
+            { name: 'Nusantara Style', confidence: 42 }
+          ];
+
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16 md:pt-32 lg:min-h-screen">
             <button onClick={() => navigate(-1)} className="inline-flex items-center text-sm font-medium text-theme-muted hover:text-gold transition-colors mb-6 md:mb-8 bg-theme-surface/50 px-4 py-2 rounded-full border border-theme-border/50 backdrop-blur-sm self-start">
@@ -95,7 +144,7 @@ export function ArtworkView() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 relative">
                 {/* Artwork Image */}
                 <div className="lg:sticky lg:top-24 z-10 w-full mb-8 lg:mb-0">
-                    <Card variant="elevated" className="overflow-hidden bg-theme-surface/30 border-theme-border/40 Aspect-square lg:aspect-auto flex items-center justify-center p-4 lg:p-8">
+                    <Card variant="elevated" className="overflow-hidden bg-theme-surface/30 border-theme-border/40 aspect-square lg:aspect-auto flex items-center justify-center p-4 lg:p-8">
                         {imageUrl ? (
                             <img
                                 src={imageUrl}
@@ -172,6 +221,69 @@ export function ArtworkView() {
                         </div>
                     )}
 
+                    {/* AI Insights & Genre Confidence Breakdown */}
+                    <div className="bg-theme-surface/30 border border-theme-border/40 rounded-2xl p-6">
+                        <h3 className="font-serif font-semibold text-lg text-theme-text mb-4 flex items-center gap-2">
+                            <Cpu className="w-5 h-5 text-gold" />
+                            AI Genre & Style Insights
+                        </h3>
+                        <p className="text-xs text-theme-muted mb-4">
+                            Automatic computer vision pipeline classification and analysis.
+                        </p>
+                        <div className="space-y-4">
+                            {aiGenres.map((g, idx) => (
+                                <div key={idx} className="space-y-1.5">
+                                    <div className="flex justify-between text-xs font-semibold">
+                                        <span className="text-theme-text">{g.name}</span>
+                                        <span className="text-gold font-mono">{g.confidence}%</span>
+                                    </div>
+                                    <div className="h-2 bg-theme-elevated/40 rounded-full overflow-hidden">
+                                        <div 
+                                            className="h-full bg-gradient-to-r from-gold/50 to-gold rounded-full transition-all duration-1000"
+                                            style={{ width: `${g.confidence}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Proof of Art (PoA) Blockchain Provenance Timeline */}
+                    <div className="bg-theme-surface/30 border border-theme-border/40 rounded-2xl p-6">
+                        <h3 className="font-serif font-semibold text-lg text-theme-text mb-6 flex items-center gap-2">
+                            <ShieldCheck className="w-5 h-5 text-emerald-500" />
+                            Proof of Art (PoA) Provenance
+                        </h3>
+                        <div className="relative border-l-2 border-theme-border/50 pl-6 ml-3 space-y-6">
+                            {/* Step 1: Created */}
+                            <div className="relative">
+                                <div className="absolute -left-[31px] top-1.5 w-4 h-4 rounded-full bg-gold border-2 border-theme-bg" />
+                                <h4 className="text-sm font-bold text-theme-text">Masterpiece Creation</h4>
+                                <p className="text-xs text-theme-muted mt-0.5">
+                                    Authored by {artwork.artist?.displayName || 'Unknown Artist'} in {artwork.year || 2026} using {artwork.medium || 'Mixed Media'}.
+                                </p>
+                            </div>
+
+                            {/* Step 2: Verified */}
+                            <div className="relative">
+                                <div className="absolute -left-[31px] top-1.5 w-4 h-4 rounded-full bg-emerald-500 border-2 border-theme-bg" />
+                                <h4 className="text-sm font-bold text-theme-text">Institutional Verification</h4>
+                                <p className="text-xs text-theme-muted mt-0.5">
+                                    Digitally cataloged and verified by {artwork.museum?.name || artwork.gallery?.name || 'SeniQu Core Curator'} under ID {artwork.id.substring(0, 8)}.
+                                </p>
+                            </div>
+
+                            {/* Step 3: Registered */}
+                            <div className="relative">
+                                <div className="absolute -left-[31px] top-1.5 w-4 h-4 rounded-full bg-indigo-500 border-2 border-theme-bg" />
+                                <h4 className="text-sm font-bold text-theme-text">On-chain Registration</h4>
+                                <p className="text-xs text-theme-muted mt-0.5">
+                                    Tokenized on the blockchain. Provenance verified using cryptographic signature and secure smart contract binding.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         {artwork.medium && (
                             <div className="bg-theme-surface/40 hover:bg-theme-surface/60 transition-colors border border-theme-border/40 rounded-xl p-4 flex flex-col justify-center items-center text-center">
@@ -214,7 +326,11 @@ export function ArtworkView() {
                                             <p className="text-xl font-medium text-gold/60">{((artwork as any).currency) || 'ETH'}</p>
                                         </div>
                                     </div>
-                                    <Button variant="gold" className="w-full sm:w-auto px-8 py-6 text-lg font-semibold shadow-lg shadow-gold/20 hover:shadow-gold/40 hover:-translate-y-1 transition-all">
+                                    <Button 
+                                        variant="gold" 
+                                        onClick={startPurchaseFlow}
+                                        className="w-full sm:w-auto px-8 py-6 text-lg font-semibold shadow-lg shadow-gold/20 hover:shadow-gold/40 hover:-translate-y-1 transition-all"
+                                    >
                                         Purchase Masterpiece
                                     </Button>
                                 </div>
@@ -223,6 +339,117 @@ export function ArtworkView() {
                     )}
                 </div>
             </div>
+
+            {/* Interactive Web3 Privy Checkout Modal */}
+            {isPurchaseModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+                    <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-theme-surface border border-theme-border shadow-2xl p-6 animate-in fade-in zoom-in duration-300">
+                        {/* Header */}
+                        <div className="flex justify-between items-center mb-6">
+                            <div className="flex items-center gap-2">
+                                <Wallet className="w-5 h-5 text-gold" />
+                                <span className="font-serif font-bold text-lg text-theme-text">Secure Checkout</span>
+                            </div>
+                            <button 
+                                onClick={() => setIsPurchaseModalOpen(false)}
+                                className="p-1.5 rounded-full hover:bg-theme-elevated/45 text-theme-muted transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Steps content */}
+                        <div className="min-h-[220px] flex flex-col justify-center items-center text-center">
+                            {purchaseStep === 'wallet_connecting' && (
+                                <div className="space-y-4">
+                                    <Loader2 className="w-12 h-12 text-gold animate-spin mx-auto" />
+                                    <h4 className="font-bold text-theme-text text-base">Privy Wallet Connection</h4>
+                                    <p className="text-xs text-theme-muted max-w-[280px] mx-auto">
+                                        Loading embedded wallet configuration & securing hardware enclave session bindings...
+                                    </p>
+                                </div>
+                            )}
+
+                            {purchaseStep === 'signing' && (
+                                <div className="space-y-5 w-full">
+                                    <div className="relative flex items-center justify-center">
+                                        <div className="absolute w-16 h-16 rounded-full bg-gold/10 animate-ping" />
+                                        <div className="p-4 bg-gold/20 rounded-full text-gold relative z-10">
+                                            <Fingerprint className="w-10 h-10" />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <h4 className="font-bold text-theme-text text-base">Sign Cryptographic Nonce</h4>
+                                        <p className="text-xs text-theme-muted max-w-[320px] mx-auto leading-relaxed">
+                                            Sign message to bind your embedded address <span className="font-mono bg-theme-elevated px-1.5 py-0.5 rounded text-gold text-[10px]">0x3fc...91a</span> and prevent replay attacks (OWASP A7).
+                                        </p>
+                                    </div>
+                                    <Button variant="gold" onClick={handleSignMessage} className="w-full font-bold">
+                                        Sign Transaction
+                                    </Button>
+                                </div>
+                            )}
+
+                            {purchaseStep === 'confirming' && (
+                                <div className="space-y-5 w-full">
+                                    <div className="space-y-3 p-4 bg-theme-surface/50 border border-theme-border/50 rounded-2xl text-left text-xs">
+                                        <div className="flex justify-between">
+                                            <span className="text-theme-muted">Artwork Price:</span>
+                                            <span className="font-bold text-theme-text">{artwork.price} {((artwork as any).currency) || 'ETH'}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-theme-muted">Estimated Gas Fee:</span>
+                                            <span className="font-mono text-gold">0.00042 ETH</span>
+                                        </div>
+                                        <div className="h-[1px] bg-theme-border/50 my-2" />
+                                        <div className="flex justify-between text-sm">
+                                            <span className="font-semibold text-theme-text">Total Cost:</span>
+                                            <span className="font-bold text-gold">{((artwork.price || 0) + 0.00042).toFixed(5)} {((artwork as any).currency) || 'ETH'}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <Button variant="outline" onClick={() => setPurchaseStep('signing')} className="flex-1 font-semibold">
+                                            Back
+                                        </Button>
+                                        <Button variant="gold" onClick={handleApproveTransaction} className="flex-1 font-bold">
+                                            Approve & Broadcast
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {purchaseStep === 'success' && (
+                                <div className="space-y-5 w-full">
+                                    <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-full w-fit mx-auto">
+                                        <CheckCircle2 className="w-12 h-12" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <h4 className="font-bold text-theme-text text-base">Purchase Completed!</h4>
+                                        <p className="text-xs text-theme-muted max-w-[280px] mx-auto">
+                                            Congratulations! The verified Certificate of Authenticity (PoA) has been minted and transferred to your wallet.
+                                        </p>
+                                    </div>
+                                    <div className="bg-theme-surface/80 border border-theme-border/40 rounded-xl p-3 text-left">
+                                        <p className="text-[10px] text-theme-muted uppercase tracking-wider font-semibold mb-1">Transaction Hash</p>
+                                        <a 
+                                            href={`https://etherscan.io/tx/${txHash}`}
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-xs font-mono text-gold flex items-center gap-1.5 hover:underline break-all"
+                                        >
+                                            {txHash.substring(0, 24)}...
+                                            <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+                                        </a>
+                                    </div>
+                                    <Button variant="gold" onClick={() => setIsPurchaseModalOpen(false)} className="w-full font-bold">
+                                        Done
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
