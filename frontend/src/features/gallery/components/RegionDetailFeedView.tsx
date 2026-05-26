@@ -9,7 +9,7 @@ import {
     LayoutGrid, 
     Loader2 
 } from 'lucide-react';
-import { RegionDetail } from '../data/citiesRegistry';
+import { RegionDetail, classifyPlace } from '../data/citiesRegistry';
 
 type FilterType = 'museum' | 'gallery' | 'heritage';
 type ViewMode = 'list' | 'map';
@@ -160,26 +160,12 @@ export const RegionDetailFeedView: React.FC<RegionDetailFeedViewProps> = ({
             ) : (
                 <div className="space-y-4">
                     {filteredPlaces.map((place) => {
-                        const type = (place.type || '').toLowerCase();
-                        const name = (place.name || '').toLowerCase();
-                        const address = (place.address || '').toLowerCase();
-                        
+                        const matchedType = classifyPlace(place);
                         let typeLabel = 'Museum';
-                        let matchedType: 'museum' | 'gallery' | 'heritage' = 'museum';
-
-                        if (type === 'gallery' || type.includes('gallery') || type.includes('art') || 
-                            name.includes('galeri') || name.includes('gallery') || name.includes('art')) {
+                        if (matchedType === 'gallery') {
                             typeLabel = 'Galeri Seni';
-                            matchedType = 'gallery';
-                        } else if (type === 'heritage' || type.includes('heritage') || type.includes('historic') || 
-                                   type.includes('attraction') || type.includes('shrine') || type.includes('worship') || 
-                                   name.includes('candi') || name.includes('pura') || name.includes('monumen') || 
-                                   name.includes('heritage') || name.includes('situs') || name.includes('makam') || 
-                                   name.includes('klenteng') || name.includes('benteng') || name.includes('fort') || 
-                                   name.includes('tugu') || name.includes('katedral') || name.includes('istana') || 
-                                   address.includes('candi') || address.includes('pura')) {
+                        } else if (matchedType === 'heritage') {
                             typeLabel = 'Cagar Budaya';
-                            matchedType = 'heritage';
                         }
 
                         let displayImage = place.cover_image_url || (place.photos && place.photos[0]);

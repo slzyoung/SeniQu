@@ -16,6 +16,10 @@ import { CreateMuseumDto } from "./dto/create-museum.dto"
 import { UpdateMuseumDto } from "./dto/update-museum.dto"
 import { SearchMuseumDto } from "./dto/search-museum.dto"
 import { StorageService } from "../storage/storage.service"
+import * as dns from "dns"
+import { promisify } from "util"
+
+const dnsLookup = promisify(dns.lookup)
 
 @Injectable()
 export class MuseumsService {
@@ -2277,8 +2281,8 @@ out center body;`;
     }
 
     /**
-     * Download an external image, optimize it using Sharp, and upload it to R2 CDN.
-     * Returns our own public R2 URL.
+     * Download an external image securely, optimize it using Sharp via StorageService, and upload it to R2 CDN.
+     * Enforces SSRF checks, content-length limits, chunked stream safeguards, and mime checks.
      */
     async uploadExternalImageToR2(externalUrl: string, folder = "museums"): Promise<string> {
         if (!externalUrl) return externalUrl;
@@ -2286,29 +2290,143 @@ out center body;`;
         if (r2PublicUrl && externalUrl.startsWith(r2PublicUrl)) {
             return externalUrl;
         }
+
         try {
-            this.logger.log(`[R2-PROXY] Proxying external image to R2: ${externalUrl}`);
+            const parsedUrl = new URL(externalUrl);
+            
+            // SSRF Check 1: Enforce HTTP/HTTPS protocols only
+            if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+                this.logger.error(`[R2-PROXY-SECURITY] Blocked non-HTTP/HTTPS protocol: ${parsedUrl.protocol}`);
+                return externalUrl;
+            }
+
+            // SSRF Check 2: Resolve hostname and check IP ranges
+            const hostname = parsedUrl.hostname;
+            let ip = hostname;
+            try {
+                const lookup = await dnsLookup(hostname);
+                ip = lookup.address;
+            } catch (dnsErr) {
+                this.logger.warn(`[R2-PROXY-SECURITY] Hostname DNS resolution failed: ${hostname}`);
+            }
+
+            if (this.isPrivateIP(ip)) {
+                this.logger.error(`[R2-PROXY-SECURITY] Blocked SSRF attempt to private/loopback IP: ${ip} (${hostname})`);
+                return externalUrl;
+            }
+
+            this.logger.log(`[R2-PROXY] Proxying external image securely: ${externalUrl}`);
+
+            // Fetch with timeout and signal
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s maximum timeout
+
             const res = await fetch(externalUrl, {
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-                }
+                    'User-Agent': 'SeniQuApp/1.0 (contact@seniqu.art)',
+                },
+                signal: controller.signal
             });
-            if (!res.ok) throw new Error(`Status ${res.status}`);
-            const buffer = Buffer.from(await res.arrayBuffer());
-            const contentType = res.headers.get('content-type') || 'image/jpeg';
-            
+            clearTimeout(timeoutId);
+
+            if (!res.ok) {
+                throw new Error(`HTTP status ${res.status}`);
+            }
+
+            // Mime-type verification
+            const contentType = res.headers.get('content-type') || '';
+            const validMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'image/jpg'];
+            const isValidMime = validMimeTypes.some(mime => contentType.toLowerCase().includes(mime));
+            if (!isValidMime && contentType) {
+                this.logger.error(`[R2-PROXY-SECURITY] Blocked invalid content-type: ${contentType}`);
+                return externalUrl;
+            }
+
+            // Content-length check
+            const contentLengthHeader = res.headers.get('content-length');
+            const maxSizeBytes = 10 * 1024 * 1024; // 10MB max image size
+            if (contentLengthHeader) {
+                const contentLength = parseInt(contentLengthHeader, 10);
+                if (contentLength > maxSizeBytes) {
+                    this.logger.error(`[R2-PROXY-SECURITY] Blocked image exceeding size limit: ${contentLength} bytes`);
+                    return externalUrl;
+                }
+            }
+
+            // Read response in chunks to prevent memory exhaustion (Anti-Chunking / Decompression Bomb protection)
+            if (!res.body) {
+                throw new Error('Response body is empty');
+            }
+
+            const reader = res.body.getReader();
+            const chunks: Uint8Array[] = [];
+            let totalBytes = 0;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                if (value) {
+                    totalBytes += value.length;
+                    if (totalBytes > maxSizeBytes) {
+                        reader.cancel();
+                        this.logger.error(`[R2-PROXY-SECURITY] Terminated chunked transfer: stream size exceeded ${maxSizeBytes} bytes`);
+                        return externalUrl;
+                    }
+                    chunks.push(value);
+                }
+            }
+
+            // Merge chunks
+            const buffer = Buffer.alloc(totalBytes);
+            let offset = 0;
+            for (const chunk of chunks) {
+                buffer.set(chunk, offset);
+                offset += chunk.length;
+            }
+
+            // Construct file payload
             const file = {
                 buffer,
-                originalname: `external-image`,
-                mimetype: contentType,
-                size: buffer.length
+                originalname: `external-image.webp`,
+                mimetype: contentType || 'image/webp',
+                size: totalBytes
             };
 
             const uploadResult = await this.storageService.uploadFile(file as any, folder);
             return uploadResult.url;
+
         } catch (err: any) {
             this.logger.error(`[R2-PROXY] Failed to upload external image to R2: ${err.message}`);
             return externalUrl; // Fallback to external URL
         }
+    }
+
+    private isPrivateIP(ip: string): boolean {
+        if (!ip) return true;
+        
+        // IPv4 check
+        const ipv4Pattern = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+        if (ipv4Pattern.test(ip)) {
+            const parts = ip.split('.').map(Number);
+            if (parts.some(isNaN)) return true;
+            
+            // Loopback, Private, Link-local ranges
+            if (parts[0] === 127) return true;
+            if (parts[0] === 10) return true;
+            if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+            if (parts[0] === 192 && parts[1] === 168) return true;
+            if (parts[0] === 169 && parts[1] === 254) return true;
+            if (parts.join('.') === '0.0.0.0') return true;
+            
+            return false;
+        }
+        
+        // IPv6 loopback & private
+        const ipLower = ip.toLowerCase();
+        if (ipLower === '::1' || ipLower === '::') return true;
+        if (ipLower.startsWith('fe80:') || ipLower.startsWith('fc00:') || ipLower.startsWith('fd00:')) return true;
+        
+        return false;
     }
 }

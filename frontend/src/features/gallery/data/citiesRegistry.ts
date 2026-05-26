@@ -59,3 +59,41 @@ export const CITY_REGIONS_MAP: Record<string, RegionDetail[]> = {
     aceh: acehRegions,
     lampung: lampungRegions
 };
+
+/**
+ * Robust, exclusive place-classification helper.
+ * Ensures that Museum, Gallery, and Heritage categories are mutually exclusive.
+ */
+export function classifyPlace(place: { type?: string; name?: string; address?: string }): 'museum' | 'gallery' | 'heritage' {
+    const type = (place.type || '').toLowerCase();
+    const name = (place.name || '').toLowerCase();
+    const address = (place.address || '').toLowerCase();
+
+    // 1. Museum (Highest priority to avoid overlap)
+    const isMuseum = type === 'museum' || 
+                     type.includes('museum') || 
+                     name.includes('museum') || 
+                     name.includes('museo');
+    
+    if (isMuseum) {
+        return 'museum';
+    }
+
+    // 2. Gallery (Art-focused, excluding museums)
+    const isGallery = type === 'gallery' || 
+                      type.includes('gallery') || 
+                      type.includes('art') || 
+                      name.includes('galeri') || 
+                      name.includes('gallery') || 
+                      name.includes('art') || 
+                      name.includes('studio seni') ||
+                      name.includes('sanggar');
+    
+    if (isGallery) {
+        return 'gallery';
+    }
+
+    // 3. Heritage (Historical, Religious, Tourism destinations, and fallback)
+    return 'heritage';
+}
+

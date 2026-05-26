@@ -11,7 +11,8 @@ import {
     CITY_WHITELIST, 
     CITY_REGIONS_MAP, 
     CityMetadata, 
-    RegionDetail 
+    RegionDetail,
+    classifyPlace
 } from '../data/citiesRegistry';
 
 import { RegionExplorationView } from '../components/RegionExplorationView';
@@ -328,27 +329,7 @@ export function CityRegions() {
     // Apply subcategory filter tabs with smart, robust classification mapping
     const filteredPlaces = useMemo(() => {
         return regionPlaces.filter(place => {
-            const type = (place.type || '').toLowerCase();
-            const name = (place.name || '').toLowerCase();
-            const address = (place.address || '').toLowerCase();
-
-            if (activeFilter === 'museum') {
-                return type === 'museum' || type.includes('museum') || name.includes('museum');
-            }
-            if (activeFilter === 'gallery') {
-                return type === 'gallery' || type.includes('gallery') || type.includes('art') || 
-                       name.includes('galeri') || name.includes('gallery') || name.includes('art');
-            }
-            if (activeFilter === 'heritage') {
-                return type === 'heritage' || type.includes('heritage') || type.includes('historic') || 
-                       type.includes('attraction') || type.includes('shrine') || type.includes('worship') || 
-                       name.includes('candi') || name.includes('pura') || name.includes('monumen') || 
-                       name.includes('heritage') || name.includes('situs') || name.includes('makam') || 
-                       name.includes('klenteng') || name.includes('benteng') || name.includes('fort') || 
-                       name.includes('tugu') || name.includes('katedral') || name.includes('istana') || 
-                       address.includes('candi') || address.includes('pura');
-            }
-            return true;
+            return classifyPlace(place) === activeFilter;
         });
     }, [regionPlaces, activeFilter]);
 
@@ -356,24 +337,8 @@ export function CityRegions() {
     const categoryCounts = useMemo(() => {
         const counts = { museum: 0, gallery: 0, heritage: 0 };
         regionPlaces.forEach(place => {
-            const type = (place.type || '').toLowerCase();
-            const name = (place.name || '').toLowerCase();
-            const address = (place.address || '').toLowerCase();
-
-            const isMuseum = type === 'museum' || type.includes('museum') || name.includes('museum');
-            const isGallery = type === 'gallery' || type.includes('gallery') || type.includes('art') || 
-                             name.includes('galeri') || name.includes('gallery') || name.includes('art');
-            const isHeritage = type === 'heritage' || type.includes('heritage') || type.includes('historic') || 
-                              type.includes('attraction') || type.includes('shrine') || type.includes('worship') || 
-                              name.includes('candi') || name.includes('pura') || name.includes('monumen') || 
-                              name.includes('heritage') || name.includes('situs') || name.includes('makam') || 
-                              name.includes('klenteng') || name.includes('benteng') || name.includes('fort') || 
-                              name.includes('tugu') || name.includes('katedral') || name.includes('istana') || 
-                              address.includes('candi') || address.includes('pura');
-
-            if (isMuseum) counts.museum++;
-            if (isGallery) counts.gallery++;
-            if (isHeritage) counts.heritage++;
+            const category = classifyPlace(place);
+            counts[category]++;
         });
         return counts;
     }, [regionPlaces]);
