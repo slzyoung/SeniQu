@@ -6,6 +6,7 @@ import * as sharp from "sharp"
 import { v4 as uuidv4 } from "uuid"
 import * as dns from "dns"
 import { promisify } from "util"
+import * as puppeteer from 'puppeteer-core'
 
 const dnsLookup = promisify(dns.lookup)
 
@@ -20,7 +21,6 @@ const r2AccessKeyId = process.env.R2_ACCESS_KEY_ID
 const r2SecretAccessKey = process.env.R2_SECRET_ACCESS_KEY
 const r2BucketName = process.env.R2_BUCKET_NAME || "seniqu"
 const r2PublicUrl = process.env.R2_PUBLIC_URL || "https://cdn.seniqu.art"
-const googleMapsKey = process.env.GOOGLE_MAPS_KEY || process.env.FRONTEND_GOOGLE_MAPS_KEY || ""
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !r2AccountId || !r2AccessKeyId || !r2SecretAccessKey) {
     console.error("❌ Missing required database or R2 credentials in .env file.")
@@ -44,24 +44,19 @@ const getPublicUrl = (key: string) => `${r2PublicUrl.replace(/\/$/, "")}/${key}`
 function isPrivateIP(ip: string): boolean {
     if (!ip) return true
     
-    // IPv4 check
     const ipv4Pattern = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/
     if (ipv4Pattern.test(ip)) {
         const parts = ip.split('.').map(Number)
         if (parts.some(isNaN)) return true
-        
-        // Loopback, Private, Link-local ranges
         if (parts[0] === 127) return true
         if (parts[0] === 10) return true
         if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true
         if (parts[0] === 192 && parts[1] === 168) return true
         if (parts[0] === 169 && parts[1] === 254) return true
         if (parts.join('.') === '0.0.0.0') return true
-        
         return false
     }
     
-    // IPv6 check
     const ipLower = ip.toLowerCase()
     if (ipLower === '::1' || ipLower === '::') return true
     if (ipLower.startsWith('fe80:') || ipLower.startsWith('fc00:') || ipLower.startsWith('fd00:')) return true
@@ -182,102 +177,13 @@ async function uploadToR2(key: string, body: Buffer, contentType: string): Promi
     )
 }
 
-/**
- * Wikipedia search for cover images
- */
-async function scrapePlaceImage(placeName: string): Promise<string | null> {
-    try {
-        const queryName = placeName.trim()
-        if (!queryName) return null
-
-        // Step 1: ID Wikipedia
-        const idUrl = `https://id.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(queryName)}&gsrlimit=1&prop=pageimages&pithumbsize=1000&format=json&origin=*`
-        const res1 = await fetch(idUrl, {
-            headers: { 'User-Agent': 'SeniQu-Scraper/1.0 (contact@seniqu.art)' }
-        })
-        if (res1.ok) {
-            const data = await res1.json() as any
-            if (data?.query?.pages) {
-                const pages = Object.values(data.query.pages) as any[]
-                if (pages.length > 0 && pages[0].thumbnail?.source) {
-                    return pages[0].thumbnail.source
-                }
-            }
-        }
-
-        // Step 2: EN Wikipedia fallback
-        const enUrl = `https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(queryName)}&gsrlimit=1&prop=pageimages&pithumbsize=1000&format=json&origin=*`
-        const res2 = await fetch(enUrl, {
-            headers: { 'User-Agent': 'SeniQu-Scraper/1.0 (contact@seniqu.art)' }
-        })
-        if (res2.ok) {
-            const data = await res2.json() as any
-            if (data?.query?.pages) {
-                const pages = Object.values(data.query.pages) as any[]
-                if (pages.length > 0 && pages[0].thumbnail?.source) {
-                    return pages[0].thumbnail.source
-                }
-            }
-        }
-    } catch (e: any) {
-        console.warn(`Wikipedia image lookup failed for "${placeName}":`, e.message)
-    }
-    return null
-}
-
-/**
- * Google Places API photo search fallback
- */
-async function scrapeGooglePlaceImage(placeName: string, city: string): Promise<string | null> {
-    if (!googleMapsKey) return null
-    try {
-        console.log(`[Google Maps Fallback] Searching text for "${placeName}, ${city}"...`)
-        const searchUrl = 'https://places.googleapis.com/v1/places:searchText'
-        const searchRes = await fetch(searchUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': googleMapsKey,
-                'X-Goog-FieldMask': 'places.id,places.photos',
-                'Accept-Language': 'id',
-            },
-            body: JSON.stringify({
-                textQuery: `${placeName} ${city}`,
-                languageCode: 'id',
-                maxResultCount: 1,
-            })
-        })
-
-        if (!searchRes.ok) return null
-        const searchData = await searchRes.json() as any
-        if (searchData.places && searchData.places.length > 0) {
-            const place = searchData.places[0]
-            if (place.photos && place.photos.length > 0) {
-                const photoName = place.photos[0].name
-                console.log(`[Google Maps Fallback] Resolving static photo URL for "${photoName}"...`)
-                const mediaUrl = `https://places.googleapis.com/v1/${photoName}/media?key=${googleMapsKey}&maxHeightPx=1000`
-                const mediaRes = await fetch(mediaUrl, {
-                    method: 'GET',
-                    redirect: 'follow', // Follow the redirect to obtain static content URL
-                })
-                if (mediaRes.ok) {
-                    return mediaRes.url
-                }
-            }
-        }
-    } catch (e: any) {
-        console.warn(`Google Places photo lookup failed for "${placeName}":`, e.message)
-    }
-    return null
-}
-
 async function run() {
-    console.log("🚀 Starting secure enrichment & R2 CDN migration for institutions...")
-    
+    console.log("🚀 Starting Google Maps & Search combined Puppeteer scraper...")
+
     // Fetch all institutions from the database
     const { data: institutions, error } = await supabase
         .from('institutions')
-        .select('id, name, city, cover_image_url')
+        .select('id, name, city, cover_image_url, reviews')
     
     if (error || !institutions) {
         console.error("Failed to query institutions table:", error?.message)
@@ -286,97 +192,218 @@ async function run() {
 
     console.log(`Successfully fetched ${institutions.length} institutions from database.`)
 
-    const pendingMigration = institutions.filter(i => {
-        const url = i.cover_image_url
-        // Migrate if null/empty OR if it is an external URL (doesn't point to cdn.seniqu.art)
-        return !url || !url.includes("cdn.seniqu.art")
+    const mockAuthors = [
+        "Budi Santoso", "Siti Rahma", "Aditya Wijaya", "Dewi Lestari", "Rian Hidayat",
+        "Andi Saputra", "Ahmad Saputra", "Rina Wulandari", "Hendra Kurnia", "Mega Sari",
+        "Joko Susanto", "Sri Utami", "Eko Prasetyo", "Rudi Kurnia", "Agus Gunawan",
+        "Yanto Nasution", "Bambang Setiawan", "Wati Setiawan", "Kartika Wati", "Denny Siregar",
+        "Fajar Wijaya", "Gita Lestari", "Dina Hidayatullah", "Hadi Saputra", "Indra Putra",
+        "Kurniawan Lubis", "Larasati Kusuma", "Mulyono Utomo", "Novi Siregar", "Putra Susanto"
+    ]
+
+    const pendingUpdate = institutions.filter(i => {
+        const needsCover = !i.cover_image_url || !i.cover_image_url.includes("cdn.seniqu.art")
+        const isMockReviews = !i.reviews || i.reviews.length === 0 || i.reviews.some((r: any) => mockAuthors.includes(r.author))
+        return needsCover || isMockReviews
     })
 
-    console.log(`Identified ${pendingMigration.length} records requiring image enrichment or CDN migration.`)
+    console.log(`Identified ${pendingUpdate.length} records requiring Google Maps cover image or review scraping.`)
+
+    if (pendingUpdate.length === 0) {
+        console.log("🎉 All records are up-to-date! No work to do.")
+        return
+    }
+
+    const browser = await puppeteer.launch({
+        executablePath: '/usr/bin/google-chrome',
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-blink-features=AutomationControlled',
+            '--window-size=1280,1024',
+        ]
+    })
 
     let processedCount = 0
     let successCount = 0
 
-    for (const inst of pendingMigration) {
+    for (const inst of pendingUpdate) {
         processedCount++
-        console.log(`\n[${processedCount}/${pendingMigration.length}] Processing "${inst.name}" (${inst.city || 'No City'})`)
+        console.log(`\n[${processedCount}/${pendingUpdate.length}] Processing "${inst.name}" (${inst.city || 'No City'})`)
         
-        let targetUrl = inst.cover_image_url
-        let sourceMethod = "external-cdn-migration"
+        const updatePayload: any = {}
+        let imageProcessed = false
+        let reviewsProcessed = false
 
-        // Step 1: If cover_image_url is missing, scrape from Wikipedia first, then fall back to Google Places
-        if (!targetUrl) {
-            sourceMethod = "wikipedia-scraper"
-            console.log(`  🔍 Image missing. Trying Wikipedia scraper...`)
-            targetUrl = await scrapePlaceImage(inst.name)
-            
-            // Wikipedia failed, try Google Places API if configured
-            if (!targetUrl && googleMapsKey) {
-                sourceMethod = "google-places-api"
-                targetUrl = await scrapeGooglePlaceImage(inst.name, inst.city || "")
+        const needsCover = !inst.cover_image_url || !inst.cover_image_url.includes("cdn.seniqu.art")
+        const isMockReviews = !inst.reviews || inst.reviews.length === 0 || inst.reviews.some((r: any) => mockAuthors.includes(r.author))
+
+        const page = await browser.newPage()
+        await page.setViewport({ width: 1280, height: 1024 })
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+        
+        // Set normal viewport and user agent
+
+        try {
+            // STEP 1: Handle Review Scraping (Google Search)
+            if (isMockReviews) {
+                console.log(`  🔍 Finding FID in Google Search...`)
+                const searchQuery = encodeURIComponent(`${inst.name} ${inst.city || ''}`)
+                const searchUrl = `https://www.google.com/search?q=${searchQuery}&hl=id&gl=id`
+                
+                await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 })
+                await new Promise(r => setTimeout(r, 3000))
+
+                // Extract FID
+                let fid: string | null = await page.evaluate(() => {
+                    const el = document.querySelector('[data-fid]')
+                    return el ? el.getAttribute('data-fid') : null
+                })
+
+                if (!fid) {
+                    const content = await page.content()
+                    const match = content.match(/0x[0-9a-fA-F]+:0x[0-9a-fA-F]+/)
+                    fid = match ? match[0] : null
+                }
+
+                if (fid) {
+                    console.log(`  Found FID: ${fid}. Navigating to reviews modal...`)
+                    const reviewsUrl = `https://www.google.com/search?q=${searchQuery}&hl=id&gl=id#lrd=${fid},1`
+                    await page.goto(reviewsUrl, { waitUntil: 'networkidle2', timeout: 30000 })
+                    
+                    try {
+                        await page.waitForSelector('div.bwb7ce', { timeout: 12000 })
+                    } catch (err) {
+                        console.log(`  Waiting for review selector timed out, using fallback delay.`)
+                        await new Promise(r => setTimeout(r, 6000))
+                    }
+
+                    // Parse reviews
+                    const reviews = await page.evaluate(() => {
+                        const results: any[] = []
+                        document.querySelectorAll('div.bwb7ce').forEach((el: any) => {
+                            try {
+                                const author = el.querySelector('.Vpc5Fe')?.textContent?.trim() || ''
+                                const text = el.querySelector('.OA1nbd')?.textContent?.trim() || ''
+                                
+                                const ratingStr = el.querySelector('.dHX2k')?.getAttribute('aria-label') || ''
+                                const ratingMatch = ratingStr.match(/([0-5][\.,\d]*)/)
+                                const rating = ratingMatch ? parseFloat(ratingMatch[1].replace(',', '.')) : 5
+
+                                const time = el.querySelector('.y3Ibjb')?.textContent?.trim() || 'Baru saja'
+
+                                if (author) {
+                                    results.push({ author, rating, text, time })
+                                }
+                            } catch (e) {
+                                // Ignore individual review parsing errors
+                            }
+                        })
+                        return results
+                    })
+
+                    if (reviews && reviews.length > 0) {
+                        console.log(`  ✅ Successfully scraped ${reviews.length} authentic reviews from Google Maps.`)
+                        updatePayload.reviews = reviews
+                        reviewsProcessed = true
+                    } else {
+                        console.log(`  ⚠️ Reviews modal was empty or parsing failed.`)
+                    }
+                } else {
+                    console.log(`  ⚠️ FID could not be found. Skipping reviews.`)
+                }
             }
-        }
 
-        if (!targetUrl) {
-            console.log(`  ⚠️ Skipping: No image could be resolved for this place.`)
-            continue
-        }
+            // STEP 2: Handle Cover Image Scraping (Google Maps)
+            if (needsCover) {
+                console.log(`  🗺️  Finding cover photo in Google Maps...`)
+                const mapQuery = encodeURIComponent(`${inst.name} ${inst.city || ''}`)
+                const mapUrl = `https://www.google.com/maps/search/${mapQuery}?hl=id`
+                
+                await page.goto(mapUrl, { waitUntil: 'networkidle2', timeout: 30000 })
+                await new Promise(r => setTimeout(r, 6000))
 
-        // Step 2: Download the image securely (SSRF check + chunk caps + timeouts)
-        console.log(`  📥 Downloading image securely from: ${targetUrl.substring(0, 80)}...`)
-        const buffer = await downloadAsset(targetUrl)
-        if (!buffer) {
-            console.error(`  ❌ Failed to download secure buffer from ${targetUrl.substring(0, 60)}`)
-            continue
-        }
+                const coverPhoto = await page.evaluate(() => {
+                    const imgs = Array.from(document.querySelectorAll('img'))
+                    const matches = imgs.map(img => img.getAttribute('src') || '')
+                        .filter(src => src.includes('googleusercontent.com') || src.includes('gps-cs-s'))
+                    return matches.length > 0 ? matches[0] : null
+                })
 
-        // Step 3: Optimize using Sharp (strips malicious EXIF headers, scales down, outputs secure WebP)
-        console.log(`  🖼️  Optimizing image with Sharp (converting to WebP)...`)
-        let optimizedBuffer: Buffer
-        try {
-            optimizedBuffer = await sharp(buffer)
-                .resize({ width: 1200, height: 800, fit: "cover", withoutEnlargement: true })
-                .webp({ quality: 80 })
-                .toBuffer()
-        } catch (err: any) {
-            console.error(`  ❌ Sharp processing failed:`, err.message)
-            continue
-        }
+                if (coverPhoto) {
+                    console.log(`  Found cover photo: ${coverPhoto.substring(0, 100)}...`)
+                    // Resize to high-resolution (1200x800)
+                    let resizedUrl = coverPhoto
+                    if (coverPhoto.includes('=')) {
+                        const base = coverPhoto.split('=')[0]
+                        resizedUrl = `${base}=w1200-h800-p`
+                    } else {
+                        resizedUrl = `${coverPhoto}=w1200-h800-p`
+                    }
 
-        // Step 4: Upload optimized buffer to R2 CDN
-        try {
-            const fileUuid = uuidv4()
-            const key = `museums/images/${fileUuid}.webp`
-            console.log(`  📤 Uploading to R2: bucket=${r2BucketName}, key=${key}`)
-            await uploadToR2(key, optimizedBuffer, "image/webp")
+                    console.log(`  📥 Downloading image securely...`)
+                    const buffer = await downloadAsset(resizedUrl)
+                    if (buffer) {
+                        console.log(`  🖼️  Optimizing with Sharp (strip EXIF metadata)...`)
+                        try {
+                            const optimizedBuffer = await sharp(buffer)
+                                .resize({ width: 1200, height: 800, fit: "cover", withoutEnlargement: true })
+                                .webp({ quality: 80 })
+                                .toBuffer()
 
-            const cdnUrl = getPublicUrl(key)
+                            const fileUuid = uuidv4()
+                            const key = `museums/images/${fileUuid}.webp`
+                            
+                            console.log(`  📤 Uploading WebP to Cloudflare R2...`)
+                            await uploadToR2(key, optimizedBuffer, "image/webp")
 
-            // Step 5: Save CDN URL back to Database metadata
-            console.log(`  💾 Indexing metadata in database...`)
-            const { error: updateErr } = await supabase
-                .from('institutions')
-                .update({ cover_image_url: cdnUrl })
-                .eq('id', inst.id)
+                            const cdnUrl = getPublicUrl(key)
+                            updatePayload.cover_image_url = cdnUrl
+                            imageProcessed = true
+                        } catch (err: any) {
+                            console.error(`  ❌ Sharp processing or R2 upload failed:`, err.message)
+                        }
+                    }
+                } else {
+                    console.log(`  ⚠️ No cover image found on Google Maps.`)
+                }
+            }
 
-            if (updateErr) {
-                console.error(`  ❌ Database update failed:`, updateErr.message)
+            // STEP 3: Update the Database
+            if (Object.keys(updatePayload).length > 0) {
+                console.log(`  💾 Indexing metadata in database...`)
+                const { error: updateErr } = await supabase
+                    .from('institutions')
+                    .update(updatePayload)
+                    .eq('id', inst.id)
+
+                if (updateErr) {
+                    console.error(`  ❌ Database update failed:`, updateErr.message)
+                } else {
+                    console.log(`  ✅ Successfully updated record in Supabase! (Cover: ${imageProcessed ? 'YES' : 'NO'}, Reviews: ${reviewsProcessed ? 'YES' : 'NO'})`)
+                    successCount++
+                }
             } else {
-                console.log(`  ✅ Successfully updated DB! URL: ${cdnUrl}`)
-                successCount++
+                console.log(`  ℹ️ Nothing new to update for this record.`)
             }
-        } catch (err: any) {
-            console.error(`  ❌ R2 migration failed:`, err.message)
+
+        } catch (e: any) {
+            console.error(`  ❌ Error processing "${inst.name}":`, e.message)
+        } finally {
+            await page.close()
         }
 
-        // Step 6: Anti-Throttling Delay (800ms between records)
-        await new Promise(resolve => setTimeout(resolve, 800))
+        // Anti-Throttling Delay (random between 2.0 and 3.5 seconds)
+        const delayMs = Math.floor(Math.random() * 1500) + 2000
+        await new Promise(resolve => setTimeout(resolve, delayMs))
     }
 
-    console.log(`\n🎉 ENRICHMENT & MIGRATION SUMMARY:`)
-    console.log(`- Total Records Processed: ${pendingMigration.length}`)
-    console.log(`- Successfully Migrated to R2 CDN: ${successCount}`)
-    console.log(`- Failed/Skipped: ${pendingMigration.length - successCount}`)
+    await browser.close()
+    console.log(`\n🎉 PUPPETEER GOOGLE MAPS SCRAPING & CDN MIGRATION COMPLETE:`)
+    console.log(`- Total Records Checked: ${pendingUpdate.length}`)
+    console.log(`- Successfully Updated in DB: ${successCount}`)
+    console.log(`- Failed/Skipped: ${pendingUpdate.length - successCount}`)
 }
 
 run()
