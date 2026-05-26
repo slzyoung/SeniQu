@@ -3,7 +3,7 @@
  * Uses real API data with useArtwork hook
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Outlet, useParams, Link, useNavigate } from 'react-router-dom';
 import { Navbar } from '../../components/Navbar';
 import { Footer } from '../../components/Footer';
@@ -30,9 +30,11 @@ import {
     Wallet,
     X
 } from 'lucide-react';
-import { useArtwork } from '../../hooks/useArtworks';
+import { useArtwork, useArtworks } from '../../hooks/useArtworks';
+import { useMuseum } from '../../hooks/useMuseums';
 import { useAddBookmark } from '../../hooks/useUser';
 import { formatDate } from '../../lib/utils';
+import { motion } from 'framer-motion';
 
 import { MobileBottomNav } from '../../components/common/MobileBottomNav';
 
@@ -48,6 +50,27 @@ export function GalleryLayout() {
             <MobileBottomNav />
         </div>
     );
+}
+
+// Helper to retrieve artwork image from various formats
+function getArtworkImage(artwork: any): string {
+    if (!artwork) return '';
+    const raw =
+        artwork.primaryImageUrl
+        || artwork.primary_image_url
+        || artwork.imageUrl
+        || artwork.image_url
+        || '';
+    if (raw) return raw;
+    let imgs = artwork.images;
+    if (typeof imgs === 'string') {
+        try { imgs = JSON.parse(imgs); } catch { imgs = []; }
+    }
+    if (Array.isArray(imgs) && imgs.length > 0) {
+        const first = typeof imgs[0] === 'string' ? imgs[0] : imgs[0]?.url || imgs[0]?.image_url || imgs[0]?.imageUrl;
+        if (first) return first;
+    }
+    return '';
 }
 
 // Artwork Detail Page with real API data
@@ -120,7 +143,7 @@ export function ArtworkView() {
         );
     }
 
-    const imageUrl = artwork.images?.[0]?.url;
+    const imageUrl = getArtworkImage(artwork);
 
     // Derived AI Genres mock data with confidence scores
     const aiGenres = (artwork.genre && artwork.genre.length > 0)
@@ -135,7 +158,7 @@ export function ArtworkView() {
           ];
 
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16 md:pt-32 lg:min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 pb-16 md:pt-4 lg:min-h-screen">
             <button onClick={() => navigate(-1)} className="inline-flex items-center text-sm font-medium text-theme-muted hover:text-gold transition-colors mb-6 md:mb-8 bg-theme-surface/50 px-4 py-2 rounded-full border border-theme-border/50 backdrop-blur-sm self-start">
                 <ChevronLeft className="w-4 h-4 mr-2" />
                 Back
@@ -453,12 +476,20 @@ export function ArtworkView() {
         </div>
     );
 }
-
 // Museum Detail Page (Mockup Implementation)
 export function MuseumDetail() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [expandedText, setExpandedText] = useState(false);
+
+    // Fetch real museum info
+    const { data: dbMuseum, isLoading: museumLoading } = useMuseum(id || '');
+
+    // Fetch real artworks
+    const { data: artworksData } = useArtworks({
+        page: 1,
+        limit: 100
+    });
 
     // Dynamic metadata dictionary based on ID
     const MOCK_DATA: Record<string, any> = {
@@ -467,51 +498,90 @@ export function MuseumDetail() {
             location: 'Jakarta Barat, Indonesia',
             descStart: 'Museum Nasional Indonesia, juga dikenal sebagai Museum Gajah, adalah museum kebanggaan bangsa yang mengajak kita semua mengapresiasi sejarah, seni, dan kreativitas Nusantara.',
             descMore: ' Didirikan pada tahun 1778, museum ini memiliki koleksi lebih dari 140.000 benda bersejarah dan artefak budaya dari seluruh Indonesia.',
-            initial: 'M'
+            initial: 'M',
+            coverImage: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Museum_Nasional_Indonesia_2.jpg/800px-Museum_Nasional_Indonesia_2.jpg'
         },
         'museum-affandi': {
             name: 'MUSEUM AFFANDI',
             location: 'Sleman, Yogyakarta',
             descStart: 'Museum Affandi menyimpan maestro ekspresionisme Indonesia, Bapak Affandi. Melestarikan ratusan lukisan mahakarya yang menawan hati.',
             descMore: ' Terletak di tepi sungai Gajah Wong, kompleks unik ini dirancang langsung oleh sang maestro sebagai rumah dan galeri pribadinya.',
-            initial: 'A'
+            initial: 'A',
+            coverImage: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Affandi_Museum.JPG/800px-Affandi_Museum.JPG'
         },
         'museum-sonobudoyo': {
             name: 'MUSEUM SONOBUDOYO',
             location: 'Bantul, Yogyakarta',
             descStart: 'Museum terbesar dan terlengkap di Yogyakarta yang menyimpan koleksi kebudayaan Jawa yang luar biasa kaya dan mendalam.',
             descMore: ' Dari keris kuno hingga instrumen gamelan, rasakan kemegahan pusaka leluhur yang tak ternilai harganya.',
-            initial: 'S'
+            initial: 'S',
+            coverImage: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/Sonobudoyo_Yogyakarta.jpg/800px-Sonobudoyo_Yogyakarta.jpg'
         },
         'candi-prambanan': {
             name: 'CANDI PRAMBANAN',
             location: 'Sleman, Yogyakarta',
             descStart: 'Mahakarya peradaban Hindu abad ke-9, menjulang tinggi dan ukiran memukau yang mengabadikan kisah epik Ramayana.',
             descMore: ' Keajaiban arsitektur kuno ini adalah salah satu candi terindah di Asia Tenggara, diakui sebagai warisan dunia oleh UNESCO.',
-            initial: 'P'
+            initial: 'P',
+            coverImage: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Prambanan_Temple_Yogyakarta_Indonesia.jpg/800px-Prambanan_Temple_Yogyakarta_Indonesia.jpg'
         },
         'canggu-art-space': {
             name: 'CANGGU ART SPACE',
             location: 'Canggu, Bali',
             descStart: 'A premier bohemian sanctuary for contemporary fine arts, blending deep Balinese heritage with modern global expressionism.',
             descMore: ' Hosting weekly exhibitions from breakthrough local talents and fostering a community of passionate international artists.',
-            initial: 'C'
+            initial: 'C',
+            coverImage: 'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?q=80&w=1200'
         }
-    }
+    };
 
-    const data = MOCK_DATA[id || ''] || {
+    const mockData = MOCK_DATA[id || ''] || {
         name: 'NATIONAL GALLERY',
         location: 'Washington DC, United States',
         descStart: 'The National Gallery of Art serves the nation by inviting everyone to explore and experience art, creativity, and our shared history.',
         descMore: ' Founded in 1937, it preserves, collects, exhibits, and fosters an understanding of works of art at the highest possible museum and scholarly standards.',
-        initial: 'N'
+        initial: 'N',
+        coverImage: 'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?q=80&w=1200'
     };
 
-    const museumName = data.name;
-    const museumLocation = data.location;
-    const descriptionStart = data.descStart;
-    const descriptionMore = data.descMore;
-    const museumInitial = data.initial;
+    // Combine database data and mock fallback
+    const museumName = dbMuseum?.name || mockData.name;
+    const museumLocation = dbMuseum?.address 
+        ? `${dbMuseum.address.city}, ${dbMuseum.address.province || 'Indonesia'}`
+        : mockData.location;
+    const descriptionStart = dbMuseum?.description 
+        ? dbMuseum.description.substring(0, 150)
+        : mockData.descStart;
+    const descriptionMore = dbMuseum?.description && dbMuseum.description.length > 150
+        ? dbMuseum.description.substring(150)
+        : mockData.descMore;
+    const museumInitial = museumName ? museumName.charAt(0).toUpperCase() : 'M';
+    const coverImage = dbMuseum?.images?.[0] || mockData.coverImage;
+
+    const allArtworks = useMemo(() => {
+        if (!artworksData) return [];
+        const raw = artworksData;
+        if (Array.isArray(raw)) return raw;
+        if (raw.data && Array.isArray(raw.data)) return raw.data;
+        return [];
+    }, [artworksData]);
+
+    const museumArtworks = useMemo(() => {
+        return allArtworks.filter((art: any) => {
+            const mId = art.museumId || art.museum?.id || '';
+            const gId = art.galleryId || art.gallery?.id || '';
+            const mName = (art.museum?.name || '').toLowerCase();
+            const gName = (art.gallery?.name || '').toLowerCase();
+            const curName = (museumName || '').toLowerCase();
+            
+            return (
+                mId === id ||
+                gId === id ||
+                (id && art.museum?.slug === id) ||
+                (curName && (mName.includes(curName) || gName.includes(curName) || curName.includes(mName) || curName.includes(gName)))
+            );
+        });
+    }, [allArtworks, id, museumName]);
 
     const mockCollection = [
         "https://images.unsplash.com/photo-1580136608260-4eb11f4b24fe?w=500&q=80",
@@ -519,6 +589,14 @@ export function MuseumDetail() {
         "https://images.unsplash.com/photo-1579541592065-da8a1fbfa40a?w=500&q=80",
         "https://images.unsplash.com/photo-1578301978693-85fa9c026f47?w=500&q=80"
     ];
+
+    if (museumLoading) {
+        return (
+            <div className="min-h-screen bg-[#EBEAE4] dark:bg-[#1a1a1a] flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-gold animate-spin" />
+            </div>
+        );
+    }
 
     return (
         <div className="relative min-h-screen bg-[#EBEAE4] dark:bg-[#1a1a1a] text-[#1a1a1a] dark:text-[#EBEAE4] font-sans overflow-x-hidden" style={{ margin: '-2rem -1rem', paddingBottom: '5rem' }}>
@@ -542,9 +620,9 @@ export function MuseumDetail() {
                 {/* Hero section */}
                 <div className="relative w-full h-[45vh] md:h-[60vh] bg-stone-800">
                     <img 
-                        src="https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?q=80&w=1200" 
-                        alt="Museum Interior" 
-                        className="w-full h-full object-cover object-bottom opacity-80"
+                        src={coverImage} 
+                        alt={museumName} 
+                        className="w-full h-full object-cover object-center opacity-80"
                     />
                     <div className="absolute inset-0 bg-black/20 pointer-events-none" />
                     
@@ -578,9 +656,9 @@ export function MuseumDetail() {
                         {museumLocation}
                     </p>
 
-                    <p className="mt-6 text-[15px] md:text-lg leading-relaxed text-stone-700 dark:text-stone-300 max-w-sm md:max-w-2xl mx-auto font-serif">
+                    <p className="mt-6 text-[15px] md:text-lg leading-relaxed text-stone-700 dark:text-stone-300 max-w-sm md:max-w-2xl mx-auto font-serif font-light">
                         {descriptionStart}
-                        {!expandedText && (
+                        {!expandedText && descriptionMore && (
                             <button onClick={() => setExpandedText(true)} className="ml-1 font-bold italic underline decoration-1 underline-offset-2">
                                 ..More
                             </button>
@@ -603,46 +681,98 @@ export function MuseumDetail() {
 
                 {/* Collection Section */}
                 <div className="px-6 md:px-12 py-8 mt-2">
-                    <div className="flex items-center justify-between mb-8 cursor-pointer hover:opacity-70 transition-opacity text-[#1a1a1a] dark:text-[#EBEAE4]">
+                    <div className="flex items-center justify-between mb-8 text-[#1a1a1a] dark:text-[#EBEAE4]">
                         <h2 className="text-2xl md:text-3xl font-serif uppercase tracking-[0.1em]">
                             The Collection
                         </h2>
-                        <ArrowRight className="w-6 h-6" strokeWidth={1.5} />
+                        {museumArtworks.length > 0 && (
+                            <span className="text-xs text-stone-500 dark:text-stone-400 font-serif">
+                                {museumArtworks.length} Masterpieces managed by Partner
+                            </span>
+                        )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 md:gap-8">
-                        {/* Frame 1 */}
-                        <div className="w-full relative shadow-xl p-3 md:p-5 bg-[#CBA36D]" style={{ boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5), 0 15px 25px rgba(0,0,0,0.2)' }}>
-                            <div className="absolute inset-0 border border-yellow-900/60 m-1 md:m-2 pointer-events-none"></div>
-                            <div className="w-full aspect-[5/4] bg-black shadow-inner overflow-hidden border border-amber-900/50">
-                                <img src={mockCollection[0]} alt="Collection item 1" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
-                            </div>
+                    {museumArtworks.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-6 md:gap-10">
+                            {museumArtworks.map((art: any, idx: number) => {
+                                const artworkImg = getArtworkImage(art);
+                                const isOffset = idx % 2 === 1;
+                                return (
+                                    <motion.div
+                                        key={art.id || idx}
+                                        className={`w-full ${isOffset ? 'md:mt-16' : ''}`}
+                                        style={{ cursor: 'pointer' }}
+                                        whileHover={{ y: -4 }}
+                                        onClick={() => navigate(`/gallery/artwork/${art.id}`)}
+                                    >
+                                        <div 
+                                            className="w-full relative shadow-xl p-3 md:p-5 bg-[#CBA36D]" 
+                                            style={{ boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5), 0 15px 25px rgba(0,0,0,0.2)' }}
+                                        >
+                                            <div className="absolute inset-0 border border-yellow-900/60 m-1 md:m-2 pointer-events-none"></div>
+                                            <div className="w-full aspect-[4/5] bg-black shadow-inner overflow-hidden border border-amber-900/50">
+                                                <img 
+                                                    src={artworkImg} 
+                                                    alt={art.title} 
+                                                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" 
+                                                />
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Elegant label below the frame */}
+                                        <div style={{ marginTop: 12, padding: '0 4px', textAlign: 'center' }}>
+                                            <h4 style={{ fontSize: 14, fontWeight: 700, fontFamily: 'serif', margin: 0, lineClamp: 1, WebkitLineClamp: 1, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                                {art.title}
+                                            </h4>
+                                            <p style={{ fontSize: 11, color: 'var(--theme-muted)', margin: '2px 0 0 0' }}>
+                                                {art.artist?.displayName || 'Unknown Artist'}
+                                                {art.year ? `, ${art.year}` : ''}
+                                            </p>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
                         </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                            <div className="grid grid-cols-2 gap-4 md:gap-8">
+                                {/* Frame 1 */}
+                                <div className="w-full relative shadow-xl p-3 md:p-5 bg-[#CBA36D]" style={{ boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5), 0 15px 25px rgba(0,0,0,0.2)' }}>
+                                    <div className="absolute inset-0 border border-yellow-900/60 m-1 md:m-2 pointer-events-none"></div>
+                                    <div className="w-full aspect-[5/4] bg-black shadow-inner overflow-hidden border border-amber-900/50">
+                                        <img src={mockCollection[0]} alt="Collection item 1" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
+                                    </div>
+                                </div>
 
-                        {/* Frame 2 - Offset */}
-                        <div className="w-full relative shadow-xl p-3 md:p-5 md:mt-16 bg-[#CBA36D]" style={{ boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5), 0 15px 25px rgba(0,0,0,0.2)' }}>
-                            <div className="absolute inset-0 border border-yellow-900/60 m-1 md:m-2 pointer-events-none"></div>
-                            <div className="w-full aspect-[3/4] bg-black shadow-inner overflow-hidden border border-amber-900/50">
-                                <img src={mockCollection[1]} alt="Collection item 2" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
-                            </div>
-                        </div>
+                                {/* Frame 2 - Offset */}
+                                <div className="w-full relative shadow-xl p-3 md:p-5 md:mt-16 bg-[#CBA36D]" style={{ boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5), 0 15px 25px rgba(0,0,0,0.2)' }}>
+                                    <div className="absolute inset-0 border border-yellow-900/60 m-1 md:m-2 pointer-events-none"></div>
+                                    <div className="w-full aspect-[3/4] bg-black shadow-inner overflow-hidden border border-amber-900/50">
+                                        <img src={mockCollection[1]} alt="Collection item 2" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
+                                    </div>
+                                </div>
 
-                        {/* Frame 3 */}
-                        <div className="w-full relative shadow-xl p-3 md:p-5 bg-[#CBA36D]" style={{ boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5), 0 15px 25px rgba(0,0,0,0.2)' }}>
-                            <div className="absolute inset-0 border border-yellow-900/60 m-1 md:m-2 pointer-events-none"></div>
-                            <div className="w-full aspect-[3/4] bg-black shadow-inner overflow-hidden border border-amber-900/50">
-                                <img src={mockCollection[2]} alt="Collection item 3" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
-                            </div>
-                        </div>
+                                {/* Frame 3 */}
+                                <div className="w-full relative shadow-xl p-3 md:p-5 bg-[#CBA36D]" style={{ boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5), 0 15px 25px rgba(0,0,0,0.2)' }}>
+                                    <div className="absolute inset-0 border border-yellow-900/60 m-1 md:m-2 pointer-events-none"></div>
+                                    <div className="w-full aspect-[3/4] bg-black shadow-inner overflow-hidden border border-amber-900/50">
+                                        <img src={mockCollection[2]} alt="Collection item 3" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
+                                    </div>
+                                </div>
 
-                        {/* Frame 4 - Offset */}
-                        <div className="w-full relative shadow-xl p-3 md:p-5 md:mt-16 bg-[#CBA36D]" style={{ boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5), 0 15px 25px rgba(0,0,0,0.2)' }}>
-                            <div className="absolute inset-0 border border-yellow-900/60 m-1 md:m-2 pointer-events-none"></div>
-                            <div className="w-full aspect-[5/4] bg-black shadow-inner overflow-hidden border border-amber-900/50">
-                                <img src={mockCollection[3]} alt="Collection item 4" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
+                                {/* Frame 4 - Offset */}
+                                <div className="w-full relative shadow-xl p-3 md:p-5 md:mt-16 bg-[#CBA36D]" style={{ boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5), 0 15px 25px rgba(0,0,0,0.2)' }}>
+                                    <div className="absolute inset-0 border border-yellow-900/60 m-1 md:m-2 pointer-events-none"></div>
+                                    <div className="w-full aspect-[5/4] bg-black shadow-inner overflow-hidden border border-amber-900/50">
+                                        <img src={mockCollection[3]} alt="Collection item 4" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--theme-muted)', fontStyle: 'italic', marginTop: 12 }}>
+                                Showing curated sample masterworks. Partner collections upload interface coming soon.
                             </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
         </div>

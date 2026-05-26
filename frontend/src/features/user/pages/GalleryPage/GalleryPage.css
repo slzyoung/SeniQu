@@ -22,6 +22,13 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    cursor: pointer;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.vg-profile:hover {
+    opacity: 0.85;
+    transform: translateY(-1px);
 }
 
 .vg-avatar {
@@ -128,7 +135,79 @@
     border: none;
     cursor: pointer;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
 }
+
+.vg-filter-btn:active {
+    transform: scale(0.95);
+}
+
+.vg-filter-btn--active {
+    background-color: var(--text-gold, #C9A84C);
+    color: #121212;
+    box-shadow: 0 4px 14px rgba(201, 168, 76, 0.3);
+}
+
+/* Collapsible Filter Panel */
+.vg-filter-panel-container {
+    overflow: hidden;
+    padding: 0 20px;
+    margin-bottom: 24px;
+}
+
+.vg-filter-panel {
+    background-color: var(--theme-elevated);
+    border-radius: 20px;
+    padding: 16px;
+    border: 1px solid var(--theme-border);
+}
+
+.vg-filter-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.vg-filter-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--theme-muted);
+}
+
+.vg-filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-height: 120px;
+    overflow-y: auto;
+    padding-bottom: 4px;
+}
+
+.vg-filter-chip {
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 600;
+    background-color: var(--theme-surface);
+    color: var(--theme-text);
+    border: 1px solid var(--theme-border);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.vg-filter-chip:hover {
+    border-color: var(--text-gold, #C9A84C);
+}
+
+.vg-filter-chip--active {
+    background-color: var(--text-gold, #C9A84C);
+    color: #121212;
+    border-color: var(--text-gold, #C9A84C);
+    font-weight: 755;
+}
+
 
 /* Categories Area */
 .vg-categories {
@@ -319,4 +398,52 @@
         max-width: 1200px;
         margin: 0 auto;
     }
+}
+
+/* Horizontal sliders with hidden scrollbars */
+.vg-horizontal-slider {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding: 0 4px 12px;
+    scrollbar-width: none; /* Firefox */
+    -webkit-overflow-scrolling: touch;
+}
+.vg-horizontal-slider::-webkit-scrollbar {
+    display: none; /* Chrome/Safari/Edge */
+}
+
+/* Places Sub-Chips Filter Panel */
+.vg-sub-chips {
+    display: flex;
+    gap: 8px;
+    padding: 0 20px 16px;
+    margin-top: -8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+.vg-sub-chips::-webkit-scrollbar {
+    display: none;
+}
+.vg-sub-chip {
+    padding: 6px 14px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--theme-text-muted, #7c7c82);
+    background-color: var(--theme-surface);
+    border: 1px solid var(--theme-border);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.vg-sub-chip:hover {
+    color: var(--theme-text);
+    border-color: var(--theme-muted);
+}
+.vg-sub-chip--active {
+    color: var(--theme-text);
+    background-color: var(--theme-elevated);
+    border-color: var(--text-gold, #C9A84C);
 }

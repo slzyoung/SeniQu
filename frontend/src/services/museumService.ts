@@ -11,6 +11,8 @@ export interface MuseumSearchFilters {
     limit?: number;
     city?: string;
     type?: string;
+    search?: string;
+    verified?: boolean;
 }
 
 export interface NearbyFilters {
