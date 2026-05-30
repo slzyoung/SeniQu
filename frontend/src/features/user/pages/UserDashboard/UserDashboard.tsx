@@ -3,7 +3,7 @@
  * Immersive cultural heritage explorer with city-based navigation
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -158,10 +158,16 @@ function GalleryCard({
 
     return (
         <motion.div
-            className="heritage-gallery-card heritage-fade-in"
+            className="heritage-gallery-card"
             onClick={onClick}
-            style={{ animationDelay: `${index * 0.08}s` }}
-            whileHover={{ y: -3 }}
+            initial={{ opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{
+                duration: 0.6,
+                delay: index * 0.05,
+                ease: [0.16, 1, 0.3, 1]
+            }}
+            whileHover={{ y: -6, scale: 1.02 }}
         >
             <div className="heritage-gallery-card__img-wrap">
                 <img
@@ -200,6 +206,9 @@ export function UserDashboard() {
     const [direction, setDirection] = useState(1); // 1 for next, -1 for prev
 
     const PAGE_SIZE = 7;
+    const galleriesRef = useRef<HTMLDivElement>(null);
+    const [scrollProgress, setScrollProgress] = useState(0);
+    const [isPaused, setIsPaused] = useState(false);
 
     // Fetch real data from API
     const { data: museumsData, isLoading: museumsLoading } = useMuseums({ limit: 8 });
@@ -212,6 +221,49 @@ export function UserDashboard() {
         if (raw.data && Array.isArray(raw.data)) return raw.data;
         return extractArray(raw);
     }, [museumsData]);
+
+    // Auto-scroll galleries effect
+    useEffect(() => {
+        if (isPaused || museums.length === 0) return;
+
+        const interval = setInterval(() => {
+            if (galleriesRef.current) {
+                const container = galleriesRef.current;
+                const maxScroll = container.scrollWidth - container.clientWidth;
+                if (maxScroll <= 0) return;
+
+                if (container.scrollLeft >= maxScroll - 10) {
+                    container.scrollTo({ left: 0, behavior: 'smooth' });
+                } else {
+                    scrollGalleries('right');
+                }
+            }
+        }, 4000);
+
+        return () => clearInterval(interval);
+    }, [museums, isPaused]);
+
+    const handleGalleriesScroll = () => {
+        if (galleriesRef.current) {
+            const container = galleriesRef.current;
+            const maxScroll = container.scrollWidth - container.clientWidth;
+            if (maxScroll > 0) {
+                setScrollProgress(container.scrollLeft / maxScroll);
+            }
+        }
+    };
+
+    const scrollGalleries = (dir: 'left' | 'right') => {
+        if (galleriesRef.current) {
+            const container = galleriesRef.current;
+            const scrollAmount = 340; // Card width + gap
+            const targetScroll = container.scrollLeft + (dir === 'left' ? -scrollAmount : scrollAmount);
+            container.scrollTo({
+                left: targetScroll,
+                behavior: 'smooth'
+            });
+        }
+    };
 
     // Filter cities based on search (including regional keywords)
     const filteredCities = useMemo(() => {
@@ -437,16 +489,35 @@ export function UserDashboard() {
                         <p className="heritage-section__eyebrow">Handpicked</p>
                         <h2 className="heritage-section__title">Curated Galleries</h2>
                     </div>
-                    <button
-                        className="heritage-section__see-all"
-                        onClick={() => navigate(ROUTES.USER_GALLERY)}
-                    >
-                        View All <ChevronRight style={{ width: 14, height: 14 }} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {/* Scroll buttons */}
+                        <button
+                            onClick={() => scrollGalleries('left')}
+                            onMouseEnter={() => setIsPaused(true)}
+                            onMouseLeave={() => setIsPaused(false)}
+                            className="p-2 rounded-full border border-theme-border/60 text-theme-text/80 hover:text-gold hover:border-gold transition-all active:scale-95 cursor-pointer hidden sm:flex items-center justify-center bg-theme-surface/40 backdrop-blur-sm"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => scrollGalleries('right')}
+                            onMouseEnter={() => setIsPaused(true)}
+                            onMouseLeave={() => setIsPaused(false)}
+                            className="p-2 rounded-full border border-theme-border/60 text-theme-text/80 hover:text-gold hover:border-gold transition-all active:scale-95 cursor-pointer hidden sm:flex items-center justify-center bg-theme-surface/40 backdrop-blur-sm"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                        <button
+                            className="heritage-section__see-all ml-2"
+                            onClick={() => navigate(ROUTES.USER_GALLERY)}
+                        >
+                            View All <ChevronRight style={{ width: 14, height: 14 }} />
+                        </button>
+                    </div>
                 </div>
 
                 {museumsLoading ? (
-                    <div className="heritage-galleries">
+                    <div className="heritage-galleries" ref={galleriesRef}>
                         {[1, 2, 3].map((n) => (
                             <div
                                 key={n}
@@ -460,20 +531,38 @@ export function UserDashboard() {
                         ))}
                     </div>
                 ) : museums.length > 0 ? (
-                    <div className="heritage-galleries">
-                        {museums.slice(0, 6).map((museum: any, i: number) => (
-                            <GalleryCard
-                                key={museum.id || i}
-                                museum={museum}
-                                index={i}
-                                onClick={() =>
-                                    navigate(
-                                        `/gallery/museum/${museum.slug || museum.id}`
-                                    )
-                                }
-                            />
-                        ))}
-                    </div>
+                    <>
+                        <div 
+                            className="heritage-galleries" 
+                            ref={galleriesRef}
+                            onScroll={handleGalleriesScroll}
+                            onMouseEnter={() => setIsPaused(true)}
+                            onMouseLeave={() => setIsPaused(false)}
+                            onTouchStart={() => setIsPaused(true)}
+                        >
+                            {museums.slice(0, 8).map((museum: any, i: number) => (
+                                <GalleryCard
+                                    key={museum.id || i}
+                                    museum={museum}
+                                    index={i}
+                                    onClick={() =>
+                                        navigate(
+                                            `/gallery/museum/${museum.slug || museum.id}`
+                                        )
+                                    }
+                                />
+                            ))}
+                        </div>
+                        {/* Scroll Progress Bar */}
+                        <div className="w-full flex justify-center mt-2">
+                            <div className="w-24 h-1 bg-theme-text/10 rounded-full overflow-hidden">
+                                <div 
+                                    className="h-full bg-gold transition-all duration-100 ease-out rounded-full"
+                                    style={{ width: `${Math.max(12, scrollProgress * 100)}%` }}
+                                />
+                            </div>
+                        </div>
+                    </>
                 ) : (
                     <div className="heritage-empty">
                         <Landmark className="heritage-empty__icon" />

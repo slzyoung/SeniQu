@@ -124,6 +124,7 @@ export interface Address {
 // Museum & Gallery Types
 export interface Museum {
     id: string;
+    slug?: string;
     name: string;
     description: string;
     address: Address;

@@ -131,6 +131,7 @@ class MuseumService {
 
         return {
             id: data.id,
+            slug: data.slug,
             name: data.name,
             description: data.description,
             address: data.address || {

@@ -1847,11 +1847,19 @@ out center body;`;
      * Find museum by slug
      */
     async findBySlug(slug: string) {
-        const { data, error } = await this.supabase
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
+        
+        let query = this.supabase
             .from("institutions")
-            .select("*, owner:users!institutions_owner_id_fkey(id, display_name, avatar_url, is_verified)")
-            .eq("slug", slug)
-            .single()
+            .select("*, owner:users!institutions_owner_id_fkey(id, display_name, avatar_url, is_verified)");
+            
+        if (isUuid) {
+            query = query.or(`id.eq.${slug},slug.eq.${slug}`);
+        } else {
+            query = query.eq("slug", slug);
+        }
+
+        const { data, error } = await query.single();
 
         if (error || !data) {
             throw new NotFoundException(`Museum '${slug}' not found`)
@@ -1860,7 +1868,7 @@ out center body;`;
         // Increment visitor count
         await this.supabase
             .from("institutions")
-            .update({ total_visitors: data.total_visitors + 1 })
+            .update({ total_visitors: (data.total_visitors || 0) + 1 })
             .eq("id", data.id)
 
         return { data }

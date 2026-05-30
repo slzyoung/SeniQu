@@ -3,7 +3,7 @@
  * Uses real API data with useArtwork hook
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Outlet, useParams, Link, useNavigate } from 'react-router-dom';
 import { Navbar } from '../../components/Navbar';
 import { Footer } from '../../components/Footer';
@@ -28,11 +28,16 @@ import {
     Cpu,
     CheckCircle2,
     Wallet,
-    X
+    X,
+    MapPin,
+    BookOpen,
+    Star,
+    MessageCircle
 } from 'lucide-react';
 import { useArtwork, useArtworks } from '../../hooks/useArtworks';
 import { useMuseum } from '../../hooks/useMuseums';
 import { useAddBookmark } from '../../hooks/useUser';
+import { museumService } from '../../services/museumService';
 import { formatDate } from '../../lib/utils';
 import { motion } from 'framer-motion';
 
@@ -491,6 +496,22 @@ export function MuseumDetail() {
         limit: 100
     });
 
+    const [wikiData, setWikiData] = useState<any>(null);
+    const [wikiLoading, setWikiLoading] = useState(false);
+    const [placeDetails, setPlaceDetails] = useState<any>(null);
+    const [placeDetailsLoading, setPlaceDetailsLoading] = useState(false);
+
+    const [isFollowing, setIsFollowing] = useState(() => {
+        const key = `follow-museum-${id}`;
+        return localStorage.getItem(key) === 'true';
+    });
+
+    const handleToggleFollow = () => {
+        const next = !isFollowing;
+        setIsFollowing(next);
+        localStorage.setItem(`follow-museum-${id}`, String(next));
+    };
+
     // Dynamic metadata dictionary based on ID
     const MOCK_DATA: Record<string, any> = {
         'museum-nasional': {
@@ -535,6 +556,105 @@ export function MuseumDetail() {
         }
     };
 
+    const MASTERPIECE_COLLECTIONS: Record<string, any[]> = {
+        museum: [
+            {
+                id: 'fallback-m1',
+                title: 'Penangkapan Pangeran Diponegoro',
+                artist: { displayName: 'Raden Saleh' },
+                year: '1857',
+                medium: 'Oil on Canvas',
+                primary_image_url: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=800&q=80',
+                description: 'Karya historis legendaris menggambarkan pengkhianatan Belanda terhadap pemimpin gerilya Diponegoro.'
+            },
+            {
+                id: 'fallback-m2',
+                title: 'Self Portrait with Pipe',
+                artist: { displayName: 'Affandi' },
+                year: '1974',
+                medium: 'Oil on Canvas (Squeezed directly from tube)',
+                primary_image_url: 'https://images.unsplash.com/photo-1580136608260-4eb11f4b24fe?w=800&q=80',
+                description: 'Lukisan ekspresionis mahakarya Affandi memancarkan kejujuran spiritualitas kemanusiaan.'
+            },
+            {
+                id: 'fallback-m3',
+                title: 'Wayang Kulit Purwa - Bima Sena',
+                artist: { displayName: 'Kriya Sungging Kasongan' },
+                year: 'Abad 19',
+                medium: 'Buffalo Parchment & Gold Leaf',
+                primary_image_url: 'https://images.unsplash.com/photo-1578301978693-85fa9c026f47?w=800&q=80',
+                description: 'Kerajinan tatah sungging halus dengan lapisan prada emas menggambarkan karakter pewayangan legendaris.'
+            },
+            {
+                id: 'fallback-m4',
+                title: 'Mahkota Emas Kerajaan Banten',
+                artist: { displayName: 'Pandai Emas Banten Purba' },
+                year: 'Abad 17',
+                medium: 'Gold & Gemstones',
+                primary_image_url: 'https://images.unsplash.com/photo-1577083552431-6e5fd01988ec?w=800&q=80',
+                description: 'Mahkota emas peninggalan Kesultanan Banten yang melambangkan kekuasaan maritim.'
+            }
+        ],
+        gallery: [
+            {
+                id: 'fallback-g1',
+                title: 'Komposisi Bidang Tradisi Nusantara',
+                artist: { displayName: 'A.D. Pirous' },
+                year: '1998',
+                medium: 'Acrylic & Gold Foil on Canvas',
+                primary_image_url: 'https://images.unsplash.com/photo-1579541592065-da8a1fbfa40a?w=800&q=80',
+                description: 'Eksplorasi kaligrafi berpadu dengan ornamen etnik kebudayaan Nusantara.'
+            },
+            {
+                id: 'fallback-g2',
+                title: 'Batik Tulis Keraton Yogyakarta - Motif Sogan',
+                artist: { displayName: 'Abdi Dalem Kriya Batik' },
+                year: '1950',
+                medium: 'Natural Dyes on Primissima Cotton',
+                primary_image_url: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=800&q=80',
+                description: 'Batik motif sakral dengan pewarna alami sogan yang dikenakan oleh keluarga kerajaan.'
+            },
+            {
+                id: 'fallback-g3',
+                title: 'Ibu Menyusui Anak',
+                artist: { displayName: 'Hendra Gunawan' },
+                year: '1970',
+                medium: 'Oil on Canvas',
+                primary_image_url: 'https://images.unsplash.com/photo-1580136608260-4eb11f4b24fe?w=800&q=80',
+                description: 'Refleksi perjuangan kasih sayang ibu rakyat jelata dalam sapuan warna cerah dramatis.'
+            }
+        ],
+        heritage: [
+            {
+                id: 'fallback-h1',
+                title: 'Pusaka Keris Jawa - Dapur Sengkelat Luk 13',
+                artist: { displayName: 'Mpu Supa Mandagri (Era Majapahit)' },
+                year: 'Abad 15',
+                medium: 'Iron, Nickel Meteorite & Teak Wood',
+                primary_image_url: 'https://images.unsplash.com/photo-1577083552431-6e5fd01988ec?w=800&q=80',
+                description: 'Karya tempa logam sakral dengan pamor meteorit wos wutah perlambang kemakmuran.'
+            },
+            {
+                id: 'fallback-h2',
+                title: 'Patung Dewa Wisnu Mengendarai Garuda',
+                artist: { displayName: 'I Nyoman Nuarta' },
+                year: '2018',
+                medium: 'Copper & Brass Alloy',
+                primary_image_url: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800&q=80',
+                description: 'Representasi ikonik GWK Bali yang mencerminkan dedikasi seni pahat raksasa modern.'
+            },
+            {
+                id: 'fallback-h3',
+                title: 'Relif Penobatan Raja Candi Borobudur',
+                artist: { displayName: 'Pahat Kuno Sailendra' },
+                year: 'Abad 8',
+                medium: 'Andesite Stone',
+                primary_image_url: 'https://images.unsplash.com/photo-1596402184320-417e7178b2cd?w=800&q=80',
+                description: 'Relif batu andesit menceritakan perjalanan spritual Siddhartha Gautama.'
+            }
+        ]
+    };
+
     const mockData = MOCK_DATA[id || ''] || {
         name: 'NATIONAL GALLERY',
         location: 'Washington DC, United States',
@@ -545,10 +665,9 @@ export function MuseumDetail() {
     };
 
     // Combine database data and mock fallback
-    const museumName = dbMuseum?.name || mockData.name;
-    const museumLocation = dbMuseum?.address 
-        ? `${dbMuseum.address.city}, ${dbMuseum.address.province || 'Indonesia'}`
-        : mockData.location;
+    const museumName = dbMuseum?.name || placeDetails?.name || mockData.name;
+    const museumLocation = placeDetails?.address || 
+                           (dbMuseum ? `${dbMuseum.city || ''}, ${dbMuseum.province || 'Indonesia'}`.replace(/^,\s*/, '') : mockData.location);
     const descriptionStart = dbMuseum?.description 
         ? dbMuseum.description.substring(0, 150)
         : mockData.descStart;
@@ -556,7 +675,54 @@ export function MuseumDetail() {
         ? dbMuseum.description.substring(150)
         : mockData.descMore;
     const museumInitial = museumName ? museumName.charAt(0).toUpperCase() : 'M';
-    const coverImage = dbMuseum?.images?.[0] || mockData.coverImage;
+
+    const coverImage = placeDetails?.photos?.[0] || 
+                       dbMuseum?.cover_image_url || 
+                       (dbMuseum?.images && dbMuseum.images.length > 0 ? dbMuseum.images[0] : null) || 
+                       wikiData?.thumbnail || 
+                       mockData.coverImage;
+
+    // Load Wikipedia history and Google Place details
+    useEffect(() => {
+        if (!dbMuseum) return;
+
+        const fetchWiki = async () => {
+            setWikiLoading(true);
+            try {
+                const res = await museumService.getWikipediaSummary(dbMuseum.name);
+                if (res && res.extract) {
+                    setWikiData(res);
+                }
+            } catch (error) {
+                console.error('[WIKI_FETCH] Error:', error);
+            } finally {
+                setWikiLoading(false);
+            }
+        };
+
+        const fetchPlaceDetails = async () => {
+            const googlePlaceId = dbMuseum.slug?.startsWith('g-') 
+                ? dbMuseum.slug.substring(2) 
+                : (dbMuseum.id?.startsWith('g-') ? dbMuseum.id.substring(2) : null);
+            
+            if (googlePlaceId) {
+                setPlaceDetailsLoading(true);
+                try {
+                    const details = await museumService.getPlaceDetails(googlePlaceId);
+                    if (details) {
+                        setPlaceDetails(details);
+                    }
+                } catch (error) {
+                    console.error('[PLACE_DETAILS_FETCH] Error:', error);
+                } finally {
+                    setPlaceDetailsLoading(false);
+                }
+            }
+        };
+
+        fetchWiki();
+        fetchPlaceDetails();
+    }, [dbMuseum]);
 
     const allArtworks = useMemo(() => {
         if (!artworksData) return [];
@@ -583,12 +749,12 @@ export function MuseumDetail() {
         });
     }, [allArtworks, id, museumName]);
 
-    const mockCollection = [
-        "https://images.unsplash.com/photo-1580136608260-4eb11f4b24fe?w=500&q=80",
-        "https://images.unsplash.com/photo-1577083552431-6e5fd01988ec?w=500&q=80",
-        "https://images.unsplash.com/photo-1579541592065-da8a1fbfa40a?w=500&q=80",
-        "https://images.unsplash.com/photo-1578301978693-85fa9c026f47?w=500&q=80"
-    ];
+    const category = (dbMuseum?.type || 'museum').toLowerCase();
+    const fallbackArtworks = MASTERPIECE_COLLECTIONS[category] || MASTERPIECE_COLLECTIONS.museum;
+
+    const displayArtworks = museumArtworks.length > 0 ? museumArtworks : fallbackArtworks;
+
+    const reviewsList = placeDetails?.reviews || dbMuseum?.reviews || [];
 
     if (museumLoading) {
         return (
@@ -600,6 +766,26 @@ export function MuseumDetail() {
 
     return (
         <div className="relative min-h-screen bg-[#EBEAE4] dark:bg-[#1a1a1a] text-[#1a1a1a] dark:text-[#EBEAE4] font-sans overflow-x-hidden" style={{ margin: '-2rem -1rem', paddingBottom: '5rem' }}>
+            {/* Custom style for double borders */}
+            <style>{`
+                .vintage-double-border {
+                    border: 8px solid #b38646;
+                    outline: 2px solid #5a3c1b;
+                    outline-offset: -5px;
+                    box-shadow: 
+                        0 8px 16px rgba(0,0,0,0.4), 
+                        inset 0 0 12px rgba(0,0,0,0.6);
+                    background-color: #211c14;
+                    padding: 6px;
+                }
+                .label-plate {
+                    background: linear-gradient(135deg, #FAF8F5 0%, #EBE7E0 100%);
+                    border: 1px solid #c3b7a7;
+                    border-bottom: 2px solid #a3927d;
+                    box-shadow: inset 0 1px 0 white, 0 2px 4px rgba(0,0,0,0.06);
+                }
+            `}</style>
+
             {/* Top Actions */}
             <div className="absolute top-12 md:top-16 inset-x-0 z-40 flex items-center justify-between px-6 max-w-lg mx-auto md:max-w-4xl">
                 <button onClick={() => navigate(-1)} className="p-2 rounded-full text-white bg-black/30 hover:bg-black/50 backdrop-blur-md transition-colors">
@@ -609,9 +795,25 @@ export function MuseumDetail() {
                     <button className="p-2 rounded-full text-white bg-black/30 hover:bg-black/50 backdrop-blur-md transition-colors">
                         <Upload className="w-5 h-5" />
                     </button>
-                    <button className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-black dark:bg-[#EBEAE4] text-white dark:text-black font-semibold text-sm hover:scale-105 transition-transform shadow-lg">
-                        <Plus className="w-4 h-4" />
-                        Follow
+                    <button 
+                        onClick={handleToggleFollow}
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-full font-semibold text-sm hover:scale-105 transition-all shadow-lg ${
+                            isFollowing 
+                                ? 'bg-gold text-black border border-gold' 
+                                : 'bg-black dark:bg-[#EBEAE4] text-white dark:text-black'
+                        }`}
+                    >
+                        {isFollowing ? (
+                            <>
+                                <CheckCircle2 className="w-4 h-4 text-black" />
+                                Following
+                            </>
+                        ) : (
+                            <>
+                                <Plus className="w-4 h-4" />
+                                Follow
+                            </>
+                        )}
                     </button>
                 </div>
             </div>
@@ -622,7 +824,11 @@ export function MuseumDetail() {
                     <img 
                         src={coverImage} 
                         alt={museumName} 
-                        className="w-full h-full object-cover object-center opacity-80"
+                        className="w-full h-full object-cover object-center opacity-85 transition-opacity duration-300"
+                        onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = 'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?q=80&w=1200';
+                        }}
                     />
                     <div className="absolute inset-0 bg-black/20 pointer-events-none" />
                     
@@ -644,29 +850,69 @@ export function MuseumDetail() {
                 </div>
 
                 {/* Museum Info */}
-                <div className="pt-16 px-6 md:px-12 text-center pb-8">
-                    <h1 className="text-3xl sm:text-4xl md:text-6xl text-center px-4 font-serif font-medium uppercase tracking-[0.08em] flex flex-col items-center justify-center -ml-1 text-[#1a1a1a] dark:text-[#EBEAE4]">
-                        <span>{museumName.split(' ')[0]}</span>
-                        <div className="flex items-center">
-                            <span>{museumName.split(' ').slice(1).join(' ')}</span>
-                        </div>
+                <div className="pt-16 px-6 md:px-12 text-center pb-6">
+                    <h1 className="text-2xl sm:text-3xl md:text-5xl text-center px-4 font-serif font-bold uppercase tracking-[0.08em] flex flex-col items-center justify-center text-[#1a1a1a] dark:text-[#EBEAE4] leading-tight">
+                        {museumName}
                     </h1>
                     
-                    <p className="mt-4 text-sm md:text-base font-semibold text-stone-600 dark:text-stone-400">
-                        {museumLocation}
+                    <p className="mt-4 text-sm md:text-base font-semibold text-stone-600 dark:text-stone-400 flex items-center justify-center gap-1.5">
+                        <MapPin className="w-4 h-4 text-gold shrink-0" />
+                        <span>{museumLocation}</span>
                     </p>
 
-                    <p className="mt-6 text-[15px] md:text-lg leading-relaxed text-stone-700 dark:text-stone-300 max-w-sm md:max-w-2xl mx-auto font-serif font-light">
-                        {descriptionStart}
-                        {!expandedText && descriptionMore && (
-                            <button onClick={() => setExpandedText(true)} className="ml-1 font-bold italic underline decoration-1 underline-offset-2">
-                                ..More
-                            </button>
-                        )}
-                        {expandedText && (
-                            <span>{descriptionMore}</span>
-                        )}
-                    </p>
+                    {/* Google Ratings Stars */}
+                    {(placeDetails?.rating || dbMuseum?.rating) && (
+                        <div className="flex items-center justify-center gap-1 mt-3">
+                            <span className="text-sm font-bold text-stone-700 dark:text-stone-300">
+                                {Number(placeDetails?.rating || dbMuseum?.rating).toFixed(1)}
+                            </span>
+                            <div className="flex items-center gap-0.5">
+                                {Array.from({ length: 5 }).map((_, si) => {
+                                    const ratingValue = placeDetails?.rating || dbMuseum?.rating || 0;
+                                    return (
+                                        <Star
+                                            key={si}
+                                            className={`w-3.5 h-3.5 ${si < Math.round(ratingValue) ? 'fill-gold text-gold' : 'text-stone-300 dark:text-stone-700'}`}
+                                        />
+                                    );
+                                })}
+                            </div>
+                            {(placeDetails?.reviewCount || dbMuseum?.total_ratings !== undefined) && (
+                                <span className="text-xs text-stone-500 dark:text-stone-400 ml-1">
+                                    ({placeDetails?.reviewCount || dbMuseum?.total_ratings || 0} ulasan)
+                                </span>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Wikipedia / DB History Info */}
+                    {wikiLoading ? (
+                        <div className="flex items-center gap-2 py-8 justify-center">
+                            <Loader2 className="w-4.5 h-4.5 text-gold animate-spin shrink-0" />
+                            <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">Memuat sejarah singkat dari Wikipedia...</p>
+                        </div>
+                    ) : (
+                        <div className="mt-6 text-left pt-5 border-t border-stone-200 dark:border-stone-800 max-w-sm md:max-w-2xl mx-auto flex flex-col gap-2">
+                            <h3 className="text-xs font-bold tracking-wider uppercase mb-1 flex items-center gap-1.5 text-stone-700 dark:text-stone-300">
+                                <BookOpen className="w-4.5 h-4.5 text-gold" />
+                                Deskripsi & Sejarah Singkat
+                            </h3>
+                            <p className="text-sm leading-relaxed text-stone-700 dark:text-stone-300 font-serif text-justify leading-relaxed">
+                                {wikiData?.extract || dbMuseum?.description || placeDetails?.description || mockData.descStart}
+                            </p>
+                            {wikiData?.url && (
+                                <a 
+                                    href={wikiData.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="mt-1 text-blue-500 hover:underline inline-flex items-center gap-0.5 text-xs font-bold"
+                                >
+                                    Baca Selengkapnya di Wikipedia
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Decorative Divider */}
@@ -681,99 +927,118 @@ export function MuseumDetail() {
 
                 {/* Collection Section */}
                 <div className="px-6 md:px-12 py-8 mt-2">
-                    <div className="flex items-center justify-between mb-8 text-[#1a1a1a] dark:text-[#EBEAE4]">
-                        <h2 className="text-2xl md:text-3xl font-serif uppercase tracking-[0.1em]">
-                            The Collection
+                    <div className="flex items-center justify-between mb-6 text-[#1a1a1a] dark:text-[#EBEAE4]">
+                        <h2 className="text-xl md:text-2xl font-serif uppercase tracking-[0.1em]">
+                            THE COLLECTION
                         </h2>
                         {museumArtworks.length > 0 && (
                             <span className="text-xs text-stone-500 dark:text-stone-400 font-serif">
-                                {museumArtworks.length} Masterpieces managed by Partner
+                                {museumArtworks.length} Karya terunggah
                             </span>
                         )}
                     </div>
+                    
+                    <p className="text-xs text-stone-500 dark:text-stone-400 mb-6 -mt-4 leading-normal">
+                        Daftar karya/artefak terunggah yang dikelola mandiri oleh masing-masing pengelola museum via CDN Storage R2.
+                    </p>
 
-                    {museumArtworks.length > 0 ? (
-                        <div className="grid grid-cols-2 gap-6 md:gap-10">
-                            {museumArtworks.map((art: any, idx: number) => {
-                                const artworkImg = getArtworkImage(art);
-                                const isOffset = idx % 2 === 1;
-                                return (
-                                    <motion.div
-                                        key={art.id || idx}
-                                        className={`w-full ${isOffset ? 'md:mt-16' : ''}`}
-                                        style={{ cursor: 'pointer' }}
-                                        whileHover={{ y: -4 }}
-                                        onClick={() => navigate(`/gallery/artwork/${art.id}`)}
-                                    >
-                                        <div 
-                                            className="w-full relative shadow-xl p-3 md:p-5 bg-[#CBA36D]" 
-                                            style={{ boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5), 0 15px 25px rgba(0,0,0,0.2)' }}
-                                        >
-                                            <div className="absolute inset-0 border border-yellow-900/60 m-1 md:m-2 pointer-events-none"></div>
-                                            <div className="w-full aspect-[4/5] bg-black shadow-inner overflow-hidden border border-amber-900/50">
-                                                <img 
-                                                    src={artworkImg} 
-                                                    alt={art.title} 
-                                                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" 
-                                                />
-                                            </div>
+                    <div className="grid grid-cols-2 gap-4 md:gap-8">
+                        {displayArtworks.map((art: any, idx: number) => {
+                            const isReal = museumArtworks.length > 0;
+                            const isOffset = idx % 2 === 1;
+                            
+                            return (
+                                <motion.div
+                                    key={art.id || idx}
+                                    className={`w-full vintage-double-border flex flex-col justify-between ${isOffset ? 'md:mt-12' : ''}`}
+                                    style={{ cursor: isReal ? 'pointer' : 'default' }}
+                                    whileHover={isReal ? { y: -4 } : {}}
+                                    onClick={() => isReal && navigate(`/gallery/artwork/${art.id}`)}
+                                >
+                                    {/* Inner canvas box */}
+                                    <div className="w-full aspect-[4/3] bg-black shadow-inner overflow-hidden border border-amber-900/60 rounded mb-2">
+                                        <img 
+                                            src={art.primary_image_url || art.cover_image_url} 
+                                            alt={art.title} 
+                                            className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                                            onError={(e) => {
+                                                e.currentTarget.onerror = null;
+                                                e.currentTarget.src = 'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?q=80&w=600';
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Brass/paper label plate */}
+                                    <div className="label-plate p-2 rounded text-[#2c2720] flex flex-col">
+                                        <h4 className="text-[10px] font-bold font-serif line-clamp-1 uppercase tracking-tight">
+                                            {art.title}
+                                        </h4>
+                                        <p className="text-[9px] text-stone-600 truncate mt-0.5">
+                                            Oleh: {art.artist?.displayName || art.artist?.display_name || 'Unknown Artist'}
+                                        </p>
+                                        <div className="flex items-center justify-between text-[7px] text-stone-500 font-bold mt-1.5 pt-1 border-t border-stone-300/60">
+                                            <span>Medium: {art.medium ? art.medium.split(' ')[0] : 'N/A'}</span>
+                                            <span>Tahun: {art.year || 'N/A'}</span>
                                         </div>
-                                        
-                                        {/* Elegant label below the frame */}
-                                        <div style={{ marginTop: 12, padding: '0 4px', textAlign: 'center' }}>
-                                            <h4 style={{ fontSize: 14, fontWeight: 700, fontFamily: 'serif', margin: 0, lineClamp: 1, WebkitLineClamp: 1, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                                                {art.title}
-                                            </h4>
-                                            <p style={{ fontSize: 11, color: 'var(--theme-muted)', margin: '2px 0 0 0' }}>
-                                                {art.artist?.displayName || 'Unknown Artist'}
-                                                {art.year ? `, ${art.year}` : ''}
-                                            </p>
-                                        </div>
-                                    </motion.div>
-                                );
-                            })}
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                            <div className="grid grid-cols-2 gap-4 md:gap-8">
-                                {/* Frame 1 */}
-                                <div className="w-full relative shadow-xl p-3 md:p-5 bg-[#CBA36D]" style={{ boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5), 0 15px 25px rgba(0,0,0,0.2)' }}>
-                                    <div className="absolute inset-0 border border-yellow-900/60 m-1 md:m-2 pointer-events-none"></div>
-                                    <div className="w-full aspect-[5/4] bg-black shadow-inner overflow-hidden border border-amber-900/50">
-                                        <img src={mockCollection[0]} alt="Collection item 1" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
                                     </div>
-                                </div>
-
-                                {/* Frame 2 - Offset */}
-                                <div className="w-full relative shadow-xl p-3 md:p-5 md:mt-16 bg-[#CBA36D]" style={{ boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5), 0 15px 25px rgba(0,0,0,0.2)' }}>
-                                    <div className="absolute inset-0 border border-yellow-900/60 m-1 md:m-2 pointer-events-none"></div>
-                                    <div className="w-full aspect-[3/4] bg-black shadow-inner overflow-hidden border border-amber-900/50">
-                                        <img src={mockCollection[1]} alt="Collection item 2" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
-                                    </div>
-                                </div>
-
-                                {/* Frame 3 */}
-                                <div className="w-full relative shadow-xl p-3 md:p-5 bg-[#CBA36D]" style={{ boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5), 0 15px 25px rgba(0,0,0,0.2)' }}>
-                                    <div className="absolute inset-0 border border-yellow-900/60 m-1 md:m-2 pointer-events-none"></div>
-                                    <div className="w-full aspect-[3/4] bg-black shadow-inner overflow-hidden border border-amber-900/50">
-                                        <img src={mockCollection[2]} alt="Collection item 3" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
-                                    </div>
-                                </div>
-
-                                {/* Frame 4 - Offset */}
-                                <div className="w-full relative shadow-xl p-3 md:p-5 md:mt-16 bg-[#CBA36D]" style={{ boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5), 0 15px 25px rgba(0,0,0,0.2)' }}>
-                                    <div className="absolute inset-0 border border-yellow-900/60 m-1 md:m-2 pointer-events-none"></div>
-                                    <div className="w-full aspect-[5/4] bg-black shadow-inner overflow-hidden border border-amber-900/50">
-                                        <img src={mockCollection[3]} alt="Collection item 4" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
-                                    </div>
-                                </div>
-                            </div>
-                            <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--theme-muted)', fontStyle: 'italic', marginTop: 12 }}>
-                                Showing curated sample masterworks. Partner collections upload interface coming soon.
-                            </div>
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+                    
+                    {!museumArtworks.length && (
+                        <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--theme-muted)', fontStyle: 'italic', marginTop: 24 }}>
+                            Menampilkan sampel karya kurasi. Halaman unggah koleksi mitra akan segera hadir.
                         </div>
                     )}
                 </div>
+
+                {/* Reviews Section */}
+                {reviewsList.length > 0 && (
+                    <div className="px-6 md:px-12 py-8 mt-4 border-t border-stone-200 dark:border-stone-800">
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-lg md:text-xl font-serif uppercase tracking-[0.1em] flex items-center gap-1.5 text-stone-800 dark:text-stone-200">
+                                <MessageCircle className="w-5 h-5 text-gold" />
+                                Ulasan Google Maps
+                            </h3>
+                        </div>
+                        <p className="text-xs text-stone-500 dark:text-stone-400 mb-6">
+                            Pendapat langsung dari pengunjung di Google Maps.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-stone-300 dark:scrollbar-thumb-stone-700 scrollbar-track-transparent">
+                            {reviewsList.map((review: any, i: number) => (
+                                <div 
+                                    key={i} 
+                                    className="p-4 rounded-2xl bg-white/40 dark:bg-white/5 border border-stone-200 dark:border-stone-800 flex flex-col gap-2 shadow-sm"
+                                >
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-xs font-bold text-stone-800 dark:text-stone-200">
+                                            {review.author || review.author_name}
+                                        </span>
+                                        <span className="text-[10px] text-stone-500">
+                                            {review.time || review.relative_time_description || 'Baru-baru ini'}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-0.5">
+                                        {Array.from({ length: 5 }).map((_, si) => (
+                                            <Star
+                                                key={si}
+                                                className={`w-3.5 h-3.5 ${si < review.rating ? 'fill-gold text-gold' : 'text-stone-200 dark:text-stone-800'}`}
+                                            />
+                                        ))}
+                                    </div>
+
+                                    {review.text && (
+                                        <p className="text-xs text-stone-700 dark:text-stone-300 leading-relaxed text-justify">
+                                            {review.text}
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
