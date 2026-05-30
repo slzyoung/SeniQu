@@ -53,9 +53,14 @@ export const PlaceDetailsView: React.FC<PlaceDetailsViewProps> = ({
             {/* Photo Cover Banner */}
             <div className="relative h-60 w-full overflow-hidden bg-black">
                 <img 
-                    src={selectedPlace.cover_image_url || (selectedPlace.photos && selectedPlace.photos[0]) || 'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?w=800&q=80'} 
+                    src={
+                        selectedPlace.cover_image_url || 
+                        (selectedPlace.photos && typeof selectedPlace.photos[0] === 'string' ? selectedPlace.photos[0] : null) || 
+                        wikiDataMap[selectedPlace.id]?.thumbnail ||
+                        'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?w=800&q=80'
+                    } 
                     alt={selectedPlace.name} 
-                    className="w-full h-full object-cover opacity-80"
+                    className="w-full h-full object-cover opacity-85 transition-opacity duration-300"
                     onError={(e) => {
                         e.currentTarget.onerror = null;
                         e.currentTarget.src = '/images/museum/museumnasionalindonesia.png';
@@ -104,8 +109,31 @@ export const PlaceDetailsView: React.FC<PlaceDetailsViewProps> = ({
 
             {/* Floating Initial Avatar Badge */}
             <div className="flex justify-center -mt-10 relative z-20">
-                <div className="w-20 h-20 rounded-full border-4 border-[#121214] bg-charcoal dark:bg-zinc-800 text-white font-serif text-3xl font-bold flex items-center justify-center shadow-lg">
-                    {selectedPlace.name ? selectedPlace.name.charAt(0) : 'M'}
+                <div className="w-20 h-20 rounded-full border-4 border-[#121214] bg-charcoal dark:bg-zinc-800 text-white font-serif text-3xl font-bold flex items-center justify-center shadow-lg overflow-hidden">
+                    {selectedPlace.cover_image_url || (selectedPlace.photos && typeof selectedPlace.photos[0] === 'string' ? selectedPlace.photos[0] : null) || wikiDataMap[selectedPlace.id]?.thumbnail ? (
+                        <img 
+                            src={
+                                selectedPlace.cover_image_url || 
+                                (selectedPlace.photos && typeof selectedPlace.photos[0] === 'string' ? selectedPlace.photos[0] : null) || 
+                                wikiDataMap[selectedPlace.id]?.thumbnail
+                            }
+                            alt={selectedPlace.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                const fallbackEl = e.currentTarget.parentElement?.querySelector('.fallback-initial');
+                                if (fallbackEl) {
+                                    (fallbackEl as HTMLElement).style.display = 'flex';
+                                }
+                            }}
+                        />
+                    ) : null}
+                    <span 
+                        className="fallback-initial w-full h-full items-center justify-center font-serif text-3xl font-bold bg-charcoal dark:bg-zinc-800"
+                        style={{ display: (selectedPlace.cover_image_url || (selectedPlace.photos && typeof selectedPlace.photos[0] === 'string' ? selectedPlace.photos[0] : null) || wikiDataMap[selectedPlace.id]?.thumbnail) ? 'none' : 'flex' }}
+                    >
+                        {selectedPlace.name ? selectedPlace.name.charAt(0) : 'M'}
+                    </span>
                 </div>
             </div>
 

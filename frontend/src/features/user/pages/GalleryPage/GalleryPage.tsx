@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -93,10 +93,17 @@ export function GalleryPage() {
     // ====== FILTER & VIEW STATES ======
     const [activeCategory, setActiveCategory] = useState('exhibition');
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedCity, setSelectedCity] = useState('');
+    const [selectedCity, setSelectedCity] = useState(user ? 'Jakarta' : '');
     const [showFilterPanel, setShowFilterPanel] = useState(false);
     const [expandedMuseumCities, setExpandedMuseumCities] = useState<Record<string, boolean>>({});
     const [expandedGalleryCities, setExpandedGalleryCities] = useState<Record<string, boolean>>({});
+
+    // Sync selectedCity to 'Jakarta' when logged in user is hydrated/loaded
+    useEffect(() => {
+        if (user && !selectedCity) {
+            setSelectedCity('Jakarta');
+        }
+    }, [user, selectedCity]);
 
     // ====== DATA QUERIES ======
     const { data: museumData, isLoading: museumsLoading } = useMuseums({
@@ -315,12 +322,14 @@ export function GalleryPage() {
                             <div className="vg-filter-section">
                                 <span className="vg-filter-title">Filter by City / Region</span>
                                 <div className="vg-filter-chips">
-                                    <button
-                                        className={`vg-filter-chip ${selectedCity === '' ? 'vg-filter-chip--active' : ''}`}
-                                        onClick={() => setSelectedCity('')}
-                                    >
-                                        All Cities
-                                    </button>
+                                    {!user && (
+                                        <button
+                                            className={`vg-filter-chip ${selectedCity === '' ? 'vg-filter-chip--active' : ''}`}
+                                            onClick={() => setSelectedCity('')}
+                                        >
+                                            All Cities
+                                        </button>
+                                    )}
                                     {Object.entries(CITY_WHITELIST).map(([key, city]) => (
                                         <button
                                             key={key}

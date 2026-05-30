@@ -338,7 +338,9 @@ export function CityRegions() {
         const counts = { museum: 0, gallery: 0, heritage: 0 };
         regionPlaces.forEach(place => {
             const category = classifyPlace(place);
-            counts[category]++;
+            if (category) {
+                counts[category]++;
+            }
         });
         return counts;
     }, [regionPlaces]);

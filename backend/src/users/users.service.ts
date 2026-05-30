@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger, Inject, forwardRef } from "@nestjs/common"
+import { Injectable, NotFoundException, ConflictException, Logger, Inject, forwardRef } from "@nestjs/common"
 import { DatabaseService } from "../database/database.service"
 import { CreateUserDto } from "./dto/create-user.dto"
 import { UpdateUserDto } from "./dto/update-user.dto"
@@ -225,6 +225,10 @@ export class UsersService {
             .single()
 
         if (error) {
+            // Detect duplicate username constraint violation
+            if (error.message?.includes('users_username_key') || error.code === '23505') {
+                throw new ConflictException('Username is already taken. Please choose a different one.')
+            }
             throw new Error(error.message)
         }
         

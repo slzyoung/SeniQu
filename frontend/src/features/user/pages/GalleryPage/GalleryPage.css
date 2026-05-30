@@ -178,11 +178,16 @@
 
 .vg-filter-chips {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 8px;
-    max-height: 120px;
-    overflow-y: auto;
-    padding-bottom: 4px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+.vg-filter-chips::-webkit-scrollbar {
+    display: none;
 }
 
 .vg-filter-chip {

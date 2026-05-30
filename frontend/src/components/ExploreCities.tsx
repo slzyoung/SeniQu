@@ -140,18 +140,25 @@ export function ExploreCities() {
                 key={city.id}
                 city={city}
                 index={i}
-                onClick={() => {
-                  if (isAuthenticated) {
-                    navigate(`/gallery/city/${city.id}`);
-                  } else {
-                    openAuthModal();
-                  }
-                }}
+                onClick={() => navigate(`/gallery/city/${city.id}`)}
               />
             ))}
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* Guest: Explore More CTA */}
+      {!isAuthenticated && HERITAGE_CITIES.length > PAGE_SIZE && (
+        <div className="flex justify-center mt-6">
+          <button
+            onClick={() => openAuthModal()}
+            className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-medium tracking-wide text-gold/80 hover:text-gold border border-gold/20 hover:border-gold/40 bg-transparent hover:bg-gold/[0.05] transition-all duration-200 active:scale-[0.97] cursor-pointer"
+          >
+            Explore More
+            <ChevronRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
+          </button>
+        </div>
+      )}
 
       {/* Elegant mobile-first Pagination controls for showing 7 cities at a time */}
       {isAuthenticated && pageCount > 1 && (

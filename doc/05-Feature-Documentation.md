@@ -16,6 +16,7 @@ Accessible to all visitors.
   - **Expandable Filter Panel**: Collapsible panel with three filter dimensions — **Era/Period** (Pre-Historic, Hindu-Buddhist, Islamic Sultanate, Colonial, Post-Independence, Contemporary), **Medium/Material** (Canvas, Batik Textile, Wood Carving, Wayang Kulit, Stone Relic, Digital Art), and **Origin Region** (Sumatra, Java, Kalimantan, Sulawesi, Nusa Tenggara, Papua, Bali).
   - **Active Filter Pills**: When the filter panel is collapsed, active filters appear as dismissible gold pill tags below the toolbar.
   - **Filter Count Badge**: The Filters button displays a real-time count of active filter dimensions.
+  - **Gallery Page City Filter Optimization**: For logged-in users, the 'All Cities' option is hidden to enforce localized cultural exploration, defaulting the active city filter initially to 'Jakarta'. The filter chips are redesigned as a nowrap, horizontally scrollable slider to optimize screen real estate on mobile viewports and provide a premium interactive feel.
 - **Museum & Gallery Geolocation**: Dedicated pages for 450+ institutions to showcase their collections, exhibition hours, and physical locations.
 - **Artwork Deep-Dive** (`ArtworkView`):
   - **AI Genre & Style Insights Panel**: Computer vision pipeline classification with animated confidence progress bars (e.g., `Modernism 94%`, `Expressionism 78%`).

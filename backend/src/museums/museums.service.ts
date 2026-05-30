@@ -1009,15 +1009,17 @@ out center body;`;
      */
     private isGenuineHeritage(name: string, types: string[], rating?: number, reviewCount?: number): boolean {
         const nameLower = name.toLowerCase();
-        const safeRating = rating || 0;
         const safeReviews = reviewCount || 0;
 
-        // 1. Strict name exclusions for local community infrastructure & minor places
+        // 1. Strict name exclusions for local community infrastructure, transit, and minor places
         const badHeritageNameKeywords = [
             'mushola', 'musholla', 'langgar', 'pos ronda', 'pos kamling', 
             'panti asuhan', 'sekolah', ' sd', ' smp', ' sma', ' smk', ' tk ', 'paud', 
             'polsek', 'koramil', 'bengkel', 'laundry', 'salon', 'spa', 'apotek', 'klinik', 'puskesmas',
-            'lapangan bulutangkis', 'lapangan tenis', 'lapangan voli'
+            'lapangan bulutangkis', 'lapangan tenis', 'lapangan voli', 'lapangan futsal', 'gym', 'fitness',
+            'stasiun', 'station', 'halte', 'terminal', 'bandara', 'airport', 'mrt', 'lrt', 'krl', 'kereta', 'bus', 'pelabuhan', 'port', 'shelter',
+            'kantor', 'office', 'desa', 'kelurahan', 'kecamatan', 'kabupaten', 'rt ', 'rw ',
+            'universitas', 'kampus', 'ugm', 'itb', 'ui ', 'undip', 'unpad', 'unair'
         ];
         if (badHeritageNameKeywords.some(keyword => nameLower.includes(keyword))) {
             return false;
@@ -1028,31 +1030,45 @@ out center body;`;
             || nameLower.includes('masjid') || nameLower.includes('gereja') || nameLower.includes('candi') || nameLower.includes('wihara') || nameLower.includes('klenteng');
             
         if (isReligiousPlace) {
-            // A famous/historical religious site will have a decent review count or rating.
-            // Minor local mosques/churches have very few reviews (less than 15).
-            // Candi (temples) are usually always heritage, so we exclude "candi" from this strict check.
             const isHistoricalWord = nameLower.includes('candi') || nameLower.includes('agung') || nameLower.includes('gedhe') || nameLower.includes('historical') || nameLower.includes('heritage') || nameLower.includes('katedral') || nameLower.includes('cathedral');
             if (!isHistoricalWord && safeReviews < 15) {
                 return false;
             }
         }
 
-        // 3. Filter out commercial shops, restaurants, cafes, hotels from heritage list
-        // Unless they are famous heritage spots (e.g. have >= 50 reviews or contain "heritage", "historical", "situs", "monumen")
+        // 3. Filter out commercial shops, restaurants, cafes, hotels, resorts, villas from heritage list
+        // Exception ONLY if it has strong historical tags AND is verified famous
         const badCommercialKeywords = [
-            'hotel', 'resort', 'homestay', 'home stay', 'guesthouse', 'guest house', 'villa', 'hostel',
-            'cafe', 'coffee', 'kopi', 'resto', 'restaurant', 'warung', 'rumah makan', 
-            'toko', 'shop', 'boutique', 'butik', 'mall', 'furniture', 'decor', 'decorating', 
-            'wedding', 'sewa', 'rent', 'rental', 'bengkel', 'laundry'
+            'hotel', 'resort', 'homestay', 'home stay', 'guesthouse', 'guest house', 'villa', 'hostel', 'lodging', 'inn',
+            'cafe', 'coffee', 'kopi', 'resto', 'restaurant', 'warung', 'rumah makan', 'eatery', 'dapur', 'bakery', 'boba', 'gelato', 'angkringan', 'kedai', 'culinary', 'kuliner', 'bar', 'lounge', 'food court', 'foodcourt',
+            'toko', 'shop', 'store', 'boutique', 'butik', 'mall', 'plaza', 'supermarket', 'mart', 'furniture', 'decor', 'decorating', 'florist', 'bouquet', 'buket', 'flower', 'bunga', 'wedding', 'sewa', 'rent', 'rental', 'salon', 'spa', 'laundry', 'tailor', 'jahit', 'bengkel', 'repair', 'showroom', 'studio foto', 'photo studio', 'printing', 'percetakan', 'advertising', 'market', 'pasar'
         ];
         if (badCommercialKeywords.some(keyword => nameLower.includes(keyword))) {
-            const isFamousHeritage = nameLower.includes('heritage') || nameLower.includes('historical') || nameLower.includes('situs') || nameLower.includes('monumen') || nameLower.includes('keraton') || nameLower.includes('palace');
-            if (!isFamousHeritage && safeReviews < 50) {
+            const isGenuineHeritageSite = nameLower.includes('heritage') || nameLower.includes('historical') || nameLower.includes('situs') || nameLower.includes('monumen') || nameLower.includes('keraton') || nameLower.includes('palace') || nameLower.includes('candi') || nameLower.includes('benteng');
+            if (!isGenuineHeritageSite || safeReviews < 50) {
                 return false;
             }
         }
 
-        // 4. Filter out places with no tourist value (e.g. rating/reviews are extremely low or non-existent, unless name contains strong heritage terms)
+        // 4. Strict type exclusion to filter out generic businesses
+        const badTypes = [
+            'transit_station', 'bus_station', 'subway_station', 'train_station', 'airport',
+            'lodging', 'hotel', 'real_estate_agency', 'housing_development', 'apartment_building',
+            'clothing_store', 'shopping_mall', 'home_goods_store', 'supermarket',
+            'furniture_store', 'florist', 'hair_care', 'beauty_salon', 'spa',
+            'bakery', 'meal_takeaway', 'grocery_or_supermarket', 'liquor_store',
+            'cafe', 'restaurant', 'bar', 'night_club', 'food', 'store', 'car_repair', 'laundry',
+            'school', 'university', 'primary_school', 'secondary_school', 'local_government_office', 'police', 'hospital', 'doctor', 'dentist', 'pharmacy', 'gym'
+        ];
+        
+        if (types.some(type => badTypes.includes(type))) {
+            const isGenuineHeritageSite = nameLower.includes('heritage') || nameLower.includes('historical') || nameLower.includes('situs') || nameLower.includes('monumen') || nameLower.includes('keraton') || nameLower.includes('palace') || nameLower.includes('candi') || nameLower.includes('benteng');
+            if (!isGenuineHeritageSite || safeReviews < 50) {
+                return false;
+            }
+        }
+
+        // 5. Filter out places with no tourist value (e.g. rating/reviews are extremely low or non-existent, unless name contains strong heritage terms)
         const hasStrongHeritageWord = [
             'museum', 'galeri', 'gallery', 'heritage', 'historical', 'situs', 'monumen', 'monument', 
             'candi', 'temple', 'keraton', 'palace', 'benteng', 'fort', 'tugu', 'makam', 'tomb', 
@@ -1062,7 +1078,7 @@ out center body;`;
             'rekreasi', 'amusement', 'taman', 'park'
         ].some(keyword => nameLower.includes(keyword));
 
-        // If a place has 0 reviews and doesn't contain any strong heritage/tourism terms, it's likely a generic establishment/establishment marker
+        // If a place has 0 reviews and doesn't contain any strong heritage/tourism terms, it's likely a generic establishment
         if (safeReviews === 0 && !hasStrongHeritageWord) {
             return false;
         }
@@ -1077,15 +1093,18 @@ out center body;`;
     private isGenuineMuseumOrGallery(name: string, types: string[], category: string): boolean {
         const nameLower = name.toLowerCase();
         
-        // 1. Strict name exclusion keywords (businesses, shops, lodgings, eateries)
+        // 1. Strict name exclusion keywords (businesses, shops, lodgings, eateries, transit, schools)
         const badNameKeywords = [
             'hotel', 'resort', 'homestay', 'home stay', 'guesthouse', 'guest house', 
-            'hostel', 'motel', 'villa', 'kos ', 'kost ', 'kontrakan', 'residence',
-            'cafe', 'coffee', 'kopi', 'resto', 'restaurant', 'warung', 'rumah makan', 
-            'toko', 'shop', 'boutique', 'butik', 'mall', 'supermarket', 'mart',
+            'hostel', 'motel', 'villa', 'kos ', 'kost ', 'kontrakan', 'residence', 'lodging', 'inn',
+            'cafe', 'coffee', 'kopi', 'resto', 'restaurant', 'warung', 'rumah makan', 'eatery', 'dapur', 'bakery', 'boba', 'gelato', 'angkringan', 'kedai',
+            'toko', 'shop', 'store', 'boutique', 'butik', 'mall', 'supermarket', 'mart',
             'furniture', 'decor', 'decorating', 'florist', 'bouquet', 'buket', 'flower', 'bunga',
             'wedding', 'sewa', 'rent', 'rental', 'salon', 'spa', 'laundry', 'tailor', 'jahit',
-            'studio foto', 'photo studio', 'print', 'percetakan', 'advertising', 'apartemen', 'apartment'
+            'studio foto', 'photo studio', 'print', 'percetakan', 'advertising', 'apartemen', 'apartment',
+            'stasiun', 'station', 'halte', 'terminal', 'bandara', 'airport', 'mrt', 'lrt', 'krl', 'kereta', 'bus', 'pelabuhan', 'port', 'shelter',
+            'sekolah', 'sd ', 'smp ', 'sma ', 'smk ', 'tk ', 'paud', 'panti asuhan', 'polsek', 'polres', 'koramil', 'kantor', 'office',
+            'universitas', 'kampus', 'ugm', 'itb', 'ui ', 'undip', 'unpad', 'unair'
         ];
         
         if (badNameKeywords.some(keyword => nameLower.includes(keyword))) {
@@ -1107,14 +1126,16 @@ out center body;`;
             }
         }
 
-        // 2. Strict type exclusions (Google Place categories that represent lodging, food, retail, residential)
+        // 2. Strict type exclusions (Google Place categories that represent lodging, food, retail, residential, government, education)
         const badTypes = [
             'lodging', 'hotel', 'guest_house', 'hostel', 'motel', 
             'real_estate_agency', 'housing_development', 'apartment_building',
             'clothing_store', 'shopping_mall', 'home_goods_store', 'supermarket',
             'furniture_store', 'florist', 'hair_care', 'beauty_salon', 'spa',
             'bakery', 'meal_takeaway', 'grocery_or_supermarket', 'liquor_store',
-            'cafe', 'restaurant', 'bar', 'night_club', 'food'
+            'cafe', 'restaurant', 'bar', 'night_club', 'food', 'transit_station', 'bus_station',
+            'subway_station', 'train_station', 'airport', 'school', 'university', 'local_government_office',
+            'police', 'hospital', 'doctor', 'dentist', 'pharmacy', 'gym'
         ];
 
         if (category === 'museum' || category === 'gallery') {
@@ -1133,8 +1154,6 @@ out center body;`;
         }
 
         // 3. Filter out private residential houses/homes that don't belong to museum/gallery categories
-        // If the category is NOT verified museum, and the name starts with "rumah" or "house of" (case-insensitive),
-        // and it does NOT contain "museum", "gallery", "galeri", "art", "seni", "sejarah", "history", "heritage", "culture", "budaya", "batik", "lukis"
         if (category !== 'museum' && (nameLower.startsWith('rumah') || nameLower.startsWith('house of'))) {
             const hasPositiveKeyword = [
                 'museum', 'gallery', 'galeri', 'art', 'seni', 'sejarah', 
@@ -1261,6 +1280,25 @@ out center body;`;
     }
 
     /**
+     * Checks if the Wikipedia match is relevant to the query place name.
+     * At least one of the query terms (excluding generic ones) must be present in the target title or text.
+     */
+    private isMatchAcceptable(placeName: string, titleOrText: string): boolean {
+        if (!placeName || !titleOrText) return false;
+        const queryWords = placeName.toLowerCase()
+            .replace(/[^a-z0-9\s]/g, '')
+            .split(/\s+/)
+            .filter(w => w.length > 2 && w !== 'museum' && w !== 'gallery' && w !== 'galeri' && w !== 'taman' && w !== 'wisata');
+
+        if (queryWords.length === 0) {
+            return true;
+        }
+
+        const textLower = titleOrText.toLowerCase();
+        return queryWords.some(word => textLower.includes(word));
+    }
+
+    /**
      * Scrape place image from Wikipedia (100% FREE fallback)
      */
     async scrapePlaceImage(placeName: string): Promise<string | null> {
@@ -1281,7 +1319,7 @@ out center body;`;
                 const data = await response.json() as any;
                 if (data?.query?.pages) {
                     const pages = Object.values(data.query.pages) as any[];
-                    if (pages.length > 0 && pages[0].thumbnail?.source) {
+                    if (pages.length > 0 && pages[0].thumbnail?.source && this.isMatchAcceptable(queryName, pages[0].title)) {
                         return pages[0].thumbnail.source;
                     }
                 }
@@ -1299,7 +1337,7 @@ out center body;`;
                 const data = await response.json() as any;
                 if (data?.query?.pages) {
                     const pages = Object.values(data.query.pages) as any[];
-                    if (pages.length > 0 && pages[0].thumbnail?.source) {
+                    if (pages.length > 0 && pages[0].thumbnail?.source && this.isMatchAcceptable(queryName, pages[0].title)) {
                         return pages[0].thumbnail.source;
                     }
                 }
@@ -1332,13 +1370,17 @@ out center body;`;
                 const desc = existingInstitution.description;
                 // If it's already cached and is NOT the default address fallback
                 if (desc && desc.length > 50 && !desc.startsWith('Tempat bersejarah/budaya:')) {
-                    this.logger.log(`[WIKI_CACHE] Cache hit in DB for "${queryName}".`);
-                    return {
-                        title: existingInstitution.name,
-                        extract: desc,
-                        url: `https://id.wikipedia.org/wiki/${encodeURIComponent(existingInstitution.name)}`,
-                        thumbnail: existingInstitution.cover_image_url || null,
-                    };
+                    if (this.isMatchAcceptable(queryName, desc)) {
+                        this.logger.log(`[WIKI_CACHE] Cache hit in DB for "${queryName}".`);
+                        return {
+                            title: existingInstitution.name,
+                            extract: desc,
+                            url: `https://id.wikipedia.org/wiki/${encodeURIComponent(existingInstitution.name)}`,
+                            thumbnail: existingInstitution.cover_image_url || null,
+                        };
+                    } else {
+                        this.logger.warn(`[WIKI_CACHE] Mismatched/stale description in DB for "${queryName}". Re-scraping.`);
+                    }
                 }
             }
 
@@ -1359,7 +1401,7 @@ out center body;`;
                     const pages = Object.values(data.query.pages) as any[];
                     if (pages.length > 0) {
                         const page = pages[0];
-                        if (page.extract) {
+                        if (page.extract && this.isMatchAcceptable(queryName, page.title)) {
                             result = {
                                 title: page.title,
                                 extract: page.extract,
@@ -1386,7 +1428,7 @@ out center body;`;
                         const pages = Object.values(data.query.pages) as any[];
                         if (pages.length > 0) {
                             const page = pages[0];
-                            if (page.extract) {
+                            if (page.extract && this.isMatchAcceptable(queryName, page.title)) {
                                 result = {
                                     title: page.title,
                                     extract: page.extract,

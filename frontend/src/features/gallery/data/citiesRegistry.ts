@@ -76,36 +76,67 @@ export const CITY_REGIONS_MAP: Record<string, RegionDetail[]> = {
  * Robust, exclusive place-classification helper.
  * Ensures that Museum, Gallery, and Heritage categories are mutually exclusive.
  */
-export function classifyPlace(place: { type?: string; name?: string; address?: string }): 'museum' | 'gallery' | 'heritage' {
+export function classifyPlace(place: { type?: string; name?: string; address?: string }): 'museum' | 'gallery' | 'heritage' | null {
     const type = (place.type || '').toLowerCase();
     const name = (place.name || '').toLowerCase();
     const address = (place.address || '').toLowerCase();
 
-    // 1. Museum (Highest priority to avoid overlap)
+    const nameLower = name.toLowerCase();
+
+    // 1. Strict name and type validation to filter out non-genuine places
+    const isMuseumName = nameLower.includes('museum') || nameLower.includes('musium') || nameLower.includes('museo');
+    const isGalleryName = nameLower.includes('gallery') || nameLower.includes('galeri') || nameLower.includes('art');
+    const isHighlyLikelyArtOrMuseum = isMuseumName || isGalleryName;
+
+    // Bad keywords for transit, lodging, eatery, retail, services, local infrastructure
+    const badKeywords = [
+        'stasiun', 'station', 'halte', 'terminal', 'bandara', 'airport', 'mrt', 'lrt', 'krl', 'kereta', 'bus', 'pelabuhan', 'port', 'shelter',
+        'hotel', 'resort', 'villa', 'homestay', 'home stay', 'guesthouse', 'guest house', 'hostel', 'motel', 'lodging', 'kos ', 'kost ', 'kontrakan', 'apartment', 'apartemen', 'inn',
+        'cafe', 'coffee', 'kopi', 'resto', 'restaurant', 'warung', 'rumah makan', 'eatery', 'dapur', 'bakery', 'boba', 'gelato', 'angkringan', 'kedai', 'culinary', 'kuliner', 'bar', 'lounge', 'food court', 'foodcourt',
+        'toko', 'shop', 'store', 'boutique', 'butik', 'mall', 'plaza', 'supermarket', 'mart', 'furniture', 'decor', 'decorating', 'florist', 'bouquet', 'buket', 'flower', 'bunga', 'wedding', 'sewa', 'rent', 'rental', 'salon', 'spa', 'laundry', 'tailor', 'jahit', 'bengkel', 'repair', 'showroom', 'studio foto', 'photo studio', 'printing', 'percetakan', 'advertising', 'market', 'pasar',
+        'sekolah', 'sd ', 'smp ', 'sma ', 'smk ', 'tk ', 'paud', 'panti asuhan', 'polsek', 'polres', 'koramil', 'kantor', 'office', 'klinik', 'puskesmas', 'apotek', 'hospital', 'rumah sakit', 'desa', 'kelurahan', 'kecamatan', 'kabupaten', 'rt ', 'rw ', 'pos ronda', 'pos kamling', 'lapangan bulutangkis', 'lapangan tenis', 'lapangan voli', 'lapangan futsal', 'gym', 'fitness',
+        'universitas', 'kampus', 'ugm', 'itb', 'ui ', 'undip', 'unpad', 'unair'
+    ];
+
+    if (badKeywords.some(keyword => nameLower.includes(keyword))) {
+        if (!isHighlyLikelyArtOrMuseum) {
+            return null;
+        }
+        
+        // Even if it has "museum" or "gallery", filter out commercial combinations (e.g. "Hotel Museum", "Gallery Cafe")
+        const superBadKeywords = [
+            'hotel', 'homestay', 'guesthouse', 'guest house', 'villa', 'warung', 'rumah makan', 
+            'cafe', 'coffee', 'kopi', 'resto', 'restaurant', 'toko', 'shop', 'boutique', 'butik',
+            'florist', 'bouquet', 'buket', 'rent', 'rental', 'sewa', 'decor', 'decorating'
+        ];
+        if (superBadKeywords.some(keyword => nameLower.includes(keyword))) {
+            return null;
+        }
+    }
+
+    // 2. Museum (Highest priority to avoid overlap)
     const isMuseum = type === 'museum' || 
                      type.includes('museum') || 
-                     name.includes('museum') || 
-                     name.includes('museo');
+                     isMuseumName;
     
     if (isMuseum) {
         return 'museum';
     }
 
-    // 2. Gallery (Art-focused, excluding museums)
+    // 3. Gallery (Art-focused, excluding museums)
     const isGallery = type === 'gallery' || 
                       type.includes('gallery') || 
                       type.includes('art') || 
-                      name.includes('galeri') || 
-                      name.includes('gallery') || 
-                      name.includes('art') || 
-                      name.includes('studio seni') ||
-                      name.includes('sanggar');
+                      isGalleryName || 
+                      nameLower.includes('studio seni') ||
+                      nameLower.includes('sanggar');
     
     if (isGallery) {
         return 'gallery';
     }
 
-    // 3. Heritage (Historical, Religious, Tourism destinations, and fallback)
+    // 4. Heritage (Historical, Religious, Tourism destinations, and fallback)
     return 'heritage';
 }
+
 

@@ -325,5 +325,28 @@ To avoid making database migrations for every new scraped feature, utilize Postg
 Ensure that all interactive frontend components that trigger backend queries (such as map panning, search autocomplete, or category filtering) are wrapped in a **debounce hook (300ms - 500ms)**. This prevents double-clicks or fast scroll gestures from spamming requests.
 
 ---
-*Document Version: 1.2.0*
-*Last Updated: 2026-05-26*
+
+## 10. Data Quality, Verification & Geocoding Cleanups (May 2026 Updates)
+
+To protect metadata integrity and guarantee zero dummy placeholders, we executed a comprehensive data audit and resolved the following inconsistencies:
+
+### A. Strict Classification & Geolocation Filters
+* **Targeted Indexing**: Restructured both "Explore by City" and "Nearby Page" selectors to strictly query verified cultural locations classified as `museum`, `gallery`, or `heritage` (which includes historical structures and famous cultural tourist destinations/monuments).
+* **Railway Station Elimination**: Removed railway stations (e.g., Stasiun Jakarta Kota, Stasiun Manggarai, etc.) from cultural heritage indexing in Jakarta Barat and other major cities to prevent layout clutter and map noise.
+* **Museum Detail Page Image Integrity**: Corrected the detail rendering logic to ensure that whenever a user selects a pin or views institution info, the container displays the actual saved cover image of the destination.
+
+### B. Surabaya Postcode Geotargeting Correction
+* **The Bug**: Due to postal codes in Surabaya containing suffixes or ranges like `Jawa Timur 60xxx`, geographic match scripts failed to accurately group them, returning zero local matches or falling back to generic placeholders.
+* **The Solution**: Upgraded geocoding mapping functions to correctly parse provincial/regional postcode blocks (e.g. `60111`, `60234` matching regex/wildcards for `60xxx`). We scraped genuine historical/cultural images and summaries from Wikipedia APIs, mirrored them to R2 CDN, resolved and corrected all empty placeholders, and synchronized database entries.
+
+### C. Specific Site Cover Image Updates & Mirroring
+We replaced low-quality placeholders with official high-resolution local images, mirrored them to Cloudflare R2 bucket storage, and updated database references:
+1. **Deli Serdang / Medan (Taman Garista)**: Replaced placeholder cover with `Taman-Garista.jpg`.
+2. **Jakarta Aquarium (Jakarta Barat)**: Resolved incorrect Wikipedia history summary text mismatch, replaced cover image with `jakartaaquarium.jpeg`.
+3. **The Great Asia Afrika (Bandung Barat)**: Replaced placeholder cover with `thegreatasiaafrika.jpeg`.
+4. **Museum Perkebunan Indonesia 1 & 2 (Medan)**: Replaced mock graphics with official images (`museumperkebunanindonesia1.jpg` and `museumperkebunanindonesia2.jpg`).
+5. **Gedung Nasional Medan Removal**: Deleted the obsolete/non-matching "Gedung Nasional Medan" record to maintain correct cataloging.
+
+---
+*Document Version: 1.3.0*
+*Last Updated: 2026-05-31*
