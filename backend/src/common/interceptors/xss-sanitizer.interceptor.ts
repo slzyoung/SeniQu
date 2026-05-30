@@ -79,9 +79,28 @@ export class XssSanitizerInterceptor implements NestInterceptor {
     }
 
     private sanitizeString(str: string): string {
-        // Only encode actual XSS attack vectors
-        // Preserve URL-safe characters: / = : . @ ? & # 
-        return str
+        // STEP 1: Decode any pre-existing HTML entities to prevent double-encoding.
+        // This prevents the &amp;amp;amp; chain corruption bug.
+        let decoded = str
+        // First, collapse malformed amp chains without semicolons (e.g. &ampampamp → &)
+        decoded = decoded.replace(/&(amp)+/g, "&")
+        // Then decode standard entities iteratively
+        let prev = ""
+        for (let i = 0; i < 10 && decoded !== prev; i++) {
+            prev = decoded
+            decoded = decoded
+                .replace(/&amp;/g, "&")
+                .replace(/&lt;/g, "<")
+                .replace(/&gt;/g, ">")
+                .replace(/&quot;/g, '"')
+                .replace(/&#x27;/g, "'")
+                .replace(/&#x60;/g, "`")
+                .replace(/&#039;/g, "'")
+        }
+
+        // STEP 2: Now encode actual XSS attack vectors on the clean text.
+        // Preserve URL-safe characters: / = : . @ ? & #
+        return decoded
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")

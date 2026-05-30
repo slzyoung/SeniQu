@@ -166,28 +166,49 @@ export function extractPagination(data: unknown): { total: number; page: number;
 
 /**
  * Decode HTML entities in a string (e.g. &amp; -> &)
+ * Handles multi-layer encoding (e.g. &amp;amp;amp; chains) AND
+ * malformed amp chains without semicolons (e.g. &ampampamp).
  */
 export function decodeHTML(str: string | null | undefined): string {
     if (!str) return '';
-    // Use DOMParser if available to decode safely
+
+    // STEP 1: Collapse malformed &ampampamp... chains (without semicolons)
+    // These are NOT valid HTML entities, so DOMParser won't decode them.
+    let cleaned = str.replace(/&(amp)+/g, '&');
+
+    // STEP 2: Use DOMParser to decode standard HTML entities — apply repeatedly
+    // until the result stabilizes (handles multi-layer entity corruption)
     if (typeof window !== 'undefined' && typeof DOMParser !== 'undefined') {
         try {
             const parser = new DOMParser();
-            const doc = parser.parseFromString(str, 'text/html');
-            return doc.body.textContent || '';
+            let result = cleaned;
+            let prev = '';
+            // Max 10 iterations to prevent infinite loops
+            for (let i = 0; i < 10 && result !== prev; i++) {
+                prev = result;
+                const doc = parser.parseFromString(result, 'text/html');
+                result = doc.body.textContent || '';
+            }
+            return result;
         } catch (e) {
             // fallback
         }
     }
-    // Simple regex fallback
-    return str
-        .replace(/&amp;/g, '&')
-        .replace(/&amp/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#039;/g, "'")
-        .replace(/&#x27;/g, "'")
-        .replace(/&#x39;/g, "'");
+
+    // Regex fallback — also loop until stable
+    let result = cleaned;
+    let prev = '';
+    for (let i = 0; i < 10 && result !== prev; i++) {
+        prev = result;
+        result = result
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#039;/g, "'")
+            .replace(/&#x27;/g, "'")
+            .replace(/&#x39;/g, "'");
+    }
+    return result;
 }
 

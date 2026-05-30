@@ -11,7 +11,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { X, MapPin, Calendar, ChevronLeft, Sparkles } from 'lucide-react';
+import { X, MapPin, Calendar, ChevronLeft, Sparkles, ArrowRight } from 'lucide-react';
 import './MyArtsPage.css';
 
 // ============================================================
@@ -263,22 +263,25 @@ export default function MyArtsPage() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.7 }}
                         >
-                            <svg
-                                className="ex-arrow"
-                                viewBox="0 0 100 60"
-                                xmlns="http://www.w3.org/2000/svg"
+                            <motion.div
+                                className="ex-arrow-container"
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 0.85, scale: 1 }}
+                                transition={{ delay: 1, duration: 0.5 }}
                             >
-                                <path
-                                    d="M10,15 Q25,50 55,45 T90,25"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                />
-                                <path
-                                    d="M80,15 L90,25 L78,32"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                />
-                            </svg>
+                                <span className="ex-arrow-label">Explore</span>
+                                <motion.div
+                                    className="ex-arrow-icon-wrap"
+                                    animate={{ x: [0, 8, 0] }}
+                                    transition={{
+                                        duration: 1.6,
+                                        repeat: Infinity,
+                                        ease: 'easeInOut',
+                                    }}
+                                >
+                                    <ArrowRight size={24} strokeWidth={2.5} />
+                                </motion.div>
+                            </motion.div>
 
                             <motion.button
                                 className="ex-btn-circle"
