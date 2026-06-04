@@ -260,11 +260,18 @@ export class MuseumsService {
                     }
                 }
 
+                // Compose rich address from all available fields (street + city + province)
+                const addressParts = [m.street, m.city, m.province].filter(Boolean);
+                const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : '';
+
                 return {
                     id: m.id,
                     slug: m.slug,
                     name: m.name,
-                    address: m.street || m.city || '',
+                    address: fullAddress,
+                    city: m.city || '',
+                    province: m.province || '',
+                    description: m.description || '',
                     latitude,
                     longitude,
                     rating: Number(m.rating) || 5.0,
@@ -725,10 +732,14 @@ out center body;`;
                             }
                         }
 
+                        // Extract city from formattedAddress for region classification
+                        const extractedCity = this.extractCityFromAddress(p.formattedAddress || '');
+
                         return {
                             id: p.id,
                             name: name,
                             address: p.formattedAddress || '',
+                            city: extractedCity,
                             latitude: p.location?.latitude,
                             longitude: p.location?.longitude,
                             rating: p.rating,
@@ -756,6 +767,17 @@ out center body;`;
             }
         }
 
+        // === Merge verified local database places within range to ensure curation is always shown ===
+        try {
+            const dbFallbackPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, safeQuery);
+            if (dbFallbackPlaces && dbFallbackPlaces.length > 0) {
+                this.logger.log(`[MERGE] Merging ${dbFallbackPlaces.length} local database places into search results before deduplication`);
+                allPlaces.push(...dbFallbackPlaces);
+            }
+        } catch (mergeDbErr: any) {
+            this.logger.warn(`Failed to merge local database places: ${mergeDbErr.message}`);
+        }
+
         if (googleApiFailed) {
             this.logger.warn(`Google Places API request failed (403/401/429). Initiating local PostGIS + OSM fallback.`);
             let localPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, safeQuery);
@@ -766,17 +788,27 @@ out center body;`;
             return { places: localPlaces, region: regionInfo, quotaExceeded: true };
         }
 
-        // === Deduplicate prioritizing specific category (museum > gallery > heritage) ===
+        // === Deduplicate prioritizing database-sourced records and category (museum > gallery > heritage) ===
         const uniqueMap = new Map<string, any>();
         for (const p of allPlaces) {
-            const existing = uniqueMap.get(p.id);
+            const slug = p.slug || this.getPlaceSlug(p.id);
+            const existing = uniqueMap.get(slug);
             if (!existing) {
-                uniqueMap.set(p.id, p);
+                uniqueMap.set(slug, p);
             } else {
-                if (p.type === 'museum') {
-                    uniqueMap.set(p.id, p);
-                } else if (p.type === 'gallery' && existing.type !== 'museum') {
-                    uniqueMap.set(p.id, p);
+                const existingIsDb = !!existing.slug && !existing.id?.startsWith('g-') && !existing.id?.startsWith('ChI');
+                const newIsDb = !!p.slug && !p.id?.startsWith('g-') && !p.id?.startsWith('ChI');
+
+                if (newIsDb && !existingIsDb) {
+                    uniqueMap.set(slug, p);
+                } else if (!newIsDb && existingIsDb) {
+                    // Keep existing database record
+                } else {
+                    if (p.type === 'museum') {
+                        uniqueMap.set(slug, p);
+                    } else if (p.type === 'gallery' && existing.type !== 'museum') {
+                        uniqueMap.set(slug, p);
+                    }
                 }
             }
         }
@@ -795,7 +827,7 @@ out center body;`;
 
         // Check database for existing metadata to merge into the response BEFORE splitting
         try {
-            const slugs = filtered.map((p) => this.getPlaceSlug(p.id));
+            const slugs = filtered.map((p) => p.slug || this.getPlaceSlug(p.id));
             const { data: dbPlaces } = await this.supabase
                 .from('institutions')
                 .select('slug, type, cover_image_url, reviews, description')
@@ -814,7 +846,7 @@ out center body;`;
             }
 
             for (const p of filtered) {
-                const slug = this.getPlaceSlug(p.id);
+                const slug = p.slug || this.getPlaceSlug(p.id);
                 const cached = dbPlaceMap.get(slug);
                 if (cached) {
                     p.photos = cached.coverImageUrl ? [cached.coverImageUrl] : [];
@@ -933,6 +965,8 @@ out center body;`;
             'ChIJQSL5xeb71y0RXLfWmD5s3G0': 'sadikin-pard-gallery',
             'ChIJ6Z13tzSHeC4RrIyhQJ7UjyY': 'galeri-raos-batu',
             'ChIJpdN9cieDeC4RL6fVx0_EVzM': 'oemah-boedaya-slamet',
+            'ChIJizzSwrCAeC4RLPgOBBjOgXA': 'oemah-boedaya-slamet',
+            'ChIJuQcd1iqHeC4RgJdHUq1IqFk': 'jawa-timur-park-1',
             'ChIJyYo8W5Ip1i0RlLTNdG6H_bE': 'seroomah',
             'ChIJOaclQjQp1i0R1WowgQ3IhZI': 'epic-tattoo-studio',
             'ChIJVceZEUuBeC4R-qmGnOpPypo': 'flockink-tattoo-studio',
@@ -1581,7 +1615,21 @@ out center body;`;
                 }
 
                 const adminId = this.systemAdminId;
-                const slugs = places.map((p) => this.getPlaceSlug(p.id));
+
+                // Filter out database-sourced places — they already exist with curated slugs.
+                // A place is database-sourced if it has a slug that doesn't start with "g-".
+                const googlePlaces = places.filter((p) => {
+                    const hasNonGoogleSlug = p.slug && !p.slug.startsWith('g-');
+                    if (hasNonGoogleSlug) return false; // Already a curated DB record, skip ingestion
+                    return true;
+                });
+
+                if (googlePlaces.length === 0) {
+                    this.logger.log(`[INGEST] All ${places.length} places are database-sourced. Ingestion skipped.`);
+                    return;
+                }
+
+                const slugs = googlePlaces.map((p) => this.getPlaceSlug(p.id));
 
                 // 2. Query existing slugs and check if cover_image_url, reviews, or description are missing
                 const { data: existing, error: existingError } = await this.supabase
@@ -1605,15 +1653,15 @@ out center body;`;
                     ])
                 );
 
-                const newPlaces = places.filter((p) => !existingMap.has(this.getPlaceSlug(p.id)));
-                const missingMetadataPlaces = places.filter((p) => {
+                const newPlaces = googlePlaces.filter((p) => !existingMap.has(this.getPlaceSlug(p.id)));
+                const missingMetadataPlaces = googlePlaces.filter((p) => {
                     const slug = this.getPlaceSlug(p.id);
                     const state = existingMap.get(slug);
                     return state && (!state.coverImageUrl || !state.hasReviews || !state.hasDescription);
                 });
 
                 if (newPlaces.length === 0 && missingMetadataPlaces.length === 0) {
-                    this.logger.log(`[INGEST] All ${places.length} places already exist with metadata in database. Ingestion skipped.`);
+                    this.logger.log(`[INGEST] All ${googlePlaces.length} Google places already exist with metadata in database. Ingestion skipped.`);
                     return;
                 }
 

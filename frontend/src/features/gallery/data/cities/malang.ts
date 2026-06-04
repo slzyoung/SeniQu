@@ -14,12 +14,12 @@ export const regions: RegionDetail[] = [
         "id": "kota",
         "name": "Kota Malang",
         "keywords": [
-            "malang kota",
             "klojen",
             "blimbing",
             "lowokwaru",
             "sukun",
-            "kedungkandang"
+            "kedungkandang",
+            "malang"
         ],
         "description": "Balai Kota Malang, kawasan cagar budaya Ijen, dan galeri seni kreatif.",
         "image": "https://cdn.seniqu.art/assets/static/cities/malang.webp"
