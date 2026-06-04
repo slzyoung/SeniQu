@@ -348,5 +348,36 @@ We replaced low-quality placeholders with official high-resolution local images,
 5. **Gedung Nasional Medan Removal**: Deleted the obsolete/non-matching "Gedung Nasional Medan" record to maintain correct cataloging.
 
 ---
-*Document Version: 1.3.0*
-*Last Updated: 2026-05-31*
+
+## 11. Malang Region Data Alignment & Pre-Partition Merging (June 2026 Updates)
+
+To ensure the high fidelity of cultural destinations in Malang and fix image/category mismatches, we implemented a custom ETL media pipeline and refactored the backend geolocation search merging sequence:
+
+### A. Malang Local Assets ETL Pipeline (WebP & R2 CDN)
+* **The Challenge**: Key local galleries in Malang (such as **seROOMah**, **Flockink Tattoo Studio**, and **Epic Tattoo Studio**) lacked matching cover images, displaying fallback placeholder graphics. Additionally, **Istana Boneka (Isbon)** lacked a high-fidelity image reflecting its status as a local heritage/recreation landmark.
+* **The Pipeline**: Implemented an automated asset upload pipeline that:
+  1. Locates local high-resolution raw images from `/frontend/public/images/gallery` and `/frontend/public/images/heritage`.
+  2. Uses `sharp` to resize them (max width 1200px) and convert them to optimized `WebP` format (80% quality) to guarantee minimal load times and reduced bandwidth consumption.
+  3. Uploads the processed WebP files to the Cloudflare R2 CDN bucket with long-lived Cache-Control headers (`public, max-age=31536000, immutable`).
+  4. Synchronizes these new CDN URLs back to the `cover_image_url` column of the `institutions` database table.
+
+### B. Google Place ID to Clean Seed Slug Mapping
+To prevent duplicate records and ensure that searches on the frontend successfully fetch curated database metadata:
+* Mapped the raw Google Places API Place IDs to clean, human-readable seed slugs in `PLACE_ID_TO_SEED_SLUG` (`backend/src/museums/museums.service.ts`):
+  * `ChIJyYo8W5Ip1i0RlLTNdG6H_bE` &rarr; `seroomah` (seROOMah)
+  * `ChIJOaclQjQp1i0R1WowgQ3IhZI` &rarr; `epic-tattoo-studio` (Epic Tattoo Studio)
+  * `ChIJVceZEUuBeC4R-qmGnOpPypo` &rarr; `flockink-tattoo-studio` (Flockink Tattoo Studio)
+  * `ChIJNVIILZ2CeC4RWN26myj1Rxg` &rarr; `istana-boneka-wilis` (ISTANA BONEKA WILIS)
+  * `ChIJRSPR7nGCeC4R2j5H2JdoBY4` &rarr; `istana-boneka-gajayana` (Istana Boneka Gajayana)
+
+### C. Pre-Partition Database Merging Logic
+* **The Problem**: Previously, the backend split Google search results into `museums`, `galleries`, and `heritage` arrays *before* querying the database for curated overrides. This meant that category updates (e.g. changing type from `museum` to `heritage`) in the database were not reflected in the subcategory lists returned to the frontend.
+* **The Solution**: Refactored `searchNearbyPlaces` in `museums.service.ts` to fetch and merge all database overrides (including `type`, `cover_image_url`, `reviews`, and `description`) onto the *entire* filtered list of places *before* splitting them into subcategories. This ensures frontend tabs always show fully accurate and up-to-date categorizations.
+
+### D. Istana Boneka Categorization Correction
+* **Reclassification**: Changed the classification of both Istana Boneka locations (**Wilis** and **Gajayana**) in the database from `museum` to `heritage` (Cagar Budaya) so they are excluded from the museum catalog and focused strictly on recreational/heritage spots.
+* **Image Update**: Updated their cover images to the new CDN-hosted `isbonmalang.jpg` asset.
+
+---
+*Document Version: 1.4.0*
+*Last Updated: 2026-06-04*

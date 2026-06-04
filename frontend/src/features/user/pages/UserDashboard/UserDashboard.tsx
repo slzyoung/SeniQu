@@ -3,7 +3,7 @@
  * Immersive cultural heritage explorer with city-based navigation
  */
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -75,7 +75,69 @@ const HERITAGE_CITIES: CityData[] = Object.entries(CITY_WHITELIST).map(([id, met
     featured: id === 'jakarta',
 }));
 
-const HERO_IMAGE = 'https://cdn.seniqu.art/assets/static/hero/bromo.webp';
+// ============================================================
+// HERO CAROUSEL — 7 Indonesian Heritage Cities
+// ============================================================
+
+interface HeroSlide {
+    id: string;
+    image: string;
+    alt: string;
+    city: string;
+    tagline: string;
+}
+
+const HERO_SLIDES: HeroSlide[] = [
+    {
+        id: 'bromo',
+        image: 'https://cdn.seniqu.art/assets/static/hero/bromo.webp',
+        alt: 'Mount Bromo — East Java',
+        city: 'East Java',
+        tagline: 'Majestic volcanic landscapes',
+    },
+    {
+        id: 'borobudur',
+        image: 'https://cdn.seniqu.art/assets/static/hero/borobudur.webp',
+        alt: 'Borobudur Temple — Central Java',
+        city: 'Yogyakarta',
+        tagline: 'Ancient Buddhist temple wonder',
+    },
+    {
+        id: 'bali',
+        image: 'https://cdn.seniqu.art/assets/static/hero/bali.webp',
+        alt: 'Ulun Danu Beratan — Bali',
+        city: 'Bali',
+        tagline: 'Island of Gods & culture',
+    },
+    {
+        id: 'bandung',
+        image: 'https://cdn.seniqu.art/assets/static/hero/bandung.webp',
+        alt: 'Gedung Sate — Bandung',
+        city: 'Bandung',
+        tagline: 'Art Deco heritage city',
+    },
+    {
+        id: 'jakarta',
+        image: 'https://cdn.seniqu.art/assets/static/hero/jakarta.webp',
+        alt: 'Jakarta Old Town',
+        city: 'Jakarta',
+        tagline: 'Capital of cultural heritage',
+    },
+    {
+        id: 'yogyakarta',
+        image: 'https://cdn.seniqu.art/assets/static/cities/yogyakarta.webp',
+        alt: 'Kraton Yogyakarta — Special Region',
+        city: 'Yogyakarta',
+        tagline: 'Living Javanese royal legacy',
+    },
+    {
+        id: 'surabaya',
+        image: 'https://cdn.seniqu.art/assets/static/cities/surabaya.webp',
+        alt: 'Tugu Pahlawan — Surabaya',
+        city: 'Surabaya',
+        tagline: 'Hero City of independence',
+    },
+];
 
 // ============================================================
 // HELPER FUNCTIONS
@@ -143,8 +205,8 @@ function CityCard({
     );
 }
 
-/** Curated Gallery Card */
-function GalleryCard({
+/** Curated Place Card */
+function PlaceCard({
     museum,
     index,
     onClick,
@@ -179,15 +241,15 @@ function GalleryCard({
             </div>
             <div className="heritage-gallery-card__info">
                 <span className="heritage-gallery-card__eyebrow">
-                    {museum?.type || 'Collection'}
+                    {museum?.type || 'Place'}
                 </span>
                 <h4 className="heritage-gallery-card__name">
-                    {museum?.name || 'Gallery'}
+                    {museum?.name || 'Curated Place'}
                 </h4>
                 <p className="heritage-gallery-card__desc">
                     {museum?.description
                         ? museum.description.substring(0, 80) + (museum.description.length > 80 ? '...' : '')
-                        : `A curated journey through the artistic heritage of ${city}.`}
+                        : `A curated journey through the cultural heritage of ${city}.`}
                 </p>
             </div>
         </motion.div>
@@ -209,6 +271,38 @@ export function UserDashboard() {
     const galleriesRef = useRef<HTMLDivElement>(null);
     const [scrollProgress, setScrollProgress] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
+
+    // ── Hero Carousel State ──
+    const [heroIndex, setHeroIndex] = useState(0);
+    const [heroManualPause, setHeroManualPause] = useState(false);
+    const heroTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const advanceHero = useCallback(() => {
+        setHeroIndex((prev) => (prev + 1) % HERO_SLIDES.length);
+    }, []);
+
+    // Auto-advance hero carousel every 6 seconds
+    useEffect(() => {
+        if (heroManualPause) return;
+        heroTimerRef.current = setInterval(advanceHero, 6000);
+        return () => {
+            if (heroTimerRef.current) clearInterval(heroTimerRef.current);
+        };
+    }, [heroManualPause, advanceHero]);
+
+    // Preload next hero image for smoother transitions
+    useEffect(() => {
+        const nextIdx = (heroIndex + 1) % HERO_SLIDES.length;
+        const img = new Image();
+        img.src = HERO_SLIDES[nextIdx].image;
+    }, [heroIndex]);
+
+    const handleHeroDotClick = (idx: number) => {
+        setHeroIndex(idx);
+        // Reset auto-advance timer on manual interaction
+        if (heroTimerRef.current) clearInterval(heroTimerRef.current);
+        heroTimerRef.current = setInterval(advanceHero, 6000);
+    };
 
     // Fetch real data from API
     const { data: museumsData, isLoading: museumsLoading } = useMuseums({ limit: 8 });
@@ -318,15 +412,31 @@ export function UserDashboard() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4 }}
         >
-            {/* ====== HERO SECTION ====== */}
-            <div className="heritage-hero">
-                <img
-                    src={HERO_IMAGE}
-                    alt="National Heritage"
-                    className="heritage-hero__bg"
-                    loading="eager"
-                />
+            {/* ====== HERO SECTION — Animated City Carousel ====== */}
+            <div
+                className="heritage-hero"
+                onMouseEnter={() => setHeroManualPause(true)}
+                onMouseLeave={() => setHeroManualPause(false)}
+                onTouchStart={() => setHeroManualPause(true)}
+                onTouchEnd={() => { setTimeout(() => setHeroManualPause(false), 3000); }}
+            >
+                {/* Animated Background Image Carousel */}
+                <AnimatePresence mode="wait">
+                    <motion.img
+                        key={HERO_SLIDES[heroIndex].id}
+                        src={HERO_SLIDES[heroIndex].image}
+                        alt={HERO_SLIDES[heroIndex].alt}
+                        className="heritage-hero__bg"
+                        initial={{ opacity: 0, scale: 1.08 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 1.5, ease: 'easeOut' }}
+                        loading={heroIndex === 0 ? 'eager' : 'lazy'}
+                    />
+                </AnimatePresence>
+
                 <div className="heritage-hero__overlay" />
+
                 <div className="heritage-hero__content">
                     <motion.span
                         className="heritage-hero__label"
@@ -352,6 +462,35 @@ export function UserDashboard() {
                     >
                         Discover the soul of Indonesia through its curated architectural and cultural districts.
                     </motion.p>
+
+                    {/* City name indicator — animated per slide */}
+                    <AnimatePresence mode="wait">
+                        <motion.span
+                            key={HERO_SLIDES[heroIndex].id + '-city'}
+                            className="heritage-hero__city-tag"
+                            initial={{ opacity: 0, x: 12 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -12 }}
+                            transition={{ duration: 0.4, ease: 'easeOut' }}
+                        >
+                            <MapPin style={{ width: 12, height: 12 }} />
+                            {HERO_SLIDES[heroIndex].city}
+                            <span className="heritage-hero__city-divider">·</span>
+                            {HERO_SLIDES[heroIndex].tagline}
+                        </motion.span>
+                    </AnimatePresence>
+                </div>
+
+                {/* Carousel Dot Indicators */}
+                <div className="heritage-hero__dots">
+                    {HERO_SLIDES.map((slide, idx) => (
+                        <button
+                            key={slide.id}
+                            className={`heritage-hero__dot ${idx === heroIndex ? 'heritage-hero__dot--active' : ''}`}
+                            onClick={() => handleHeroDotClick(idx)}
+                            aria-label={`Go to ${slide.city}`}
+                        />
+                    ))}
                 </div>
             </div>
 
@@ -482,12 +621,12 @@ export function UserDashboard() {
                 )}
             </div>
 
-            {/* ====== CURATED GALLERIES ====== */}
+            {/* ====== CURATED PLACES ====== */}
             <div className="heritage-section">
                 <div className="heritage-section__header">
                     <div>
                         <p className="heritage-section__eyebrow">Handpicked</p>
-                        <h2 className="heritage-section__title">Curated Galleries</h2>
+                        <h2 className="heritage-section__title">Curated Place</h2>
                     </div>
                     <div className="flex items-center gap-2">
                         {/* Scroll buttons */}
@@ -541,7 +680,7 @@ export function UserDashboard() {
                             onTouchStart={() => setIsPaused(true)}
                         >
                             {museums.slice(0, 8).map((museum: any, i: number) => (
-                                <GalleryCard
+                                <PlaceCard
                                     key={museum.id || i}
                                     museum={museum}
                                     index={i}
@@ -567,13 +706,13 @@ export function UserDashboard() {
                     <div className="heritage-empty">
                         <Landmark className="heritage-empty__icon" />
                         <p className="heritage-empty__text">
-                            No galleries available yet — check back soon!
+                            No places available yet — check back soon!
                         </p>
                         <button
                             className="heritage-empty__action"
                             onClick={() => navigate(ROUTES.GALLERY)}
                         >
-                            Explore Public Gallery
+                            Explore Public Places
                         </button>
                     </div>
                 )}

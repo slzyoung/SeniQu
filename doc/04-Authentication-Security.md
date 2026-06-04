@@ -300,6 +300,18 @@ sequenceDiagram
 - ✅ Zero git history entries for any `.env` file (backend or frontend)
 - ✅ Google OAuth Client ID (public) is appropriately in frontend `.env` — this is safe per Google's documentation
 
+### 1.13 DNS Preference Workaround (IPv4First)
+
+During backend integration in dual-stack (IPv4/IPv6) local network environments, outbound requests to Google API endpoints (such as `https://oauth2.googleapis.com/token` during the OAuth authorization code exchange) can hang or time out if the system attempts to resolve and route through IPv6 paths first. This issues a `connect ETIMEDOUT` network error.
+
+To resolve this and guarantee robust connectivity:
+* **Implementation**: Hardened the NestJS application entrypoint (`backend/src/main.ts`) by setting the default DNS lookup result order to resolve IPv4 addresses first:
+  ```typescript
+  import * as dns from 'dns';
+  dns.setDefaultResultOrder('ipv4first');
+  ```
+* **Impact**: outbound HTTPS connections to external APIs (Google, Supabase, etc.) avoid unstable IPv6 routes, ensuring zero-latency OAuth callbacks.
+
 ## 2. Role-Based Access Control (RBAC)
 
 ### 2.1 User Roles

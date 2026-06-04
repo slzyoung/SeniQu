@@ -70,6 +70,23 @@ class MuseumService {
         return [];
     }
 
+    /**
+     * Helper to safely extract single record from nested response wrappers
+     */
+    private extractSingleData(res: any): any {
+        if (!res) return null;
+        if (res.id && res.name) return res;
+        if (res.data) {
+            if (res.data.id && res.data.name) return res.data;
+            if (res.data.data) {
+                if (res.data.data.id && res.data.data.name) return res.data.data;
+                return res.data.data;
+            }
+            return res.data;
+        }
+        return res;
+    }
+
     private parseLocation = (data: any): { lat: number; lng: number } => {
         if (!data) return { lat: 0, lng: 0 };
 
@@ -279,13 +296,14 @@ class MuseumService {
      * Get museum by slug
      */
     async getMuseumBySlug(slug: string): Promise<Museum> {
-        const response = await apiGet<{ data: any }>(`/museums/${slug}`);
-        return this.mapDatabaseToMuseum(response.data);
+        const response = await apiGet<any>(`/museums/${slug}`);
+        const singleData = this.extractSingleData(response);
+        return this.mapDatabaseToMuseum(singleData);
     }
 
     /**
-    * Get museum by ID
-    */
+     * Get museum by ID
+     */
     // async getMuseumById(id: string): Promise<Museum> {
     //     // The backend mostly uses slug, but let's assume we might need ID lookup if the controller supports it.
     //     // Controller has generic GET /museums/:slug, checking if it handles UUIDs too. 
@@ -297,24 +315,27 @@ class MuseumService {
      * Create new museum (Institution/Admin)
      */
     async createMuseum(data: CreateMuseumData): Promise<Museum> {
-        const response = await apiPost<{ data: any }>('/museums', data);
-        return this.mapDatabaseToMuseum(response.data);
+        const response = await apiPost<any>('/museums', data);
+        const singleData = this.extractSingleData(response);
+        return this.mapDatabaseToMuseum(singleData);
     }
 
     /**
      * Update museum
      */
     async updateMuseum(id: string, data: Partial<CreateMuseumData>): Promise<Museum> {
-        const response = await apiPut<{ data: any }>(`/museums/${id}`, data);
-        return this.mapDatabaseToMuseum(response.data);
+        const response = await apiPut<any>(`/museums/${id}`, data);
+        const singleData = this.extractSingleData(response);
+        return this.mapDatabaseToMuseum(singleData);
     }
 
     /**
      * Verify museum (Admin)
      */
     async verifyMuseum(id: string): Promise<Museum> {
-        const response = await apiPut<{ data: any }>(`/museums/${id}/verify`);
-        return this.mapDatabaseToMuseum(response.data);
+        const response = await apiPut<any>(`/museums/${id}/verify`);
+        const singleData = this.extractSingleData(response);
+        return this.mapDatabaseToMuseum(singleData);
     }
 
     /**
