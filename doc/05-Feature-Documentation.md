@@ -60,13 +60,14 @@ Accessible to all visitors.
 - **Create Artwork with AI (AI Studio)**: A state-of-the-art generative AI creation workspace integrated into the AI Studio Dashboard.
   - **Text Prompting**: Accepts complex descriptive text inputs to generate high-resolution artistic assets.
   - **Curated Heritage Styles**: Users can select from standard preset artistic styles (e.g., Oil Painting, Digital Art, Batik Heritage) to automatically guide the generation.
-  - **DALL-E & Stability AI Integration**: Proxied server-side image generation using modern AI APIs.
+  - **Cloudflare Workers AI (Flux.1-schnell)**: Primary server-side image generation engine. Integrates `@cf/black-forest-labs/flux-1-schnell` model with a robust fallback chain (Pollinations AI → Curated Unsplash Art) to guarantee 100% service uptime even if API quotas are exhausted.
   - **Generation History & Management**: View past creations, download them to local storage, and publish them directly to the community feed.
 - **Generative Summaries**: AI creating fast, digestible narratives of complex historical artifacts.
 - **Multilingual Support**: Auto-translation of exhibition descriptions for international tourists.
 - **Smart Metadata Standardizer**: AI engine classifying unstructured institutional catalogs into the unified SeniQu database.
 
 ### 1.6 Community Feed Enhancements
+- **Interactive Masonry Community Grid**: Rebuilt the Community Feed as a highly-optimized masonry grid layout (2-column mobile, 3-column tablet, 4-column desktop) with lazy-loaded image shimmer skeletons, double-tap to like with interactive pop animations, and paging with a "Load More" action.
 - **Featured Styles Carousel**: A premium, interactive carousel that showcases popular cultural styles (e.g. Batik, Digital Art, Oil Painting).
   - **Touch & Mouse Drag Scrolling**: Fully supports swipe-dragging on mobile and scroll-dragging on desktop.
   - **Autoplay & Navigation**: Slides auto-advance with a smooth, continuous CSS transition, pausing intelligently on hover or manual interaction.

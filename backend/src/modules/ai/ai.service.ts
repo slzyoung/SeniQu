@@ -220,102 +220,64 @@ export class AiService {
       }
 
       // 2. Perform actual AI image generation
+      // Priority: Cloudflare Workers AI Flux → Pollinations AI → Curated Unsplash Art
       let imageBuffer: Buffer;
       let contentType = 'image/png';
-      const geminiApiKey = this.configService.get<string>('ai.geminiApiKey');
+      const cfApiToken = this.configService.get<string>('ai.cfApiToken');
+      const cfAccountId = this.configService.get<string>('ai.cfAccountId');
+      const cleanPrompt = sanitizePromptForStorage(prompt);
+      const fullPrompt = `${cleanPrompt}, ${style} style, digital art, high quality, masterpiece`;
 
-      if (geminiApiKey) {
-        this.logger.log(`Generating artwork using Google AI Studio Imagen 4 for user ${userId}...`);
+      // === Tier 1: Cloudflare Workers AI — FLUX.1-schnell (free 10k neurons/day) ===
+      if (cfApiToken && cfAccountId) {
+        this.logger.log(`Generating artwork using Cloudflare Workers AI Flux for user ${userId}...`);
         try {
-          // Sanitize user prompt and build the final generation prompt
-          const cleanPrompt = sanitizePromptForStorage(prompt);
-          const geminiResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${geminiApiKey}`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                instances: [
-                  {
-                    prompt: `${cleanPrompt}, ${style} style, digital art, high quality, masterpiece`,
-                  },
-                ],
-                parameters: {
-                  sampleCount: 1,
-                  aspectRatio: '1:1',
-                },
-              }),
-            }
-          );
+          const cfUrl = `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/ai/run/@cf/black-forest-labs/flux-1-schnell`;
+          const cfResponse = await fetch(cfUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${cfApiToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              prompt: fullPrompt,
+              num_steps: 8,
+            }),
+          });
 
-          if (!geminiResponse.ok) {
-            const errText = await geminiResponse.text();
-            this.logger.error(`Gemini Imagen API error (status ${geminiResponse.status}): ${errText}`);
-            throw new Error(`Gemini Imagen API responded with status ${geminiResponse.status}`);
+          if (!cfResponse.ok) {
+            const errText = await cfResponse.text();
+            this.logger.error(`Cloudflare Workers AI error (status ${cfResponse.status}): ${errText}`);
+            throw new Error(`Cloudflare Workers AI responded with status ${cfResponse.status}`);
           }
 
-          const responseData = await geminiResponse.json();
-          const base64Image = responseData?.predictions?.[0]?.bytesBase64Encoded;
+          const cfContentType = cfResponse.headers.get('content-type') || '';
 
-          if (!base64Image) {
-            throw new Error('No image returned in predictions from Gemini Imagen API.');
-          }
-
-          imageBuffer = Buffer.from(base64Image, 'base64');
-          contentType = responseData?.predictions?.[0]?.mimeType || 'image/png';
-        } catch (err: any) {
-          this.logger.warn(`Gemini Imagen API failed: ${err.message}. Falling back to Pollinations AI...`);
-          try {
-            const pollUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(`${prompt}, ${style} style`)}?width=800&height=1000&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
-            const pollResponse = await fetch(pollUrl);
-            if (!pollResponse.ok) {
-              throw new Error(`Pollinations API responded with status ${pollResponse.status}`);
-            }
-            const arrayBuffer = await pollResponse.arrayBuffer();
+          if (cfContentType.includes('image/')) {
+            // Response is raw binary image
+            const arrayBuffer = await cfResponse.arrayBuffer();
             imageBuffer = Buffer.from(arrayBuffer);
+            contentType = cfContentType.split(';')[0] || 'image/png';
+            this.logger.log(`Cloudflare Workers AI Flux returned raw image (${contentType}, ${imageBuffer.length} bytes)`);
+          } else {
+            // Response is JSON with base64 image
+            const cfData = await cfResponse.json();
+            if (!cfData?.success || !cfData?.result?.image) {
+              const errMsg = cfData?.errors?.map((e: any) => e.message).join(', ') || 'Unknown error';
+              throw new Error(`Cloudflare Workers AI returned error: ${errMsg}`);
+            }
+            imageBuffer = Buffer.from(cfData.result.image, 'base64');
             contentType = 'image/png';
-          } catch (pollErr: any) {
-            this.logger.warn(`Pollinations AI failed: ${pollErr.message}. Falling back to curated high-fidelity Unsplash Art...`);
-            const fallbackInfo = getRandomCuratedArt(style);
-            const fallbackResponse = await fetch(fallbackInfo.url);
-            if (!fallbackResponse.ok) {
-              throw new InternalServerErrorException('AI image generation service and all fallbacks are currently unavailable.');
-            }
-            const arrayBuffer = await fallbackResponse.arrayBuffer();
-            imageBuffer = Buffer.from(arrayBuffer);
-            contentType = fallbackInfo.mimeType;
+            this.logger.log(`Cloudflare Workers AI Flux returned base64 image (${imageBuffer.length} bytes)`);
           }
+        } catch (cfErr: any) {
+          this.logger.warn(`Cloudflare Workers AI Flux failed: ${cfErr.message}. Falling back to Pollinations AI...`);
+          imageBuffer = await this.fallbackImageGeneration(prompt, style);
         }
       } else {
-        // Free and robust fallback: Pollinations AI
-        this.logger.log(`Generating artwork using Pollinations AI for user ${userId}...`);
-        try {
-          const pollUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(`${prompt}, ${style} style`)}?width=800&height=1000&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
-          const pollResponse = await fetch(pollUrl);
-          if (!pollResponse.ok) {
-            throw new Error(`Pollinations API responded with status ${pollResponse.status}`);
-          }
-          const arrayBuffer = await pollResponse.arrayBuffer();
-          imageBuffer = Buffer.from(arrayBuffer);
-          contentType = 'image/png';
-        } catch (err: any) {
-          this.logger.warn(`Pollinations AI generation failed: ${err.message}. Falling back to curated high-fidelity Unsplash Art...`);
-          try {
-            const fallbackInfo = getRandomCuratedArt(style);
-            const fallbackResponse = await fetch(fallbackInfo.url);
-            if (!fallbackResponse.ok) {
-              throw new Error('Failed to fetch fallback Unsplash artwork.');
-            }
-            const arrayBuffer = await fallbackResponse.arrayBuffer();
-            imageBuffer = Buffer.from(arrayBuffer);
-            contentType = fallbackInfo.mimeType;
-          } catch (fallbackErr: any) {
-            this.logger.error(`All image generation fallbacks failed: ${fallbackErr.message}`);
-            throw new InternalServerErrorException('Failed to generate image from AI generator.');
-          }
-        }
+        // No Cloudflare token configured — use fallback chain
+        this.logger.log(`No Cloudflare Workers AI token configured. Using fallback generators for user ${userId}...`);
+        imageBuffer = await this.fallbackImageGeneration(prompt, style);
       }
 
       // 3. Upload generated buffer to Cloudflare R2 CDN
@@ -369,6 +331,45 @@ export class AiService {
       }
       this.logger.error(`Generation failed: ${error.message}`, error.stack);
       throw new InternalServerErrorException('An error occurred during generation.');
+    }
+  }
+
+  /**
+   * Fallback image generation chain: Pollinations AI → Curated Unsplash Art
+   */
+  private async fallbackImageGeneration(prompt: string, style: string): Promise<Buffer> {
+    // Try Pollinations AI
+    try {
+      this.logger.log('Attempting Pollinations AI fallback...');
+      const pollUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(`${prompt}, ${style} style`)}?width=800&height=1000&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
+      const pollResponse = await fetch(pollUrl);
+      if (!pollResponse.ok) {
+        throw new Error(`Pollinations API responded with status ${pollResponse.status}`);
+      }
+      const arrayBuffer = await pollResponse.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      if (buffer.length < 1000) {
+        throw new Error('Pollinations returned suspiciously small response');
+      }
+      this.logger.log(`Pollinations AI generated image (${buffer.length} bytes)`);
+      return buffer;
+    } catch (pollErr: any) {
+      this.logger.warn(`Pollinations AI failed: ${pollErr.message}. Falling back to curated artwork...`);
+    }
+
+    // Final fallback: Curated high-fidelity artwork
+    try {
+      const fallbackInfo = getRandomCuratedArt(style);
+      const fallbackResponse = await fetch(fallbackInfo.url);
+      if (!fallbackResponse.ok) {
+        throw new Error('Failed to fetch curated artwork.');
+      }
+      const arrayBuffer = await fallbackResponse.arrayBuffer();
+      this.logger.log(`Using curated artwork fallback: ${fallbackInfo.url}`);
+      return Buffer.from(arrayBuffer);
+    } catch (fallbackErr: any) {
+      this.logger.error(`All image generation fallbacks failed: ${fallbackErr.message}`);
+      throw new InternalServerErrorException('AI image generation service and all fallbacks are currently unavailable.');
     }
   }
 

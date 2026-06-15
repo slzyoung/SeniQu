@@ -91,6 +91,8 @@ export const configuration = () => ({
     ai: {
         hfAccessToken: process.env.HF_ACCESS_TOKEN || '',
         geminiApiKey: process.env.GEMINI_API_KEY || '',
+        cfAccountId: process.env.R2_ACCOUNT_ID || '',
+        cfApiToken: process.env.CLOUDFLARE_API_TOKEN || '',
         dailyLimit: parseInt(process.env.AI_DAILY_LIMIT || "5", 10),
     },
 })
@@ -156,6 +158,7 @@ export const validationSchema = Joi.object({
     // AI Generation
     HF_ACCESS_TOKEN: Joi.string().optional().allow(''),
     GEMINI_API_KEY: Joi.string().optional().allow(''),
+    CLOUDFLARE_API_TOKEN: Joi.string().optional().allow(''),
     AI_DAILY_LIMIT: Joi.number().default(5),
 })
 

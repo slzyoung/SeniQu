@@ -7,7 +7,7 @@
  * Screen 3 (Edit):  Generated result details with comments/likes
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import {
   Sparkles,
   Plus,
@@ -116,6 +116,10 @@ export default function AIDashboardPage() {
   const [detailMode, setDetailMode] = useState<'owner' | 'community'>('owner');
   const [commentContent, setCommentContent] = useState('');
   const [activeTab, setActiveTab] = useState<'my-artworks' | 'community'>('my-artworks');
+  const [feedPage, setFeedPage] = useState(1);
+  const [doubleTapLikeId, setDoubleTapLikeId] = useState<string | null>(null);
+  const lastTapRef = useRef<{ id: string; time: number } | null>(null);
+  const FEED_PAGE_SIZE = 8;
 
   const { data: commentsData, isLoading: commentsLoading } = useAIComments(
     selectedArtwork?.id || '',
@@ -172,6 +176,37 @@ export default function AIDashboardPage() {
     setUploadTitle('');
     setModalTab('generate');
   };
+
+  // Paginated community feed
+  const communityItems = feed?.communityFeed || [];
+  const paginatedFeed = useMemo(() => communityItems.slice(0, feedPage * FEED_PAGE_SIZE), [communityItems, feedPage, FEED_PAGE_SIZE]);
+  const hasMoreFeed = paginatedFeed.length < communityItems.length;
+
+  // Double-tap to like handler
+  const handleCardTap = useCallback((item: any) => {
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last && last.id === item.id && now - last.time < 350) {
+      // Double tap — like!
+      if (!item.isLiked) {
+        toggleLikeMutation.mutate(item.id);
+      }
+      setDoubleTapLikeId(item.id);
+      setTimeout(() => setDoubleTapLikeId(null), 900);
+      lastTapRef.current = null;
+    } else {
+      lastTapRef.current = { id: item.id, time: now };
+      // Single tap — navigate after delay
+      setTimeout(() => {
+        if (lastTapRef.current?.id === item.id && lastTapRef.current?.time === now) {
+          setSelectedArtwork(item);
+          setDetailMode('community');
+          setScreen('edit');
+          lastTapRef.current = null;
+        }
+      }, 350);
+    }
+  }, [toggleLikeMutation]);
 
   const avatarSrc = user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.displayName || 'U')}&background=1a1a2e&color=c9a84c&size=80`;
 
@@ -652,10 +687,13 @@ export default function AIDashboardPage() {
             <div className="aic-section">
               <div className="aic-section__head">
                 <h2 className="aic-section__title">Community Feed</h2>
+                {communityItems.length > 0 && (
+                  <span className="aic-section__count">{communityItems.length}</span>
+                )}
               </div>
             </div>
 
-            {feed?.communityFeed && feed.communityFeed.length === 0 ? (
+            {communityItems.length === 0 ? (
               <div className="aic-empty-state">
                 <Sparkles className="w-10 h-10 text-muted mb-2 opacity-50" />
                 <p className="aic-empty-state__title">Community Feed Empty</p>
@@ -664,61 +702,100 @@ export default function AIDashboardPage() {
                 </p>
               </div>
             ) : (
-              <div className="aic-community-feed">
-                {feed?.communityFeed?.map((item, index) => (
+              <>
+                <div className="aic-cfeed">
+                  {paginatedFeed.map((item, index) => (
+                    <motion.div
+                      key={item.id}
+                      className="aic-cfeed__card"
+                      initial={{ opacity: 0, scale: 0.92 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      whileTap={{ scale: 0.97 }}
+                      transition={{
+                        type: 'spring',
+                        damping: 22,
+                        stiffness: 180,
+                        delay: Math.min((index % FEED_PAGE_SIZE) * 0.04, 0.28),
+                      }}
+                      onClick={() => handleCardTap(item)}
+                    >
+                      {/* Image */}
+                      <div className="aic-cfeed__img-wrap">
+                        <img
+                          src={item.imageUrl}
+                          alt={cleanPromptDisplay(item.prompt)}
+                          className="aic-cfeed__img"
+                          loading="lazy"
+                        />
+
+                        {/* Gradient overlay */}
+                        <div className="aic-cfeed__gradient" />
+
+                        {/* Style badge */}
+                        <span className="aic-cfeed__style">{item.style}</span>
+
+                        {/* Double-tap heart animation */}
+                        <AnimatePresence>
+                          {doubleTapLikeId === item.id && (
+                            <motion.div
+                              className="aic-cfeed__heart-pop"
+                              initial={{ scale: 0, opacity: 0 }}
+                              animate={{ scale: 1.2, opacity: 1 }}
+                              exit={{ scale: 1.8, opacity: 0 }}
+                              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                            >
+                              <Heart className="w-12 h-12 fill-white text-white drop-shadow-lg" />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
+                      {/* Bottom info */}
+                      <div className="aic-cfeed__info">
+                        <div className="aic-cfeed__author">
+                          <img
+                            src={item.author.avatarUrl}
+                            alt={item.author.name}
+                            className="aic-cfeed__avatar"
+                          />
+                          <span className="aic-cfeed__name">{item.author.name}</span>
+                        </div>
+                        <div className="aic-cfeed__row">
+                          <p className="aic-cfeed__prompt">{cleanPromptDisplay(item.prompt)}</p>
+                          <button
+                            className={`aic-cfeed__like ${item.isLiked ? 'aic-cfeed__like--active' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleLikeMutation.mutate(item.id);
+                            }}
+                          >
+                            <Heart className={`w-3.5 h-3.5 ${item.isLiked ? 'fill-current' : ''}`} />
+                            <span>{item.likes}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+
+                {/* Load More */}
+                {hasMoreFeed && (
                   <motion.div
-                    key={item.id}
-                    className="aic-community-card"
-                    initial={{ opacity: 0, y: 24 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    whileHover={{ y: -4, boxShadow: '0 12px 24px rgba(0, 0, 0, 0.12)' }}
-                    whileTap={{ scale: 0.99 }}
-                    transition={{ type: 'spring', damping: 20, stiffness: 150, delay: Math.min(index * 0.06, 0.3) }}
-                    onClick={() => {
-                      setSelectedArtwork(item);
-                      setDetailMode('community');
-                      setScreen('edit');
-                    }}
+                    className="aic-cfeed__load-more"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3 }}
                   >
-                    <div className="aic-community-card__header">
-                      <img
-                        src={item.author.avatarUrl}
-                        alt={item.author.name}
-                        className="aic-community-card__avatar"
-                      />
-                      <div className="aic-community-card__user-info">
-                        <span className="aic-community-card__username">{item.author.name}</span>
-                        <span className="aic-community-card__style-tag">{item.style}</span>
-                      </div>
-                    </div>
-
-                    <div className="aic-community-card__img-container">
-                      <img
-                        src={item.imageUrl}
-                        alt={item.prompt}
-                        className="aic-community-card__img"
-                        loading="lazy"
-                      />
-                    </div>
-
-                    <div className="aic-community-card__footer">
-                      <p className="aic-community-card__prompt">"{cleanPromptDisplay(item.prompt)}"</p>
-                      <div className="aic-community-card__actions">
-                        <button
-                          className={`aic-community-card__like-btn ${item.isLiked ? 'aic-community-card__like-btn--active' : ''}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleLikeMutation.mutate(item.id);
-                          }}
-                        >
-                          <Heart className={`w-4 h-4 ${item.isLiked ? 'fill-red text-red' : ''}`} />
-                          <span>{item.likes}</span>
-                        </button>
-                      </div>
-                    </div>
+                    <button
+                      className="aic-cfeed__load-btn"
+                      onClick={() => setFeedPage(p => p + 1)}
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Load More ({communityItems.length - paginatedFeed.length} remaining)
+                    </button>
                   </motion.div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </>
         )}

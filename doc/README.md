@@ -22,6 +22,7 @@
 | 12 | [Enterprise Admin Architecture](./12-Enterprise-Admin-Architecture.md) | Unified UI/UX, RBAC enhancements, and admin dashboard modernization |
 | 13 | [Hybrid Mapping & Cost Optimization](./13-Hybrid-Mapping-Cost-Optimization.md) | Architectural details on hybrid map rendering and budget-protection Google Maps API practices |
 | 14 | [Geolocation Detection & Testing](./14-Geolocation-Testing-Guide.md) | Technical explanation of IP-based geolocation issues and developer testing instructions |
+| 15 | [Cloudflare Workers AI & Generative Artwork Engine](./15-Cloudflare-Workers-AI.md) | Overview of Cloudflare Workers AI Flux image generation, multi-tier fallback architecture, and UI/UX feed enhancements |
 
 ---
 
