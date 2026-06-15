@@ -166,6 +166,9 @@ class MuseumService {
             contactInfo: data.contact_info,
             isVerified: data.is_verified,
             reviews: data.reviews || [],
+            type: data.type || 'museum',
+            total_ratings: data.total_ratings || 0,
+            cover_image_url: data.cover_image_url || '',
         };
     };
 

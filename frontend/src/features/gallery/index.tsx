@@ -20,7 +20,6 @@ import {
     ArrowLeft,
     Upload,
     Plus,
-    ArrowRight,
     ShieldCheck,
     Fingerprint,
     ExternalLink,
@@ -499,7 +498,6 @@ export function MuseumDetail() {
     const [wikiData, setWikiData] = useState<any>(null);
     const [wikiLoading, setWikiLoading] = useState(false);
     const [placeDetails, setPlaceDetails] = useState<any>(null);
-    const [placeDetailsLoading, setPlaceDetailsLoading] = useState(false);
 
     const [isFollowing, setIsFollowing] = useState(() => {
         const key = `follow-museum-${id}`;
@@ -667,7 +665,7 @@ export function MuseumDetail() {
     // Combine database data and mock fallback
     const museumName = dbMuseum?.name || placeDetails?.name || mockData.name;
     const museumLocation = placeDetails?.address || 
-                           (dbMuseum ? `${dbMuseum.city || ''}, ${dbMuseum.province || 'Indonesia'}`.replace(/^,\s*/, '') : mockData.location);
+                           (dbMuseum ? `${dbMuseum.address?.city || ''}, ${dbMuseum.address?.province || 'Indonesia'}`.replace(/^,\s*/, '') : mockData.location);
     const descriptionStart = dbMuseum?.description 
         ? dbMuseum.description.substring(0, 150)
         : mockData.descStart;
@@ -706,7 +704,6 @@ export function MuseumDetail() {
                 : (dbMuseum.id?.startsWith('g-') ? dbMuseum.id.substring(2) : null);
             
             if (googlePlaceId) {
-                setPlaceDetailsLoading(true);
                 try {
                     const details = await museumService.getPlaceDetails(googlePlaceId);
                     if (details) {
@@ -714,8 +711,6 @@ export function MuseumDetail() {
                     }
                 } catch (error) {
                     console.error('[PLACE_DETAILS_FETCH] Error:', error);
-                } finally {
-                    setPlaceDetailsLoading(false);
                 }
             }
         };
@@ -898,7 +893,21 @@ export function MuseumDetail() {
                                 Deskripsi & Sejarah Singkat
                             </h3>
                             <p className="text-sm leading-relaxed text-stone-700 dark:text-stone-300 font-serif text-justify leading-relaxed">
-                                {wikiData?.extract || dbMuseum?.description || placeDetails?.description || mockData.descStart}
+                                {wikiData?.extract || (
+                                    <>
+                                        {descriptionStart}
+                                        {descriptionMore && !expandedText && '...'}
+                                        {descriptionMore && expandedText && descriptionMore}
+                                        {descriptionMore && (
+                                            <button 
+                                                onClick={() => setExpandedText(!expandedText)}
+                                                className="text-gold hover:underline font-bold text-xs ml-1 focus:outline-none inline"
+                                            >
+                                                {expandedText ? ' Sembunyikan' : ' Baca Selengkapnya'}
+                                            </button>
+                                        )}
+                                    </>
+                                )}
                             </p>
                             {wikiData?.url && (
                                 <a 

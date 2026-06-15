@@ -1821,11 +1821,31 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                     };
                 }).filter((p: any) => p !== null);
 
-                // Deduplicate by place id
-                const seen = new Set<string>();
+                // Deduplicate by place id AND normalized name + proximity
+                const seenIds = new Set();
+                const seenNames: Record<string, { lat: number; lng: number }> = {};
                 const unique = mapped.filter((p: any) => {
-                    if (seen.has(p.id)) return false;
-                    seen.add(p.id);
+                    // ID-based dedup
+                    if (seenIds.has(p.id)) return false;
+                    seenIds.add(p.id);
+
+                    // Name + proximity dedup
+                    const normalName = (p.name || '').toLowerCase()
+                        .replace(/[^a-z0-9\s]/g, '')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                    if (normalName) {
+                        const existing = seenNames[normalName];
+                        if (existing) {
+                            const latDiff = Math.abs((p.latitude || 0) - existing.lat);
+                            const lngDiff = Math.abs((p.longitude || 0) - existing.lng);
+                            if (latDiff < 0.005 && lngDiff < 0.005) {
+                                return false; // Duplicate by name + proximity
+                            }
+                        }
+                        seenNames[normalName] = { lat: p.latitude || 0, lng: p.longitude || 0 };
+                    }
+
                     return true;
                 });
 

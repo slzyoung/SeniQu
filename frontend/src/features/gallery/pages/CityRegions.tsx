@@ -10,10 +10,9 @@ import { museumService } from '../../../services/museumService';
 import { 
     CITY_WHITELIST, 
     CITY_REGIONS_MAP, 
-    CityMetadata, 
-    RegionDetail,
     classifyPlace
 } from '../data/citiesRegistry';
+import type { CityMetadata, RegionDetail } from '../data/citiesRegistry';
 
 import { RegionExplorationView } from '../components/RegionExplorationView';
 import { RegionDetailFeedView } from '../components/RegionDetailFeedView';
@@ -163,7 +162,7 @@ export function CityRegions() {
 
     // Validate parameter (Anti-Hacking Security check)
     const normalizedCityId = id.toLowerCase().trim();
-    const cityMetadata = useMemo(() => {
+    const cityMetadata: CityMetadata | null = useMemo(() => {
         return CITY_WHITELIST[normalizedCityId] || null;
     }, [normalizedCityId]);
 
@@ -219,7 +218,46 @@ export function CityRegions() {
                 if (!isSubscribed) return;
 
                 const loadedPlaces = res?.places || [];
-                setPlaces(loadedPlaces);
+
+                 // CLIENT-SIDE DEDUPLICATION SAFETY NET
+                 // Removes duplicates by normalized name + geographic proximity (500m)
+                 const deduplicatedPlaces: any[] = [];
+                 const seenNames: Record<string, { lat: number; lng: number }> = {};
+ 
+                 for (const place of loadedPlaces) {
+                     const normalName = (place.name || '').toLowerCase()
+                         .replace(/[^a-z0-9\s]/g, '')
+                         .replace(/\s+/g, ' ')
+                         .trim();
+ 
+                     if (!normalName) {
+                         deduplicatedPlaces.push(place);
+                         continue;
+                     }
+ 
+                     const existing = seenNames[normalName];
+                     if (existing) {
+                         // Check proximity (simple degree-based ~500m approximation)
+                         const latDiff = Math.abs((place.latitude || 0) - existing.lat);
+                         const lngDiff = Math.abs((place.longitude || 0) - existing.lng);
+                         if (latDiff < 0.005 && lngDiff < 0.005) {
+                             // Duplicate — skip this one (keep the first occurrence which has higher priority from backend)
+                             continue;
+                         }
+                     }
+ 
+                     seenNames[normalName] = {
+                         lat: place.latitude || 0,
+                         lng: place.longitude || 0,
+                     };
+                     deduplicatedPlaces.push(place);
+                 }
+
+                if (deduplicatedPlaces.length < loadedPlaces.length) {
+                    console.log(`[DEDUP-CLIENT] Removed ${loadedPlaces.length - deduplicatedPlaces.length} duplicate places`);
+                }
+
+                setPlaces(deduplicatedPlaces);
                 
                 if (res?.quotaExceeded) {
                     setIsOfflineMode(true);
@@ -246,7 +284,7 @@ export function CityRegions() {
     // ============================================
     // DYNAMIC REGION CALCULATION & FILTERING
     // ============================================
-    const regionsList = useMemo(() => {
+    const regionsList: RegionDetail[] = useMemo(() => {
         return CITY_REGIONS_MAP[normalizedCityId] || [];
     }, [normalizedCityId]);
 
@@ -280,9 +318,24 @@ export function CityRegions() {
     // Dynamically resolve region card images using real place cover images from Google Maps/DB
     const regionImages = useMemo(() => {
         const images: Record<string, string> = {};
+
+        /** Extract a valid image URL from a place, returns null if none */
+        const extractImageUrl = (place: any): string | null => {
+            if (place.cover_image_url && typeof place.cover_image_url === 'string' && place.cover_image_url.startsWith('http')) {
+                return place.cover_image_url;
+            }
+            if (place.photos && place.photos.length > 0) {
+                const firstPhoto = place.photos[0];
+                if (typeof firstPhoto === 'string' && firstPhoto.startsWith('http')) {
+                    return firstPhoto;
+                }
+            }
+            return null;
+        };
+
         regionsList.forEach(reg => {
             const placeWithImage = places.find(place => {
-                const img = place.cover_image_url || (place.photos && place.photos[0]);
+                const img = extractImageUrl(place);
                 if (!img) return false;
 
                 const address = (place.address || '').toLowerCase();
@@ -297,7 +350,7 @@ export function CityRegions() {
             });
 
             if (placeWithImage) {
-                images[reg.id] = placeWithImage.cover_image_url || placeWithImage.photos[0];
+                images[reg.id] = extractImageUrl(placeWithImage) || reg.image;
             } else {
                 images[reg.id] = reg.image;
             }

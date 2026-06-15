@@ -379,5 +379,40 @@ To prevent duplicate records and ensure that searches on the frontend successful
 * **Image Update**: Updated their cover images to the new CDN-hosted `isbonmalang.jpg` asset.
 
 ---
-*Document Version: 1.4.0*
-*Last Updated: 2026-06-04*
+
+## 12. City-Wide Deduplication & Code Hardening (June 15, 2026 Updates)
+
+To resolve duplicate place listings appearing in search results across major cities (Jakarta, Yogyakarta, Malang, etc.) and eliminate TypeScript compilation errors, we implemented strict multi-key deduplication and refactored the frontend page imports and type-safety boundaries:
+
+### A. Proximity & Name-Based Deduplication Algorithm (Backend & Frontend)
+* **Problem**: Identical cultural/heritage destinations returned from multiple sources (local database, Google Places, OpenStreetMap) had different IDs, leading to duplicate cards and markers on the map for the same physical location.
+* **Proximity Matching**: Implemented a Haversine-based name-proximity algorithm:
+  * Compares lowercase, alphanumeric-normalized names (removing special characters and collapsing whitespace).
+  * If two places have the same normalized name and their geographical distance is $\le 500$ meters ($0.5$ km), they are classified as duplicates.
+  * In the frontend (`PublicNearbyPage.tsx`), a bounding-box difference of $< 0.005$ degrees lat/lng is used as a fast, localized name-proximity check.
+* **Priority-Score Sorting**: Resolved duplicates by ranking records using a scoring hierarchy:
+  1. **Curated DB Records**: Preferred above all (score +100).
+  2. **Curated Cover Images**: Places with real cover URLs get high preference (+50).
+  3. **Google Place Photos**: Valid photo URL links (+30).
+  4. **Category**: Museums (+10) over Galleries (+5).
+  5. **Ratings**: High-rating nodes are preferred (+3).
+  6. **Rich Descriptions**: Detailed, non-placeholder summaries (+2).
+* **OSM Pre-Filter**: Applied identical deduplication logic directly to OpenStreetMap (OSM) Overpass query processing in `museums.service.ts` before ingesting places to the cache database.
+
+### B. Image Source Protection (`RegionDetailFeedView.tsx`)
+* **Photo Resolving Fix**: Ensured that the image scraper/renderer does not feed Google Places API reference photo objects (e.g. `{name: 'places/.../photos/...'}`) directly into image `src` tags, which caused broken/missing images.
+* **Direct URL Fallbacks**: Configured `displayImage` to resolve only to direct string URLs starting with `http`, falling back to categorized high-quality local placeholders if missing.
+
+### C. TypeScript Type Safety & Import Refactoring (`CityRegions.tsx` & `index.tsx`)
+* **TypeScript Warn Fix**: Resolved compiler warnings `TS6133` (declared but never read) for `CityMetadata` and `RegionDetail` by splitting standard value imports from type-only imports using `import type` and explicitly annotating the returned `useMemo` states:
+  * `const cityMetadata: CityMetadata | null = useMemo(...)`
+  * `const regionsList: RegionDetail[] = useMemo(...)`
+* **Unused Variable Purge**: Removed unused imports like `ArrowRight` (from `lucide-react`) and unused local states/variables such as `placeDetailsLoading` to comply with strict production TS configuration rules.
+
+### D. Premium Description Toggle ("Baca Selengkapnya")
+* **Interactive UI Expansion**: Integrated a state-driven toggle using the `expandedText` state hook to support premium description collapse/expand rendering.
+* **Character-Boundary Fallbacks**: Safely displays the first 150 characters of the history description (`descriptionStart`), appending `...` and a styled gold-colored toggle link that expands inline to show the remainder (`descriptionMore`) when triggered.
+
+---
+*Document Version: 1.5.0*
+*Last Updated: 2026-06-15*

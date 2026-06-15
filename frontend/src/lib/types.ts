@@ -136,6 +136,9 @@ export interface Museum {
     contactInfo?: ContactInfo;
     isVerified: boolean;
     reviews?: any[];
+    type?: string;
+    total_ratings?: number;
+    cover_image_url?: string;
 }
 
 export interface Gallery {

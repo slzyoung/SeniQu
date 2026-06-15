@@ -299,7 +299,22 @@ export class MuseumsService {
             this.haversineDistance(lat, lng, b.latitude, b.longitude)
         );
 
-        return localPlaces;
+        // Deduplicate by normalized name + proximity (500m)
+        const deduplicated: any[] = [];
+        const seenNames = new Map<string, { lat: number; lng: number }>();
+        for (const p of localPlaces) {
+            const normalName = (p.name || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+            if (!normalName) { deduplicated.push(p); continue; }
+            const existing = seenNames.get(normalName);
+            if (existing) {
+                const dist = this.haversineDistance(p.latitude, p.longitude, existing.lat, existing.lng);
+                if (dist <= 0.5) continue; // Skip duplicate within 500m
+            }
+            seenNames.set(normalName, { lat: p.latitude, lng: p.longitude });
+            deduplicated.push(p);
+        }
+
+        return deduplicated;
     }
 
     /**
@@ -403,12 +418,27 @@ out center body;`;
             this.haversineDistance(lat, lng, b.latitude, b.longitude)
         );
 
-        // Background ingestion: ingest these OSM places into our DB so they are cached locally!
-        if (filteredPlaces.length > 0) {
-            this.ingestOSMPlacesToDatabase(filteredPlaces);
+        // Deduplicate by normalized name + proximity (500m)
+        const deduplicated: any[] = [];
+        const seenOsmNames = new Map<string, { lat: number; lng: number }>();
+        for (const p of filteredPlaces) {
+            const normalName = (p.name || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+            if (!normalName) { deduplicated.push(p); continue; }
+            const existing = seenOsmNames.get(normalName);
+            if (existing) {
+                const dist = this.haversineDistance(p.latitude, p.longitude, existing.lat, existing.lng);
+                if (dist <= 0.5) continue;
+            }
+            seenOsmNames.set(normalName, { lat: p.latitude, lng: p.longitude });
+            deduplicated.push(p);
         }
 
-        return filteredPlaces;
+        // Background ingestion: ingest these OSM places into our DB so they are cached locally!
+        if (deduplicated.length > 0) {
+            this.ingestOSMPlacesToDatabase(deduplicated);
+        }
+
+        return deduplicated;
     }
 
     /**
@@ -788,31 +818,87 @@ out center body;`;
             return { places: localPlaces, region: regionInfo, quotaExceeded: true };
         }
 
-        // === Deduplicate prioritizing database-sourced records and category (museum > gallery > heritage) ===
-        const uniqueMap = new Map<string, any>();
+        // === ROBUST MULTI-KEY DEDUPLICATION ===
+        // Deduplicates by: 1) slug match, 2) normalized name + proximity (500m)
+        // Prioritizes: DB records with real cover images > Google records > OSM records
+
+        /** Normalize a place name for dedup comparison */
+        const normalizeName = (name: string): string =>
+            (name || '').toLowerCase()
+                .replace(/[^a-z0-9\s]/g, '')  // remove special chars
+                .replace(/\s+/g, ' ')           // collapse whitespace
+                .trim();
+
+        /** Check if a record is from the local database (not Google/OSM) */
+        const isDbRecord = (p: any): boolean =>
+            !!p.slug && !p.slug.startsWith('g-') && !p.slug.startsWith('osm-')
+            && !p.id?.startsWith('ChI') && !p.id?.startsWith('g-') && !p.id?.startsWith('osm-');
+
+        /** Score a record for priority (higher = keep) */
+        const recordPriority = (p: any): number => {
+            let score = 0;
+            if (isDbRecord(p)) score += 100;                                             // DB records always preferred
+            if (p.cover_image_url) score += 50;  // has curated cover image from DB
+            else if (p.photos && p.photos.length > 0 && typeof p.photos[0] === 'string' && p.photos[0].startsWith('http')) score += 30; // has valid photo URL
+            if (p.type === 'museum') score += 10;
+            else if (p.type === 'gallery') score += 5;
+            if (p.rating && p.rating > 0) score += 3;
+            if (p.description && !p.description.startsWith('Tempat bersejarah/budaya:')) score += 2;
+            return score;
+        };
+
+        // Pass 1: Group by slug
+        const slugMap = new Map<string, any>();
         for (const p of allPlaces) {
             const slug = p.slug || this.getPlaceSlug(p.id);
-            const existing = uniqueMap.get(slug);
-            if (!existing) {
-                uniqueMap.set(slug, p);
-            } else {
-                const existingIsDb = !!existing.slug && !existing.id?.startsWith('g-') && !existing.id?.startsWith('ChI');
-                const newIsDb = !!p.slug && !p.id?.startsWith('g-') && !p.id?.startsWith('ChI');
+            p._dedup_slug = slug; // Attach for later use
+            const existing = slugMap.get(slug);
+            if (!existing || recordPriority(p) > recordPriority(existing)) {
+                slugMap.set(slug, p);
+            }
+        }
 
-                if (newIsDb && !existingIsDb) {
-                    uniqueMap.set(slug, p);
-                } else if (!newIsDb && existingIsDb) {
-                    // Keep existing database record
-                } else {
-                    if (p.type === 'museum') {
-                        uniqueMap.set(slug, p);
-                    } else if (p.type === 'gallery' && existing.type !== 'museum') {
-                        uniqueMap.set(slug, p);
+        // Pass 2: Group by normalized name + proximity (catches cross-source duplicates)
+        const nameProximityMap = new Map<string, any>(); // key = normalized name
+        for (const p of slugMap.values()) {
+            const normalName = normalizeName(p.name);
+            if (!normalName) {
+                nameProximityMap.set(p._dedup_slug, p); // fallback: use slug as key
+                continue;
+            }
+
+            let foundDuplicate = false;
+            for (const [key, existing] of nameProximityMap) {
+                const existingName = normalizeName(existing.name);
+                if (existingName === normalName) {
+                    // Same normalized name — check if geographically close (within 500m)
+                    const dist = this.haversineDistance(
+                        p.latitude || 0, p.longitude || 0,
+                        existing.latitude || 0, existing.longitude || 0,
+                    );
+                    if (dist <= 0.5) { // 500 meters
+                        // Duplicate found — keep the one with higher priority
+                        if (recordPriority(p) > recordPriority(existing)) {
+                            nameProximityMap.delete(key);
+                            nameProximityMap.set(p._dedup_slug, p);
+                        }
+                        foundDuplicate = true;
+                        break;
                     }
                 }
             }
+            if (!foundDuplicate) {
+                nameProximityMap.set(p._dedup_slug, p);
+            }
         }
-        const unique = Array.from(uniqueMap.values());
+
+        // Clean up temp fields
+        for (const p of nameProximityMap.values()) {
+            delete p._dedup_slug;
+        }
+
+        this.logger.log(`[DEDUP] ${allPlaces.length} raw → ${slugMap.size} after slug dedup → ${nameProximityMap.size} after name+proximity dedup`);
+        const unique = Array.from(nameProximityMap.values());
         const radiusKm = safeRadius / 1000;
         const textPlaceIds = new Set(textPlaces.map(p => p.id));
         const filtered = unique.filter(p => {
@@ -849,7 +935,10 @@ out center body;`;
                 const slug = p.slug || this.getPlaceSlug(p.id);
                 const cached = dbPlaceMap.get(slug);
                 if (cached) {
-                    p.photos = cached.coverImageUrl ? [cached.coverImageUrl] : [];
+                    if (cached.coverImageUrl) {
+                        p.cover_image_url = cached.coverImageUrl; // Set direct field for frontend
+                        p.photos = [cached.coverImageUrl];
+                    }
                     p.reviews = cached.reviews;
                     if (cached.description) p.description = cached.description;
                     if (cached.type) p.type = cached.type; // Overwrite type to match database curated value!
