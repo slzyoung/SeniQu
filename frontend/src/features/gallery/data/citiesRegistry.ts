@@ -163,11 +163,19 @@ export function getRealPlaceCoverImage(name: string, type?: string, existingCove
     if (n.includes('great asia afrika') || n.includes('great asia africa')) return 'https://cdn.seniqu.art/cities/thegreatasiaafrika.jpeg';
 
     // Surabaya
+    if (n.includes('mangrove wonorejo')) return 'https://cdn.seniqu.art/museums/images/hutan-mangrove-wonorejo.png';
+    if (n.includes('kenjeran park')) return 'https://cdn.seniqu.art/museums/images/kenjeran-park.png';
+    if (n.includes('taman harmoni')) return 'https://cdn.seniqu.art/museums/images/taman-harmoni.png';
+    if (n.includes('ciputra waterpark')) return 'https://cdn.seniqu.art/museums/images/ciputra-waterpark.png';
+    if (n.includes('graha natura')) return 'https://cdn.seniqu.art/museums/images/graha-natura-park.png';
+    if (n.includes('vin autism')) return 'https://cdn.seniqu.art/museums/images/vin-autism-gallery.png';
+    if (n.includes('sampoerna')) return 'https://cdn.seniqu.art/museums/images/house-of-sampoerna.png';
+    if (n.includes('jembatan merah')) return 'https://cdn.seniqu.art/museums/images/jembatan-merah.png';
+    if (n.includes('north quay')) return 'https://cdn.seniqu.art/museums/images/surabaya-north-quay.png';
+    if (n.includes('suramadu')) return 'https://cdn.seniqu.art/museums/images/suramadu-bridge.png';
     if (n.includes('durasim')) return 'https://upload.wikimedia.org/wikipedia/commons/e/ea/Gedung_Cak_Durasim.jpg';
     if (n.includes('kapal selam') || n.includes('monkasel')) return 'https://upload.wikimedia.org/wikipedia/commons/e/ea/KRI_Pasopati_410.jpg';
     if (n.includes('sepuluh nopember') || n.includes('10 november')) return 'https://upload.wikimedia.org/wikipedia/commons/b/b3/Museum_10_November.jpg';
-    if (n.includes('sampoerna')) return 'https://upload.wikimedia.org/wikipedia/commons/1/1a/House_of_Sampoerna_exterior.jpg';
-    if (n.includes('jembatan merah')) return 'https://upload.wikimedia.org/wikipedia/commons/1/10/Jembatan_Merah_Surabaya.jpg';
     if (n.includes('pahlawan') && n.includes('tugu')) return 'https://upload.wikimedia.org/wikipedia/commons/4/4b/Tugu_Pahlawan_Surabaya.jpg';
     if (n.includes('sanggar agung')) return 'https://upload.wikimedia.org/wikipedia/commons/b/b5/Sanggar_Agung_Kwan_Im_Statue.jpg';
     if (n.includes('al-akbar') || n.includes('al akbar')) return 'https://upload.wikimedia.org/wikipedia/commons/0/07/Masjid_Al-Akbar_Surabaya.jpg';

@@ -300,6 +300,7 @@ export class MuseumsService {
                     rating: Number(m.rating) || 5.0,
                     reviewCount: m.total_artworks || 0,
                     type: m.type || 'museum',
+                    cover_image_url: m.cover_image_url || undefined,
                     photos: m.cover_image_url ? [m.cover_image_url] : [],
                     reviews: m.reviews && m.reviews.length > 0 ? m.reviews : this.generateMockReviews(m.name, Number(m.rating) || 5.0),
                 };

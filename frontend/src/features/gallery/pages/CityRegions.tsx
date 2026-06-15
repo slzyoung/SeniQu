@@ -406,7 +406,9 @@ export function CityRegions() {
 
         regionsList.forEach(reg => {
             // Prioritize curated CDN/custom region cover images and prevent dynamic override
-            if (reg.image && (reg.image.includes('/cities/') || reg.image.includes('cdn.seniqu.art/cities/'))) {
+            // BUT do not prioritize it if it is the generic city-wide image (e.g. jakarta.webp or surabaya.webp)
+            const isGenericCityImage = cityMetadata && reg.image === cityMetadata.image;
+            if (reg.image && !isGenericCityImage && (reg.image.includes('/cities/') || reg.image.includes('cdn.seniqu.art/cities/'))) {
                 images[reg.id] = reg.image;
                 return;
             }
@@ -425,7 +427,7 @@ export function CityRegions() {
             }
         });
         return images;
-    }, [places, regionsList]);
+    }, [places, regionsList, cityMetadata]);
 
     // Filtered by active region
     const regionPlaces = useMemo(() => {
