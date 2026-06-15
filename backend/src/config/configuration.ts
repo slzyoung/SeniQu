@@ -60,7 +60,7 @@ export const configuration = () => ({
         accountId: process.env.R2_ACCOUNT_ID,
         accessKeyId: process.env.R2_ACCESS_KEY_ID,
         secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-        bucketName: process.env.R2_BUCKET_NAME || "seniqu-assets",
+        bucketName: process.env.R2_BUCKET_NAME || "seniqu",
         publicUrl: process.env.R2_PUBLIC_URL,
     },
 
@@ -141,7 +141,7 @@ export const validationSchema = Joi.object({
     R2_ACCOUNT_ID: Joi.string().optional(),
     R2_ACCESS_KEY_ID: Joi.string().optional(),
     R2_SECRET_ACCESS_KEY: Joi.string().optional(),
-    R2_BUCKET_NAME: Joi.string().default("seniqu-assets"),
+    R2_BUCKET_NAME: Joi.string().default("seniqu"),
     R2_PUBLIC_URL: Joi.string().optional(),
 
     // SMTP
