@@ -220,8 +220,9 @@ export class AiService {
       }
 
       // 2. Perform actual AI image generation
-      // Priority: Cloudflare Workers AI Flux → Pollinations AI → Curated Unsplash Art
-      let imageBuffer: Buffer;
+      // Priority: Cloudflare Workers AI Flux → Pollinations AI → Curated CDN Art
+      let imageBuffer: Buffer | null = null;
+      let directImageUrl: string | null = null;
       let contentType = 'image/png';
       const cfApiToken = this.configService.get<string>('ai.cfApiToken');
       const cfAccountId = this.configService.get<string>('ai.cfAccountId');
@@ -272,37 +273,43 @@ export class AiService {
           }
         } catch (cfErr: any) {
           this.logger.warn(`Cloudflare Workers AI Flux failed: ${cfErr.message}. Falling back to Pollinations AI...`);
-          imageBuffer = await this.fallbackImageGeneration(prompt, style);
+          const fallbackResult = await this.fallbackImageGenerationWithUrl(prompt, style);
+          imageBuffer = fallbackResult.buffer;
+          directImageUrl = fallbackResult.directUrl;
         }
       } else {
         // No Cloudflare token configured — use fallback chain
         this.logger.log(`No Cloudflare Workers AI token configured. Using fallback generators for user ${userId}...`);
-        imageBuffer = await this.fallbackImageGeneration(prompt, style);
+        const fallbackResult = await this.fallbackImageGenerationWithUrl(prompt, style);
+        imageBuffer = fallbackResult.buffer;
+        directImageUrl = fallbackResult.directUrl;
       }
 
-      // 3. Upload generated buffer to Cloudflare R2 CDN
-      const filename = `${uuidv4()}.png`;
-      const fakeFile: Express.Multer.File = {
-        fieldname: 'file',
-        originalname: filename,
-        encoding: '7bit',
-        mimetype: contentType,
-        size: imageBuffer.length,
-        buffer: imageBuffer,
-        stream: null as any,
-        destination: '',
-        filename: filename,
-        path: '',
-      };
+      // 3. Upload generated buffer to Cloudflare R2 CDN (with retry + graceful fallback)
+      let imageUrl: string;
 
-      this.logger.log(`Uploading AI generated image to R2 CDN...`);
-      const uploadResult = await this.storageService.uploadFile(
-        fakeFile,
-        'ai-outputs',
-        userId
-      );
+      if (imageBuffer) {
+        const filename = `${uuidv4()}.png`;
+        const fakeFile: Express.Multer.File = {
+          fieldname: 'file',
+          originalname: filename,
+          encoding: '7bit',
+          mimetype: contentType,
+          size: imageBuffer.length,
+          buffer: imageBuffer,
+          stream: null as any,
+          destination: '',
+          filename: filename,
+          path: '',
+        };
 
-      const imageUrl = uploadResult.url;
+        imageUrl = await this.uploadToR2WithRetry(fakeFile, userId, directImageUrl);
+      } else if (directImageUrl) {
+        // No buffer available, use the direct URL
+        imageUrl = directImageUrl;
+      } else {
+        throw new InternalServerErrorException('AI image generation failed: no image data produced.');
+      }
 
       // 4. Save metadata in Supabase (with sanitized prompt)
       const cleanedPrompt = sanitizePromptForStorage(prompt);
@@ -335,12 +342,80 @@ export class AiService {
   }
 
   /**
-   * Fallback image generation chain: Pollinations AI → Curated Unsplash Art
+   * Upload image to R2 with retry (1 retry with exponential backoff).
+   * If R2 upload completely fails (e.g., signature mismatch, credentials rotated),
+   * gracefully fall back to the direct image URL so the user still gets a result.
    */
-  private async fallbackImageGeneration(prompt: string, style: string): Promise<Buffer> {
+  private async uploadToR2WithRetry(
+    fakeFile: Express.Multer.File,
+    userId: string,
+    fallbackUrl: string | null,
+    maxRetries = 1,
+  ): Promise<string> {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        this.logger.log(`Uploading AI generated image to R2 CDN (attempt ${attempt + 1})...`);
+        const uploadResult = await this.storageService.uploadFile(
+          fakeFile,
+          'ai-outputs',
+          userId,
+        );
+
+        // Check if the upload returned a data URI (dev fallback) — that's fine
+        if (uploadResult.url.startsWith('data:')) {
+          this.logger.warn('R2 upload fell back to Base64 data URI (dev mode).');
+        }
+
+        return uploadResult.url;
+      } catch (uploadErr: any) {
+        const isSignatureError = uploadErr.message?.includes('signature') ||
+          uploadErr.message?.includes('SignatureDoesNotMatch') ||
+          uploadErr.message?.includes('AccessDenied');
+
+        this.logger.error(
+          `R2 upload attempt ${attempt + 1} failed: ${uploadErr.message}` +
+          (isSignatureError ? ' [CREDENTIAL ISSUE — check R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY]' : ''),
+        );
+
+        if (attempt < maxRetries) {
+          const backoffMs = 1000 * Math.pow(2, attempt);
+          this.logger.log(`Retrying R2 upload in ${backoffMs}ms...`);
+          await new Promise(resolve => setTimeout(resolve, backoffMs));
+          continue;
+        }
+
+        // All retries exhausted — use fallback URL if available
+        if (fallbackUrl) {
+          this.logger.warn(
+            `R2 upload failed after ${maxRetries + 1} attempts. ` +
+            `Using direct image URL as fallback: ${fallbackUrl}`,
+          );
+          return fallbackUrl;
+        }
+
+        // No fallback URL available — throw with clear message
+        throw new InternalServerErrorException(
+          'Storage upload failed. Please check your R2 credentials (R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY) in your environment configuration.',
+        );
+      }
+    }
+
+    // Should never reach here, but TypeScript needs it
+    throw new InternalServerErrorException('Unexpected upload state.');
+  }
+
+  /**
+   * Fallback image generation chain: Pollinations AI → Curated CDN Art
+   * Returns both the image buffer and the direct source URL.
+   * The directUrl serves as a fallback if R2 upload fails.
+   */
+  private async fallbackImageGenerationWithUrl(
+    prompt: string,
+    style: string,
+  ): Promise<{ buffer: Buffer; directUrl: string }> {
     // Try Pollinations AI
     try {
-      this.logger.log('Attempting Pollinations AI fallback...');
+      this.logger.log('Attempting Pollinations AI fallback (with URL)...');
       const pollUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(`${prompt}, ${style} style`)}?width=800&height=1000&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
       const pollResponse = await fetch(pollUrl);
       if (!pollResponse.ok) {
@@ -352,12 +427,13 @@ export class AiService {
         throw new Error('Pollinations returned suspiciously small response');
       }
       this.logger.log(`Pollinations AI generated image (${buffer.length} bytes)`);
-      return buffer;
+      // Use the final redirect URL (Pollinations may redirect)
+      return { buffer, directUrl: pollUrl };
     } catch (pollErr: any) {
       this.logger.warn(`Pollinations AI failed: ${pollErr.message}. Falling back to curated artwork...`);
     }
 
-    // Final fallback: Curated high-fidelity artwork
+    // Final fallback: Curated CDN artwork
     try {
       const fallbackInfo = getRandomCuratedArt(style);
       const fallbackResponse = await fetch(fallbackInfo.url);
@@ -366,11 +442,20 @@ export class AiService {
       }
       const arrayBuffer = await fallbackResponse.arrayBuffer();
       this.logger.log(`Using curated artwork fallback: ${fallbackInfo.url}`);
-      return Buffer.from(arrayBuffer);
+      return { buffer: Buffer.from(arrayBuffer), directUrl: fallbackInfo.url };
     } catch (fallbackErr: any) {
       this.logger.error(`All image generation fallbacks failed: ${fallbackErr.message}`);
       throw new InternalServerErrorException('AI image generation service and all fallbacks are currently unavailable.');
     }
+  }
+
+  /**
+   * @deprecated Use fallbackImageGenerationWithUrl instead
+   * Kept for backwards compatibility
+   */
+  private async fallbackImageGeneration(prompt: string, style: string): Promise<Buffer> {
+    const result = await this.fallbackImageGenerationWithUrl(prompt, style);
+    return result.buffer;
   }
 
   /**

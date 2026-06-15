@@ -95,6 +95,51 @@ export class StorageService implements OnModuleInit {
         })
 
         this.logger.log(`✅ Cloudflare R2 storage initialized (bucket: ${this.bucketName})`)
+
+        // Validate credentials asynchronously on startup
+        this.validateCredentials().catch(() => {
+            // Error already logged inside validateCredentials
+        })
+    }
+
+    /**
+     * Validate R2 credentials on startup by attempting a HeadObject on a known path.
+     * Logs a critical warning if credentials are invalid (signature mismatch).
+     */
+    private async validateCredentials(): Promise<void> {
+        try {
+            // Attempt a lightweight HeadObject on a non-existent key — the 404 is fine,
+            // but a SignatureDoesNotMatch error means credentials are wrong.
+            await this.s3Client.send(
+                new HeadObjectCommand({
+                    Bucket: this.bucketName,
+                    Key: "__health-check__",
+                }),
+            )
+        } catch (error: any) {
+            const code = error?.name || error?.Code || ""
+            if (code === "NotFound" || error?.$metadata?.httpStatusCode === 404) {
+                // 404 is expected — credentials work fine
+                this.logger.log("✅ R2 credential validation passed.")
+                return
+            }
+
+            if (
+                code === "SignatureDoesNotMatch" ||
+                code === "InvalidAccessKeyId" ||
+                error?.message?.includes("signature") ||
+                error?.message?.includes("AccessDenied")
+            ) {
+                this.logger.error(
+                    "🚨 R2 CREDENTIAL VALIDATION FAILED! " +
+                    `Error: ${code} — ${error.message}. ` +
+                    "Storage uploads WILL fail. Please update R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY in your environment."
+                )
+                return
+            }
+
+            this.logger.warn(`⚠️  R2 credential check inconclusive: ${code} — ${error.message}`)
+        }
     }
 
     /**
@@ -243,9 +288,25 @@ export class StorageService implements OnModuleInit {
             }
         } catch (error: any) {
             const env = this.configService.get<string>("nodeEnv")
+            const errorCode = error?.name || error?.Code || ""
+            const isSignatureError =
+                errorCode === "SignatureDoesNotMatch" ||
+                errorCode === "InvalidAccessKeyId" ||
+                error?.message?.includes("signature") ||
+                error?.message?.includes("AccessDenied")
+
             if (env === "production") {
+                if (isSignatureError) {
+                    this.logger.error(
+                        `🚨 R2 CDN Upload CREDENTIAL ERROR for ${key}: ${errorCode} — ${error.message}. ` +
+                        `Check R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY in production environment.`
+                    )
+                    throw new InternalServerErrorException(
+                        "Storage credentials are misconfigured. Please contact the administrator."
+                    )
+                }
                 this.logger.error(`R2 CDN Upload failed for ${key} in production: ${error.message}`)
-                throw new InternalServerErrorException(`Storage upload failed: ${error.message}`)
+                throw new InternalServerErrorException("Storage upload failed. Please try again later.")
             }
 
             this.logger.warn(`R2 CDN Upload failed for ${key}: ${error.message}. Falling back to Base64 database storage!`)
