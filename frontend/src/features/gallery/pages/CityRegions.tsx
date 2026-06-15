@@ -10,7 +10,8 @@ import { museumService } from '../../../services/museumService';
 import { 
     CITY_WHITELIST, 
     CITY_REGIONS_MAP, 
-    classifyPlace
+    classifyPlace,
+    getRealPlaceCoverImage
 } from '../data/citiesRegistry';
 import type { CityMetadata, RegionDetail } from '../data/citiesRegistry';
 
@@ -21,6 +22,86 @@ import { PlaceDetailsView } from '../components/PlaceDetailsView';
 type FilterType = 'museum' | 'gallery' | 'heritage';
 type ViewMode = 'list' | 'map';
 type NavigationPage = 'regions' | 'places' | 'details';
+
+// ============================================
+// REGION CLASSIFICATION HELPERS
+// ============================================
+
+// Clean search strings to avoid false matches (e.g. matching "timur" in "Jawa Timur")
+const cleanStrForRegionMatching = (str: string): string => {
+    if (!str) return '';
+    return str.toLowerCase()
+        .replace(/\bjawa timur\b/gi, '')
+        .replace(/\beast java\b/gi, '')
+        .replace(/\bjawa barat\b/gi, '')
+        .replace(/\bwest java\b/gi, '')
+        .replace(/\bjawa tengah\b/gi, '')
+        .replace(/\bcentral java\b/gi, '')
+        .replace(/\bdki jakarta\b/gi, '')
+        .replace(/\bjakarta raya\b/gi, '')
+        .replace(/\bdaerah istimewa yogyakarta\b/gi, '')
+        .replace(/\bdiy yogyakarta\b/gi, '')
+        .replace(/\byogyakarta\b/gi, '')
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
+// Calculate Haversine distance
+const getHaversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371; // km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+};
+
+// Match a place to its corresponding region
+const getMatchingRegionId = (place: any, regionsList: RegionDetail[]): string | null => {
+    if (!place || !regionsList || regionsList.length === 0) return null;
+
+    // 1. Keyword-based matching with cleaning
+    const cleanName = cleanStrForRegionMatching(place.name);
+    const cleanAddress = cleanStrForRegionMatching(place.address);
+    const cleanCity = cleanStrForRegionMatching(place.city);
+
+    for (const reg of regionsList) {
+        const matches = reg.keywords.some(keyword => {
+            const kw = keyword.toLowerCase().trim();
+            if (!kw) return false;
+            return cleanName.includes(kw) || cleanAddress.includes(kw) || cleanCity.includes(kw);
+        });
+        if (matches) {
+            return reg.id;
+        }
+    }
+
+    // 2. Fallback to Geographic proximity matching (closest region center)
+    const lat = typeof place.latitude === 'number' ? place.latitude : 0;
+    const lng = typeof place.longitude === 'number' ? place.longitude : 0;
+    if (lat !== 0 && lng !== 0) {
+        const regionsWithCoords = regionsList.filter(r => typeof r.lat === 'number' && typeof r.lng === 'number');
+        if (regionsWithCoords.length > 0) {
+            let closestRegion = regionsWithCoords[0];
+            let minDist = getHaversineDistance(lat, lng, closestRegion.lat!, closestRegion.lng!);
+
+            for (let i = 1; i < regionsWithCoords.length; i++) {
+                const dist = getHaversineDistance(lat, lng, regionsWithCoords[i].lat!, regionsWithCoords[i].lng!);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closestRegion = regionsWithCoords[i];
+                }
+            }
+            return closestRegion.id;
+        }
+    }
+
+    return null;
+};
 
 // ============================================
 // CURATED MASTERPIECE COLLECTIONS (R2 CDN Mockups)
@@ -296,20 +377,10 @@ export function CityRegions() {
         });
 
         places.forEach(place => {
-            const address = (place.address || '').toLowerCase();
-            const name = (place.name || '').toLowerCase();
-            const cityField = (place.city || '').toLowerCase();
-            
-            regionsList.forEach(reg => {
-                const matches = reg.keywords.some(keyword => 
-                    address.includes(keyword) || 
-                    name.includes(keyword) || 
-                    cityField.includes(keyword)
-                );
-                if (matches) {
-                    counts[reg.id]++;
-                }
-            });
+            const matchedId = getMatchingRegionId(place, regionsList);
+            if (matchedId && counts[matchedId] !== undefined) {
+                counts[matchedId]++;
+            }
         });
 
         return counts;
@@ -319,34 +390,32 @@ export function CityRegions() {
     const regionImages = useMemo(() => {
         const images: Record<string, string> = {};
 
-        /** Extract a valid image URL from a place, returns null if none */
         const extractImageUrl = (place: any): string | null => {
-            if (place.cover_image_url && typeof place.cover_image_url === 'string' && place.cover_image_url.startsWith('http')) {
-                return place.cover_image_url;
-            }
-            if (place.photos && place.photos.length > 0) {
-                const firstPhoto = place.photos[0];
-                if (typeof firstPhoto === 'string' && firstPhoto.startsWith('http')) {
-                    return firstPhoto;
-                }
+            const rawCover = (place.cover_image_url && typeof place.cover_image_url === 'string' && place.cover_image_url.startsWith('http'))
+                ? place.cover_image_url
+                : (place.photos && place.photos.length > 0 && typeof place.photos[0] === 'string' && place.photos[0].startsWith('http'))
+                    ? place.photos[0]
+                    : undefined;
+            
+            const resolved = getRealPlaceCoverImage(place.name, classifyPlace(place) || 'museum', rawCover);
+            if (resolved && !resolved.includes('unsplash.com/photo-1582555172866') && !resolved.includes('unsplash.com/photo-1596402184320')) {
+                return resolved;
             }
             return null;
         };
 
         regionsList.forEach(reg => {
+            // Prioritize curated CDN/custom region cover images and prevent dynamic override
+            if (reg.image && (reg.image.includes('/cities/') || reg.image.includes('cdn.seniqu.art/cities/'))) {
+                images[reg.id] = reg.image;
+                return;
+            }
+
             const placeWithImage = places.find(place => {
+                const matchedId = getMatchingRegionId(place, regionsList);
+                if (matchedId !== reg.id) return false;
                 const img = extractImageUrl(place);
-                if (!img) return false;
-
-                const address = (place.address || '').toLowerCase();
-                const name = (place.name || '').toLowerCase();
-                const cityField = (place.city || '').toLowerCase();
-
-                return reg.keywords.some(keyword =>
-                    address.includes(keyword) ||
-                    name.includes(keyword) ||
-                    cityField.includes(keyword)
-                );
+                return !!img;
             });
 
             if (placeWithImage) {
@@ -362,19 +431,10 @@ export function CityRegions() {
     const regionPlaces = useMemo(() => {
         let result = places;
         if (selectedRegionId !== 'all') {
-            const activeReg = regionsList.find(r => r.id === selectedRegionId);
-            if (activeReg) {
-                result = places.filter(place => {
-                    const address = (place.address || '').toLowerCase();
-                    const name = (place.name || '').toLowerCase();
-                    const cityField = (place.city || '').toLowerCase();
-                    return activeReg.keywords.some(keyword => 
-                        address.includes(keyword) || 
-                        name.includes(keyword) || 
-                        cityField.includes(keyword)
-                    );
-                });
-            }
+            result = places.filter(place => {
+                const matchedId = getMatchingRegionId(place, regionsList);
+                return matchedId === selectedRegionId;
+            });
         }
         return result;
     }, [places, selectedRegionId, regionsList]);

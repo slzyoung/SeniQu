@@ -39,6 +39,7 @@ import { useAddBookmark } from '../../hooks/useUser';
 import { museumService } from '../../services/museumService';
 import { formatDate } from '../../lib/utils';
 import { motion } from 'framer-motion';
+import { getRealPlaceCoverImage } from './data/citiesRegistry';
 
 import { MobileBottomNav } from '../../components/common/MobileBottomNav';
 
@@ -673,12 +674,17 @@ export function MuseumDetail() {
         ? dbMuseum.description.substring(150)
         : mockData.descMore;
     const museumInitial = museumName ? museumName.charAt(0).toUpperCase() : 'M';
+    const category = (dbMuseum?.type || 'museum').toLowerCase();
 
-    const coverImage = placeDetails?.photos?.[0] || 
-                       dbMuseum?.cover_image_url || 
-                       (dbMuseum?.images && dbMuseum.images.length > 0 ? dbMuseum.images[0] : null) || 
-                       wikiData?.thumbnail || 
-                       mockData.coverImage;
+    const coverImage = getRealPlaceCoverImage(
+        museumName,
+        category,
+        placeDetails?.photos?.[0] || 
+        dbMuseum?.cover_image_url || 
+        (dbMuseum?.images && dbMuseum.images.length > 0 ? dbMuseum.images[0] : null) || 
+        wikiData?.thumbnail || 
+        mockData.coverImage
+    );
 
     // Load Wikipedia history and Google Place details
     useEffect(() => {
@@ -744,7 +750,6 @@ export function MuseumDetail() {
         });
     }, [allArtworks, id, museumName]);
 
-    const category = (dbMuseum?.type || 'museum').toLowerCase();
     const fallbackArtworks = MASTERPIECE_COLLECTIONS[category] || MASTERPIECE_COLLECTIONS.museum;
 
     const displayArtworks = museumArtworks.length > 0 ? museumArtworks : fallbackArtworks;

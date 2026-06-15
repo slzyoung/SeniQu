@@ -1,5 +1,71 @@
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, BadRequestException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
+import { StorageService } from '../../storage/storage.service';
+import { ConfigService } from '@nestjs/config';
+import { v4 as uuidv4 } from 'uuid';
+
+/**
+ * CDN-hosted curated artwork images per style for Imagen/Pollinations fallback.
+ * These are served from our Cloudflare R2 CDN for reliability.
+ */
+const CDN_BASE = 'https://cdn.seniqu.art/ai/themes';
+
+const CURATED_ARTWORKS: Record<string, string[]> = {
+  fantasy: [
+    `${CDN_BASE}/fantasy_world.jpg`,
+  ],
+  anime: [
+    `${CDN_BASE}/anime_portrait.jpg`,
+  ],
+  cyberpunk: [
+    `${CDN_BASE}/cyberpunk.jpg`,
+  ],
+  watercolor: [
+    `${CDN_BASE}/watercolor.jpg`,
+  ],
+  'oil-painting': [
+    `${CDN_BASE}/oil_painting.jpg`,
+  ],
+  'digital-art': [
+    `${CDN_BASE}/digital_art.jpg`,
+  ],
+  batik: [
+    `${CDN_BASE}/batik_heritage.jpg`,
+  ],
+  default: [
+    `${CDN_BASE}/fantasy_world.jpg`,
+    `${CDN_BASE}/watercolor.jpg`,
+    `${CDN_BASE}/digital_art.jpg`,
+  ],
+};
+
+function getRandomCuratedArt(style: string): { url: string; mimeType: string } {
+  const normStyle = (style || 'default').toLowerCase().trim();
+  let pool = CURATED_ARTWORKS[normStyle];
+  if (!pool || pool.length === 0) {
+    const foundKey = Object.keys(CURATED_ARTWORKS).find(k => normStyle.includes(k));
+    pool = foundKey ? CURATED_ARTWORKS[foundKey] : CURATED_ARTWORKS.default;
+  }
+  const url = pool[Math.floor(Math.random() * pool.length)];
+  const mimeType = url.endsWith('.png') ? 'image/png' : 'image/jpeg';
+  return { url, mimeType };
+}
+
+/**
+ * Sanitize user prompt before storage:
+ * - Strip markdown bold syntax (**text**)
+ * - Strip formatting labels like "Prompt (≤500 chars):"
+ * - Strip HTML tags
+ * - Normalize whitespace
+ */
+function sanitizePromptForStorage(raw: string): string {
+  return raw
+    .replace(/\*\*[^*]*\*\*:?/g, '')      // Strip **bold labels**
+    .replace(/<[^>]*>/g, '')               // Strip HTML tags
+    .replace(/[\u201C\u201D]/g, '"')       // Normalize smart quotes
+    .replace(/\s+/g, ' ')                  // Collapse whitespace
+    .trim();
+}
 
 /**
  * AI Service
@@ -10,134 +76,279 @@ import { DatabaseService } from '../../database/database.service';
 export class AiService {
   private readonly logger = new Logger(AiService.name);
 
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly storageService: StorageService,
+    private readonly configService: ConfigService,
+  ) {}
 
   /**
-   * Returns structured mockup feed data for the AI Dashboard UI.
-   * Mirrors the design: "For You", "Featured Styles", "Community Feed".
+   * Returns structured feed data for the AI Dashboard UI.
+   * Fetches public creations from the database and returns them for "For You" and "Community Feed".
    */
-  async getAiFeed() {
-    const forYou = [
-      {
-        id: 'fy-1',
-        title: 'Dark and Mysterious City',
-        prompt: 'Create a dark and mysterious illustration of a city for rusia, the ttrpg created by Critical...',
+  async getAiFeed(userId?: string) {
+    const supabase = this.databaseService.getAdminClient();
+
+    // Fetch public artworks
+    const { data: dbArtworks, error } = await supabase
+      .from('ai_artworks')
+      .select(`
+        id,
+        prompt,
+        image_url,
+        style,
+        likes_count,
+        created_at,
+        user_id
+      `)
+      .eq('visibility', 'public')
+      .order('created_at', { ascending: false })
+      .limit(30);
+
+    if (error) {
+      this.logger.error(`Failed to fetch public AI artworks: ${error.message}`);
+    }
+
+    const artworks = dbArtworks || [];
+
+    // Fetch author info for these user IDs
+    const userIds = Array.from(new Set(artworks.map((a: any) => a.user_id)));
+    let userProfiles: Record<string, any> = {};
+
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('users')
+        .select('id, display_name, avatar_url')
+        .in('id', userIds);
+      if (profiles) {
+        profiles.forEach((p: any) => {
+          userProfiles[p.id] = p;
+        });
+      }
+    }
+
+    // Fetch liked artwork IDs by this user to mark them
+    let likedArtworkIds = new Set<string>();
+    if (userId) {
+      const { data: likes } = await supabase
+        .from('ai_artwork_likes')
+        .select('artwork_id')
+        .eq('user_id', userId);
+      if (likes) {
+        likedArtworkIds = new Set(likes.map((l: any) => l.artwork_id));
+      }
+    }
+
+    // Map to feed item structure
+    const feedItems = artworks.map((item: any) => {
+      const author = userProfiles[item.user_id];
+      return {
+        id: item.id,
+        imageUrl: item.image_url,
+        prompt: item.prompt,
+        likes: item.likes_count || 0,
+        isLiked: likedArtworkIds.has(item.id),
+        style: item.style || 'default',
         author: {
-          name: 'HoltHamlet',
-          isPremium: true,
-          avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop',
-        },
-        imageUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&h=800&fit=crop',
-        likes: 120,
-      },
-      {
-        id: 'fy-2',
-        title: 'Ethereal Forest Spirit',
-        prompt: 'An ethereal forest spirit standing in a bioluminescent forest...',
-        author: {
-          name: 'LlamaDr',
-          isPremium: false,
-          avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop',
-        },
-        imageUrl: 'https://images.unsplash.com/photo-1606907568019-2db11718c3cb?w=600&h=800&fit=crop',
-        likes: 85,
-      },
-      {
-        id: 'fy-3',
-        title: 'Celestial Dragon',
-        prompt: 'A majestic celestial dragon soaring through a starlit nebula...',
-        author: {
-          name: 'ArtisanX',
-          isPremium: true,
-          avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop',
-        },
-        imageUrl: 'https://images.unsplash.com/photo-1578301978693-85fa9fd0c331?w=600&h=800&fit=crop',
-        likes: 312,
-      },
-    ];
+          name: author?.display_name || 'Anonymous',
+          avatarUrl: author?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
+        }
+      };
+    });
 
     const featuredStyles = [
       {
         id: 'style-fantasy',
         name: 'Fantasy World',
-        imageUrl: 'https://images.unsplash.com/photo-1618336753174-8e100f91ce0a?w=400&h=200&fit=crop',
+        imageUrl: `${CDN_BASE}/fantasy_world.jpg`,
       },
       {
         id: 'style-anime',
         name: 'Anime Portrait',
-        imageUrl: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&h=200&fit=crop',
+        imageUrl: `${CDN_BASE}/anime_portrait.jpg`,
       },
       {
         id: 'style-cyberpunk',
         name: 'Cyberpunk City',
-        imageUrl: 'https://images.unsplash.com/photo-1515630278258-407f66498911?w=400&h=200&fit=crop',
+        imageUrl: `${CDN_BASE}/cyberpunk.jpg`,
       },
       {
         id: 'style-watercolor',
         name: 'Watercolor',
-        imageUrl: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=400&h=200&fit=crop',
+        imageUrl: `${CDN_BASE}/watercolor.jpg`,
+      },
+      {
+        id: 'style-oil-painting',
+        name: 'Oil Painting',
+        imageUrl: `${CDN_BASE}/oil_painting.jpg`,
+      },
+      {
+        id: 'style-digital-art',
+        name: 'Digital Art',
+        imageUrl: `${CDN_BASE}/digital_art.jpg`,
+      },
+      {
+        id: 'style-batik',
+        name: 'Batik Heritage',
+        imageUrl: `${CDN_BASE}/batik_heritage.jpg`,
       },
     ];
 
-    const communityFeed = [
-      {
-        id: 'cf-1',
-        author: {
-          name: 'CaesarJ',
-          avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
-        },
-        imageUrl: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=600&h=600&fit=crop',
-      },
-      {
-        id: 'cf-2',
-        author: {
-          name: 'Polemic',
-          isPremium: true,
-          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
-        },
-        imageUrl: 'https://images.unsplash.com/photo-1547826039-bfc35e0f1ea8?w=600&h=600&fit=crop',
-      },
-      {
-        id: 'cf-3',
-        author: {
-          name: 'PixelMage',
-          avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&h=100&fit=crop',
-        },
-        imageUrl: 'https://images.unsplash.com/photo-1549490349-8643362247b5?w=600&h=600&fit=crop',
-      },
-    ];
-
-    return { forYou, featuredStyles, communityFeed };
+    return {
+      forYou: feedItems,
+      featuredStyles,
+      communityFeed: feedItems,
+    };
   }
 
-  /**
-   * Simulates AI generation and persists result to the database.
-   * In production, this would call a real AI model API.
-   */
   async generateArtwork(userId: string, prompt: string, style: string) {
     try {
-      const supabase = this.databaseService.getClient();
+      const supabase = this.databaseService.getAdminClient();
 
-      // Simulate AI processing delay (2-4 seconds)
-      const delay = 2000 + Math.random() * 2000;
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      // 1. Enforce strict MVP limit of 3 total AI generation prompts per user
+      const { count, error: countError } = await supabase
+        .from('ai_artworks')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId);
 
-      // Mockup generated images based on style
-      const mockImages: Record<string, string> = {
-        'fantasy': 'https://images.unsplash.com/photo-1618336753174-8e100f91ce0a?w=800&h=1000&fit=crop',
-        'anime': 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=800&h=1000&fit=crop',
-        'cyberpunk': 'https://images.unsplash.com/photo-1515630278258-407f66498911?w=800&h=1000&fit=crop',
-        'watercolor': 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=800&h=1000&fit=crop',
-        'default': 'https://images.unsplash.com/photo-1620121692029-d088224ddc74?w=800&h=1000&fit=crop',
+      if (countError) {
+        this.logger.error(`Failed to query user artwork count: ${countError.message}`);
+      } else if (count !== null && count >= 3) {
+        throw new BadRequestException(
+          'Limit Promosi MVP Tercapai: Setiap user dibatasi maksimal 3x generate artwork.'
+        );
+      }
+
+      // 2. Perform actual AI image generation
+      let imageBuffer: Buffer;
+      let contentType = 'image/png';
+      const geminiApiKey = this.configService.get<string>('ai.geminiApiKey');
+
+      if (geminiApiKey) {
+        this.logger.log(`Generating artwork using Google AI Studio Imagen 4 for user ${userId}...`);
+        try {
+          // Sanitize user prompt and build the final generation prompt
+          const cleanPrompt = sanitizePromptForStorage(prompt);
+          const geminiResponse = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${geminiApiKey}`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                instances: [
+                  {
+                    prompt: `${cleanPrompt}, ${style} style, digital art, high quality, masterpiece`,
+                  },
+                ],
+                parameters: {
+                  sampleCount: 1,
+                  aspectRatio: '1:1',
+                },
+              }),
+            }
+          );
+
+          if (!geminiResponse.ok) {
+            const errText = await geminiResponse.text();
+            this.logger.error(`Gemini Imagen API error (status ${geminiResponse.status}): ${errText}`);
+            throw new Error(`Gemini Imagen API responded with status ${geminiResponse.status}`);
+          }
+
+          const responseData = await geminiResponse.json();
+          const base64Image = responseData?.predictions?.[0]?.bytesBase64Encoded;
+
+          if (!base64Image) {
+            throw new Error('No image returned in predictions from Gemini Imagen API.');
+          }
+
+          imageBuffer = Buffer.from(base64Image, 'base64');
+          contentType = responseData?.predictions?.[0]?.mimeType || 'image/png';
+        } catch (err: any) {
+          this.logger.warn(`Gemini Imagen API failed: ${err.message}. Falling back to Pollinations AI...`);
+          try {
+            const pollUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(`${prompt}, ${style} style`)}?width=800&height=1000&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
+            const pollResponse = await fetch(pollUrl);
+            if (!pollResponse.ok) {
+              throw new Error(`Pollinations API responded with status ${pollResponse.status}`);
+            }
+            const arrayBuffer = await pollResponse.arrayBuffer();
+            imageBuffer = Buffer.from(arrayBuffer);
+            contentType = 'image/png';
+          } catch (pollErr: any) {
+            this.logger.warn(`Pollinations AI failed: ${pollErr.message}. Falling back to curated high-fidelity Unsplash Art...`);
+            const fallbackInfo = getRandomCuratedArt(style);
+            const fallbackResponse = await fetch(fallbackInfo.url);
+            if (!fallbackResponse.ok) {
+              throw new InternalServerErrorException('AI image generation service and all fallbacks are currently unavailable.');
+            }
+            const arrayBuffer = await fallbackResponse.arrayBuffer();
+            imageBuffer = Buffer.from(arrayBuffer);
+            contentType = fallbackInfo.mimeType;
+          }
+        }
+      } else {
+        // Free and robust fallback: Pollinations AI
+        this.logger.log(`Generating artwork using Pollinations AI for user ${userId}...`);
+        try {
+          const pollUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(`${prompt}, ${style} style`)}?width=800&height=1000&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
+          const pollResponse = await fetch(pollUrl);
+          if (!pollResponse.ok) {
+            throw new Error(`Pollinations API responded with status ${pollResponse.status}`);
+          }
+          const arrayBuffer = await pollResponse.arrayBuffer();
+          imageBuffer = Buffer.from(arrayBuffer);
+          contentType = 'image/png';
+        } catch (err: any) {
+          this.logger.warn(`Pollinations AI generation failed: ${err.message}. Falling back to curated high-fidelity Unsplash Art...`);
+          try {
+            const fallbackInfo = getRandomCuratedArt(style);
+            const fallbackResponse = await fetch(fallbackInfo.url);
+            if (!fallbackResponse.ok) {
+              throw new Error('Failed to fetch fallback Unsplash artwork.');
+            }
+            const arrayBuffer = await fallbackResponse.arrayBuffer();
+            imageBuffer = Buffer.from(arrayBuffer);
+            contentType = fallbackInfo.mimeType;
+          } catch (fallbackErr: any) {
+            this.logger.error(`All image generation fallbacks failed: ${fallbackErr.message}`);
+            throw new InternalServerErrorException('Failed to generate image from AI generator.');
+          }
+        }
+      }
+
+      // 3. Upload generated buffer to Cloudflare R2 CDN
+      const filename = `${uuidv4()}.png`;
+      const fakeFile: Express.Multer.File = {
+        fieldname: 'file',
+        originalname: filename,
+        encoding: '7bit',
+        mimetype: contentType,
+        size: imageBuffer.length,
+        buffer: imageBuffer,
+        stream: null as any,
+        destination: '',
+        filename: filename,
+        path: '',
       };
 
-      const imageUrl = mockImages[style] || mockImages['default'];
+      this.logger.log(`Uploading AI generated image to R2 CDN...`);
+      const uploadResult = await this.storageService.uploadFile(
+        fakeFile,
+        'ai-outputs',
+        userId
+      );
 
+      const imageUrl = uploadResult.url;
+
+      // 4. Save metadata in Supabase (with sanitized prompt)
+      const cleanedPrompt = sanitizePromptForStorage(prompt);
       const { data, error } = await supabase
         .from('ai_artworks')
         .insert({
           user_id: userId,
-          prompt,
+          prompt: cleanedPrompt,
           style,
           image_url: imageUrl,
           status: 'completed',
@@ -151,9 +362,11 @@ export class AiService {
         throw new InternalServerErrorException('Failed to save generated artwork.');
       }
 
-      return { success: true, data };
+      return data;
     } catch (error: any) {
-      if (error instanceof InternalServerErrorException) throw error;
+      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+        throw error;
+      }
       this.logger.error(`Generation failed: ${error.message}`, error.stack);
       throw new InternalServerErrorException('An error occurred during generation.');
     }
@@ -164,7 +377,7 @@ export class AiService {
    */
   async getUserHistory(userId: string) {
     try {
-      const supabase = this.databaseService.getClient();
+      const supabase = this.databaseService.getAdminClient();
 
       const { data, error } = await supabase
         .from('ai_artworks')
@@ -178,11 +391,401 @@ export class AiService {
         throw new InternalServerErrorException('Failed to fetch AI history.');
       }
 
-      return { success: true, data: data || [] };
+      return data || [];
     } catch (error: any) {
       if (error instanceof InternalServerErrorException) throw error;
       this.logger.error(`History error: ${error.message}`, error.stack);
       throw new InternalServerErrorException('An error occurred fetching history.');
+    }
+  }
+
+  /**
+   * Delete an AI artwork.
+   */
+  async deleteArtwork(userId: string, artworkId: string) {
+    try {
+      const supabase = this.databaseService.getAdminClient();
+
+      const { data: artwork, error: fetchError } = await supabase
+        .from('ai_artworks')
+        .select('image_url')
+        .eq('id', artworkId)
+        .eq('user_id', userId)
+        .single();
+
+      if (fetchError || !artwork) {
+        throw new BadRequestException('Artwork not found or access denied.');
+      }
+
+      const { error } = await supabase
+        .from('ai_artworks')
+        .delete()
+        .eq('id', artworkId)
+        .eq('user_id', userId);
+
+      if (error) {
+        this.logger.error(`Failed to delete artwork: ${error.message}`);
+        throw new InternalServerErrorException('Failed to delete artwork from database.');
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('An error occurred during deletion.');
+    }
+  }
+
+  /**
+   * Update visibility of an AI artwork (Publish/Unpublish).
+   */
+  async updateVisibility(userId: string, artworkId: string, visibility: 'public' | 'private') {
+    try {
+      const supabase = this.databaseService.getAdminClient();
+
+      const { data, error } = await supabase
+        .from('ai_artworks')
+        .update({ visibility })
+        .eq('id', artworkId)
+        .eq('user_id', userId)
+        .select()
+        .single();
+
+      if (error) {
+        this.logger.error(`Failed to update visibility: ${error.message}`);
+        throw new InternalServerErrorException('Failed to update visibility.');
+      }
+
+      return data;
+    } catch (error: any) {
+      if (error instanceof InternalServerErrorException) throw error;
+      throw new InternalServerErrorException('An error occurred updating visibility.');
+    }
+  }
+
+  /**
+   * Toggle like on an AI artwork.
+   */
+  async toggleLike(userId: string, artworkId: string) {
+    try {
+      const supabase = this.databaseService.getAdminClient();
+
+      // Check if user already liked it
+      const { data: existingLike, error: checkError } = await supabase
+        .from('ai_artwork_likes')
+        .select('id')
+        .eq('artwork_id', artworkId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (checkError) throw checkError;
+
+      let isLiked = false;
+
+      if (existingLike) {
+        // Unlike: delete from likes table
+        const { error: deleteError } = await supabase
+          .from('ai_artwork_likes')
+          .delete()
+          .eq('id', existingLike.id);
+        if (deleteError) throw deleteError;
+
+        isLiked = false;
+
+        // Decrement likes_count
+        const { data: current } = await supabase.from('ai_artworks').select('likes_count').eq('id', artworkId).single();
+        const count = Math.max(0, (current?.likes_count || 1) - 1);
+        await supabase.from('ai_artworks').update({ likes_count: count }).eq('id', artworkId);
+      } else {
+        // Like: insert into likes table
+        const { error: insertError } = await supabase
+          .from('ai_artwork_likes')
+          .insert({ artwork_id: artworkId, user_id: userId });
+        if (insertError) throw insertError;
+
+        isLiked = true;
+
+        // Increment likes_count
+        const { data: current } = await supabase.from('ai_artworks').select('likes_count').eq('id', artworkId).single();
+        const count = (current?.likes_count || 0) + 1;
+        await supabase.from('ai_artworks').update({ likes_count: count }).eq('id', artworkId);
+      }
+
+      // Fetch new likes count
+      const { data: updated } = await supabase
+        .from('ai_artworks')
+        .select('likes_count')
+        .eq('id', artworkId)
+        .single();
+
+      return { likesCount: updated?.likes_count || 0, isLiked };
+    } catch (error: any) {
+      this.logger.error(`Toggle like failed: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('An error occurred toggling like.');
+    }
+  }
+
+  /**
+   * Get comments on an AI artwork.
+   */
+  async getComments(artworkId: string) {
+    try {
+      const supabase = this.databaseService.getAdminClient();
+
+      const { data, error } = await supabase
+        .from('ai_artwork_comments')
+        .select(`
+          id,
+          content,
+          created_at,
+          user_id
+        `)
+        .eq('artwork_id', artworkId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      const comments = data || [];
+      const userIds = Array.from(new Set(comments.map((c: any) => c.user_id)));
+      let userProfiles: Record<string, any> = {};
+
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('users')
+          .select('id, display_name, avatar_url')
+          .in('id', userIds);
+        if (profiles) {
+          profiles.forEach((p: any) => {
+            userProfiles[p.id] = p;
+          });
+        }
+      }
+
+      const result = comments.map((c: any) => {
+        const user = userProfiles[c.user_id];
+        return {
+          id: c.id,
+          content: c.content,
+          created_at: c.created_at,
+          user: {
+            id: c.user_id,
+            display_name: user?.display_name || 'Anonymous',
+            avatar_url: user?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
+          }
+        };
+      });
+
+      return result;
+    } catch (error: any) {
+      this.logger.error(`Fetch comments failed: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('An error occurred fetching comments.');
+    }
+  }
+
+  /**
+   * Add a comment on an AI artwork.
+   */
+  async addComment(userId: string, artworkId: string, content: string) {
+    try {
+      const supabase = this.databaseService.getAdminClient();
+
+      const trimmedContent = (content || '').trim();
+      if (!trimmedContent || trimmedContent.length > 500) {
+        throw new BadRequestException('Comment must be between 1 and 500 characters.');
+      }
+
+      const { data: commentData, error } = await supabase
+        .from('ai_artwork_comments')
+        .insert({
+          artwork_id: artworkId,
+          user_id: userId,
+          content: trimmedContent
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const { data: userProfile } = await supabase
+        .from('users')
+        .select('display_name, avatar_url')
+        .eq('id', userId)
+        .single();
+
+      const result = {
+        id: commentData.id,
+        content: commentData.content,
+        created_at: commentData.created_at,
+        user: {
+          id: userId,
+          display_name: userProfile?.display_name || 'Anonymous',
+          avatar_url: userProfile?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
+        }
+      };
+
+      return result;
+    } catch (error: any) {
+      if (error instanceof BadRequestException) throw error;
+      this.logger.error(`Add comment failed: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('An error occurred adding comment.');
+    }
+  }
+
+  /**
+   * Moderate and validate an uploaded image using Gemini Vision API.
+   * Checks if the image contains actual artwork and is appropriate.
+   */
+  async moderateImage(buffer: Buffer, mimeType: string): Promise<{ isArtwork: boolean; isAppropriate: boolean; reason: string }> {
+    try {
+      const geminiApiKey = this.configService.get<string>('ai.geminiApiKey');
+      if (!geminiApiKey) {
+        return { isArtwork: true, isAppropriate: true, reason: 'Gemini API Key not set, skipped moderation.' };
+      }
+
+      const base64Data = buffer.toString('base64');
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: 'Analyze the provided image. Determine if the image is a genuine piece of artwork (e.g., a painting, drawing, sculpture, digital design, traditional craft, or photography of physical art) and is appropriate for a public gallery (no NSFW, no hate speech, not a random personal selfie/meme, not a screenshot of text/unrelated app). Respond ONLY with a JSON object containing keys: isArtwork (boolean), isAppropriate (boolean), and reason (string describing the analysis).'
+                  },
+                  {
+                    inlineData: {
+                      mimeType: mimeType,
+                      data: base64Data,
+                    }
+                  }
+                ]
+              }
+            ],
+            generationConfig: {
+              responseMimeType: 'application/json'
+            }
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const errText = await response.text();
+        this.logger.error(`Gemini Moderation API error (status ${response.status}): ${errText}`);
+        return { isArtwork: true, isAppropriate: true, reason: 'API call failed, bypassing moderation.' };
+      }
+
+      const result = await response.json();
+      const textResponse = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!textResponse) {
+        throw new Error('Empty response from Gemini Moderation API.');
+      }
+
+      const parsed = JSON.parse(textResponse.trim());
+      return {
+        isArtwork: !!parsed.isArtwork,
+        isAppropriate: !!parsed.isAppropriate,
+        reason: parsed.reason || '',
+      };
+    } catch (err: any) {
+      this.logger.error(`Image moderation failed: ${err.message}`, err.stack);
+      return { isArtwork: true, isAppropriate: true, reason: 'Error in moderation processing.' };
+    }
+  }
+
+  /**
+   * Upload user's custom artwork, run Gemini content moderation,
+   * save to R2 CDN, and index in the database.
+   */
+  async uploadUserArtwork(userId: string, buffer: Buffer, originalname: string, mimeType: string, prompt: string, style: string) {
+    try {
+      const supabase = this.databaseService.getAdminClient();
+
+      // 1. Enforce strict MVP limit of 3 total AI/custom artwork creations per user
+      const { count, error: countError } = await supabase
+        .from('ai_artworks')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId);
+
+      if (countError) {
+        this.logger.error(`Failed to query user artwork count: ${countError.message}`);
+      } else if (count !== null && count >= 3) {
+        throw new BadRequestException(
+          'Limit Promosi MVP Tercapai: Setiap user dibatasi maksimal 3x generate/upload artwork.'
+        );
+      }
+
+      // 2. Perform content moderation with Gemini API
+      this.logger.log(`Performing content moderation on uploaded file ${originalname} for user ${userId}...`);
+      const moderation = await this.moderateImage(buffer, mimeType);
+
+      if (!moderation.isAppropriate) {
+        throw new BadRequestException(
+          `Moderasi gagal: Gambar dinilai tidak pantas/tidak layak dipublikasikan. Alasan: ${moderation.reason}`
+        );
+      }
+
+      if (!moderation.isArtwork) {
+        throw new BadRequestException(
+          `Moderasi gagal: Gambar dideteksi bukan merupakan karya seni (lukisan, patung, grafis, dll.). Alasan: ${moderation.reason}`
+        );
+      }
+
+      // 3. Upload file to R2
+      const filename = `${uuidv4()}_${originalname}`;
+      const fakeFile: Express.Multer.File = {
+        fieldname: 'file',
+        originalname: filename,
+        encoding: '7bit',
+        mimetype: mimeType,
+        size: buffer.length,
+        buffer,
+        stream: null as any,
+        destination: '',
+        filename,
+        path: '',
+      };
+
+      this.logger.log(`Uploading user artwork to R2...`);
+      const uploadResult = await this.storageService.uploadFile(
+        fakeFile,
+        'ai-outputs',
+        userId
+      );
+
+      const imageUrl = uploadResult.url;
+
+      // 4. Save metadata
+      const { data, error } = await supabase
+        .from('ai_artworks')
+        .insert({
+          user_id: userId,
+          prompt: prompt || 'User Uploaded Artwork',
+          image_url: imageUrl,
+          style: style || 'Default',
+          status: 'completed',
+          visibility: 'public',
+          likes_count: 0
+        })
+        .select()
+        .single();
+
+      if (error) {
+        this.logger.error(`Failed to save uploaded artwork: ${error.message}`);
+        throw new InternalServerErrorException('Failed to save artwork metadata.');
+      }
+
+      return data;
+    } catch (error: any) {
+      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) throw error;
+      this.logger.error(`Upload artwork failed: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('An error occurred during artwork upload.');
     }
   }
 }

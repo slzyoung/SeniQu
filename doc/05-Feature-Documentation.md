@@ -57,9 +57,26 @@ Accessible to all visitors.
 - **Contrast-Preserving Filter Chips**: Fully custom-tailored active chips in light mode (e.g. "Heritage", "Museum") maintaining pure white text (`#fff !important`) even on hover, overcoming standard default overrides.
 
 ### 1.5 AI-Enhanced Cultural System
+- **Create Artwork with AI (AI Studio)**: A state-of-the-art generative AI creation workspace integrated into the AI Studio Dashboard.
+  - **Text Prompting**: Accepts complex descriptive text inputs to generate high-resolution artistic assets.
+  - **Curated Heritage Styles**: Users can select from standard preset artistic styles (e.g., Oil Painting, Digital Art, Batik Heritage) to automatically guide the generation.
+  - **DALL-E & Stability AI Integration**: Proxied server-side image generation using modern AI APIs.
+  - **Generation History & Management**: View past creations, download them to local storage, and publish them directly to the community feed.
 - **Generative Summaries**: AI creating fast, digestible narratives of complex historical artifacts.
 - **Multilingual Support**: Auto-translation of exhibition descriptions for international tourists.
 - **Smart Metadata Standardizer**: AI engine classifying unstructured institutional catalogs into the unified SeniQu database.
+
+### 1.6 Community Feed Enhancements
+- **Featured Styles Carousel**: A premium, interactive carousel that showcases popular cultural styles (e.g. Batik, Digital Art, Oil Painting).
+  - **Touch & Mouse Drag Scrolling**: Fully supports swipe-dragging on mobile and scroll-dragging on desktop.
+  - **Autoplay & Navigation**: Slides auto-advance with a smooth, continuous CSS transition, pausing intelligently on hover or manual interaction.
+  - **Visual Pagination & Indicator Dots**: Dynamic dots below the carousel tracking the active card index.
+
+### 1.7 Optimized Local Fallback & Region Classification
+- **PostGIS Spatial Fallback**: Fully offline-compatible geolocation fallback query using PostGIS `location` fields when third-party APIs fail.
+- **Supabase PostgREST 1000-Limit Bypass**: Employs a paginated batch-fetching algorithm that fetches 100% of verified database institutions to prevent silent omission of entries beyond the first 1000 records.
+- **Surabaya Regional Geotargeting**: Correctly parses postcodes and coordinates to classify and filter destinations into specific zones (Surabaya Timur, Surabaya Barat, Surabaya Utara, Surabaya Pusat, Surabaya Selatan).
+- **R2 CDN Image Hosting**: All major regional cover images (including Surabaya East, West, and North) are hosted on Cloudflare R2 CDN and indexed in the Supabase database.
 
 ---
 

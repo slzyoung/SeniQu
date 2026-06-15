@@ -59,7 +59,7 @@ import { useAuthStore } from '../../../../stores/useAuthStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GoogleMap, useJsApiLoader, CircleF, InfoWindowF, PolylineF } from '@react-google-maps/api';
 import { museumService } from '../../../../services/museumService';
-import { classifyPlace } from '../../data/citiesRegistry';
+import { classifyPlace, getRealPlaceCoverImage } from '../../data/citiesRegistry';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './PublicNearbyPage.css';
@@ -1740,7 +1740,7 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                         waitTime,
                         isVerified: m.isVerified || false,
                         description: m.description || '',
-                        coverImageUrl: m.images?.[0] || null,
+                        coverImageUrl: getRealPlaceCoverImage(m.name || 'Heritage Destination', category, m.images?.[0] || null),
                         previewImages: m.images && m.images.length > 0 ? m.images : [],
                         reviews: m.reviews || [],
                         latitude: lat,
@@ -1792,12 +1792,8 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                     const crowdLevel = reviewCount > 300 ? 'Busy' : reviewCount > 100 ? 'Moderate traffic' : 'Not crowded';
 
                     const validPhotos = (place.photos || []).filter((p: any) => typeof p === 'string' && p.trim() !== '');
-                    const fallbackPhoto = category === 'gallery'
-                        ? '/images/gallery/galerinasionalindonesia.jpg'
-                        : category === 'museum'
-                            ? '/images/museum/museumnasionalindonesia.png'
-                            : '/images/museum/Museumullensentalu.jpg';
-                    const previewImages = validPhotos.length > 0 ? validPhotos : [fallbackPhoto];
+                    const resolvedCover = getRealPlaceCoverImage(place.name || 'Heritage Destination', category, validPhotos.length > 0 ? validPhotos[0] : null);
+                    const previewImages = validPhotos.length > 0 ? [resolvedCover, ...validPhotos.slice(1)] : [resolvedCover];
 
                     return {
                         id: place.id || Math.random().toString(),
@@ -1813,7 +1809,7 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                         waitTime,
                         isVerified: true,
                         description: place.address || 'Registered tourism destination.',
-                        coverImageUrl: validPhotos.length > 0 ? validPhotos[0] : null,
+                        coverImageUrl: resolvedCover,
                         previewImages,
                         reviews: place.reviews || [],
                         latitude: place.latitude,

@@ -3,7 +3,7 @@
  * Integrated search for Artworks and Museums
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Image as ImageIcon, X, Loader2, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';

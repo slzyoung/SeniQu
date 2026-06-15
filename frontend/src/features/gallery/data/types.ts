@@ -13,4 +13,6 @@ export interface RegionDetail {
     keywords: string[];
     description: string;
     image: string; // Iconic Landmark Image
+    lat?: number;
+    lng?: number;
 }

@@ -86,6 +86,13 @@ export const configuration = () => ({
         apiKey: process.env.GOOGLE_MAPS_KEY || '',                    // Backend-only: Places API, Geocoding API, Routes API
         clientApiKey: process.env.FRONTEND_GOOGLE_MAPS_KEY || '',     // Frontend-only: Maps JavaScript API (public, restricted)
     },
+
+    // AI Generation
+    ai: {
+        hfAccessToken: process.env.HF_ACCESS_TOKEN || '',
+        geminiApiKey: process.env.GEMINI_API_KEY || '',
+        dailyLimit: parseInt(process.env.AI_DAILY_LIMIT || "5", 10),
+    },
 })
 
 /**
@@ -145,6 +152,11 @@ export const validationSchema = Joi.object({
     // Google Maps
     GOOGLE_MAPS_KEY: Joi.string().optional().allow(''),
     FRONTEND_GOOGLE_MAPS_KEY: Joi.string().optional().allow(''),
+
+    // AI Generation
+    HF_ACCESS_TOKEN: Joi.string().optional().allow(''),
+    GEMINI_API_KEY: Joi.string().optional().allow(''),
+    AI_DAILY_LIMIT: Joi.number().default(5),
 })
 
 export type AppConfiguration = ReturnType<typeof configuration>

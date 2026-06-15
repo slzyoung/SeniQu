@@ -24,7 +24,7 @@ import { extractArray } from '../../../../lib/utils';
 import { ROUTES } from '../../../../lib/constants';
 import { useAuthStore } from '../../../../stores/useAuthStore';
 import { Avatar } from '../../../../components/ui/Avatar';
-import { CITY_WHITELIST } from '../../../../features/gallery/data/citiesRegistry';
+import { CITY_WHITELIST, getRealPlaceCoverImage } from '../../../../features/gallery/data/citiesRegistry';
 import './GalleryPage.css';
 
 function ensureImageParams(url: string, width = 800): string {
@@ -41,7 +41,8 @@ function getMuseumImage(museum: any): string {
         || museum?.cover_image_url
         || (museum?.images && museum.images[0])
         || '';
-    if (raw) return ensureImageParams(raw);
+    const resolved = getRealPlaceCoverImage(museum?.name || '', museum?.type || 'museum', raw || undefined);
+    if (resolved) return ensureImageParams(resolved);
     
     // Curated high-quality backup images of real Indonesian landmarks (no swimming pools!)
     const type = museum?.type || 'heritage';

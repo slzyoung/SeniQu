@@ -14,7 +14,7 @@ import {
     Star,
     MessageCircle
 } from 'lucide-react';
-import { CityMetadata } from '../data/citiesRegistry';
+import { CityMetadata, getRealPlaceCoverImage, classifyPlace } from '../data/citiesRegistry';
 
 interface PlaceDetailsViewProps {
     selectedPlace: any;
@@ -50,14 +50,16 @@ export const PlaceDetailsView: React.FC<PlaceDetailsViewProps> = ({
             transition={{ duration: 0.3 }}
             className="bg-theme-surface rounded-3xl overflow-hidden border border-theme-border/60 shadow-xl"
         >
-            {/* Photo Cover Banner */}
             <div className="relative h-60 w-full overflow-hidden bg-black">
                 <img 
                     src={
-                        selectedPlace.cover_image_url || 
-                        (selectedPlace.photos && typeof selectedPlace.photos[0] === 'string' ? selectedPlace.photos[0] : null) || 
-                        wikiDataMap[selectedPlace.id]?.thumbnail ||
-                        'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?w=800&q=80'
+                        getRealPlaceCoverImage(
+                            selectedPlace.name,
+                            classifyPlace(selectedPlace) || 'museum',
+                            selectedPlace.cover_image_url || 
+                            (selectedPlace.photos && typeof selectedPlace.photos[0] === 'string' ? selectedPlace.photos[0] : null) || 
+                            wikiDataMap[selectedPlace.id]?.thumbnail
+                        )
                     } 
                     alt={selectedPlace.name} 
                     className="w-full h-full object-cover opacity-85 transition-opacity duration-300"
@@ -113,9 +115,13 @@ export const PlaceDetailsView: React.FC<PlaceDetailsViewProps> = ({
                     {selectedPlace.cover_image_url || (selectedPlace.photos && typeof selectedPlace.photos[0] === 'string' ? selectedPlace.photos[0] : null) || wikiDataMap[selectedPlace.id]?.thumbnail ? (
                         <img 
                             src={
-                                selectedPlace.cover_image_url || 
-                                (selectedPlace.photos && typeof selectedPlace.photos[0] === 'string' ? selectedPlace.photos[0] : null) || 
-                                wikiDataMap[selectedPlace.id]?.thumbnail
+                                getRealPlaceCoverImage(
+                                    selectedPlace.name,
+                                    classifyPlace(selectedPlace) || 'museum',
+                                    selectedPlace.cover_image_url || 
+                                    (selectedPlace.photos && typeof selectedPlace.photos[0] === 'string' ? selectedPlace.photos[0] : null) || 
+                                    wikiDataMap[selectedPlace.id]?.thumbnail
+                                )
                             }
                             alt={selectedPlace.name}
                             className="w-full h-full object-cover"

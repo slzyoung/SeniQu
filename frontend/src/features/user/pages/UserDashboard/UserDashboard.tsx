@@ -26,7 +26,7 @@ import { useArtworks } from '../../../../hooks/useArtworks';
 import { useMuseums } from '../../../../hooks/useMuseums';
 import { extractArray } from '../../../../lib/utils';
 import { ROUTES } from '../../../../lib/constants';
-import { CITY_WHITELIST } from '../../../../features/gallery/data/citiesRegistry';
+import { CITY_WHITELIST, getRealPlaceCoverImage } from '../../../../features/gallery/data/citiesRegistry';
 import './UserDashboard.css';
 
 // ============================================================
@@ -157,7 +157,8 @@ function getMuseumImage(museum: any): string {
         || museum?.cover_image_url
         || (museum?.images && museum.images[0])
         || '';
-    if (raw) return ensureImageParams(raw);
+    const resolved = getRealPlaceCoverImage(museum?.name || '', museum?.type || 'museum', raw || undefined);
+    if (resolved) return ensureImageParams(resolved);
     return 'https://images.unsplash.com/photo-1583037189850-1921ae7c6c22?w=400&q=80';
 }
 

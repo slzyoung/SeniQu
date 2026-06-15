@@ -9,7 +9,7 @@ import {
     LayoutGrid, 
     Loader2 
 } from 'lucide-react';
-import { RegionDetail, classifyPlace } from '../data/citiesRegistry';
+import { RegionDetail, classifyPlace, getRealPlaceCoverImage } from '../data/citiesRegistry';
 
 type FilterType = 'museum' | 'gallery' | 'heritage';
 type ViewMode = 'list' | 'map';
@@ -168,20 +168,16 @@ export const RegionDetailFeedView: React.FC<RegionDetailFeedViewProps> = ({
                             typeLabel = 'Cagar Budaya';
                         }
 
-                        // Extract cover image — handle both direct URLs and Google Places photo objects
-                        let displayImage = place.cover_image_url;
+                        // Extract cover image using high-fidelity real place name resolver
+                        let displayImage = getRealPlaceCoverImage(place.name, matchedType, place.cover_image_url);
                         if (!displayImage && place.photos && place.photos.length > 0) {
                             const firstPhoto = place.photos[0];
                             if (typeof firstPhoto === 'string' && firstPhoto.startsWith('http')) {
-                                displayImage = firstPhoto;
+                                displayImage = getRealPlaceCoverImage(place.name, matchedType, firstPhoto);
                             }
-                            // Google Places photo objects (e.g. {name: 'places/.../photos/...'}) are NOT direct URLs
-                            // They need the place-details endpoint to resolve — don't use them as img src
                         }
                         if (!displayImage) {
-                            if (matchedType === 'gallery') displayImage = 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=500&q=80';
-                            else if (matchedType === 'heritage') displayImage = 'https://images.unsplash.com/photo-1596402184320-417e7178b2cd?w=500&q=80';
-                            else displayImage = 'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?w=500&q=80';
+                            displayImage = getRealPlaceCoverImage(place.name, matchedType);
                         }
 
                         return (

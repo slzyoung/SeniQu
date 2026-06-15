@@ -213,13 +213,36 @@ export class MuseumsService {
      * Helper to perform local fallback search using PostGIS
      */
     private async performLocalFallbackSearch(lat: number, lng: number, radiusMeters: number, query?: string): Promise<any[]> {
-        const { data, error } = await this.supabase
-            .from("institutions")
-            .select("id, name, slug, description, type, street, city, province, logo_url, cover_image_url, is_verified, is_featured, rating, total_artworks, location, reviews")
-            .eq("is_verified", true);
+        let data: any[] = [];
+        let from = 0;
+        const limit = 1000;
+        let hasMore = true;
 
-        if (error || !data) {
-            this.logger.error(`Local fallback search failed: ${error?.message || 'No data'}`);
+        while (hasMore) {
+            const { data: chunk, error } = await this.supabase
+                .from("institutions")
+                .select("id, name, slug, description, type, street, city, province, logo_url, cover_image_url, is_verified, is_featured, rating, total_artworks, location, reviews")
+                .eq("is_verified", true)
+                .range(from, from + limit - 1);
+
+            if (error) {
+                this.logger.error(`Local fallback search failed at range ${from}-${from + limit - 1}: ${error.message}`);
+                break;
+            }
+
+            if (chunk && chunk.length > 0) {
+                data = [...data, ...chunk];
+                if (chunk.length < limit) {
+                    hasMore = false;
+                } else {
+                    from += limit;
+                }
+            } else {
+                hasMore = false;
+            }
+        }
+
+        if (data.length === 0) {
             return [];
         }
 
@@ -1482,11 +1505,12 @@ out center body;`;
         const targetHasBio = bioKeywords.some(w => textLower.includes(w));
         const queryHasBio = bioKeywords.some(w => queryLower.includes(w));
         
-        if (targetHasBio && !queryHasBio) {
+        const isPlaceQuery = ['museum', 'gallery', 'galeri', 'gedung', 'taman', 'candi', 'masjid', 'gereja', 'monumen', 'tugu', 'alun', 'katedral', 'house', 'studio', 'center'].some(w => queryLower.includes(w));
+        if (targetHasBio && !queryHasBio && !isPlaceQuery) {
             return false; // Mismatched biography page
         }
 
-        return matchRatio >= 0.5;
+        return matchRatio >= 0.4;
     }
 
     /**

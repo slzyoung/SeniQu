@@ -9,7 +9,7 @@ import axios, {
     InternalAxiosRequestConfig
 } from 'axios';
 import { API_BASE_URL, RATE_LIMIT } from './constants';
-import { getCSRFToken, generateCSRFToken, checkRateLimit, secureRetrieve } from './security';
+import { getCSRFToken, generateCSRFToken, checkRateLimit, secureRetrieve, secureStore } from './security';
 import { ApiError } from './types';
 
 // ============================================
@@ -63,14 +63,19 @@ export function getAccessToken(): string | null {
 }
 
 async function refreshAccessToken(): Promise<string> {
-    if (refreshPromise) return refreshPromise;
+    if (refreshPromise) {
+        console.log('[API Token Refresh] Reuse active refresh token promise...');
+        return refreshPromise;
+    }
 
     // Get refresh token from secure storage
     const refreshToken = secureRetrieve('refresh_token');
     if (!refreshToken) {
+        console.warn('[API Token Refresh] No refresh token available in secure storage');
         return Promise.reject(new Error('No refresh token available'));
     }
 
+    console.log('[API Token Refresh] Launching refresh request to backend...');
     refreshPromise = api
         .post('/auth/refresh', { refreshToken }, {
             __skipAuthInterceptor: true
@@ -78,12 +83,15 @@ async function refreshAccessToken(): Promise<string> {
         .then((response) => {
             const newToken = response.data.accessToken;
             setAccessToken(newToken);
+            secureStore('access_token', newToken); // Sync secure storage!
+            console.log(`[API Token Refresh] Successfully refreshed token! New token prefix: ${newToken.substring(0, 12)}...`);
             // Resolve all queued requests with the new token
             failedQueue.forEach(({ resolve }) => resolve(newToken));
             failedQueue = [];
             return newToken;
         })
         .catch((err) => {
+            console.error('[API Token Refresh] Refresh token request failed:', err.message);
             // Reject all queued requests
             failedQueue.forEach(({ reject }) => reject(err));
             failedQueue = [];
@@ -104,7 +112,23 @@ api.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
         // Add Authorization header
         if (accessToken && !(config as { __skipAuthInterceptor?: boolean }).__skipAuthInterceptor) {
-            config.headers.Authorization = `Bearer ${accessToken}`;
+            // Remove any potential old/expired authorization headers to prevent duplicates
+            if (config.headers.delete) {
+                config.headers.delete('Authorization');
+                config.headers.delete('authorization');
+            } else {
+                delete config.headers['Authorization'];
+                delete config.headers['authorization'];
+            }
+
+            if (config.headers.set) {
+                config.headers.set('Authorization', `Bearer ${accessToken}`);
+            } else {
+                config.headers['Authorization'] = `Bearer ${accessToken}`;
+            }
+            console.log(`[API Request] Sending authorized request to: ${config.url} | Token: ${accessToken.substring(0, 12)}...`);
+        } else {
+            console.log(`[API Request] Sending public/skipped request to: ${config.url}`);
         }
 
         // Add CSRF token for mutating requests
@@ -168,13 +192,30 @@ api.interceptors.response.use(
 
         if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
             originalRequest._retry = true;
+            console.log(`[API Response] Received 401 for: ${originalRequest.url} | Attempting token refresh...`);
 
             // If a refresh is already in progress, queue this request
             if (refreshPromise) {
+                console.log(`[API Response] Queuing request for: ${originalRequest.url} until active refresh completes.`);
                 return new Promise<string>((resolve, reject) => {
                     failedQueue.push({ resolve, reject });
                 }).then((newToken) => {
-                    originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                    console.log(`[API Response] Retrying queued request for: ${originalRequest.url} with new token...`);
+                    
+                    if (originalRequest.headers.delete) {
+                        originalRequest.headers.delete('Authorization');
+                        originalRequest.headers.delete('authorization');
+                    } else {
+                        delete originalRequest.headers['Authorization'];
+                        delete originalRequest.headers['authorization'];
+                    }
+
+                    if (originalRequest.headers.set) {
+                        originalRequest.headers.set('Authorization', `Bearer ${newToken}`);
+                    } else {
+                        originalRequest.headers = originalRequest.headers || {};
+                        originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+                    }
                     return api(originalRequest);
                 }).catch((err) => {
                     return Promise.reject(err);
@@ -183,9 +224,25 @@ api.interceptors.response.use(
 
             try {
                 const newToken = await refreshAccessToken();
-                originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                console.log(`[API Response] Retrying primary request: ${originalRequest.url} with newly refreshed token...`);
+                
+                if (originalRequest.headers.delete) {
+                    originalRequest.headers.delete('Authorization');
+                    originalRequest.headers.delete('authorization');
+                } else {
+                    delete originalRequest.headers['Authorization'];
+                    delete originalRequest.headers['authorization'];
+                }
+
+                if (originalRequest.headers.set) {
+                    originalRequest.headers.set('Authorization', `Bearer ${newToken}`);
+                } else {
+                    originalRequest.headers = originalRequest.headers || {};
+                    originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+                }
                 return api(originalRequest);
             } catch (refreshError) {
+                console.error('[API Response] Refresh failed. Clearing token and dispatching logout event.');
                 // Refresh failed, clear tokens and redirect to login
                 setAccessToken(null);
                 // Small delay to debounce multiple simultaneous logout events

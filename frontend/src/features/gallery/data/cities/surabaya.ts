@@ -22,7 +22,9 @@ export const regions: RegionDetail[] = [
             "tugu pahlawan"
         ],
         "description": "Monumen Kapal Selam dan Museum Sepuluh Nopember.",
-        "image": "https://cdn.seniqu.art/assets/static/cities/surabaya.webp"
+        "image": "https://cdn.seniqu.art/cities/surabayapusat.jpeg",
+        "lat": -7.2620,
+        "lng": 112.7420
     },
     {
         "id": "selatan",
@@ -40,7 +42,9 @@ export const regions: RegionDetail[] = [
             "zoo"
         ],
         "description": "Pusat cagar budaya House of Sampoerna dan Kebun Binatang.",
-        "image": "https://cdn.seniqu.art/assets/static/cities/surabaya.webp"
+        "image": "https://cdn.seniqu.art/assets/static/cities/surabaya.webp",
+        "lat": -7.2950,
+        "lng": 112.7380
     },
     {
         "id": "timur",
@@ -56,7 +60,9 @@ export const regions: RegionDetail[] = [
             "tenggilis mejoyo"
         ],
         "description": "Hutan Mangrove Wonorejo dan kawasan galeri seni Mulyorejo.",
-        "image": "https://cdn.seniqu.art/assets/static/cities/surabaya.webp"
+        "image": "https://cdn.seniqu.art/cities/surabaya_timur.jpeg",
+        "lat": -7.2800,
+        "lng": 112.7800
     },
     {
         "id": "barat",
@@ -72,7 +78,9 @@ export const regions: RegionDetail[] = [
             "lakarsantri"
         ],
         "description": "Kawasan modern dan Ciputra Waterpark.",
-        "image": "https://cdn.seniqu.art/assets/static/cities/surabaya.webp"
+        "image": "https://cdn.seniqu.art/cities/surabaya_barat.jpg",
+        "lat": -7.2750,
+        "lng": 112.6750
     },
     {
         "id": "utara",
@@ -87,6 +95,8 @@ export const regions: RegionDetail[] = [
             "jembatan suramadu"
         ],
         "description": "Kawasan maritim Selat Madura dan Jembatan Suramadu.",
-        "image": "https://cdn.seniqu.art/assets/static/cities/surabaya.webp"
+        "image": "https://cdn.seniqu.art/cities/surabaya_utara.jpeg",
+        "lat": -7.2100,
+        "lng": 112.7300
     }
 ];
