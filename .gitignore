@@ -7,6 +7,8 @@ yarn-error.log
 .env.local
 .env.production
 .env.test
+.env.render
+*.env.render
 
 # IDEs
 .vscode/
