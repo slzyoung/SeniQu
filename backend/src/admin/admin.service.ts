@@ -311,7 +311,11 @@ export class AdminService {
             query = query.eq("type", filters.type)
         }
         if (filters?.city) {
-            query = query.ilike("city", `%${filters.city}%`)
+            if (filters.city.toLowerCase() === 'bali') {
+                query = query.or('city.ilike.bali,city.ilike.bali %,province.ilike.bali,province.ilike.bali %')
+            } else {
+                query = query.ilike("city", `%${filters.city}%`)
+            }
         }
 
         const { data, error, count } = await query

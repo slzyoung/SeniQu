@@ -90,6 +90,8 @@ export class StorageService implements OnModuleInit {
                 accessKeyId,
                 secretAccessKey,
             },
+            requestChecksumCalculation: "WHEN_REQUIRED",
+            responseChecksumValidation: "WHEN_REQUIRED",
         })
 
         this.logger.log(`✅ Cloudflare R2 storage initialized (bucket: ${this.bucketName})`)

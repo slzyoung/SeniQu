@@ -152,7 +152,11 @@ export class MuseumsService {
 
         // Filters
         if (city) {
-            queryBuilder = queryBuilder.ilike("city", `%${city}%`)
+            if (city.toLowerCase() === 'bali') {
+                queryBuilder = queryBuilder.or('city.ilike.bali,city.ilike.bali %,province.ilike.bali,province.ilike.bali %')
+            } else {
+                queryBuilder = queryBuilder.ilike("city", `%${city}%`)
+            }
         }
         if (type) {
             queryBuilder = queryBuilder.eq("type", type)
