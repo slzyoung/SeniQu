@@ -142,6 +142,8 @@ Deep-dive into SenaQu's internal architecture via the [`/doc`](./doc) directory:
 - 🗺️ **[Feature Specs](./doc/05-Feature-Documentation.md)**: AI tools, mapping, tourism features.
 - 📦 **[Database Schema](./doc/07-Database-Schema.md)**: ER diagrams, migrations, RLS policies.
 - ⛓️ **[Wallet Integration](./doc/09-Wallet-Integration.md)**: Proof of Art (PoA) and hybrid wallets.
+- ☁️ **[Cloudflare R2 Storage](./doc/10-Cloudflare-R2-Integration.md)**: CDN, image optimizations, and zero-egress file hosting.
+- 🤖 **[Cloudflare Workers AI](./doc/15-Cloudflare-Workers-AI.md)**: Flux generative artwork pipeline and fallback architecture.
 
 ---
 
