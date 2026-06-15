@@ -5,6 +5,7 @@ import { ArrowRight, Trophy, Star, X, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../lib/constants';
 import { useState, useEffect } from 'react';
+import { museumService } from '../services/museumService';
 
 interface Artist {
     id: string;
@@ -56,10 +57,20 @@ function BioModal({ artist, onClose }: { artist: Artist; onClose: () => void }) 
         const fetchBio = async () => {
             try {
                 setLoading(true);
+                // Try backend proxy first to avoid client CORS/IP blocks
+                const res = await museumService.getWikipediaSummary(artist.name);
+                if (res && res.extract) {
+                    setBio(res.extract);
+                    setError(false);
+                    return;
+                }
+
+                // Fallback to direct fetch
                 const response = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${artist.wikipediaTitle}`);
                 if (!response.ok) throw new Error('Failed to fetch');
                 const data = await response.json();
                 setBio(data.extract);
+                setError(false);
             } catch (err) {
                 setError(true);
             } finally {
@@ -70,7 +81,7 @@ function BioModal({ artist, onClose }: { artist: Artist; onClose: () => void }) 
         if (artist.wikipediaTitle) {
             fetchBio();
         }
-    }, [artist.wikipediaTitle]);
+    }, [artist.wikipediaTitle, artist.name]);
 
     return (
         <AnimatePresence>
