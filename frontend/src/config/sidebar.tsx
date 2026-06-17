@@ -71,7 +71,7 @@ export const userSidebarSections: SidebarSection[] = [
         items: [
             {
                 id: 'genre-identifier',
-                label: 'Scan Art',
+                label: 'Analyze',
                 icon: <ScanLine className="w-5 h-5" />,
                 path: ROUTES.USER_GENRE_IDENTIFIER,
             },
@@ -529,7 +529,7 @@ export const publicSidebarSections: SidebarSection[] = [
         items: [
             {
                 id: 'genre-identifier',
-                label: 'Scan Art',
+                label: 'Analyze',
                 icon: <ScanLine className="w-5 h-5" />,
                 path: ROUTES.AI_GENRE,
             },

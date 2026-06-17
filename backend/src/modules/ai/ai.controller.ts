@@ -74,6 +74,46 @@ export class AiController {
     return this.aiService.deleteArtwork(req.user.id, id);
   }
 
+  // ============================================
+  // HERITAGE SCAN ENDPOINTS
+  // ============================================
+
+  /**
+   * GET /ai/heritage-scan/quota — Get user's remaining daily scan quota
+   */
+  @Get('heritage-scan/quota')
+  async getScanQuota(@Req() req: any) {
+    return this.aiService.getUserScanQuota(req.user.id);
+  }
+
+  /**
+   * GET /ai/heritage-scan/history — Get user's scan history
+   */
+  @Get('heritage-scan/history')
+  async getScanHistory(@Req() req: any) {
+    return this.aiService.getUserScanHistory(req.user.id);
+  }
+
+  /**
+   * POST /ai/heritage-scan — Scan and identify a heritage artifact image via Gemini AI
+   */
+  @Post('heritage-scan')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async scanHeritageImage(@Req() req: any) {
+    const data = await req.file();
+    if (!data) {
+      throw new BadRequestException('No file provided.');
+    }
+
+    const allowedImages = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedImages.includes(data.mimetype)) {
+      throw new BadRequestException('Only JPEG, PNG, and WebP images are allowed.');
+    }
+
+    const buffer = await data.toBuffer();
+    return this.aiService.scanHeritage(req.user.id, buffer, data.mimetype);
+  }
+
   /**
    * PATCH /ai/:id/visibility — Update visibility of an AI artwork
    */
@@ -142,5 +182,56 @@ export class AiController {
       prompt,
       style
     );
+  }
+
+  /**
+   * GET /ai/heritage-curation/quota — Get user's remaining daily curation quota
+   */
+  @Get('heritage-curation/quota')
+  async getCurationQuota(@Req() req: any) {
+    return this.aiService.getUserCurationQuota(req.user.id);
+  }
+
+  /**
+   * GET /ai/heritage-curation/history — Get user's curation history
+   */
+  @Get('heritage-curation/history')
+  async getCurationHistory(@Req() req: any) {
+    return this.aiService.getUserCurationHistory(req.user.id);
+  }
+
+  /**
+   * GET /ai/heritage-curation/public — Get public/community heritage curations (masterpieces feed)
+   */
+  @Get('heritage-curation/public')
+  async getPublicCurations() {
+    return this.aiService.getPublicHeritageCurations();
+  }
+
+  /**
+   * POST /ai/heritage-curation — Perform AI curation and restoration
+   */
+  @Post('heritage-curation')
+  async curateHeritageImage(@Req() req: any) {
+    const data = await req.file();
+    if (!data) {
+      throw new BadRequestException('No file provided.');
+    }
+
+    const allowedImages = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedImages.includes(data.mimetype)) {
+      throw new BadRequestException('Only JPEG, PNG, and WebP images are allowed.');
+    }
+
+    const buffer = await data.toBuffer();
+    return this.aiService.curateHeritage(req.user.id, buffer, data.mimetype);
+  }
+
+  /**
+   * PATCH /ai/heritage-curation/:id/publish — Publish a heritage curation
+   */
+  @Patch('heritage-curation/:id/publish')
+  async publishCuration(@Req() req: any, @Param('id') id: string) {
+    return this.aiService.publishHeritageCuration(req.user.id, id);
   }
 }

@@ -144,6 +144,8 @@ Deep-dive into SenaQu's internal architecture via the [`/doc`](./doc) directory:
 - ⛓️ **[Wallet Integration](./doc/09-Wallet-Integration.md)**: Proof of Art (PoA) and hybrid wallets.
 - ☁️ **[Cloudflare R2 Storage](./doc/10-Cloudflare-R2-Integration.md)**: CDN, image optimizations, and zero-egress file hosting.
 - 🤖 **[Cloudflare Workers AI](./doc/15-Cloudflare-Workers-AI.md)**: Flux generative artwork pipeline and fallback architecture.
+- 📸 **[Gemini AI Heritage Analyzer](./doc/16-Gemini-Heritage-Analyzer.md)**: Multimodal Gemini 2.5 Flash scanner, daily quota tracking, Web Speech audio narration, and R2 backup storage.
+- 🧪 **[Gemini AI Curation Lab](./doc/17-Gemini-AI-Curation-Lab.md)**: Interactive Before/After digital restoration lab, authentic color palette, Dublin Core metadata, and TTS audio guides.
 
 ---
 
@@ -160,4 +162,3 @@ We welcome institutional and open-core contributions to help digitize Nusantara'
 ## 📄 License & Rights
 
 SeniQu is proprietary software. All rights reserved.  
-**© 2026 SeniQu — Preserving Nusantara's Heritage, Digitally.**

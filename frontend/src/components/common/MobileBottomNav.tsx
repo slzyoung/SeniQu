@@ -1,6 +1,6 @@
 /**
  * MobileBottomNav Component
- * Role-based bottom navigation with centered "Scan" (AI Art Detect) button
+ * Role-based bottom navigation with centered "Analyze" (AI Heritage Analyzer) button
  * Inspired by Google Arts & Culture mobile nav
  */
 
@@ -46,7 +46,7 @@ interface NavItem {
 const guestNavItems: NavItem[] = [
     { path: ROUTES.HOME, icon: Home, label: 'Home' },
     { path: ROUTES.GALLERY, icon: Grid, label: 'Gallery' },
-    { path: ROUTES.AI_GENRE, icon: ScanLine, label: 'Scan', isCenter: true },
+    { path: ROUTES.AI_GENRE, icon: ScanLine, label: 'Analyze', isCenter: true },
     { path: ROUTES.NEARBY, icon: MapPin, label: 'Nearby' },
     { path: ROUTES.COMMUNITY, icon: Bookmark, label: 'More' },
 ];
@@ -54,7 +54,7 @@ const guestNavItems: NavItem[] = [
 const userNavItems: NavItem[] = [
     { path: ROUTES.USER_DASHBOARD, icon: Home, label: 'Home' },
     { path: ROUTES.USER_NEARBY, icon: Search, label: 'Explore' },
-    { path: ROUTES.USER_GENRE_IDENTIFIER, icon: ScanLine, label: 'Scan', isCenter: true },
+    { path: ROUTES.USER_GENRE_IDENTIFIER, icon: ScanLine, label: 'Analyze', isCenter: true },
     { path: ROUTES.USER_WALLET, icon: Wallet, label: 'Wallet' },
     { path: ROUTES.USER_PROFILE, icon: User, label: 'Profile' },
 ];

@@ -618,6 +618,16 @@
   padding: 20px;
   position: relative;
   overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+
+.gid-pattern-card.cursor-pointer {
+  cursor: pointer;
+}
+
+.gid-pattern-card.cursor-pointer:hover {
+  border-color: rgba(124, 107, 212, 0.3);
+  background: var(--bg-elevated);
 }
 
 /* Corner accent — gold triangle */
