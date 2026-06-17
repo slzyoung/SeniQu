@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../../../../stores/useAuthStore';
+import { useToast } from '../../../../stores/useNotificationStore';
 import {
   useAIFeed,
   useGenerateAIArtwork,
@@ -94,6 +95,8 @@ type Screen = 'hero' | 'dashboard' | 'edit';
 
 export default function AIDashboardPage() {
   const { user } = useAuthStore();
+  const toast = useToast();
+  const [isDownloading, setIsDownloading] = useState(false);
   const { data: feed, isLoading: feedLoading } = useAIFeed();
   const { data: userArtworksData, isLoading: historyLoading } = useAIHistory();
   
@@ -302,8 +305,13 @@ export default function AIDashboardPage() {
       : (communityItemInFeed?.isLiked ?? selectedArtwork.isLiked ?? false);
 
     const handleDownload = async () => {
+      if (isDownloading) return;
+      setIsDownloading(true);
+      toast.success('Download starting...', 'Fetching your artwork image');
+      
       try {
         const response = await fetch(imageUrl);
+        if (!response.ok) throw new Error('Network response was not ok');
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -314,7 +322,23 @@ export default function AIDashboardPage() {
         a.remove();
         window.URL.revokeObjectURL(url);
       } catch (err) {
-        console.error('Download failed', err);
+        console.warn('CORS or network restriction prevented direct blob download. Falling back to direct URL target.', err);
+        toast.info('Downloading via backup channel', 'Opening image in new window to save');
+        try {
+          const a = document.createElement('a');
+          a.href = imageUrl;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.download = `seniqu-ai-${artworkId}.png`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } catch (fallbackErr) {
+          toast.error('Download Failed', 'Could not open image download URL');
+          console.error('Download fallback failed', fallbackErr);
+        }
+      } finally {
+        setIsDownloading(false);
       }
     };
 
@@ -448,9 +472,14 @@ export default function AIDashboardPage() {
             <button
               className="aic-edit__action-btn"
               onClick={handleDownload}
+              disabled={isDownloading}
             >
-              <Download className="w-5 h-5" />
-              Download
+              {isDownloading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Download className="w-5 h-5" />
+              )}
+              {isDownloading ? 'Downloading...' : 'Download'}
             </button>
             <button
               className="aic-edit__action-btn"
