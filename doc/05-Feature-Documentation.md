@@ -166,5 +166,7 @@ Nested under NestJS `/messages` path with active JWT authentication guards:
 ### 5.5 Messaging Frontend Architecture
 * **`messagingService.ts`**: Web Crypto-based client service for AES encryption/decryption, ECDH key derivation, and API integrations.
 * **`ChatDrawer.tsx`**: Elegant, premium glassmorphic bottom drawer with smooth slide-up animation. Implements E2E decryption, typing checks, read receipts, and anti-scam block/report options.
+* **`MessagesPage.tsx`**: A full-featured, premium double-pane messaging interface located at `/dashboard/messages`. It supports search queries, live polling updates for multi-user chat rooms, active chat headers, custom bubble wrappers with dates separators, mobile-responsive styling, and direct access to block/report actions.
 * **`RequestBoard.tsx`**: Connects clients and bidding photographers using E2E direct messages.
 * **`PhotographerProfile.tsx`**: Hides action bars automatically when viewing own profile to prevent self-chatting.
+
