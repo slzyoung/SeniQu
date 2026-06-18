@@ -32,6 +32,7 @@ const UserMarketplace = lazyWithRetry(() => import('../features/user/pages/ArtsM
 const UserMyArts = lazyWithRetry(() => import('../features/user/pages/MyArtsPage'));
 const UserWallet = lazyWithRetry(() => import('../features/user/pages/WalletPage'));
 const UserCommunity = lazyWithRetry(() => import('../features/user/pages/CommunityPage'));
+const UserMessages = lazyWithRetry(() => import('../features/user/pages/MessagesPage'));
 
 // Lazy load gallery pages
 // Lazy load collections page
@@ -183,6 +184,7 @@ const router = createBrowserRouter(
                 <Route path={ROUTES.USER_MY_ARTS} element={<UserMyArts />} />
                 <Route path={ROUTES.USER_WALLET} element={<UserWallet />} />
                 <Route path={ROUTES.USER_COMMUNITY} element={<UserCommunity />} />
+                <Route path={ROUTES.USER_MESSAGES} element={<UserMessages />} />
             </Route>
 
             {/* Artist/Institution Dashboard Routes */}

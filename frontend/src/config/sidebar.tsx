@@ -33,7 +33,8 @@ import {
     Ticket,
     Megaphone,
     Images,
-    Camera
+    Camera,
+    Mail
 } from 'lucide-react';
 import { SidebarSection } from '../components/ui/Sidebar';
 import { ROUTES } from '../lib/constants';
@@ -115,6 +116,12 @@ export const userSidebarSections: SidebarSection[] = [
                 label: 'Forum',
                 icon: <MessageSquare className="w-5 h-5" />,
                 path: ROUTES.USER_COMMUNITY,
+            },
+            {
+                id: 'messages',
+                label: 'Messages',
+                icon: <Mail className="w-5 h-5" />,
+                path: ROUTES.USER_MESSAGES,
             },
         ],
     },

@@ -264,14 +264,25 @@ class MessagingService {
         const messages = this.unwrap<Message[]>(res);
 
         // Decrypt messages client-side
+        // Strategy: try PBKDF2 fallback first (used by sendMessage), then ECDH
         const decrypted = await Promise.all(
             messages.map(async (msg) => {
                 try {
-                    const key = await this.getSharedKey(myUserId, otherUserId, msg.senderPublicKey || undefined);
-                    const decryptedContent = await decryptMessage(msg.encryptedContent, msg.iv, key);
+                    // 1) Try PBKDF2 deterministic fallback first (this is what sendMessage uses)
+                    const fallbackKey = await deriveSymmetricFallbackKey(myUserId, otherUserId);
+                    const decryptedContent = await decryptMessage(msg.encryptedContent, msg.iv, fallbackKey);
                     return { ...msg, decryptedContent };
-                } catch (err) {
-                    console.warn('Failed to decrypt message:', msg.id, err);
+                } catch {
+                    // 2) Try ECDH if sender provided a public key
+                    if (msg.senderPublicKey) {
+                        try {
+                            const ecdhKey = await this.getSharedKey(myUserId, otherUserId, msg.senderPublicKey);
+                            const decryptedContent = await decryptMessage(msg.encryptedContent, msg.iv, ecdhKey);
+                            return { ...msg, decryptedContent };
+                        } catch (err2) {
+                            console.warn('ECDH decrypt also failed:', msg.id, err2);
+                        }
+                    }
                     return { ...msg, decryptedContent: '[Unable to decrypt]' };
                 }
             })

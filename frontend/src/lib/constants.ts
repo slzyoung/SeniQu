@@ -96,6 +96,7 @@ export const ROUTES = {
     USER_MY_ARTS: '/dashboard/my-arts',
     USER_WALLET: '/dashboard/wallet',
     USER_COMMUNITY: '/dashboard/community',
+    USER_MESSAGES: '/dashboard/messages',
 
     // Artist/Institution Routes
     ARTIST_DASHBOARD: '/artist',
