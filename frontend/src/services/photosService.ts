@@ -252,9 +252,10 @@ class PhotosService {
         title: string,
         description: string,
         budget?: number,
+        currency?: string,
         deadline?: string
     ): Promise<PhotoRequest> {
-        const res = await apiPost<any>('/photos/requests', { title, description, budget, deadline });
+        const res = await apiPost<any>('/photos/requests', { title, description, budget, currency, deadline });
         return this.unwrap<PhotoRequest>(res);
     }
 

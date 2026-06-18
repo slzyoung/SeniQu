@@ -32,6 +32,7 @@ import { WalletModule } from "./wallet/wallet.module"
 import { StorageModule } from "./storage/storage.module"
 import { AiModule } from "./modules/ai/ai.module"
 import { PhotosModule } from "./photos/photos.module"
+import { MessagesModule } from "./messages/messages.module"
 
 @Module({
     imports: [
@@ -104,6 +105,7 @@ import { PhotosModule } from "./photos/photos.module"
         StorageModule,
         AiModule,
         PhotosModule,
+        MessagesModule,
     ],
     controllers: [AppController, JwksController],
     providers: [

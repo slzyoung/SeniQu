@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { photosService, type PhotographerStats } from '../../../../../services/photosService';
 import { PhotoCard, type PhotoData } from './PhotoCard';
+import { ChatDrawer } from './ChatDrawer';
+import { useAuthStore } from '../../../../../stores/useAuthStore';
 
 interface Props {
     userId: string;
@@ -20,12 +22,14 @@ interface Props {
 }
 
 export function PhotographerProfile({ userId, onClose, onSelectPhoto, onLikePhoto }: Props) {
+    const { user } = useAuthStore();
     const [stats, setStats] = useState<PhotographerStats | null>(null);
     const [photos, setPhotos] = useState<PhotoData[]>([]);
     const [collections, setCollections] = useState<any[]>([]);
     const [selectedCollection, setSelectedCollection] = useState<any | null>(null);
     const [activeTab, setActiveTab] = useState<'photos' | 'collections'>('photos');
     const [isLoading, setIsLoading] = useState(true);
+    const [showChat, setShowChat] = useState(false);
 
     useEffect(() => {
         const loadProfile = async () => {
@@ -136,29 +140,32 @@ export function PhotographerProfile({ userId, onClose, onSelectPhoto, onLikePhot
                             </p>
 
                             {/* Mobile action bar */}
-                            <div className="flex items-center gap-3 mt-5">
-                                <button
-                                    className="px-5 py-2.5 rounded-full font-bold text-xs shadow-md transition-all flex items-center gap-1.5"
-                                    style={{
-                                        background: 'linear-gradient(135deg, var(--text-gold), var(--text-gold))',
-                                        color: '#0D0D0D'
-                                    }}
-                                >
-                                    <MessageSquare className="w-3.5 h-3.5" />
-                                    Send Message
-                                </button>
-                                <button
-                                    className="px-5 py-2.5 rounded-full font-bold text-xs border transition-all flex items-center gap-1.5"
-                                    style={{
-                                        background: 'var(--bg-surface)',
-                                        border: '1px solid var(--border-color)',
-                                        color: 'var(--text-primary)'
-                                    }}
-                                >
-                                    <Phone className="w-3.5 h-3.5" />
-                                    Contact
-                                </button>
-                            </div>
+                            {user?.id !== userId && (
+                                <div className="flex items-center gap-3 mt-5">
+                                    <button
+                                        onClick={() => setShowChat(true)}
+                                        className="px-5 py-2.5 rounded-full font-bold text-xs shadow-md transition-all flex items-center gap-1.5"
+                                        style={{
+                                            background: 'linear-gradient(135deg, var(--text-gold), var(--text-gold))',
+                                            color: '#0D0D0D'
+                                        }}
+                                    >
+                                        <MessageSquare className="w-3.5 h-3.5" />
+                                        Send Message
+                                    </button>
+                                    <button
+                                        className="px-5 py-2.5 rounded-full font-bold text-xs border transition-all flex items-center gap-1.5"
+                                        style={{
+                                            background: 'var(--bg-surface)',
+                                            border: '1px solid var(--border-color)',
+                                            color: 'var(--text-primary)'
+                                        }}
+                                    >
+                                        <Phone className="w-3.5 h-3.5" />
+                                        Contact
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -403,6 +410,15 @@ export function PhotographerProfile({ userId, onClose, onSelectPhoto, onLikePhot
                         )}
                     </div>
                 </div>
+            )}
+            {showChat && (
+                <ChatDrawer
+                    isOpen={showChat}
+                    onClose={() => setShowChat(false)}
+                    recipientId={userId}
+                    recipientName={displayName}
+                    recipientAvatar={stats?.avatarUrl}
+                />
             )}
         </motion.div>
     );

@@ -91,3 +91,80 @@ All routes are mounted under the `/photos` endpoint in NestJS:
   - Automatic avatar loading for photo owner, comment authors, and offer buyers.
 - **`PhotographerProfile.tsx`**: Slide-over layout containing creator verification details, contact actions, horizontal brand cooperation tags, and a **Solana Marketplace Earnings** summary card.
 - **`SolanaPurchaseModal.tsx`**: Checkout process simulation communicating with mock Web3 wallet providers (Phantom / Solflare) for instant purchases.
+
+---
+
+## 5. Secure E2E In-App Chat & Photography Requests
+
+SeniQu WebApp features an integrated, high-security transaction/commission coordination system that prevents scammers while allowing seamless communications.
+
+### 5.1 Photography Requests (`RequestBoard`)
+The photography requests dashboard allows users to open commissions for photo shoots or post-processing work:
+* **Multi-Currency Support**: Budget specification in **Solana (SOL)**, **Indonesian Rupiah (IDR)**, or **US Dollars (USD)**.
+* **Light / Dark Theme Adaptive**: Beautiful glassmorphic design adapting to system-wide theme tokens (`var(--bg-primary)`, `var(--text-gold)`, etc.).
+* **Submitter Chat Coordination**: Direct link for clients to securely message photographers who submit bids to their projects.
+
+### 5.2 Security Architecture: Client-Side E2E Encryption
+All communications are fully encrypted client-side using the standard **Web Crypto API (SubtleCrypto)** before being sent to the backend. The backend stores only ciphertext and initialization vectors (IVs):
+1. **Key Generation**: When a chat session starts, the browser generates an ephemeral Elliptic Curve key pair (`ECDH P-256`) in-memory. Keys are never saved to localStorage or exposed to network transport.
+2. **Key Exchange & Shared Secret**: Browsers derive a shared AES-256-GCM symmetric key via `ECDH` from the recipient's public key.
+3. **Fallback Symmetric Derivation**: If a key exchange is pending, a deterministic shared key is derived client-side via **PBKDF2 with SHA-256** using salted combinations of both user IDs.
+4. **Anti-Scam Protection**:
+   * **Suspicious Activity Reporting**: Users can report scam attempts or suspicious messages. Reports are logged in the database for admin audits.
+   * **Direct Block List**: Users can block scammers directly in-app, preventing them from sending subsequent messages.
+   * **Self-Messaging Prevention**: Action buttons are dynamically hidden when users view their own profiles, preventing self-messaging loops.
+
+### 5.3 Messaging Database Schema
+
+#### `conversations`
+Initiates a secure chat channel between two participants.
+* `id` (UUID, Primary Key)
+* `participant_a` (UUID, References `public.users(id)`)
+* `participant_b` (UUID, References `public.users(id)`)
+* `last_message_at` (TIMESTAMP)
+* `last_message_preview` (TEXT, stores ciphertext preview indicator)
+* `created_at` (TIMESTAMP)
+
+#### `messages`
+Stores encrypted payloads.
+* `id` (UUID, Primary Key)
+* `conversation_id` (UUID, References `public.conversations(id)`)
+* `sender_id` (UUID, References `public.users(id)`)
+* `recipient_id` (UUID, References `public.users(id)`)
+* `encrypted_content` (TEXT, Base64 AES-256-GCM ciphertext)
+* `iv` (TEXT, Base64 initialization vector)
+* `sender_public_key` (TEXT, JWK public key for key exchange)
+* `is_read` (BOOLEAN, default false)
+* `created_at` (TIMESTAMP)
+
+#### `message_blocks`
+Restricts communications between blocker and blocked users.
+* `id` (UUID, Primary Key)
+* `blocker_id` (UUID, References `public.users(id)`)
+* `blocked_id` (UUID, References `public.users(id)`)
+* `created_at` (TIMESTAMP)
+
+#### `message_reports`
+Audit logs for anti-scam flag submissions.
+* `id` (UUID, Primary Key)
+* `message_id` (UUID, References `public.messages(id)`)
+* `reporter_id` (UUID, References `public.users(id)`)
+* `reported_user_id` (UUID, References `public.users(id)`)
+* `reason` (TEXT)
+* `created_at` (TIMESTAMP)
+
+### 5.4 Backend REST APIs (`/messages`)
+Nested under NestJS `/messages` path with active JWT authentication guards:
+* **POST `/messages/send`**: Validates rate limits (max 30 msgs/min), verifies user blocks, updates conversation, and inserts encrypted message payload.
+* **GET `/messages/conversations`**: Lists all active chat sessions with other users' public names and avatar resources.
+* **GET `/messages/conversations/:conversationId`**: Lists decrypted history client-side and marks all received messages as read.
+* **GET `/messages/unread`**: Fetches the total number of unread incoming messages.
+* **POST `/messages/report`**: Registers anti-scam report flags.
+* **POST `/messages/block/:userId`**: Blocks a user.
+* **DELETE `/messages/block/:userId`**: Unblocks a user.
+
+### 5.5 Messaging Frontend Architecture
+* **`messagingService.ts`**: Web Crypto-based client service for AES encryption/decryption, ECDH key derivation, and API integrations.
+* **`ChatDrawer.tsx`**: Elegant, premium glassmorphic bottom drawer with smooth slide-up animation. Implements E2E decryption, typing checks, read receipts, and anti-scam block/report options.
+* **`RequestBoard.tsx`**: Connects clients and bidding photographers using E2E direct messages.
+* **`PhotographerProfile.tsx`**: Hides action bars automatically when viewing own profile to prevent self-chatting.

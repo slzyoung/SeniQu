@@ -1,18 +1,27 @@
 /**
  * RequestBoard — Photography Requests & Editing Commissions
- * Allows users to request specific photography/editing work, and photographers to submit offers/submissions
+ * 
+ * Premium modern design supporting:
+ * - Full Light / Dark mode responsiveness using theme tokens
+ * - Multi-currency support (SOL / IDR / USD)
+ * - Seamless E2E encrypted direct messaging between client and photographer
  */
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, DollarSign, Calendar, Plus, X, Sparkles, CheckCircle2, ChevronRight, Loader2 } from 'lucide-react';
+import {
+    MessageSquare, Calendar, Plus, X, Sparkles, CheckCircle2,
+    ChevronRight, Loader2, Coins, Wallet, Globe
+} from 'lucide-react';
 import { photosService, type PhotoRequest, type PhotoRequestSubmission } from '../../../../../services/photosService';
 import { useAuthStore } from '../../../../../stores/useAuthStore';
+import { ChatDrawer } from './ChatDrawer';
 
 interface Props {
     isAuthenticated: boolean;
 }
 
-export function RequestBoard({ isAuthenticated }: Props) {
+export function RequestBoard({}: Props) {
+    const { user, isAuthenticated } = useAuthStore();
     const [requests, setRequests] = useState<PhotoRequest[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -20,10 +29,18 @@ export function RequestBoard({ isAuthenticated }: Props) {
     const [submissions, setSubmissions] = useState<PhotoRequestSubmission[]>([]);
     const [submissionsLoading, setSubmissionsLoading] = useState(false);
 
+    // Chat states
+    const [activeChatUser, setActiveChatUser] = useState<{
+        id: string;
+        name: string;
+        avatar?: string;
+    } | null>(null);
+
     // Create Request form state
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [budget, setBudget] = useState('');
+    const [currency, setCurrency] = useState('IDR');
     const [deadline, setDeadline] = useState('');
     const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
 
@@ -76,11 +93,13 @@ export function RequestBoard({ isAuthenticated }: Props) {
                 title,
                 description,
                 budget ? parseFloat(budget) : undefined,
+                currency,
                 deadline || undefined
             );
             setTitle('');
             setDescription('');
             setBudget('');
+            setCurrency('IDR');
             setDeadline('');
             setShowCreateModal(false);
             loadRequests();
@@ -130,25 +149,51 @@ export function RequestBoard({ isAuthenticated }: Props) {
         }
     };
 
+    const formatBudget = (amount?: number, curr?: string) => {
+        if (amount === undefined || amount === null) return 'Open Budget';
+        const c = curr || 'IDR';
+        if (c === 'SOL') return `${amount} SOL`;
+        if (c === 'USD') return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+        return `Rp ${amount.toLocaleString()}`;
+    };
+
+    const getCurrencySymbol = (c: string) => {
+        if (c === 'SOL') return 'SOL';
+        if (c === 'USD') return '$';
+        return 'Rp';
+    };
+
     return (
         <div className="space-y-6">
             {/* Header info card */}
-            <div className="bg-gradient-to-br from-gold/15 to-purple/5 border border-gold/20 rounded-3xl p-5 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                    <Sparkles className="w-20 h-20 text-gold" />
+            <div
+                className="relative overflow-hidden rounded-[24px] p-6 border transition-all"
+                style={{
+                    background: 'var(--glow-gold)',
+                    borderColor: 'var(--glass-border)',
+                    boxShadow: 'var(--ph-shadow-sm)'
+                }}
+            >
+                <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                    <Sparkles className="w-24 h-24" style={{ color: 'var(--text-gold)' }} />
                 </div>
-                <h3 className="text-base font-bold text-white flex items-center gap-1.5">
-                    <MessageSquare className="w-4 h-4 text-gold" />
-                    Photography & Editing Commissions
+                <h3 className="text-base font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                    <MessageSquare className="w-4 h-4" style={{ color: 'var(--text-gold)' }} />
+                    Photography & Editing Requests
                 </h3>
-                <p className="text-xs text-theme-muted mt-1.5 leading-relaxed">
-                    Post custom photography requests, local landmarks wishlist, or photo editing jobs. Photographers can respond directly with custom quotes or portfolios.
+                <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                    Post a detailed brief for local photoshoot sessions, custom heritage research, landmarks wishlist, or specialized editing tasks. Photographers will respond directly with quotes and sample portfolios.
                 </p>
 
                 {isAuthenticated && (
                     <button
                         onClick={() => setShowCreateModal(true)}
-                        className="mt-4 flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold text-charcoal text-xs font-bold hover:shadow-lg hover:shadow-gold/20 transition-all"
+                        className="mt-4 flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02]"
+                        style={{
+                            background: 'linear-gradient(135deg, var(--text-gold), #b8963f)',
+                            color: '#0D0D0D',
+                            boxShadow: '0 4px 14px rgba(201,168,76,0.2)'
+                        }}
                     >
                         <Plus className="w-4 h-4" />
                         Create Request
@@ -159,14 +204,17 @@ export function RequestBoard({ isAuthenticated }: Props) {
             {/* Requests board list */}
             {isLoading ? (
                 <div className="py-20 flex flex-col items-center gap-3">
-                    <Loader2 className="w-8 h-8 text-gold animate-spin" />
-                    <p className="text-sm text-theme-muted">Loading requests...</p>
+                    <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--text-gold)' }} />
+                    <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading requests...</p>
                 </div>
             ) : requests.length === 0 ? (
-                <div className="py-16 text-center border border-dashed border-theme-border/30 rounded-3xl">
-                    <MessageSquare className="w-10 h-10 text-theme-muted/20 mx-auto mb-2" />
-                    <p className="text-sm text-theme-muted">No open requests right now</p>
-                    <p className="text-xs text-theme-muted/50 mt-1">Be the first to post a request!</p>
+                <div
+                    className="py-16 text-center border-2 border-dashed rounded-[24px]"
+                    style={{ borderColor: 'var(--border-color)' }}
+                >
+                    <MessageSquare className="w-10 h-10 mx-auto mb-2 opacity-25" style={{ color: 'var(--text-muted)' }} />
+                    <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>No open requests right now</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Be the first to post a custom brief!</p>
                 </div>
             ) : (
                 <div className="space-y-3">
@@ -174,57 +222,95 @@ export function RequestBoard({ isAuthenticated }: Props) {
                         <div
                             key={req.id}
                             onClick={() => handleSelectRequest(req)}
-                            className="p-4 bg-theme-surface/60 border border-theme-border/50 hover:border-gold/30 rounded-2xl cursor-pointer transition-all flex justify-between items-start gap-4"
+                            className="p-4 rounded-[20px] border transition-all cursor-pointer flex justify-between items-start gap-4 hover:translate-y-[-1px]"
+                            style={{
+                                background: 'var(--bg-surface)',
+                                borderColor: 'var(--border-color)',
+                                boxShadow: 'var(--ph-shadow-sm)'
+                            }}
                         >
                             <div className="flex-1 min-w-0">
-                                <h4 className="text-sm font-semibold text-white truncate">{req.title}</h4>
-                                <p className="text-xs text-theme-muted mt-1 line-clamp-2">{req.description}</p>
-                                <div className="flex flex-wrap items-center gap-3 mt-3 text-[10px] text-theme-muted font-medium">
-                                    {req.budget && (
-                                        <span className="flex items-center gap-0.5 text-gold bg-gold/10 px-2 py-0.5 rounded-full border border-gold/10">
-                                            <DollarSign className="w-3 h-3" />
-                                            Rp {req.budget.toLocaleString()}
-                                        </span>
-                                    )}
+                                <h4 className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                                    {req.title}
+                                </h4>
+                                <p className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--text-muted)' }}>
+                                    {req.description}
+                                </p>
+                                <div className="flex flex-wrap items-center gap-2 mt-3 text-[10px] font-semibold">
+                                    <span
+                                        className="flex items-center gap-1 px-2.5 py-0.5 rounded-full border"
+                                        style={{
+                                            color: 'var(--text-gold)',
+                                            background: 'var(--glow-gold)',
+                                            borderColor: 'var(--glass-border)'
+                                        }}
+                                    >
+                                        {req.currency === 'SOL' ? (
+                                            <Coins className="w-3 h-3" />
+                                        ) : req.currency === 'USD' ? (
+                                            <Globe className="w-3 h-3" />
+                                        ) : (
+                                            <Wallet className="w-3 h-3" />
+                                        )}
+                                        {formatBudget(req.budget, req.currency)}
+                                    </span>
                                     {req.deadline && (
-                                        <span className="flex items-center gap-0.5 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+                                        <span
+                                            className="flex items-center gap-1 px-2.5 py-0.5 rounded-full border"
+                                            style={{
+                                                color: 'var(--text-primary)',
+                                                background: 'var(--bg-elevated)',
+                                                borderColor: 'var(--border-color)'
+                                            }}
+                                        >
                                             <Calendar className="w-3 h-3" />
                                             {new Date(req.deadline).toLocaleDateString()}
                                         </span>
                                     )}
-                                    <span className="text-[10px] text-white/40">by @{req.users?.displayName || 'User'}</span>
+                                    <span style={{ color: 'var(--text-muted)' }}>
+                                        by @{req.users?.displayName || 'User'}
+                                    </span>
                                 </div>
                             </div>
-                            <ChevronRight className="w-4 h-4 text-theme-muted flex-shrink-0 mt-1" />
+                            <ChevronRight className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: 'var(--text-muted)' }} />
                         </div>
                     ))}
                 </div>
             )}
 
-            {/* Request Detail Panel (Slide-up modal on mobile) */}
+            {/* Request Detail Panel */}
             <AnimatePresence>
                 {selectedRequest && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-charcoal/80 backdrop-blur-sm z-50 flex justify-end"
+                        className="fixed inset-0 z-50 flex justify-end"
+                        style={{ background: 'var(--overlay)', backdropFilter: 'blur(8px)' }}
                         onClick={() => setSelectedRequest(null)}
                     >
                         <motion.div
-                            initial={{ y: '100%' }}
-                            animate={{ y: 0 }}
-                            exit={{ y: '100%' }}
-                            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                            className="w-full max-w-lg bg-theme-background h-[90vh] mt-[10vh] rounded-t-[32px] border-t border-theme-border/50 flex flex-col overflow-hidden"
+                            initial={{ x: '100%' }}
+                            animate={{ x: 0 }}
+                            exit={{ x: '100%' }}
+                            transition={{ type: 'spring', damping: 26, stiffness: 220 }}
+                            className="w-full max-w-lg h-full flex flex-col shadow-2xl"
+                            style={{
+                                background: 'var(--bg-primary)',
+                                borderLeft: '1px solid var(--border-color)'
+                            }}
                             onClick={e => e.stopPropagation()}
                         >
                             {/* Panel Header */}
-                            <div className="px-5 py-4 border-b border-theme-border/30 flex items-center justify-between">
-                                <h3 className="text-sm font-bold text-white">Request details</h3>
+                            <div
+                                className="px-5 py-4 flex items-center justify-between"
+                                style={{ borderBottom: '1px solid var(--border-color)' }}
+                            >
+                                <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Request Details</h3>
                                 <button
                                     onClick={() => setSelectedRequest(null)}
-                                    className="p-1.5 rounded-full bg-white/5 text-white/60 hover:text-white"
+                                    className="p-1.5 rounded-full transition-all"
+                                    style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
                                 >
                                     <X className="w-4 h-4" />
                                 </button>
@@ -233,34 +319,64 @@ export function RequestBoard({ isAuthenticated }: Props) {
                             {/* Panel Body */}
                             <div className="flex-1 overflow-y-auto px-5 py-6 space-y-6">
                                 <div>
-                                    <h4 className="text-base font-bold text-white">{selectedRequest.title}</h4>
-                                    <p className="text-xs text-theme-muted/50 mt-1">Requested by @{selectedRequest.users?.displayName}</p>
-                                    <p className="text-sm text-white/90 mt-3 whitespace-pre-wrap leading-relaxed">{selectedRequest.description}</p>
+                                    <h4 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+                                        {selectedRequest.title}
+                                    </h4>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                            Requested by @{selectedRequest.users?.displayName}
+                                        </p>
+                                        {isAuthenticated && selectedRequest.userId !== user?.id && (
+                                            <button
+                                                onClick={() => setActiveChatUser({
+                                                    id: selectedRequest.userId,
+                                                    name: selectedRequest.users?.displayName || 'Client',
+                                                    avatar: selectedRequest.users?.avatarUrl
+                                                })}
+                                                className="text-[10px] font-bold px-2 py-0.5 rounded-full transition-all"
+                                                style={{
+                                                    background: 'var(--glow-gold)',
+                                                    color: 'var(--text-gold)',
+                                                    border: '1px solid var(--glass-border)'
+                                                }}
+                                            >
+                                                Chat with Client
+                                            </button>
+                                        )}
+                                    </div>
+                                    <p className="text-sm mt-4 whitespace-pre-wrap leading-relaxed" style={{ color: 'var(--text-primary)' }}>
+                                        {selectedRequest.description}
+                                    </p>
                                 </div>
 
-                                <div className="flex items-center gap-4 text-xs font-semibold">
+                                <div className="flex items-center gap-6">
                                     {selectedRequest.budget && (
                                         <div>
-                                            <p className="text-[10px] text-theme-muted uppercase tracking-wider mb-0.5">Budget</p>
-                                            <p className="text-gold text-sm font-bold">Rp {selectedRequest.budget.toLocaleString()}</p>
+                                            <p className="text-[10px] uppercase tracking-wider font-bold" style={{ color: 'var(--text-muted)' }}>Budget</p>
+                                            <p className="text-sm font-bold" style={{ color: 'var(--text-gold)' }}>
+                                                {formatBudget(selectedRequest.budget, selectedRequest.currency)}
+                                            </p>
                                         </div>
                                     )}
                                     {selectedRequest.deadline && (
                                         <div>
-                                            <p className="text-[10px] text-theme-muted uppercase tracking-wider mb-0.5">Deadline</p>
-                                            <p className="text-white text-sm">{new Date(selectedRequest.deadline).toLocaleDateString()}</p>
+                                            <p className="text-[10px] uppercase tracking-wider font-bold" style={{ color: 'var(--text-muted)' }}>Deadline</p>
+                                            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                                                {new Date(selectedRequest.deadline).toLocaleDateString()}
+                                            </p>
                                         </div>
                                     )}
                                 </div>
 
                                 {/* Proposals section */}
-                                <div className="border-t border-theme-border/30 pt-6">
+                                <div className="pt-6 border-t" style={{ borderColor: 'var(--border-color)' }}>
                                     <div className="flex items-center justify-between mb-4">
-                                        <h5 className="text-sm font-bold text-white">Responses & submissions</h5>
-                                        {isAuthenticated && selectedRequest.userId !== useAuthStore.getState().user?.id && (
+                                        <h5 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Responses & submissions</h5>
+                                        {isAuthenticated && selectedRequest.userId !== user?.id && (
                                             <button
                                                 onClick={handleOpenSubmitProposal}
-                                                className="text-xs font-bold text-gold hover:underline"
+                                                className="text-xs font-bold hover:underline"
+                                                style={{ color: 'var(--text-gold)' }}
                                             >
                                                 Submit Offer
                                             </button>
@@ -268,30 +384,64 @@ export function RequestBoard({ isAuthenticated }: Props) {
                                     </div>
 
                                     {!isAuthenticated ? (
-                                        <p className="text-xs text-theme-muted py-4 text-center">Please log in to see responses.</p>
+                                        <p className="text-xs py-4 text-center" style={{ color: 'var(--text-muted)' }}>
+                                            Please log in to see responses.
+                                        </p>
                                     ) : submissionsLoading ? (
                                         <div className="py-6 flex justify-center">
-                                            <Loader2 className="w-5 h-5 text-gold animate-spin" />
+                                            <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'var(--text-gold)' }} />
                                         </div>
                                     ) : submissions.length === 0 ? (
-                                        <p className="text-xs text-theme-muted py-6 text-center border border-dashed border-theme-border/20 rounded-2xl">
+                                        <p className="text-xs py-6 text-center border border-dashed rounded-2xl" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
                                             No responses submitted yet.
                                         </p>
                                     ) : (
                                         <div className="space-y-4">
                                             {submissions.map((sub) => (
-                                                <div key={sub.id} className="p-4 bg-theme-surface/40 border border-theme-border/30 rounded-2xl space-y-3">
+                                                <div
+                                                    key={sub.id}
+                                                    className="p-4 rounded-2xl border space-y-3"
+                                                    style={{
+                                                        background: 'var(--bg-surface)',
+                                                        borderColor: 'var(--border-color)'
+                                                    }}
+                                                >
                                                     <div className="flex items-center justify-between">
-                                                        <span className="text-xs font-semibold text-white">@{sub.users?.displayName}</span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                                                                @{sub.users?.displayName}
+                                                            </span>
+                                                            {selectedRequest.userId === user?.id && (
+                                                                <button
+                                                                    onClick={() => setActiveChatUser({
+                                                                        id: sub.userId,
+                                                                        name: sub.users?.displayName || 'Photographer',
+                                                                        avatar: sub.users?.avatarUrl
+                                                                    })}
+                                                                    className="text-[9px] font-bold px-2 py-0.5 rounded-full transition-all"
+                                                                    style={{
+                                                                        background: 'var(--glow-gold)',
+                                                                        color: 'var(--text-gold)',
+                                                                        border: '1px solid var(--glass-border)'
+                                                                    }}
+                                                                >
+                                                                    Chat
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                         {sub.price && (
-                                                            <span className="text-xs font-bold text-gold">Rp {sub.price.toLocaleString()}</span>
+                                                            <span className="text-xs font-bold" style={{ color: 'var(--text-gold)' }}>
+                                                                {formatBudget(sub.price, selectedRequest.currency)}
+                                                            </span>
                                                         )}
                                                     </div>
                                                     {sub.message && (
-                                                        <p className="text-xs text-theme-muted leading-relaxed">{sub.message}</p>
+                                                        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                                                            {sub.message}
+                                                        </p>
                                                     )}
                                                     {sub.photos && (
-                                                        <div className="relative aspect-video rounded-xl overflow-hidden bg-white/5 border border-white/10">
+                                                        <div className="relative aspect-video rounded-xl overflow-hidden border" style={{ borderColor: 'var(--border-color)' }}>
                                                             <img
                                                                 src={sub.photos.thumbnailUrl || sub.photos.originalUrl}
                                                                 alt="Submission sample"
@@ -317,74 +467,122 @@ export function RequestBoard({ isAuthenticated }: Props) {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-charcoal/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                        style={{ background: 'var(--overlay)', backdropFilter: 'blur(8px)' }}
                         onClick={() => setShowCreateModal(false)}
                     >
                         <motion.div
                             initial={{ scale: 0.95 }}
                             animate={{ scale: 1 }}
                             exit={{ scale: 0.95 }}
-                            className="w-full max-w-md bg-theme-background border border-theme-border/50 rounded-3xl p-6 relative overflow-hidden"
+                            className="w-full max-w-md p-6 rounded-3xl border relative overflow-hidden"
+                            style={{
+                                background: 'var(--bg-primary)',
+                                borderColor: 'var(--border-color)'
+                            }}
                             onClick={e => e.stopPropagation()}
                         >
                             <button
                                 onClick={() => setShowCreateModal(false)}
-                                className="absolute top-4 right-4 p-1.5 rounded-full bg-white/5 text-white/60 hover:text-white"
-                            >
+                                className="absolute top-4 right-4 p-1.5 rounded-full transition-all"
+                                style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                              >
                                 <X className="w-4 h-4" />
                             </button>
 
-                            <h3 className="text-base font-bold text-white mb-4">Post custom request</h3>
+                            <h3 className="text-base font-bold mb-4" style={{ color: 'var(--text-primary)' }}>Post Custom Request</h3>
 
                             <form onSubmit={handleCreateRequest} className="space-y-4">
                                 <div>
-                                    <label className="block text-xs font-semibold text-theme-muted mb-1.5">Title</label>
+                                    <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-muted)' }}>Title</label>
                                     <input
                                         type="text"
                                         value={title}
                                         onChange={e => setTitle(e.target.value)}
                                         placeholder="e.g. Jakarta street architecture photoshoot"
-                                        className="w-full bg-theme-surface/50 border border-theme-border/30 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 outline-none focus:border-gold/50"
+                                        className="w-full text-sm outline-none px-4 py-2.5 rounded-xl border"
+                                        style={{
+                                            background: 'var(--bg-surface)',
+                                            borderColor: 'var(--border-color)',
+                                            color: 'var(--text-primary)'
+                                        }}
                                         required
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-semibold text-theme-muted mb-1.5">Description</label>
+                                    <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-muted)' }}>Description</label>
                                     <textarea
                                         value={description}
                                         onChange={e => setDescription(e.target.value)}
-                                        placeholder="Detail your requirements: location, style, deadline, deliverables..."
+                                        placeholder="Detail requirements: location, preferred style, deliverables..."
                                         rows={4}
-                                        className="w-full bg-theme-surface/50 border border-theme-border/30 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 outline-none focus:border-gold/50 resize-none"
+                                        className="w-full text-sm outline-none px-4 py-2.5 rounded-xl border resize-none"
+                                        style={{
+                                            background: 'var(--bg-surface)',
+                                            borderColor: 'var(--border-color)',
+                                            color: 'var(--text-primary)'
+                                        }}
                                         required
                                     />
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="block text-xs font-semibold text-theme-muted mb-1.5">Budget (Rp)</label>
+                                        <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-muted)' }}>Currency</label>
+                                        <select
+                                            value={currency}
+                                            onChange={e => setCurrency(e.target.value)}
+                                            className="w-full text-sm outline-none px-4 py-2.5 rounded-xl border cursor-pointer"
+                                            style={{
+                                                background: 'var(--bg-surface)',
+                                                borderColor: 'var(--border-color)',
+                                                color: 'var(--text-primary)'
+                                            }}
+                                        >
+                                            <option value="IDR">IDR (Rupiah)</option>
+                                            <option value="USD">USD (Dollar)</option>
+                                            <option value="SOL">Solana (SOL)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-muted)' }}>Budget ({getCurrencySymbol(currency)})</label>
                                         <input
                                             type="number"
                                             value={budget}
                                             onChange={e => setBudget(e.target.value)}
                                             placeholder="e.g. 500000"
-                                            className="w-full bg-theme-surface/50 border border-theme-border/30 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 outline-none focus:border-gold/50"
+                                            className="w-full text-sm outline-none px-4 py-2.5 rounded-xl border"
+                                            style={{
+                                                background: 'var(--bg-surface)',
+                                                borderColor: 'var(--border-color)',
+                                                color: 'var(--text-primary)'
+                                            }}
                                         />
                                     </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-theme-muted mb-1.5">Deadline</label>
-                                        <input
-                                            type="date"
-                                            value={deadline}
-                                            onChange={e => setDeadline(e.target.value)}
-                                            className="w-full bg-theme-surface/50 border border-theme-border/30 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-gold/50"
-                                        />
-                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-muted)' }}>Deadline</label>
+                                    <input
+                                        type="date"
+                                        value={deadline}
+                                        onChange={e => setDeadline(e.target.value)}
+                                        className="w-full text-sm outline-none px-4 py-2.5 rounded-xl border"
+                                        style={{
+                                            background: 'var(--bg-surface)',
+                                            borderColor: 'var(--border-color)',
+                                            color: 'var(--text-primary)'
+                                        }}
+                                    />
                                 </div>
 
                                 <button
                                     type="submit"
                                     disabled={isSubmittingRequest}
-                                    className="w-full mt-4 flex items-center justify-center gap-1.5 py-3 rounded-xl bg-gold text-charcoal font-bold text-sm hover:shadow-lg hover:shadow-gold/25 transition-all disabled:opacity-50"
+                                    className="w-full mt-4 flex items-center justify-center gap-1.5 py-3 rounded-xl font-bold text-sm transition-all hover:scale-[1.01]"
+                                    style={{
+                                        background: 'linear-gradient(135deg, var(--text-gold), #b8963f)',
+                                        color: '#0D0D0D',
+                                        boxShadow: '0 4px 16px rgba(201,168,76,0.3)'
+                                    }}
                                 >
                                     {isSubmittingRequest ? (
                                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -398,46 +596,54 @@ export function RequestBoard({ isAuthenticated }: Props) {
                 )}
             </AnimatePresence>
 
-            {/* Submit Proposal/Offer Modal */}
+            {/* Submit Proposal Modal */}
             <AnimatePresence>
                 {showSubmitProposalModal && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-charcoal/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                        style={{ background: 'var(--overlay)', backdropFilter: 'blur(8px)' }}
                         onClick={() => setShowSubmitProposalModal(false)}
                     >
                         <motion.div
                             initial={{ scale: 0.95 }}
                             animate={{ scale: 1 }}
                             exit={{ scale: 0.95 }}
-                            className="w-full max-w-md bg-theme-background border border-theme-border/50 rounded-3xl p-6 relative overflow-hidden"
+                            className="w-full max-w-md p-6 rounded-3xl border relative overflow-hidden"
+                            style={{
+                                background: 'var(--bg-primary)',
+                                borderColor: 'var(--border-color)'
+                            }}
                             onClick={e => e.stopPropagation()}
                         >
                             <button
                                 onClick={() => setShowSubmitProposalModal(false)}
-                                className="absolute top-4 right-4 p-1.5 rounded-full bg-white/5 text-white/60 hover:text-white"
+                                className="absolute top-4 right-4 p-1.5 rounded-full transition-all"
+                                style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
                             >
                                 <X className="w-4 h-4" />
                             </button>
 
-                            <h3 className="text-base font-bold text-white mb-4">Submit proposal</h3>
+                            <h3 className="text-base font-bold mb-4" style={{ color: 'var(--text-primary)' }}>Submit Proposal</h3>
 
                             <form onSubmit={handleSubmitProposal} className="space-y-4">
                                 {myPhotos.length > 0 && (
                                     <div>
-                                        <label className="block text-xs font-semibold text-theme-muted mb-1.5">Select photo to attach</label>
-                                        <div className="flex gap-2 overflow-x-auto pb-2 pr-1">
+                                        <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-muted)' }}>Attach photo from library</label>
+                                        <div className="flex gap-2 overflow-x-auto pb-2 pr-1 hide-scrollbar">
                                             {myPhotos.map((photo) => {
                                                 const isSelected = selectedPhotoId === photo.id;
                                                 return (
                                                     <div
                                                         key={photo.id}
                                                         onClick={() => setSelectedPhotoId(photo.id)}
-                                                        className={`w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer border-2 relative transition-all ${
-                                                            isSelected ? 'border-gold scale-95' : 'border-transparent'
-                                                        }`}
+                                                        className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer border-2 relative transition-all"
+                                                        style={{
+                                                            borderColor: isSelected ? 'var(--text-gold)' : 'transparent',
+                                                            transform: isSelected ? 'scale(0.95)' : 'none'
+                                                        }}
                                                     >
                                                         <img
                                                             src={photo.thumbnailUrl || photo.originalUrl}
@@ -445,8 +651,8 @@ export function RequestBoard({ isAuthenticated }: Props) {
                                                             className="w-full h-full object-cover"
                                                         />
                                                         {isSelected && (
-                                                            <div className="absolute inset-0 bg-charcoal/20 flex items-center justify-center">
-                                                                <CheckCircle2 className="w-4 h-4 text-gold fill-charcoal" />
+                                                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                                                <CheckCircle2 className="w-4 h-4 text-gold" style={{ color: 'var(--text-gold)' }} />
                                                             </div>
                                                         )}
                                                     </div>
@@ -457,32 +663,49 @@ export function RequestBoard({ isAuthenticated }: Props) {
                                 )}
 
                                 <div>
-                                    <label className="block text-xs font-semibold text-theme-muted mb-1.5">Message / proposal</label>
+                                    <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-muted)' }}>Message / Proposal Brief</label>
                                     <textarea
                                         value={submissionMessage}
                                         onChange={e => setSubmissionMessage(e.target.value)}
-                                        placeholder="Explain your approach, why you're a good fit, or details about the attached work..."
+                                        placeholder="Explain why you're a good fit, or details about the attached work..."
                                         rows={3}
-                                        className="w-full bg-theme-surface/50 border border-theme-border/30 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 outline-none focus:border-gold/50 resize-none"
+                                        className="w-full text-sm outline-none px-4 py-2.5 rounded-xl border resize-none"
+                                        style={{
+                                            background: 'var(--bg-surface)',
+                                            borderColor: 'var(--border-color)',
+                                            color: 'var(--text-primary)'
+                                        }}
                                         required
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-semibold text-theme-muted mb-1.5">Proposed Price (Rp)</label>
+                                    <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                                        Proposed Price ({selectedRequest ? getCurrencySymbol(selectedRequest.currency) : ''})
+                                    </label>
                                     <input
                                         type="number"
                                         value={submissionPrice}
                                         onChange={e => setSubmissionPrice(e.target.value)}
                                         placeholder="e.g. 450000"
-                                        className="w-full bg-theme-surface/50 border border-theme-border/30 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 outline-none focus:border-gold/50"
+                                        className="w-full text-sm outline-none px-4 py-2.5 rounded-xl border"
+                                        style={{
+                                            background: 'var(--bg-surface)',
+                                            borderColor: 'var(--border-color)',
+                                            color: 'var(--text-primary)'
+                                        }}
                                     />
                                 </div>
 
                                 <button
                                     type="submit"
                                     disabled={isSubmittingProposal}
-                                    className="w-full mt-4 flex items-center justify-center gap-1.5 py-3 rounded-xl bg-gold text-charcoal font-bold text-sm hover:shadow-lg hover:shadow-gold/25 transition-all disabled:opacity-50"
+                                    className="w-full mt-4 flex items-center justify-center gap-1.5 py-3 rounded-xl font-bold text-sm transition-all hover:scale-[1.01]"
+                                    style={{
+                                        background: 'linear-gradient(135deg, var(--text-gold), #b8963f)',
+                                        color: '#0D0D0D',
+                                        boxShadow: '0 4px 16px rgba(201,168,76,0.3)'
+                                    }}
                                 >
                                     {isSubmittingProposal ? (
                                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -495,6 +718,17 @@ export function RequestBoard({ isAuthenticated }: Props) {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Chat Drawer */}
+            {activeChatUser && (
+                <ChatDrawer
+                    isOpen={!!activeChatUser}
+                    onClose={() => setActiveChatUser(null)}
+                    recipientId={activeChatUser.id}
+                    recipientName={activeChatUser.name}
+                    recipientAvatar={activeChatUser.avatar}
+                />
+            )}
         </div>
     );
 }
