@@ -84,7 +84,7 @@ export const ROUTES = {
     USER_DASHBOARD: '/dashboard',
     USER_PROFILE: '/dashboard/profile',
     USER_BOOKMARKS: '/dashboard/bookmarks',
-    USER_COLLECTIONS: '/dashboard/collections',
+    USER_COLLECTIONS: '/dashboard/photography',
     USER_SETTINGS: '/dashboard/settings',
     // New User Dashboard Routes
     USER_GALLERY: '/dashboard/gallery',

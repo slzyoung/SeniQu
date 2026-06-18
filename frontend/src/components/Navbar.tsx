@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { User, LogOut, LayoutDashboard, Image, FolderHeart, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { User, LogOut, LayoutDashboard, Image, ChevronLeft, ChevronRight, X, Camera } from 'lucide-react';
 import { QuickSearch } from './common/QuickSearch';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle } from './ThemeToggle';
@@ -31,7 +31,7 @@ export function Navbar() {
   const menuItems = isAuthenticated ? [
     { label: 'Dashboard', icon: LayoutDashboard, path: getDashboardRoute(user?.role || 'user') },
     { label: 'Art Gallery', icon: Image, path: ROUTES.GALLERY },
-    { label: 'My Collections', icon: FolderHeart, path: ROUTES.USER_COLLECTIONS },
+    { label: 'Photography Hub', icon: Camera, path: ROUTES.USER_COLLECTIONS },
     { label: 'Profile', icon: User, path: ROUTES.USER_PROFILE },
   ] : [
     { label: 'About', path: '/#about' },
@@ -122,7 +122,7 @@ export function Navbar() {
                   href={ROUTES.USER_COLLECTIONS}
                   className="text-theme-muted hover:text-gold transition-colors text-sm tracking-wide font-medium relative group"
                 >
-                  My Collections
+                  My Photography Hub
                   <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-gold transition-all duration-300 group-hover:w-full" />
                 </a>
                 <a

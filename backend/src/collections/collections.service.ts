@@ -37,7 +37,7 @@ export class CollectionsService {
     }
 
     async findByOwner(ownerId: string): Promise<Collection[]> {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
 
         const { data, error } = await client
             .from("collections")

@@ -1,157 +1,294 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useMyCollections, useCreateCollection } from '../../../../hooks/useCollections';
-import { extractArray } from '../../../../lib/utils';
+/**
+ * Photography Hub — Premium Social Media & Marketplace
+ * Instagram-meets-Shutterstock-meets-OpenSea design
+ * Mobile-first, no duplicate header/bottom nav (handled by DashboardLayout)
+ * Features: masonry feed, upload bottom-sheet, lightbox, profile drawer, requests
+ */
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Loader2
+    Search, Plus, Loader2, Eye, Camera, TrendingUp,
+    Clock, ShoppingBag, Sparkles, User, Grid3X3,
+    Mountain, Bird, UserCircle, Building2, Palette, Layers
 } from 'lucide-react';
+import { SEOHead } from '../../../../components/common/SEOHead';
+import { PhotoCard, type PhotoData } from './components/PhotoCard';
+import { PhotoLightbox } from './components/PhotoLightbox';
+import { PhotoUpload } from './components/PhotoUpload';
+import { PhotographerProfile } from './components/PhotographerProfile';
+import { RequestBoard } from './components/RequestBoard';
+import { useAuthStore } from '../../../../stores/useAuthStore';
+import { photosService, type SearchPhotosParams } from '../../../../services/photosService';
 import './MyCollectionsPage.css';
-import { Modal, Input, Textarea, Button } from '../../../../components/ui';
-import { useToast } from '../../../../stores/useNotificationStore';
 
-// Mockup Data
-const MOCK_PHOTOS = [
-    { id: 1, type: 'tall', img: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=600&q=80' },
-    { id: 2, type: 'short', img: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=600&q=80' },
-    { id: 3, type: 'short', img: 'https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07?w=600&q=80' },
-    { id: 4, type: 'tall', img: 'https://images.unsplash.com/photo-1542224566-6e85f2e6772f?w=600&q=80' }
+// Category chips with icons
+const CATEGORIES = [
+    { id: '', label: 'All', icon: Grid3X3 },
+    { id: 'landscape', label: 'Nature', icon: Mountain },
+    { id: 'wildlife', label: 'Wildlife', icon: Bird },
+    { id: 'portrait', label: 'Portrait', icon: UserCircle },
+    { id: 'street', label: 'Street', icon: Layers },
+    { id: 'abstract', label: 'Abstract', icon: Palette },
+    { id: 'architecture', label: 'Architecture', icon: Building2 },
 ];
 
-export function MyCollections() {
-    const navigate = useNavigate();
-    const { data: collectionsData, isLoading } = useMyCollections();
-    const createMutation = useCreateCollection();
-    const toast = useToast();
-    
-    const [showCreateModal, setShowCreateModal] = useState(false);
-    const [newCollection, setNewCollection] = useState({ name: '', description: '' });
+// Tab definitions
+const TABS = [
+    { id: 'trending', label: 'Trending', icon: TrendingUp },
+    { id: 'latest', label: 'Latest', icon: Clock },
+    { id: 'for-sale', label: 'For Sale', icon: ShoppingBag },
+    { id: 'requests', label: 'Requests', icon: Sparkles },
+];
 
-    const collections = extractArray<any>(collectionsData) || [];
+export default function CollectionsPage() {
+    const [activeTab, setActiveTab] = useState('trending');
+    const [activeCategory, setActiveCategory] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedPhoto, setSelectedPhoto] = useState<PhotoData | null>(null);
+    const [showUpload, setShowUpload] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [photos, setPhotos] = useState<PhotoData[]>([]);
+    const [activePhotographerId, setActivePhotographerId] = useState<string | null>(null);
+    const { user, isAuthenticated } = useAuthStore();
+    const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-    const handleCreate = async () => {
-        if (!newCollection.name.trim()) {
-            toast.error('Name required', 'Please enter a collection name');
+    // Debounced search
+    const handleSearchChange = useCallback((value: string) => {
+        setSearchQuery(value);
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = setTimeout(() => {
+            // Trigger re-fetch via effect
+        }, 350);
+    }, []);
+
+    const fetchPhotos = useCallback(async () => {
+        if (activeTab === 'requests') {
+            setIsLoading(false);
             return;
         }
 
+        setIsLoading(true);
         try {
-            await createMutation.mutateAsync(newCollection);
-            setShowCreateModal(false);
-            setNewCollection({ name: '', description: '' });
-        } catch (error) {
-            // Handled
+            const params: SearchPhotosParams = {
+                page: 1,
+                limit: 30,
+                category: activeCategory || undefined,
+                query: searchQuery || undefined,
+            };
+
+            let response;
+            if (activeTab === 'for-sale') {
+                response = await photosService.getMarketplace(params);
+            } else if (activeTab === 'trending') {
+                params.sort = 'trending';
+                response = await photosService.getPhotos(params);
+            } else if (activeTab === 'latest') {
+                params.sort = 'latest';
+                response = await photosService.getPhotos(params);
+            } else {
+                response = await photosService.getPhotos(params);
+            }
+
+            const data = response?.data;
+            setPhotos(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error('Error fetching photos:', err);
+            setPhotos([]);
+        } finally {
+            setIsLoading(false);
         }
-    };
+    }, [activeCategory, activeTab, searchQuery]);
+
+    useEffect(() => {
+        fetchPhotos();
+    }, [fetchPhotos]);
+
+    const handleLike = useCallback(async (photoId: string) => {
+        try {
+            const result = await photosService.toggleLike(photoId);
+            setPhotos(prev => prev.map(p =>
+                p.id === photoId ? { ...p, isLikedByMe: result.liked, likesCount: result.count } : p
+            ));
+            setSelectedPhoto(prev =>
+                prev && prev.id === photoId ? { ...prev, isLikedByMe: result.liked, likesCount: result.count } : prev
+            );
+        } catch (err) {
+            console.error('Failed to toggle like:', err);
+        }
+    }, []);
+
+    const handleUploadSuccess = useCallback(() => {
+        setShowUpload(false);
+        fetchPhotos();
+    }, [fetchPhotos]);
+
+    // Skeleton placeholders for loading state
+    const renderSkeletons = () => (
+        <div className="ph-grid">
+            {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="ph-grid-item" style={{ animationDelay: `${i * 0.06}s` }}>
+                    <div className="ph-shimmer" style={{ height: i % 3 === 0 ? 260 : i % 3 === 1 ? 200 : 230 }} />
+                </div>
+            ))}
+        </div>
+    );
 
     return (
-        <div className="mc-page">
-            <div className="mc-container">
+        <div className="photo-hub">
+            <SEOHead
+                title="Photography — Social & Marketplace"
+                description="Share, discover and sell photography. A premium community for photographers to showcase, trade and license their best work."
+                canonical="/photography"
+            />
 
-
-                {/* Photos Section */}
-                <div className="mc-section mc-fade-in" style={{ animationDelay: '0.1s' }}>
-                    <div className="mc-section-header">
-                        <h2 className="mc-section-title">Photos</h2>
-                        <span className="mc-section-more">More</span>
-                    </div>
-                    <div className="mc-grid">
-                        <div className="mc-col">
-                            {MOCK_PHOTOS.slice(0, 2).map((p) => (
-                                <div key={p.id} className={`mc-photo-card ${p.type === 'tall' ? 'mc-photo-card--tall' : 'mc-photo-card--short'}`}>
-                                    <img src={p.img} alt="Photo" />
-                                </div>
-                            ))}
-                        </div>
-                        <div className="mc-col">
-                            {MOCK_PHOTOS.slice(2, 4).map((p) => (
-                                <div key={p.id} className={`mc-photo-card ${p.type === 'tall' ? 'mc-photo-card--tall' : 'mc-photo-card--short'}`}>
-                                    <img src={p.img} alt="Photo" />
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Collections Section */}
-                <div className="mc-section mc-fade-in" style={{ animationDelay: '0.2s' }}>
-                    <div className="mc-section-header">
-                        <h2 className="mc-section-title">Collections</h2>
-                        <span className="mc-section-more">All</span>
-                    </div>
-                    
-                    {isLoading ? (
-                        <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}>
-                            <Loader2 className="animate-spin" style={{ color: 'var(--mc-primary)' }} />
-                        </div>
-                    ) : collections.length > 0 ? (
-                        <div className="mc-h-scroll">
-                            {collections.map((col: any, i: number) => (
-                                <div key={col.id} className="mc-collection-card">
-                                    <img 
-                                        src={MOCK_PHOTOS[i % MOCK_PHOTOS.length].img} 
-                                        alt={col.name} 
-                                    />
-                                    <div className="mc-collection-overlay">
-                                        <span className="mc-collection-title">{col.name}</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="mc-h-scroll">
-                            <div className="mc-collection-card" onClick={() => setShowCreateModal(true)}>
-                                <img src="https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=400&q=80" alt="Nature" />
-                                <div className="mc-collection-overlay">
-                                    <span className="mc-collection-title">NATURE</span>
-                                </div>
-                            </div>
-                            <div className="mc-collection-card" onClick={() => setShowCreateModal(true)}>
-                                <img src="https://images.unsplash.com/photo-1542224566-6e85f2e6772f?w=400&q=80" alt="Animals" />
-                                <div className="mc-collection-overlay">
-                                    <span className="mc-collection-title">ANIMALS</span>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+            {/* ===== SEARCH BAR ===== */}
+            <div className="mb-4">
+                <div className="relative">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--ph-text-muted)]" />
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={e => handleSearchChange(e.target.value)}
+                        placeholder="Search photographers, photos, tags..."
+                        className="ph-search"
+                    />
                 </div>
             </div>
 
-            <Modal
-                isOpen={showCreateModal}
-                onClose={() => setShowCreateModal(false)}
-                title="Create New Collection"
-                footer={
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-                        <Button variant="ghost" onClick={() => setShowCreateModal(false)}>
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="primary"
-                            onClick={handleCreate}
-                            isLoading={createMutation.isPending}
-                        >
-                            Create Collection
-                        </Button>
-                    </div>
-                }
-            >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    <Input
-                        label="Collection Name"
-                        value={newCollection.name}
-                        onChange={(e) => setNewCollection({ ...newCollection, name: e.target.value })}
-                        placeholder="My Art Collection"
-                    />
-                    <Textarea
-                        label="Description (Optional)"
-                        value={newCollection.description}
-                        onChange={(e) => setNewCollection({ ...newCollection, description: e.target.value })}
-                        placeholder="Describe your collection..."
-                    />
+            {/* ===== CATEGORY CHIPS ===== */}
+            <div className="mb-4">
+                <div className="ph-categories hide-scrollbar">
+                    {CATEGORIES.map(cat => {
+                        const Icon = cat.icon;
+                        const isActive = activeCategory === cat.id;
+                        return (
+                            <button
+                                key={cat.id}
+                                onClick={() => setActiveCategory(isActive && cat.id ? '' : cat.id)}
+                                className={`ph-cat-chip ${isActive ? 'active' : ''}`}
+                            >
+                                <Icon className="w-3.5 h-3.5" />
+                                {cat.label}
+                            </button>
+                        );
+                    })}
                 </div>
-            </Modal>
+            </div>
+
+            {/* ===== FILTER TABS ===== */}
+            <div className="mb-5">
+                <div className="ph-tabs">
+                    {TABS.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`ph-tab ${activeTab === tab.id ? 'active' : ''}`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* ===== REQUESTS TAB ===== */}
+            {activeTab === 'requests' ? (
+                <RequestBoard isAuthenticated={isAuthenticated} />
+            ) : (
+                <>
+                    {/* Section Header */}
+                    <div className="flex items-center justify-between mb-3">
+                        <h2 className="ph-section-title">
+                            {activeCategory
+                                ? CATEGORIES.find(c => c.id === activeCategory)?.label
+                                : activeTab === 'for-sale' ? 'Marketplace' : activeTab === 'trending' ? 'Trending' : 'Latest'}
+                        </h2>
+                        {activeCategory && (
+                            <button
+                                onClick={() => setActiveCategory('')}
+                                className="text-xs font-semibold text-[var(--ph-gold)] hover:underline"
+                            >
+                                Clear
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Photo Feed */}
+                    {isLoading ? (
+                        renderSkeletons()
+                    ) : photos.length === 0 ? (
+                        <div className="ph-empty">
+                            <Eye className="w-10 h-10 text-[var(--ph-text-muted)] opacity-30 mx-auto mb-3" />
+                            <p className="text-sm font-medium text-[var(--ph-text-secondary)]">No photos found</p>
+                            <p className="text-xs text-[var(--ph-text-muted)] mt-1">Try a different filter or upload your own work</p>
+                            <button
+                                onClick={() => { setActiveCategory(''); setSearchQuery(''); setActiveTab('trending'); }}
+                                className="mt-4 text-xs font-bold text-[var(--ph-gold)] hover:underline"
+                            >
+                                Reset all filters
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="ph-grid">
+                            {photos.map((photo, i) => (
+                                <PhotoCard
+                                    key={photo.id}
+                                    photo={photo}
+                                    index={i}
+                                    onSelect={setSelectedPhoto}
+                                    onLike={handleLike}
+                                    onViewProfile={setActivePhotographerId}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </>
+            )}
+
+            {/* ===== UPLOAD FAB ===== */}
+            {isAuthenticated && (
+                <button
+                    onClick={() => setShowUpload(true)}
+                    className="ph-fab"
+                    aria-label="Upload photo"
+                >
+                    <Plus className="w-6 h-6" />
+                </button>
+            )}
+
+            {/* ===== LIGHTBOX ===== */}
+            <AnimatePresence>
+                {selectedPhoto && (
+                    <PhotoLightbox
+                        photo={selectedPhoto}
+                        onClose={() => setSelectedPhoto(null)}
+                        onLike={handleLike}
+                        onViewProfile={setActivePhotographerId}
+                    />
+                )}
+            </AnimatePresence>
+
+            {/* ===== PHOTOGRAPHER PROFILE ===== */}
+            <AnimatePresence>
+                {activePhotographerId && (
+                    <PhotographerProfile
+                        userId={activePhotographerId}
+                        onClose={() => setActivePhotographerId(null)}
+                        onSelectPhoto={setSelectedPhoto}
+                        onLikePhoto={handleLike}
+                    />
+                )}
+            </AnimatePresence>
+
+            {/* ===== UPLOAD MODAL ===== */}
+            <AnimatePresence>
+                {showUpload && (
+                    <PhotoUpload
+                        isOpen={showUpload}
+                        onClose={() => setShowUpload(false)}
+                        onUploadSuccess={handleUploadSuccess}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 }
-
-export default MyCollections;

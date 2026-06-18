@@ -159,6 +159,8 @@ export class StorageService implements OnModuleInit {
             "ai-outputs": "ai/processed",
             static: "assets/static",
             collections: "collections/covers",
+            photos: "collections/photos",
+            "photo-edits": "collections/photos/edits",
             "artist-profiles": "artists/profiles",
             "creator-profiles": "artists/profiles",
             "artist-banners": "artists/banners",

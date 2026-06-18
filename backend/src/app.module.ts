@@ -31,6 +31,7 @@ import { ArtistModule } from "./artist/artist.module"
 import { WalletModule } from "./wallet/wallet.module"
 import { StorageModule } from "./storage/storage.module"
 import { AiModule } from "./modules/ai/ai.module"
+import { PhotosModule } from "./photos/photos.module"
 
 @Module({
     imports: [
@@ -102,6 +103,7 @@ import { AiModule } from "./modules/ai/ai.module"
         WalletModule,
         StorageModule,
         AiModule,
+        PhotosModule,
     ],
     controllers: [AppController, JwksController],
     providers: [

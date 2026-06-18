@@ -32,7 +32,8 @@ import {
     Wand2,
     Ticket,
     Megaphone,
-    Images
+    Images,
+    Camera
 } from 'lucide-react';
 import { SidebarSection } from '../components/ui/Sidebar';
 import { ROUTES } from '../lib/constants';
@@ -118,7 +119,7 @@ export const userSidebarSections: SidebarSection[] = [
         ],
     },
     {
-        title: 'Collections',
+        title: 'Photography',
         items: [
             {
                 id: 'bookmarks',
@@ -128,8 +129,8 @@ export const userSidebarSections: SidebarSection[] = [
             },
             {
                 id: 'collections',
-                label: 'My Collections',
-                icon: <FolderHeart className="w-5 h-5" />,
+                label: 'Photography Hub',
+                icon: <Camera className="w-5 h-5" />,
                 path: ROUTES.USER_COLLECTIONS,
             },
         ],
