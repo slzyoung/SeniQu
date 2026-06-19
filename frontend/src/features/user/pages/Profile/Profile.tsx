@@ -339,7 +339,7 @@ export function Profile() {
                                 <span className="pv2-badge pv2-badge--verified">✦ Verified</span>
                             )}
                             {displayUser?.isPremium && (
-                                <span className="pv2-badge pv2-badge--premium">★ Premium</span>
+                                <span className="pv2-badge pv2-badge--premium">Premium</span>
                             )}
                         </div>
                     )}

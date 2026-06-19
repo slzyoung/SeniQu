@@ -25,6 +25,9 @@ export interface CreateArtworkData {
     price?: number;
     images: string[];
     isArt: boolean;
+    artworkType?: 'physical' | 'digital';
+    poaCertificate?: any;
+    isForSale?: boolean;
 }
 
 class ArtworkService {
@@ -161,6 +164,29 @@ class ArtworkService {
      */
     async verifyArtwork(id: string): Promise<Artwork> {
         return apiPost<Artwork>(`/artworks/${id}/verify`);
+    }
+
+    /**
+     * Record a transaction
+     */
+    async recordTransaction(data: {
+        sellerId?: string;
+        artworkId?: string;
+        artworkTitle: string;
+        artworkImage?: string;
+        amount: number;
+        currency?: string;
+        txHash: string;
+        status?: string;
+    }): Promise<any> {
+        return apiPost('/artworks/transaction', data);
+    }
+
+    /**
+     * Get transaction history
+     */
+    async getTransactionHistory(): Promise<any[]> {
+        return apiGet('/artworks/transactions/history');
     }
 }
 

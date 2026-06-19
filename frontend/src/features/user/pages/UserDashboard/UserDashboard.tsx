@@ -15,7 +15,6 @@ import {
     Landmark,
     Compass,
     ArrowRight,
-    Sparkles,
     Image as ImageIcon,
 } from 'lucide-react';
 import {
@@ -445,7 +444,7 @@ export function UserDashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.2, duration: 0.5 }}
                     >
-                        <Sparkles /> SeniQu Gallery
+                        SeniQu Gallery
                     </motion.span>
                     <motion.h1
                         className="heritage-hero__title"

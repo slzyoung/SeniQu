@@ -9,7 +9,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    MessageSquare, Calendar, Plus, X, Sparkles, CheckCircle2,
+    MessageSquare, Calendar, Plus, X, CheckCircle2,
     ChevronRight, Loader2, Coins, Wallet, Globe
 } from 'lucide-react';
 import { photosService, type PhotoRequest, type PhotoRequestSubmission } from '../../../../../services/photosService';
@@ -175,7 +175,7 @@ export function RequestBoard({}: Props) {
                 }}
             >
                 <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                    <Sparkles className="w-24 h-24" style={{ color: 'var(--text-gold)' }} />
+                    <MessageSquare className="w-24 h-24" style={{ color: 'var(--text-gold)' }} />
                 </div>
                 <h3 className="text-base font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                     <MessageSquare className="w-4 h-4" style={{ color: 'var(--text-gold)' }} />

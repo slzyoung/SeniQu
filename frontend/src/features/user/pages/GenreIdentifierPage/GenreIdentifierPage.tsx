@@ -10,7 +10,6 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Camera,
-    Sparkles,
     ArrowLeft,
     Settings,
     Share2,
@@ -84,7 +83,6 @@ function DetectionBadge({ detected }: { detected: boolean }) {
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.8 }}
                 >
-                    <Sparkles className="w-3 h-3" />
                     Heritage Detected
                 </motion.div>
             )}
@@ -153,7 +151,7 @@ function PatternMeaningCard({ result }: { result: DetectionResult }) {
         >
             <div className="gid-pattern-header flex items-center justify-between w-full" style={{ marginBottom: isExpanded ? 16 : 0, transition: 'margin 0.2s' }}>
                 <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-purple-400" />
+                    <ScanLine className="w-4 h-4 text-purple-400" />
                     <span>AI PATTERN ANALYSIS</span>
                 </div>
                 <div className="flex items-center justify-center p-1 rounded-full hover:bg-white/5 transition-colors">

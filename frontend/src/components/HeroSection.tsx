@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, Compass, Sparkles } from 'lucide-react';
+import { ArrowRight, Compass } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuthModalStore } from '../stores/useAuthModalStore';
 import './LandingPage.css';
@@ -72,7 +72,7 @@ export function HeroSection() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.5 }}
         >
-          <Sparkles /> SeniQu Gallery
+          SeniQu Gallery
         </motion.span>
 
         <motion.h1

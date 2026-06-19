@@ -19,7 +19,6 @@ import {
     Image as ImageIcon,
     Video,
     X,
-    Sparkles,
 } from 'lucide-react';
 import { PageContainer } from '../../../../components/common/DashboardLayout';
 import { Button, Avatar } from '../../../../components/ui';
@@ -78,7 +77,6 @@ function FeaturedThreadCard({ thread, onClick }: { thread: any; onClick: () => v
             )}
             <div className="featured-overlay">
                 <div className="featured-badge">
-                    <Sparkles className="w-3 h-3" />
                     Featured Discussion
                 </div>
                 <h3 className="featured-title">{decodeHTML(thread.title)}</h3>

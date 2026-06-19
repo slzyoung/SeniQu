@@ -111,6 +111,9 @@ export interface HeritageCurationResult {
     };
     is_public: boolean;
     created_at: string;
+    likes_count?: number;
+    comments_count?: number;
+    liked?: boolean;
     users?: {
         username: string;
         display_name: string;
@@ -361,6 +364,30 @@ export const aiService = {
      */
     publishCuration: async (id: string): Promise<HeritageCurationResult> => {
         const res = await api.patch<any>(`/ai/heritage-curation/${id}/publish`);
+        return res.data?.data || res.data;
+    },
+
+    /**
+     * Toggle like on a public heritage curation.
+     */
+    likeHeritageCuration: async (id: string): Promise<{ likesCount: number; isLiked: boolean }> => {
+        const res = await api.post<any>(`/ai/heritage-curation/${id}/like`);
+        return res.data?.data || res.data;
+    },
+
+    /**
+     * Get comments on a heritage curation.
+     */
+    getHeritageCurationComments: async (id: string): Promise<any[]> => {
+        const res = await apiGet<any>(`/ai/heritage-curation/${id}/comments`);
+        return res?.data || res;
+    },
+
+    /**
+     * Add a comment to a heritage curation.
+     */
+    addHeritageCurationComment: async (id: string, content: string): Promise<any> => {
+        const res = await api.post<any>(`/ai/heritage-curation/${id}/comments`, { content });
         return res.data?.data || res.data;
     },
 }

@@ -11,7 +11,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { X, MapPin, Calendar, ChevronLeft, Sparkles, ArrowRight } from 'lucide-react';
+import { X, MapPin, Calendar, ChevronLeft, ArrowRight } from 'lucide-react';
 import './MyArtsPage.css';
 
 // ============================================================
@@ -236,7 +236,6 @@ export default function MyArtsPage() {
                             animate="visible"
                         >
                             <motion.p className="ex-hero-eyebrow" variants={fadeSlideUp}>
-                                <Sparkles size={14} />
                                 SeniQu Art Experience
                             </motion.p>
 
@@ -326,7 +325,6 @@ export default function MyArtsPage() {
                             animate="visible"
                         >
                             <motion.p className="ex-section-eyebrow" variants={fadeSlideUp}>
-                                <Sparkles size={13} />
                                 Your Collection
                             </motion.p>
                             <motion.h2 variants={fadeSlideUp}>

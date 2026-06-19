@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search, Lock, Shield, Send, ArrowLeft, Ban,
     Flag, Check, CheckCheck, Loader2, AlertTriangle,
-    MessageSquare, MoreVertical, ShieldCheck, Sparkles
+    MessageSquare, MoreVertical, ShieldCheck
 } from 'lucide-react';
 import { messagingService, type Conversation, type Message } from '../../../../services/messagingService';
 import { useAuthStore } from '../../../../stores/useAuthStore';
@@ -475,7 +475,6 @@ export function MessagesPage() {
                     <div className="msg-chat__splash">
                         <div className="msg-chat__splash-glow" />
                         <div className="msg-chat__splash-icon">
-                            <Sparkles className="w-5 h-5 msg-chat__splash-sparkle" />
                             <Lock className="w-10 h-10" />
                         </div>
                         <h3>SeniQu Secure Messaging</h3>

@@ -899,7 +899,7 @@ export class AiService {
 
   /**
    * Get user's remaining curation quota for today.
-   * Limit is 5 curations per day.
+   * Limit is 3 curations per day.
    */
   async getUserCurationQuota(userId: string) {
     try {
@@ -918,7 +918,7 @@ export class AiService {
         throw new InternalServerErrorException('Gagal menghitung quota kurasi.');
       }
 
-      const limit = 5;
+      const limit = 3;
       const used = count || 0;
       const remaining = Math.max(0, limit - used);
 
@@ -949,7 +949,7 @@ export class AiService {
       const quota = await this.getUserCurationQuota(userId);
       if (quota.remaining <= 0) {
         throw new BadRequestException(
-          'Kuota Kurasi Terbatas: Anda telah mencapai batas maksimal 5 kurasi per hari.'
+          'Kuota Kurasi Terbatas: Anda telah mencapai batas maksimal 3 kurasi per hari.'
         );
       }
 
@@ -1184,7 +1184,7 @@ Ensure your JSON output is valid, complete, and not truncated. Do not include an
   /**
    * Get all public heritage curations joined with user profile data.
    */
-  async getPublicHeritageCurations(limit = 12) {
+  async getPublicHeritageCurations(userId?: string, limit = 12) {
     try {
       const supabase = this.databaseService.getAdminClient();
 
@@ -1207,11 +1207,200 @@ Ensure your JSON output is valid, complete, and not truncated. Do not include an
         throw new InternalServerErrorException('Gagal memuat galeri kurasi komunitas.');
       }
 
-      return data || [];
+      const curations = data || [];
+      if (userId && curations.length > 0) {
+        const curationIds = curations.map((c: any) => c.id);
+        const { data: userLikes, error: likesError } = await supabase
+          .from('heritage_curation_likes')
+          .select('curation_id')
+          .eq('user_id', userId)
+          .in('curation_id', curationIds);
+
+        if (!likesError && userLikes) {
+          const likedIds = new Set(userLikes.map((l: any) => l.curation_id));
+          return curations.map((c: any) => ({
+            ...c,
+            liked: likedIds.has(c.id),
+          }));
+        }
+      }
+
+      return curations;
     } catch (err: any) {
       if (err instanceof InternalServerErrorException) throw err;
       this.logger.error(`Error getting public curations: ${err.message}`);
       throw new InternalServerErrorException('Gagal memuat galeri kurasi komunitas.');
+    }
+  }
+
+  /**
+   * Toggle like on a heritage curation.
+   */
+  async toggleHeritageCurationLike(userId: string, curationId: string) {
+    try {
+      const supabase = this.databaseService.getAdminClient();
+
+      // Check if user already liked it
+      const { data: existingLike, error: checkError } = await supabase
+        .from('heritage_curation_likes')
+        .select('id')
+        .eq('curation_id', curationId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (checkError) throw checkError;
+
+      let isLiked = false;
+
+      if (existingLike) {
+        // Unlike: delete from likes table
+        const { error: deleteError } = await supabase
+          .from('heritage_curation_likes')
+          .delete()
+          .eq('id', existingLike.id);
+        if (deleteError) throw deleteError;
+
+        isLiked = false;
+
+        // Decrement likes_count
+        const { data: current } = await supabase.from('heritage_curations').select('likes_count').eq('id', curationId).single();
+        const count = Math.max(0, (current?.likes_count || 1) - 1);
+        await supabase.from('heritage_curations').update({ likes_count: count }).eq('id', curationId);
+      } else {
+        // Like: insert into likes table
+        const { error: insertError } = await supabase
+          .from('heritage_curation_likes')
+          .insert({ curation_id: curationId, user_id: userId });
+        if (insertError) throw insertError;
+
+        isLiked = true;
+
+        // Increment likes_count
+        const { data: current } = await supabase.from('heritage_curations').select('likes_count').eq('id', curationId).single();
+        const count = (current?.likes_count || 0) + 1;
+        await supabase.from('heritage_curations').update({ likes_count: count }).eq('id', curationId);
+      }
+
+      // Fetch new likes count
+      const { data: updated } = await supabase
+        .from('heritage_curations')
+        .select('likes_count')
+        .eq('id', curationId)
+        .single();
+
+      return { likesCount: updated?.likes_count || 0, isLiked };
+    } catch (error: any) {
+      this.logger.error(`Toggle curation like failed: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Gagal menyukai kurasi ini.');
+    }
+  }
+
+  /**
+   * Get comments on a heritage curation.
+   */
+  async getHeritageCurationComments(curationId: string) {
+    try {
+      const supabase = this.databaseService.getAdminClient();
+
+      const { data, error } = await supabase
+        .from('heritage_curation_comments')
+        .select(`
+          id,
+          content,
+          created_at,
+          user_id
+        `)
+        .eq('curation_id', curationId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      const comments = data || [];
+      const userIds = Array.from(new Set(comments.map((c: any) => c.user_id)));
+      let userProfiles: Record<string, any> = {};
+
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('users')
+          .select('id, display_name, avatar_url')
+          .in('id', userIds);
+        if (profiles) {
+          profiles.forEach((p: any) => {
+            userProfiles[p.id] = p;
+          });
+        }
+      }
+
+      const result = comments.map((c: any) => {
+        const user = userProfiles[c.user_id];
+        return {
+          id: c.id,
+          content: c.content,
+          created_at: c.created_at,
+          user: {
+            id: c.user_id,
+            display_name: user?.display_name || 'Anonymous',
+            avatar_url: user?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
+          }
+        };
+      });
+
+      return result;
+    } catch (error: any) {
+      this.logger.error(`Fetch curation comments failed: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Gagal mengambil komentar.');
+    }
+  }
+
+  /**
+   * Add a comment on a heritage curation.
+   */
+  async addHeritageCurationComment(userId: string, curationId: string, content: string) {
+    try {
+      const supabase = this.databaseService.getAdminClient();
+
+      const trimmedContent = (content || '').trim();
+      if (!trimmedContent || trimmedContent.length > 500) {
+        throw new BadRequestException('Komentar harus di antara 1 dan 500 karakter.');
+      }
+
+      const { data: commentData, error } = await supabase
+        .from('heritage_curation_comments')
+        .insert({
+          curation_id: curationId,
+          user_id: userId,
+          content: trimmedContent
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Update comments_count
+      const { data: current } = await supabase.from('heritage_curations').select('comments_count').eq('id', curationId).single();
+      const count = (current?.comments_count || 0) + 1;
+      await supabase.from('heritage_curations').update({ comments_count: count }).eq('id', curationId);
+
+      const { data: userProfile } = await supabase
+        .from('users')
+        .select('display_name, avatar_url')
+        .eq('id', userId)
+        .single();
+
+      return {
+        id: commentData.id,
+        content: commentData.content,
+        created_at: commentData.created_at,
+        user: {
+          id: userId,
+          display_name: userProfile?.display_name || 'Anonymous',
+          avatar_url: userProfile?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
+        }
+      };
+    } catch (error: any) {
+      this.logger.error(`Add curation comment failed: ${error.message}`, error.stack);
+      if (error instanceof BadRequestException) throw error;
+      throw new InternalServerErrorException('Gagal mengirimkan komentar.');
     }
   }
 

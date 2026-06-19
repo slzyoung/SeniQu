@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { Public } from '../../auth/decorators/public.decorator';
 import { Throttle } from '@nestjs/throttler';
 
 /**
@@ -203,9 +204,40 @@ export class AiController {
   /**
    * GET /ai/heritage-curation/public — Get public/community heritage curations (masterpieces feed)
    */
+  @Public()
   @Get('heritage-curation/public')
-  async getPublicCurations() {
-    return this.aiService.getPublicHeritageCurations();
+  async getPublicCurations(@Req() req: any) {
+    const userId = req.user?.id;
+    return this.aiService.getPublicHeritageCurations(userId);
+  }
+
+  /**
+   * POST /ai/heritage-curation/:id/like — Toggle like on a heritage curation
+   */
+  @Post('heritage-curation/:id/like')
+  async toggleHeritageCurationLike(@Req() req: any, @Param('id') id: string) {
+    return this.aiService.toggleHeritageCurationLike(req.user.id, id);
+  }
+
+  /**
+   * GET /ai/heritage-curation/:id/comments — Get comments on a heritage curation
+   */
+  @Public()
+  @Get('heritage-curation/:id/comments')
+  async getHeritageCurationComments(@Param('id') id: string) {
+    return this.aiService.getHeritageCurationComments(id);
+  }
+
+  /**
+   * POST /ai/heritage-curation/:id/comments — Add a comment to a heritage curation
+   */
+  @Post('heritage-curation/:id/comments')
+  async addHeritageCurationComment(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: { content: string },
+  ) {
+    return this.aiService.addHeritageCurationComment(req.user.id, id, body.content);
   }
 
   /**

@@ -417,7 +417,7 @@ export class UsersService {
     // ============================================
 
     async getBookmarks(userId: string, page = 1, limit = 20): Promise<{ data: any[]; total: number }> {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
         const offset = (page - 1) * limit
 
         const { data, error, count } = await client

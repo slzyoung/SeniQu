@@ -21,7 +21,6 @@ import {
     ChevronUp,
     Share2,
     ArrowLeft,
-    Sparkles,
     MessageCircle,
     Send,
 } from 'lucide-react';
@@ -181,7 +180,7 @@ export function CommunityForum() {
                             )}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent flex flex-col justify-end p-5">
                                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/90 text-charcoal text-[10px] font-bold uppercase tracking-wider w-fit mb-2">
-                                    <Sparkles className="w-3 h-3" /> Featured
+                                    Featured
                                 </div>
                                 <h3 className="font-serif font-bold text-lg sm:text-xl text-white leading-snug line-clamp-2 mb-1.5">{decodeHTML(featuredThread.title)}</h3>
                                 <div className="flex items-center gap-2 text-white/60 text-xs">

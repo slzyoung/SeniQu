@@ -280,13 +280,59 @@ export function useCurationHistory() {
  * Query hook for community masterpieces public curations.
  */
 export function usePublicCurations() {
-    const { isAuthenticated } = useAuthStore();
-
     return useQuery({
         queryKey: aiKeys.publicCurations(),
         queryFn: () => aiService.getPublicCurations(),
-        enabled: isAuthenticated && isAuthTokenReady(),
         staleTime: 1000 * 60, // 1 minute
+    });
+}
+
+/**
+ * Query hook for getting comments on a heritage curation.
+ */
+export function useHeritageCurationComments(curationId: string) {
+    return useQuery({
+        queryKey: ['heritage-curation-comments', curationId],
+        queryFn: () => aiService.getHeritageCurationComments(curationId),
+        enabled: !!curationId,
+        staleTime: 1000 * 30, // 30 seconds
+    });
+}
+
+/**
+ * Mutation hook for adding a comment to a heritage curation.
+ */
+export function useAddHeritageCurationComment() {
+    const queryClient = useQueryClient();
+    const toast = useToast();
+
+    return useMutation({
+        mutationFn: ({ curationId, content }: { curationId: string; content: string }) =>
+            aiService.addHeritageCurationComment(curationId, content),
+        onSuccess: (_data, variables) => {
+            toast.success('Komentar Dikirim', 'Komentar Anda berhasil ditambahkan!');
+            queryClient.invalidateQueries({ queryKey: ['heritage-curation-comments', variables.curationId] });
+            queryClient.invalidateQueries({ queryKey: aiKeys.publicCurations() });
+        },
+        onError: (error: any) => {
+            const message = error?.response?.data?.message || error.message || 'Gagal mengirimkan komentar.';
+            toast.error('Gagal Kirim Komentar', message);
+        },
+    });
+}
+
+/**
+ * Mutation hook for toggling like on a heritage curation.
+ */
+export function useLikeHeritageCuration() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (curationId: string) => aiService.likeHeritageCuration(curationId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: aiKeys.publicCurations() });
+            queryClient.invalidateQueries({ queryKey: aiKeys.curationHistory() });
+        },
     });
 }
 

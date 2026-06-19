@@ -32,6 +32,8 @@ export interface Artwork {
     currency?: string
     isVerified: boolean
     isArt: boolean
+    artworkType?: string
+    poaCertificate?: any
     verifiedBy?: string
     verifiedAt?: Date
     views: number
@@ -54,6 +56,12 @@ export class ArtworksService {
     async create(dto: CreateArtworkDto, artistId: string): Promise<Artwork> {
         const client = this.db.getAdminClient()
 
+        const imagesJson = {
+            artwork_type: dto.artworkType || 'physical',
+            poa_certificate: dto.poaCertificate || null,
+            additional_images: []
+        }
+
         const { data, error } = await client
             .from("artworks")
             .insert({
@@ -65,9 +73,12 @@ export class ArtworksService {
                 era: dto.era,
                 medium: dto.medium,
                 dimensions: dto.dimensions,
-                image_url: dto.imageUrl,
+                primary_image_url: dto.imageUrl,
                 status: "draft",
                 is_verified: false,
+                price: dto.price || 0,
+                is_for_sale: dto.isForSale ?? false,
+                images: JSON.stringify(imagesJson),
             })
             .select()
             .single()
@@ -78,6 +89,56 @@ export class ArtworksService {
         }
 
         return this.mapToArtwork(data)
+    }
+
+    async recordTransaction(userId: string, body: any) {
+        const client = this.db.getAdminClient()
+        const { data, error } = await client
+            .from("marketplace_transactions")
+            .insert({
+                user_id: userId,
+                seller_id: body.sellerId || null,
+                artwork_id: body.artworkId || null,
+                artwork_title: body.artworkTitle,
+                artwork_image: body.artworkImage || null,
+                amount: body.amount,
+                currency: body.currency || "SOL",
+                status: body.status || "completed",
+                tx_hash: body.txHash,
+            })
+            .select()
+            .single()
+
+        if (error) {
+            this.logger.error(`Failed to record transaction: ${error.message}`)
+            throw new Error(error.message)
+        }
+
+        // If transaction is completed, update the artwork's is_for_sale status to false
+        if (body.artworkId && (body.status === "completed" || !body.status)) {
+            await client
+                .from("artworks")
+                .update({ is_for_sale: false })
+                .eq("id", body.artworkId)
+        }
+
+        return data
+    }
+
+    async getTransactionHistory(userId: string) {
+        const client = this.db.getAdminClient()
+        const { data, error } = await client
+            .from("marketplace_transactions")
+            .select("*")
+            .or(`user_id.eq.${userId},seller_id.eq.${userId}`)
+            .order("created_at", { ascending: false })
+
+        if (error) {
+            this.logger.error(`Failed to fetch transactions: ${error.message}`)
+            throw new Error(error.message)
+        }
+
+        return data || []
     }
 
     async findById(id: string): Promise<Artwork | null> {
@@ -203,6 +264,8 @@ export class ArtworksService {
         let audioGuideUrl = undefined;
         let videoPreviewUrl = undefined;
         let aiProcessedUrl = undefined;
+        let artworkType = 'physical';
+        let poaCertificate = null;
 
         if (data.images) {
             try {
@@ -213,6 +276,8 @@ export class ArtworksService {
                     audioGuideUrl = imgData.audio_guide_url;
                     videoPreviewUrl = imgData.video_preview_url;
                     aiProcessedUrl = imgData.ai_processed_url;
+                    artworkType = imgData.artwork_type || artworkType;
+                    poaCertificate = imgData.poa_certificate || poaCertificate;
                     parsedImages = imgData.additional_images ? JSON.stringify(imgData.additional_images) : undefined;
                 } else {
                     parsedImages = typeof data.images === 'string' ? data.images : JSON.stringify(data.images);
@@ -251,6 +316,8 @@ export class ArtworksService {
             currency: data.currency,
             isVerified: data.is_verified,
             isArt: data.is_art,
+            artworkType,
+            poaCertificate,
             verifiedBy: data.verified_by,
             verifiedAt: data.verified_at ? new Date(data.verified_at) : undefined,
             views: data.views || 0,

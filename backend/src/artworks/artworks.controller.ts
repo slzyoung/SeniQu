@@ -75,4 +75,32 @@ export class ArtworksController {
     async publish(@Param("id") id: string) {
         return this.artworksService.publish(id)
     }
+
+    @Post("transaction")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth("JWT-auth")
+    @ApiOperation({ summary: "Record a marketplace purchase transaction" })
+    async recordTransaction(
+        @GetUser("id") userId: string,
+        @Body() body: {
+            sellerId?: string
+            artworkId?: string
+            artworkTitle: string
+            artworkImage?: string
+            amount: number
+            currency?: string
+            status?: string
+            txHash: string
+        }
+    ) {
+        return this.artworksService.recordTransaction(userId, body)
+    }
+
+    @Get("transactions/history")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth("JWT-auth")
+    @ApiOperation({ summary: "Get user transaction history" })
+    async getTransactionHistory(@GetUser("id") userId: string) {
+        return this.artworksService.getTransactionHistory(userId)
+    }
 }

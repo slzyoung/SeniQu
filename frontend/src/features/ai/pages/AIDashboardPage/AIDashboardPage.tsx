@@ -9,7 +9,6 @@
 
 import { useState, useCallback, useMemo, useRef } from 'react';
 import {
-  Sparkles,
   Plus,
   X,
   Loader2,
@@ -23,6 +22,7 @@ import {
   Globe,
   Lock,
   Upload,
+  Crown,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../../../../stores/useAuthStore';
@@ -240,10 +240,6 @@ export default function AIDashboardPage() {
             />
             <div className="aic-hero__gradient" />
           </div>
-
-          <span className="aic-hero__sparkle aic-hero__sparkle--1" />
-          <span className="aic-hero__sparkle aic-hero__sparkle--2" />
-          <span className="aic-hero__sparkle aic-hero__sparkle--3" />
 
           <div className="aic-hero__content">
             <motion.h1
@@ -626,7 +622,7 @@ export default function AIDashboardPage() {
           <div className="aic-dash__header-left">
             <img src={avatarSrc} alt="Avatar" className="aic-dash__avatar" />
             <span className="aic-dash__premium">
-              <Sparkles className="w-3.5 h-3.5" />
+              <Crown className="w-3.5 h-3.5" />
               Premium
             </span>
           </div>
@@ -673,7 +669,7 @@ export default function AIDashboardPage() {
 
             {userArtworks.length === 0 ? (
               <div className="aic-empty-state">
-                <Sparkles className="w-10 h-10 text-muted mb-2 opacity-50" />
+                <Wand2 className="w-10 h-10 text-muted mb-2 opacity-50" />
                 <p className="aic-empty-state__title">No Artworks Yet</p>
                 <p className="aic-empty-state__subtitle">
                   Tap the green '+' button below to generate your first AI artwork!
@@ -724,7 +720,7 @@ export default function AIDashboardPage() {
 
             {communityItems.length === 0 ? (
               <div className="aic-empty-state">
-                <Sparkles className="w-10 h-10 text-muted mb-2 opacity-50" />
+                <Globe className="w-10 h-10 text-muted mb-2 opacity-50" />
                 <p className="aic-empty-state__title">Community Feed Empty</p>
                 <p className="aic-empty-state__subtitle">
                   Be the first to publish an AI creation to the community!
@@ -908,7 +904,7 @@ export default function AIDashboardPage() {
                   className={`aic-modal__tab ${modalTab === 'generate' ? 'aic-modal__tab--active' : ''}`}
                   onClick={() => setModalTab('generate')}
                 >
-                  <Sparkles className="w-4 h-4" />
+                  <Wand2 className="w-4 h-4" />
                   <span>AI Generator</span>
                 </button>
                 <button

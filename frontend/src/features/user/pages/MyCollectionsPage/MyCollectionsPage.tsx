@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search, Plus, Loader2, Eye, Camera, TrendingUp,
-    Clock, ShoppingBag, Sparkles, User, Grid3X3,
+    Clock, ShoppingBag, Send, User, Grid3X3,
     Mountain, Bird, UserCircle, Building2, Palette, Layers
 } from 'lucide-react';
 import { SEOHead } from '../../../../components/common/SEOHead';
@@ -37,7 +37,7 @@ const TABS = [
     { id: 'trending', label: 'Trending', icon: TrendingUp },
     { id: 'latest', label: 'Latest', icon: Clock },
     { id: 'for-sale', label: 'For Sale', icon: ShoppingBag },
-    { id: 'requests', label: 'Requests', icon: Sparkles },
+    { id: 'requests', label: 'Requests', icon: Send },
 ];
 
 export default function CollectionsPage() {

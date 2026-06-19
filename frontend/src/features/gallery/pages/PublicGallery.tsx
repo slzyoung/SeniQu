@@ -22,7 +22,6 @@ import {
     Heart,
     Eye,
     Loader2,
-    Sparkles,
     AlertCircle,
     ShieldCheck,
     Cpu,
@@ -329,7 +328,7 @@ export default function PublicGallery() {
                 </div>
             ) : artworks.length === 0 ? (
                 <div className="py-20 text-center flex flex-col items-center gap-4 border border-dashed border-theme-border rounded-2xl bg-theme-surface/30">
-                    <Sparkles className="w-10 h-10 text-theme-muted/50" />
+                    <Search className="w-10 h-10 text-theme-muted/50" />
                     <p className="text-theme-muted">No artworks found matching your criteria.</p>
                     {activeFilterCount > 0 && (
                         <Button variant="outline" onClick={clearAllFilters} className="text-xs gap-1">

@@ -137,7 +137,7 @@ export function PhotoUpload({ isOpen, onClose, onUploadSuccess }: Props) {
                     </button>
                 </div>
 
-                <div className="px-5 pb-6 space-y-4 overflow-y-auto" style={{ maxHeight: 'calc(92vh - 60px)', maxHeight: 'calc(92dvh - 60px)' }}>
+                <div className="px-5 pb-6 space-y-4 overflow-y-auto" style={{ maxHeight: 'calc(92dvh - 60px)' }}>
                     {/* Success */}
                     {success ? (
                         <motion.div

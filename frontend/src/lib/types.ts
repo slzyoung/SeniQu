@@ -78,6 +78,8 @@ export interface Artwork {
     views: number;
     likes: number;
     isBookmarked?: boolean;
+    artworkType?: 'physical' | 'digital';
+    poaCertificate?: any;
 }
 
 export interface ArtworkImage {

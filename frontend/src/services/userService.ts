@@ -151,21 +151,24 @@ class UserService {
      * Get user statistics (views, bookmarks, collections, etc.)
      */
     async getStats(): Promise<UserStats> {
-        return apiGet<UserStats>('/users/me/stats');
+        const res = await apiGet<any>('/users/me/stats');
+        return res.data;
     }
 
     /**
      * Get user's recent activity
      */
     async getRecentActivity(limit = 10): Promise<RecentActivity[]> {
-        return apiGet<RecentActivity[]>('/users/me/activity', { params: { limit } });
+        const res = await apiGet<any>('/users/me/activity', { params: { limit } });
+        return res.data;
     }
 
     /**
      * Get user bookmarks (saved artworks)
      */
     async getBookmarks(page = 1, limit = 20): Promise<{ data: Artwork[]; total: number }> {
-        return apiGet('/users/me/bookmarks', { params: { page, limit } });
+        const res = await apiGet<any>('/users/me/bookmarks', { params: { page, limit } });
+        return res.data;
     }
 
     /**
@@ -186,7 +189,8 @@ class UserService {
      * Get user collections
      */
     async getCollections(page = 1, limit = 20): Promise<{ data: Collection[]; total: number }> {
-        return apiGet('/users/me/collections', { params: { page, limit } });
+        const res = await apiGet<any>('/users/me/collections', { params: { page, limit } });
+        return res.data;
     }
 
     /**
@@ -198,7 +202,8 @@ class UserService {
             description: data.description ? sanitizeInput(data.description) : undefined,
             isPublic: data.isPublic ?? true,
         };
-        return apiPost<Collection>('/users/me/collections', sanitizedData);
+        const res = await apiPost<any>('/users/me/collections', sanitizedData);
+        return res.data;
     }
 
     /**
@@ -212,7 +217,8 @@ class UserService {
      * Get user's owned artworks
      */
     async getOwnedArtworks(page = 1, limit = 20): Promise<{ data: any[]; total: number }> {
-        return apiGet('/users/me/artworks', { params: { page, limit } });
+        const res = await apiGet<any>('/users/me/artworks', { params: { page, limit } });
+        return res.data;
     }
 
     /**
