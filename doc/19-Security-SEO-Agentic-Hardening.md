@@ -62,3 +62,22 @@ To prepare the site for autonomous AI agents and improve page-speed checks, we f
 ### B. Standardized `llms.txt`
 *   Created `/llms.txt` inside the public directory.
 *   Provides structured information formatted as markdown with a required `H1` header and links, helping AI browsers map and interact with the application routes.
+
+---
+
+## 🎨 4. Premium Light/Dark Theme UI/UX Enhancements (`AuthModal.tsx`)
+
+To ensure a cohesive, professional appearance across all devices (with special priority on mobile responsiveness), we polished the visual style of the authentication modal (`AuthModal.tsx`) in both Light and Dark modes.
+
+### A. High-Contrast Modal Containers & Footer
+*   **Modal Card**: Replaced the low-contrast glassmorphic background (`bg-theme-glass`) with a solid, premium ivory-white (`bg-[#FAF9F5]`) in light mode and deep charcoal-black (`bg-[#0D0D0D]`) in dark mode, solving contrast bleed against the backdrop.
+*   **Dialog Footer**: Separated the footer using a subtle, clean container (`bg-neutral-100/50` in light mode, `bg-[#121212]` in dark mode) and a high-contrast border.
+*   **Close Action**: Adjusted the hover state to use a neutral background-color change (`hover:bg-neutral-100` and `dark:hover:bg-neutral-800`), making the button easily discoverable.
+
+### B. Crisp & Accessible Input Control Styles
+*   **Form Input Fields**: Replaced the muddy grey backgrounds (`bg-black/[0.03]`) with solid white fields (`bg-white`) in light mode and dark inputs (`bg-neutral-900/60`) in dark mode. The border and focus ring states are aligned to the brand's signature gold color palette (`border-neutral-200 focus:border-gold/50`).
+*   **Verification Grid & OTP Code Inputs**: Redesigned digit entries to use clear borders (`border-neutral-200` in light mode, `border-neutral-800/80` in dark mode) which transition to gold highlights upon verification or active interaction.
+
+### C. Link Contrast & Legibility Alignment
+*   **Secondary Actions**: Links like "Forgot password?", "Sign up", and "Sign in" were updated from low-contrast pure brand-gold (`text-gold`) to high-contrast dark amber (`text-amber-700 hover:text-amber-800`) in light mode, while retaining the premium gold colors (`text-gold dark:hover:text-gold-light`) in dark mode.
+
