@@ -39,6 +39,13 @@
     })();
   </script>
 
+  <!-- Client-side redirection to Custom Domain -->
+  <script>
+    if (window.location.hostname === 'seniquapp.netlify.app') {
+      window.location.replace('https://seniqu.art' + window.location.pathname + window.location.search + window.location.hash);
+    }
+  </script>
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
 

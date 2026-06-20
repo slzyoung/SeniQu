@@ -27,9 +27,11 @@ import {
     History,
     RefreshCw,
     ShieldAlert,
+    ScanLine,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useHeritageScan, useScanHistory, useScanQuota } from '../../../../hooks/useAI';
+import { compressImage } from '../../../../lib/imageCompressor';
 import './GenreIdentifierPage.css';
 
 // ============================================================
@@ -375,13 +377,27 @@ export function GenreIdentifierPage() {
     }, [cameraActive, cameraReady, result, scanMutation.isPending, captureAndAnalyze]);
 
     // -------- Upload handler — send file to Gemini --------
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            setPreviewUrl(URL.createObjectURL(file));
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const originalFile = e.target.files?.[0];
+        if (originalFile) {
+            setPreviewUrl(URL.createObjectURL(originalFile));
             setIsScanning(true);
             setDetected(true);
             setScanError(null);
+
+            let file = originalFile;
+            try {
+                // Pre-compress the image to reduce transfer times and prevent payload size errors on mobile
+                file = await compressImage(originalFile, {
+                    maxWidth: 1600,
+                    maxHeight: 1600,
+                    quality: 0.8,
+                    outputType: 'image/jpeg',
+                });
+                setPreviewUrl(URL.createObjectURL(file));
+            } catch (err) {
+                console.warn('Gagal melakukan kompresi gambar, menggunakan file asli:', err);
+            }
 
             scanMutation.mutate({ file }, {
                 onSuccess: (data: any) => {
@@ -413,6 +429,8 @@ export function GenreIdentifierPage() {
                 },
             });
         }
+        // Reset file input value to allow selecting the same file again
+        e.target.value = '';
     };
 
     // -------- Reset --------
@@ -548,7 +566,7 @@ export function GenreIdentifierPage() {
                 </div>
 
                 {/* Hidden file input */}
-                <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileSelect} />
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
                 <canvas ref={canvasRef} className="hidden" />
             </div>
 

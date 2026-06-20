@@ -7,7 +7,14 @@
   NODE_OPTIONS = "--max-old-space-size=4096"
   NPM_FLAGS = "--legacy-peer-deps"
 
-# Domain Aliasing - Redirect netlify subdomain to custom domain
+# Domain Aliasing - Redirect netlify subdomain to custom domain (HTTP)
+[[redirects]]
+  from = "http://seniquapp.netlify.app/*"
+  to = "https://seniqu.art/:splat"
+  status = 301
+  force = true
+
+# Domain Aliasing - Redirect netlify subdomain to custom domain (HTTPS)
 [[redirects]]
   from = "https://seniquapp.netlify.app/*"
   to = "https://seniqu.art/:splat"
