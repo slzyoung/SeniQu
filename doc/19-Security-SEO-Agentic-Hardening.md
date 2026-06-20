@@ -44,10 +44,11 @@ To optimize search engine presence and prevent duplicate indexing penalties on G
 *   **Sitemap (`sitemap.xml`)**: Updated all page `<loc>` targets to point to `https://seniqu.art`.
 *   **Robots (`robots.txt`)**: Set the `Sitemap` declaration to point directly to `https://seniqu.art/sitemap.xml`.
 
-### C. Permanent 301 Edge Redirections (`netlify.toml`, `_redirects`)
+### C. Permanent 301 Edge Redirections & CSP Alignment (`netlify.toml`, `_redirects`, `_headers`)
 *   Added domain-specific redirection rules at the top of Netlify redirect parameters.
 *   Requests hitting `https://seniquapp.netlify.app/*` are permanently redirected (`301!`) to `https://seniqu.art/:splat` to transfer SEO juice and preserve page rank.
 *   CORS origin configuration in NestJS (`main.ts`) and domain verification in the wallet service (`wallet.service.ts`) were updated to explicitly support `seniqu.art` and `www.seniqu.art`.
+*   Aligned the `Content-Security-Policy` header in both `netlify.toml` and `frontend/public/_headers` to allow `https://challenges.cloudflare.com` and `https://static.cloudflareinsights.com` (under `script-src`, `connect-src`, and `frame-src`). This ensures Cloudflare Turnstile bot protection widgets and Cloudflare Analytics beacons load successfully without browser CSP violations.
 
 ---
 
