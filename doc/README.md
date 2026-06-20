@@ -15,6 +15,7 @@ Welcome to the SeniQu documentation hub. Below is an index of all architecture d
 * **[09-Wallet-Integration.md](09-Wallet-Integration.md)**: Configuration details for embedded and external Web3 wallets (Phantom, Solflare, MetaMask).
 * **[10-Cloudflare-R2-Integration.md](10-Cloudflare-R2-Integration.md)**: Setup, credentials, and image delivery optimization using Cloudflare R2 bucket storage.
 * **[11-Security-Incident-Response.md](11-Security-Incident-Response.md)**: Procedures for handling potential token exposures, leakage, and security compromises.
+* **[19-Security-SEO-Agentic-Hardening.md](19-Security-SEO-Agentic-Hardening.md)**: Detail of Cloudflare Turnstile bot protection, honeypot filters, temporary email blocks, SEO custom domain mapping, and agentic browsing accessibility.
 
 ## Database & APIs
 * **[07-Database-Schema.md](07-Database-Schema.md)**: PostgreSQL schemas, tables definitions, and Row Level Security (RLS) policies.

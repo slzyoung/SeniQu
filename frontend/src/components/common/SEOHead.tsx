@@ -7,14 +7,14 @@
  *     title="Gallery — SeniQu"
  *     description="Explore Indonesian art heritage..."
  *     canonical="/gallery"
- *     ogImage="https://seniquapp.netlify.app/images/logo/seniqu.png"
+ *     ogImage="https://seniqu.art/images/logo/seniqu.png"
  *   />
  */
 
 import { useEffect } from 'react';
 
 const SITE_NAME = 'SeniQu';
-const BASE_URL = 'https://seniquapp.netlify.app';
+const BASE_URL = 'https://seniqu.art';
 const DEFAULT_OG_IMAGE = `${BASE_URL}/images/logo/seniqu.png`;
 const DEFAULT_DESCRIPTION =
     'Indonesian cultural heritage digital platform. Explore museums art galleries and historical sites with AI and Solana blockchain technology.';

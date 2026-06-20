@@ -8,6 +8,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Mail, Lock, ArrowLeft, Loader2, Eye, EyeOff, AlertCircle, CheckCircle, Wallet, ShieldCheck, KeyRound, MailCheck } from 'lucide-react';
+import Turnstile from 'react-turnstile';
+const TurnstileComponent = Turnstile as any;
 import { authService, loginSchema, registerSchema, AuthError, OtpRequiredResponse } from '../services/authService';
 import { useAppKit, useAppKitAccount, useAppKitProvider } from '../lib/reownConfig';
 
@@ -89,7 +91,7 @@ function WalletConnectionStatus({ state, walletName }: { state: WalletConnection
         return { label: 'Preparing signature request...', color: 'text-blue-400', icon: <Loader2 className="w-4 h-4 animate-spin" /> };
       case 'awaiting-signature':
         return {
-          label: 'Verify domain is seniquapp.netlify.app',
+          label: 'Verify domain is seniqu.art',
           color: 'text-yellow-400',
           icon: <ShieldCheck className="w-4 h-4" />
         };
@@ -157,6 +159,11 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
+  
+  // Anti-bot states
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [website, setWebsite] = useState('');
+  const turnstileRef = React.useRef<any>(null);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -208,6 +215,13 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     setForgotResendCooldown(0);
     setPasswordFocused(false);
     setForgotPasswordFocused(false);
+    setTurnstileToken(null);
+    setWebsite('');
+    try {
+      turnstileRef.current?.reset();
+    } catch (e) {
+      console.warn('Failed to reset turnstile:', e);
+    }
 
     // If we are partly authenticated in Privy but not Backend, Force Logout from Privy
     // This ensures next time user opens modal, they start fresh
@@ -237,10 +251,16 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   }, [onClose, resetState, manualWallet]);
 
   // Reset form when switching views
-  // Reset form when switching views
   const switchView = useCallback((newView: AuthView) => {
     setErrors({});
     setView(newView);
+    setTurnstileToken(null);
+    setWebsite('');
+    try {
+      turnstileRef.current?.reset();
+    } catch (e) {
+      // ignore
+    }
   }, []);
 
   // Helper: Handle successful login result
@@ -563,12 +583,21 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     setIsLoading(true);
     setErrors({});
 
+    // Client-side Turnstile check
+    if (!turnstileToken) {
+      setErrors({ general: 'Please complete the security check.' });
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const validatedData = registerSchema.parse({
         email,
         password,
         displayName: displayName || undefined,
         username: username || undefined,
+        turnstileToken: turnstileToken || undefined,
+        website: website || undefined,
       });
 
       const response = await authService.register(validatedData);
@@ -588,6 +617,14 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
       navigate(redirectPath);
       handleClose();
     } catch (error) {
+      // Reset Turnstile on registration failure so a new challenge can be completed
+      try {
+        turnstileRef.current?.reset();
+        setTurnstileToken(null);
+      } catch (e) {
+        // ignore
+      }
+
       if (error instanceof z.ZodError) {
         const fieldErrors: Record<string, string> = {};
         error.errors.forEach((err) => {
@@ -603,7 +640,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     } finally {
       setIsLoading(false);
     }
-  }, [email, password, displayName, username, storeLogin, toast, handleClose, navigate]);
+  }, [email, password, displayName, username, turnstileToken, website, storeLogin, toast, handleClose, navigate]);
 
   // Handle OTP verification
   const handleVerifyOtp = useCallback(async (otpCode: string) => {
@@ -1239,6 +1276,34 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
             </div>
           </div>
         )}
+
+        {/* Honeypot field (anti-bot trap) */}
+        <div className="absolute opacity-0 pointer-events-none w-0 h-0 overflow-hidden" aria-hidden="true">
+          <label htmlFor="website">Website</label>
+          <input
+            id="website"
+            type="text"
+            name="website"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+            tabIndex={-1}
+            autoComplete="off"
+          />
+        </div>
+
+        {/* Cloudflare Turnstile widget */}
+        <div className="flex justify-center my-3.5">
+          <TurnstileComponent
+            ref={turnstileRef}
+            sitekey={import.meta.env.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'}
+            onVerify={(token: string) => setTurnstileToken(token)}
+            onError={() => {
+              setTurnstileToken(null);
+              setErrors({ general: 'Security challenge failed to load. Please try again.' });
+            }}
+            onExpire={() => setTurnstileToken(null)}
+          />
+        </div>
 
         {/* Submit Button */}
         <button

@@ -1,5 +1,5 @@
 # SeniQu — robots.txt
-# https://seniquapp.netlify.app
+# https://seniqu.art
 
 User-agent: *
 Allow: /
@@ -24,4 +24,4 @@ Disallow: /auth/*
 Disallow: /complete-profile
 
 # Sitemap
-Sitemap: https://seniquapp.netlify.app/sitemap.xml
+Sitemap: https://seniqu.art/sitemap.xml

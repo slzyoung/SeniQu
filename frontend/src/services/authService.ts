@@ -64,6 +64,8 @@ export const registerSchema = z.object({
     displayName: displayNameSchema.optional(),
     username: usernameSchema.optional(),
     userType: z.enum(['ART_LOVER', 'ARTIST', 'COLLECTOR', 'INSTITUTION']).default('ART_LOVER'),
+    turnstileToken: z.string().optional(),
+    website: z.string().optional(),
 });
 
 // ============================================
@@ -102,7 +104,10 @@ export interface RegisterCredentials {
     displayName?: string;
     username?: string;
     userType?: 'ART_LOVER' | 'ARTIST' | 'COLLECTOR' | 'INSTITUTION';
+    turnstileToken?: string;
+    website?: string;
 }
+
 
 export interface AuthError {
     message: string;

@@ -32,4 +32,19 @@ export class RegisterDto {
     @IsEnum(UserType)
     @IsOptional()
     userType?: UserType
+
+    @ApiPropertyOptional({ description: "Cloudflare Turnstile CAPTCHA token" })
+    @IsString()
+    @IsOptional()
+    turnstileToken?: string
+
+    /**
+     * Honeypot field — invisible to real users, but bots auto-fill it.
+     * If this field has a value, the request is silently rejected.
+     */
+    @ApiPropertyOptional({ description: "Do not fill this field (anti-bot)" })
+    @IsString()
+    @IsOptional()
+    website?: string
 }
+

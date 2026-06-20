@@ -17,6 +17,7 @@ import { JwtAuthGuard } from "./guards/jwt-auth.guard"
 import { RolesGuard } from "./guards/roles.guard"
 import { PermissionsGuard } from "./guards/permissions.guard"
 import { PrivyGuard } from "./guards/privy.guard"
+import { TurnstileGuard } from "../common/guards/turnstile.guard"
 
 // Other modules
 import { UsersModule } from "../users/users.module"
@@ -61,6 +62,7 @@ import { DatabaseModule } from "../database/database.module"
         RolesGuard,
         PermissionsGuard,
         PrivyGuard,
+        TurnstileGuard,
     ],
     controllers: [AuthController],
     exports: [AuthService, JwtModule, PrivyService, GoogleService],

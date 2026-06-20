@@ -69,6 +69,7 @@ export const configuration = () => ({
         corsOrigins: process.env.CORS_ORIGINS?.split(",") || ["http://localhost:3000"],
         rateLimitTtl: parseInt(process.env.RATE_LIMIT_TTL || "60", 10),
         rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX || "100", 10),
+        turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || "",
     },
 
     // SMTP (Brevo)
@@ -143,6 +144,9 @@ export const validationSchema = Joi.object({
     R2_SECRET_ACCESS_KEY: Joi.string().optional(),
     R2_BUCKET_NAME: Joi.string().default("seniqu"),
     R2_PUBLIC_URL: Joi.string().optional(),
+
+    // Cloudflare Turnstile (Anti-Bot CAPTCHA)
+    TURNSTILE_SECRET_KEY: Joi.string().optional().allow(''),
 
     // SMTP
     SMTP_HOST: Joi.string().optional(),

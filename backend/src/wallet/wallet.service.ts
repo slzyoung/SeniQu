@@ -92,8 +92,8 @@ export class WalletService {
 
         // Domain Binding (SIWE/SIWS)
         // Allow localhost and specific production domains
-        const allowedDomains = ["localhost:5173", "seniquapp.netlify.app", "seniqu.com"];
-        let effectiveDomain = domain || "seniquapp.netlify.app";
+        const allowedDomains = ["localhost:5173", "seniquapp.netlify.app", "seniqu.art", "www.seniqu.art", "seniqu.com"];
+        let effectiveDomain = domain || "seniqu.art";
 
         // Simple validation to prevent arbitrary strings if domain is provided
         if (domain && !allowedDomains.some(d => domain.includes(d))) {
