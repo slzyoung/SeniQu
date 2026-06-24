@@ -1,0 +1,353 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Heart, MessageCircle, Share2, Volume2, VolumeX, Play, Pause, Trash2, Bookmark, MoreVertical, Music, X } from 'lucide-react';
+import { useToggleReelLike, useToggleReelReshare, useRecordReelView, useDeleteReel } from '../../../hooks/useReels';
+import { useAuthStore } from '../../../stores/useAuthStore';
+import { useToast } from '../../../stores/useNotificationStore';
+import Avatar from '../../../components/ui/Avatar';
+import { useNavigate } from 'react-router-dom';
+
+function formatCount(n: number): string {
+    if (!n) return '0';
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+    return String(n);
+}
+
+function timeAgo(dateStr: string): string {
+    if (!dateStr) return '';
+    const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+    if (diff < 60) return 'now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+    if (diff < 604800) return Math.floor(diff / 86400) + 'd';
+    return Math.floor(diff / 604800) + 'w';
+}
+
+interface Props {
+    reel: any;
+    isActive: boolean;
+    isMuted: boolean;
+    onMuteToggle: () => void;
+    onOpenComments: () => void;
+    onShare: () => void;
+    observerRef: (el: HTMLDivElement | null) => void;
+}
+
+export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpenComments, onShare, observerRef }: Props) {
+    const navigate = useNavigate();
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [showHeart, setShowHeart] = useState(false);
+    const [showPlayIcon, setShowPlayIcon] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [isFollowing, setIsFollowing] = useState(false);
+    const [showOptions, setShowOptions] = useState(false);
+    const lastTapRef = useRef(0);
+    const viewRecordedRef = useRef(false);
+
+    const toggleLike = useToggleReelLike();
+    const toggleReshare = useToggleReelReshare();
+    const deleteReel = useDeleteReel();
+    const recordView = useRecordReelView();
+    const { user } = useAuthStore();
+    const toast = useToast();
+
+    // Resolve snake_case vs camelCase from DB
+    const videoUrl = reel.video_url || reel.videoUrl || '';
+    const thumbUrl = reel.thumbnail_url || reel.thumbnailUrl || '';
+    const userName = reel.user?.display_name || reel.user?.displayName || 'Anonymous';
+    const userAvatar = reel.user?.avatar_url || reel.user?.avatarUrl;
+    const createdAt = reel.created_at || reel.createdAt || '';
+    const likeCount = reel.like_count ?? reel.likeCount ?? 0;
+    const commentCount = reel.comment_count ?? reel.commentCount ?? 0;
+
+    const shareCount = reel.share_count ?? reel.shareCount ?? 0;
+    const viewCount = reel.view_count ?? reel.viewCount ?? 0;
+    const isLiked = reel.is_liked || reel.isLiked || false;
+    const isReshared = reel.is_reshared || reel.isReshared || false;
+    const reelUserId = reel.user_id || reel.userId;
+    const dur = reel.duration || 0;
+
+    // Auto-play/pause on visibility
+    useEffect(() => {
+        if (!videoRef.current) return;
+        if (isActive) {
+            videoRef.current.currentTime = 0;
+            viewRecordedRef.current = false;
+            videoRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+        } else {
+            videoRef.current.pause();
+            setIsPlaying(false);
+        }
+    }, [isActive]);
+
+    // Sync muted state
+    useEffect(() => {
+        if (videoRef.current) videoRef.current.muted = isMuted;
+    }, [isMuted]);
+
+    // Double-tap to like, single-tap to play/pause
+    const handleTap = useCallback(() => {
+        const now = Date.now();
+        if (now - lastTapRef.current < 300) {
+            // Double tap — like
+            setShowHeart(true);
+            setTimeout(() => setShowHeart(false), 900);
+            if (!isLiked && user) toggleLike.mutate(reel.id);
+            lastTapRef.current = 0;
+        } else {
+            lastTapRef.current = now;
+            setTimeout(() => {
+                if (lastTapRef.current === now) {
+                    if (!videoRef.current) return;
+                    if (isPlaying) {
+                        videoRef.current.pause();
+                        setIsPlaying(false);
+                    } else {
+                        videoRef.current.play();
+                        setIsPlaying(true);
+                    }
+                    setShowPlayIcon(true);
+                    setTimeout(() => setShowPlayIcon(false), 500);
+                }
+            }, 310);
+        }
+    }, [isPlaying, isLiked, reel.id, user]);
+
+    // Track progress + view recording
+    const handleTimeUpdate = () => {
+        if (!videoRef.current) return;
+        const pct = (videoRef.current.currentTime / videoRef.current.duration) * 100;
+        setProgress(pct || 0);
+        setCurrentTime(videoRef.current.currentTime);
+        if (!viewRecordedRef.current && videoRef.current.currentTime > 3) {
+            viewRecordedRef.current = true;
+            recordView.mutate({ reelId: reel.id, watchDuration: 3, completed: false });
+        }
+    };
+
+    const isOwner = user?.id === reelUserId;
+    const isAdmin = ['admin', 'super_admin'].includes(user?.role || '');
+    const durStr = dur > 0 ? `${Math.floor(dur / 60)}:${String(Math.floor(dur % 60)).padStart(2, '0')}` : '';
+    const curStr = `${Math.floor(currentTime / 60)}:${String(Math.floor(currentTime % 60)).padStart(2, '0')}`;
+
+    return (
+        <div ref={observerRef} data-reel-id={reel.id} className="reel-item">
+            {/* Video Player */}
+            <video
+                ref={videoRef}
+                src={videoUrl}
+                loop
+                playsInline
+                preload="metadata"
+                muted={isMuted}
+                onClick={handleTap}
+                onTimeUpdate={handleTimeUpdate}
+                className="reel-video"
+                poster={thumbUrl}
+            />
+
+            {/* Gradient Overlays */}
+            <div className="reel-gradient-top" />
+            <div className="reel-gradient-bottom" />
+
+            {/* Play/Pause Center Indicator */}
+            {showPlayIcon && (
+                <div className="reel-center-indicator">
+                    {isPlaying
+                        ? <Play style={{ width: 48, height: 48, fill: '#fff', color: '#fff' }} />
+                        : <Pause style={{ width: 48, height: 48, fill: '#fff', color: '#fff' }} />
+                    }
+                </div>
+            )}
+
+            {/* Heart Double-Tap Animation */}
+            {showHeart && (
+                <div className="reel-center-indicator">
+                    <Heart style={{ width: 80, height: 80, fill: '#ef4444', color: '#ef4444' }} className="reel-heart-pop" />
+                </div>
+            )}
+
+            {/* Progress Bar */}
+            <div className="reel-progress-track">
+                <div className="reel-progress-fill" style={{ width: `${progress}%` }} />
+            </div>
+
+            {/* ═══════════ Bottom Info ═══════════ */}
+            <div className="reel-bottom-info">
+                {/* User Row */}
+                <div className="reel-user-row">
+                    <div 
+                        className="flex items-center gap-2.5 cursor-pointer hover:opacity-85 transition-opacity"
+                        style={{ minWidth: 0, flex: '0 1 auto' }}
+                        onClick={() => {
+                            if (reelUserId) navigate(`/profile/${reelUserId}`);
+                        }}
+                    >
+                        <Avatar
+                            name={userName}
+                            src={userAvatar}
+                            size="sm"
+                            className="!w-[38px] !h-[38px] !ring-2 !ring-white flex-shrink-0"
+                        />
+                        <div style={{ minWidth: 0, flex: '0 1 auto' }}>
+                            <div className="reel-user-name">{userName}</div>
+                            <div className="reel-user-time">{timeAgo(createdAt)}</div>
+                        </div>
+                    </div>
+
+                    {reel.user?.role === 'artist' && <span className="reel-badge-artist">Artist</span>}
+
+                    {!isOwner && (
+                        <button
+                            onClick={() => {
+                                if (!user) { toast.error('Login Required', 'Sign in to follow creators'); return; }
+                                setIsFollowing(!isFollowing);
+                                toast.success(
+                                    isFollowing ? 'Unfollowed' : 'Following',
+                                    isFollowing ? `You unfollowed ${userName}.` : `You are now following ${userName}.`
+                                );
+                            }}
+                            className={`reel-follow-btn ${isFollowing ? 'reel-following' : ''}`}
+                        >
+                            {isFollowing ? 'Following' : 'Follow'}
+                        </button>
+                    )}
+
+                    <div style={{ flex: 1 }} />
+
+                    <button onClick={() => setShowOptions(true)} className="reel-options-btn">
+                        <MoreVertical style={{ width: 20, height: 20 }} />
+                    </button>
+                </div>
+
+                {/* Caption */}
+                {reel.caption && <p className="reel-caption">{reel.caption}</p>}
+
+                {/* Hashtags */}
+                {reel.hashtags?.length > 0 && (
+                    <div className="reel-hashtags">
+                        {reel.hashtags.slice(0, 5).map((t: string) => (
+                            <span key={t} className="reel-hashtag">#{t}</span>
+                        ))}
+                    </div>
+                )}
+
+                {/* Duration */}
+                {durStr && <div className="reel-duration">{curStr} / {durStr}</div>}
+
+                {/* Music Pill */}
+                <div className="reel-music-pill">
+                    <Music style={{ width: 14, height: 14 }} className="reel-music-icon" />
+                    <div className="reel-music-track-wrap">
+                        <span className="reel-music-track-text">
+                            Original Audio — {userName} • {userName} Original Audio
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {/* ═══════════ Right Sidebar Actions ═══════════ */}
+            <div className="reel-sidebar">
+                {/* Mute Button */}
+                <button onClick={onMuteToggle} className="reel-mute-btn">
+                    {isMuted
+                        ? <VolumeX style={{ width: 18, height: 18 }} />
+                        : <Volume2 style={{ width: 18, height: 18 }} />
+                    }
+                </button>
+
+                {/* Glassmorphic Action Card */}
+                <div className="reel-actions-card">
+                    {/* Like */}
+                    <button
+                        onClick={() => {
+                            if (!user) { toast.error('Login Required', 'Sign in to like'); return; }
+                            toggleLike.mutate(reel.id);
+                        }}
+                        className={`reel-action-btn ${isLiked ? 'reel-liked' : ''}`}
+                    >
+                        <div className="reel-action-icon">
+                            <Heart style={{ width: 20, height: 20, fill: isLiked ? '#ef4444' : 'none', color: isLiked ? '#ef4444' : '#fff' }} />
+                        </div>
+                        <span className="reel-action-count">{formatCount(likeCount)}</span>
+                    </button>
+
+                    {/* Comment */}
+                    <button onClick={onOpenComments} className="reel-action-btn">
+                        <div className="reel-action-icon">
+                            <MessageCircle style={{ width: 20, height: 20 }} />
+                        </div>
+                        <span className="reel-action-count">{formatCount(commentCount)}</span>
+                    </button>
+
+                    {/* Save / Bookmark */}
+                    <button
+                        onClick={() => {
+                            if (!user) { toast.error('Login Required', 'Sign in to save'); return; }
+                            toggleReshare.mutate({ reelId: reel.id });
+                        }}
+                        className={`reel-action-btn ${isReshared ? 'reel-saved' : ''}`}
+                    >
+                        <div className="reel-action-icon">
+                            <Bookmark style={{ width: 20, height: 20, fill: isReshared ? '#C9A84C' : 'none', color: isReshared ? '#C9A84C' : '#fff' }} />
+                        </div>
+                        <span className="reel-action-count">{isReshared ? 'Saved' : 'Save'}</span>
+                    </button>
+
+                    {/* Share */}
+                    <button onClick={onShare} className="reel-action-btn">
+                        <div className="reel-action-icon">
+                            <Share2 style={{ width: 18, height: 18 }} />
+                        </div>
+                        <span className="reel-action-count">{formatCount(shareCount + viewCount)}</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* ═══════════ Options Bottom Sheet ═══════════ */}
+            {showOptions && (
+                <>
+                    <div className="reel-drawer-backdrop" onClick={() => setShowOptions(false)} />
+                    <div className="reel-drawer">
+                        <div className="reel-drawer-handle" />
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid var(--border-color, rgba(255,255,255,0.08))' }}>
+                            <h3 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary, #fff)' }}>Options</h3>
+                            <button onClick={() => setShowOptions(false)} style={{ padding: 6, borderRadius: '50%', background: 'none', border: 'none', color: 'var(--text-muted, #888)', cursor: 'pointer' }}>
+                                <X style={{ width: 20, height: 20 }} />
+                            </button>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', padding: '8px 12px', paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0px))' }}>
+                            {(isOwner || isAdmin) && (
+                                <button
+                                    onClick={() => { setShowOptions(false); if (confirm('Delete this reel?')) deleteReel.mutate(reel.id); }}
+                                    className="reel-option-item reel-option-danger"
+                                >
+                                    <Trash2 style={{ width: 18, height: 18 }} /> Delete Reel
+                                </button>
+                            )}
+                            {!isOwner && (
+                                <button
+                                    onClick={() => { setShowOptions(false); toast.success('Report Submitted', 'Thank you for reporting.'); }}
+                                    className="reel-option-item reel-option-danger"
+                                >
+                                    Report Reel
+                                </button>
+                            )}
+                            <button onClick={() => { setShowOptions(false); onMuteToggle(); }} className="reel-option-item reel-option-normal">
+                                {isMuted ? 'Unmute Video' : 'Mute Video'}
+                            </button>
+                            <button onClick={() => { setShowOptions(false); onShare(); }} className="reel-option-item reel-option-normal">
+                                Share Reel Link
+                            </button>
+                            <button onClick={() => setShowOptions(false)} className="reel-option-item reel-option-cancel">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </>
+            )}
+        </div>
+    );
+}

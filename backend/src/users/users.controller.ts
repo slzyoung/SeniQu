@@ -102,10 +102,31 @@ export class UsersController {
         return this.usersService.createCollection(user.id, dto)
     }
 
-    @Get(":id")
-    @ApiOperation({ summary: "Get user by ID" })
-    async findOne(@Param("id") id: string) {
-        return this.usersService.findById(id)
+    @Get(":id/public-profile")
+    @ApiOperation({ summary: "Get public user profile with follow stats" })
+    async getPublicProfile(
+        @Param("id") id: string,
+        @GetUser() user: any,
+    ) {
+        return this.usersService.getPublicProfile(id, user?.id)
+    }
+
+    @Post(":id/follow")
+    @ApiOperation({ summary: "Follow a user" })
+    async followUser(
+        @Param("id") targetId: string,
+        @GetUser() user: any,
+    ) {
+        return this.usersService.followUser(user.id, targetId)
+    }
+
+    @Delete(":id/follow")
+    @ApiOperation({ summary: "Unfollow a user" })
+    async unfollowUser(
+        @Param("id") targetId: string,
+        @GetUser() user: any,
+    ) {
+        return this.usersService.unfollowUser(user.id, targetId)
     }
 
     @Patch("me")

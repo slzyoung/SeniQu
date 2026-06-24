@@ -22,7 +22,9 @@ export class UploadFileDto {
             "artist-banners",
             "creator-banners",
             "collector-profiles",
-            "collector-banners"
+            "collector-banners",
+            "forum-videos",
+            "forum-thumbnails"
         ],
         default: "general",
     })
@@ -46,7 +48,9 @@ export class UploadFileDto {
         "artist-banners",
         "creator-banners",
         "collector-profiles",
-        "collector-banners"
+        "collector-banners",
+        "forum-videos",
+        "forum-thumbnails"
     ])
     folder?: string
 
@@ -63,4 +67,21 @@ export interface UploadResult {
     thumbnailKey?: string
     mediumUrl?: string
     mediumKey?: string
+}
+
+export interface ForumVideoUploadResult extends UploadResult {
+    metadata: {
+        duration: number
+        width: number
+        height: number
+        videoCodec: string
+        audioCodec: string | null
+        bitrate: number
+        fps: number
+        aspectRatio: string
+        originalFileSize: number
+        compressedFileSize: number
+        compressionRatio: number
+        originalFilename: string
+    }
 }

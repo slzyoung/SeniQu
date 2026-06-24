@@ -424,7 +424,13 @@ export default function AIDashboardPage() {
                   {selectedArtwork.visibility === 'public' ? 'Public' : 'Private'}
                 </span>
               ) : (
-                <span className="aic-detail__author-badge">
+                <span 
+                  className="aic-detail__author-badge cursor-pointer hover:underline"
+                  onClick={() => {
+                    const authorId = selectedArtwork.author?.id || selectedArtwork.user_id || selectedArtwork.userId;
+                    if (authorId) navigate(`/profile/${authorId}`);
+                  }}
+                >
                   By {selectedArtwork.author?.name || 'Artist'}
                 </span>
               )}
@@ -546,11 +552,21 @@ export default function AIDashboardPage() {
                       <img
                         src={comment.user?.avatar_url || 'https://ui-avatars.com/api/?name=U'}
                         alt={comment.user?.display_name}
-                        className="aic-comment-card__avatar"
+                        className="aic-comment-card__avatar cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => {
+                          const authorId = comment.user?.id || comment.user_id || comment.userId;
+                          if (authorId) navigate(`/profile/${authorId}`);
+                        }}
                       />
                       <div className="aic-comment-card__body">
                         <div className="aic-comment-card__head">
-                          <span className="aic-comment-card__username">
+                          <span 
+                            className="aic-comment-card__username cursor-pointer hover:underline"
+                            onClick={() => {
+                              const authorId = comment.user?.id || comment.user_id || comment.userId;
+                              if (authorId) navigate(`/profile/${authorId}`);
+                            }}
+                          >
                             {comment.user?.display_name}
                           </span>
                           <span className="aic-comment-card__date">
@@ -777,7 +793,14 @@ export default function AIDashboardPage() {
 
                       {/* Bottom info */}
                       <div className="aic-cfeed__info">
-                        <div className="aic-cfeed__author">
+                        <div 
+                          className="aic-cfeed__author cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const authorId = item.author?.id || item.user_id || item.userId;
+                            if (authorId) navigate(`/profile/${authorId}`);
+                          }}
+                        >
                           <img
                             src={item.author.avatarUrl}
                             alt={item.author.name}

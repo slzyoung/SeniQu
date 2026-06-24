@@ -14,7 +14,6 @@ import {
     Heart,
     Loader2,
     Image as ImageIcon,
-    Video,
     X,
     Trash2,
     ChevronDown,
@@ -23,10 +22,16 @@ import {
     ArrowLeft,
     MessageCircle,
     Send,
+    Film,
+    Clock,
+    AlertTriangle,
+    Play,
 } from 'lucide-react';
 import { extractArray, decodeHTML } from '../../lib/utils';
 import { uploadFile } from '../../lib/api';
 import { compressImage } from '../../lib/imageCompressor';
+import { validateVideo, formatFileSize, formatDuration, generateVideoThumbnail } from '../../lib/videoCompressor';
+import { forumService } from '../../services/forumService';
 import {
     useForumCategories,
     useForumThreads,
@@ -173,8 +178,13 @@ export function CommunityForum() {
                             style={{ aspectRatio: '16/9', maxHeight: '280px' }}
                             onClick={() => navigate(`/community/thread/${featuredThread.id}`)}
                         >
-                            {(featuredThread.mediaType) === 'video' ? (
-                                <video src={featuredThread.mediaUrl} muted className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                            {(featuredThread.mediaType || featuredThread.media_type) === 'video' ? (
+                                <>
+                                    <img src={featuredThread.video_thumbnail_url || featuredThread.videoThumbnailUrl || featuredThread.mediaUrl} alt={decodeHTML(featuredThread.title)} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                                    <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm text-white text-[10px] font-semibold">
+                                        <Play className="w-3 h-3" /> Video
+                                    </div>
+                                </>
                             ) : (
                                 <img src={featuredThread.mediaUrl} alt={decodeHTML(featuredThread.title)} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
                             )}
@@ -184,8 +194,17 @@ export function CommunityForum() {
                                 </div>
                                 <h3 className="font-serif font-bold text-lg sm:text-xl text-white leading-snug line-clamp-2 mb-1.5">{decodeHTML(featuredThread.title)}</h3>
                                 <div className="flex items-center gap-2 text-white/60 text-xs">
-                                    <Avatar name={featuredThread.author?.displayName || 'User'} src={featuredThread.author?.avatarUrl} size="xs" className="w-5 h-5" />
-                                    <span>{featuredThread.author?.displayName || 'Anonymous'}</span>
+                                    <div 
+                                        className="flex items-center gap-2 cursor-pointer hover:text-white transition-colors"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const authorId = featuredThread.author?.id || featuredThread.author_id || featuredThread.authorId;
+                                            if (authorId) navigate(`/profile/${authorId}`);
+                                        }}
+                                    >
+                                        <Avatar name={featuredThread.author?.displayName || 'User'} src={featuredThread.author?.avatarUrl} size="xs" className="w-5 h-5" />
+                                        <span>{featuredThread.author?.displayName || 'Anonymous'}</span>
+                                    </div>
                                     <span>·</span>
                                     <span>{formatTimeAgo(featuredThread.createdAt)}</span>
                                 </div>
@@ -217,8 +236,17 @@ export function CommunityForum() {
                                     >
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-1 text-xs text-gray-400 dark:text-gray-500">
-                                                <Avatar name={authorName} src={thread.author?.avatarUrl} size="xs" className="w-5 h-5" />
-                                                <span className="font-medium text-gray-600 dark:text-gray-300">{authorName}</span>
+                                                <div 
+                                                    className="flex items-center gap-2 cursor-pointer hover:text-amber-500 dark:hover:text-gold transition-colors"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const authorId = thread.author?.id || thread.author_id || thread.authorId;
+                                                        if (authorId) navigate(`/profile/${authorId}`);
+                                                    }}
+                                                >
+                                                    <Avatar name={authorName} src={thread.author?.avatarUrl} size="xs" className="w-5 h-5" />
+                                                    <span className="font-medium text-gray-600 dark:text-gray-300">{authorName}</span>
+                                                </div>
                                                 <span>·</span>
                                                 <span>{formatTimeAgo(thread.createdAt)}</span>
                                                 {(thread.isPinned) && (
@@ -236,9 +264,17 @@ export function CommunityForum() {
                                             </div>
                                         </div>
                                         {mediaUrl && (
-                                            <div className="w-20 h-16 sm:w-28 sm:h-20 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100 dark:bg-white/5">
-                                                {(thread.mediaType) === 'video' ? (
-                                                    <video src={mediaUrl} muted className="w-full h-full object-cover" />
+                                            <div className="w-20 h-16 sm:w-28 sm:h-20 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100 dark:bg-white/5 relative">
+                                                {(thread.mediaType || thread.media_type) === 'video' ? (
+                                                    <>
+                                                        <img
+                                                            src={thread.video_thumbnail_url || thread.videoThumbnailUrl || mediaUrl}
+                                                            alt="" className="w-full h-full object-cover" loading="lazy"
+                                                        />
+                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                                            <Play className="w-4 h-4 text-white drop-shadow-lg" />
+                                                        </div>
+                                                    </>
                                                 ) : (
                                                     <img src={mediaUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
                                                 )}
@@ -317,16 +353,55 @@ export function CommunityForum() {
 // PUBLIC CREATE THREAD MODAL
 // ============================================
 
+// ============================================
+// PUBLIC CREATE THREAD MODAL — WITH VIDEO UPLOAD
+// ============================================
+
 function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void, categories: any[] }) {
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [categoryId, setCategoryId] = useState('');
     const [file, setFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadPhase, setUploadPhase] = useState<'idle' | 'uploading' | 'compressing' | 'done'>('idle');
+    const [videoPreview, setVideoPreview] = useState<string | null>(null);
+    const [videoMeta, setVideoMeta] = useState<{ duration: number; width: number; height: number; size: number } | null>(null);
+    const [validationError, setValidationError] = useState<string | null>(null);
+    const [validationWarning, setValidationWarning] = useState<string | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const videoInputRef = useRef<HTMLInputElement>(null);
     const createThread = useCreateThread();
     const toast = useToast();
+
+    const isVideo = file?.type.startsWith('video/');
+
+    // Handle file selection with validation
+    const handleFileSelect = async (selectedFile: File) => {
+        setValidationError(null);
+        setValidationWarning(null);
+        setVideoPreview(null);
+        setVideoMeta(null);
+
+        if (selectedFile.type.startsWith('video/')) {
+            const validation = await validateVideo(selectedFile);
+            if (!validation.valid) {
+                setValidationError(validation.error || 'Invalid video file');
+                return;
+            }
+            if (validation.warning) setValidationWarning(validation.warning);
+            if (validation.metadata) setVideoMeta(validation.metadata);
+
+            // Generate preview thumbnail
+            try {
+                const thumb = await generateVideoThumbnail(selectedFile);
+                setVideoPreview(thumb);
+            } catch { /* non-critical */ }
+        }
+
+        setFile(selectedFile);
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -337,17 +412,34 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
 
         try {
             setIsUploading(true);
-            let mediaUrl = undefined;
-            let mediaType = undefined;
+            setUploadProgress(0);
+            let mediaUrl: string | undefined;
+            let mediaType: string | undefined;
 
             if (file) {
-                mediaType = file.type.startsWith('video/') ? 'video' : 'image';
-                // Compress image client-side before upload
-                const fileToUpload = mediaType === 'image'
-                    ? await compressImage(file, { maxWidth: 1600, quality: 0.82 })
-                    : file;
-                const uploadResult = await uploadFile(fileToUpload, 'general');
-                mediaUrl = uploadResult.url;
+                if (file.type.startsWith('video/')) {
+                    // === VIDEO: Use dedicated forum video upload endpoint ===
+                    mediaType = 'video';
+                    setUploadPhase('uploading');
+
+                    const videoResult = await forumService.uploadVideo(file, {
+                        onProgress: (p) => {
+                            setUploadProgress(p);
+                            if (p >= 100) setUploadPhase('compressing');
+                        },
+                    });
+
+                    mediaUrl = videoResult.url;
+                    setUploadPhase('done');
+                } else {
+                    // === IMAGE: Client-side compress + standard upload ===
+                    mediaType = 'image';
+                    setUploadPhase('uploading');
+                    const compressed = await compressImage(file, { maxWidth: 1600, quality: 0.82 });
+                    const uploadResult = await uploadFile(compressed, 'general');
+                    mediaUrl = uploadResult.url;
+                    setUploadPhase('done');
+                }
             }
 
             await createThread.mutateAsync({
@@ -356,28 +448,30 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                 categoryId,
                 tags: [],
                 mediaUrl,
-                mediaType
+                mediaType,
             });
 
             onClose();
         } catch (error: any) {
             console.error('Thread creation error:', error);
+            setUploadPhase('idle');
         } finally {
             setIsUploading(false);
         }
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-            <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white dark:bg-[#111111] border border-gray-200/60 dark:border-white/10 shadow-2xl rounded-2xl relative">
-                <button onClick={onClose} className="absolute top-5 right-5 p-2 rounded-full bg-gray-100 dark:bg-white/5 text-gray-400 hover:text-gray-700 dark:hover:text-white transition-all z-10">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-md">
+            <div className="w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[90vh] overflow-y-auto bg-white dark:bg-[#111111] border border-gray-200/60 dark:border-white/10 shadow-2xl rounded-t-2xl sm:rounded-2xl relative"
+                style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+                <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-full bg-gray-100 dark:bg-white/5 text-gray-400 hover:text-gray-700 dark:hover:text-white transition-all z-10">
                     <X className="w-5 h-5" />
                 </button>
-                <form onSubmit={handleSubmit} className="p-6 sm:p-8">
-                    <h2 className="text-2xl font-serif font-bold text-gray-900 dark:text-white mb-1">Create Discussion</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Share your thoughts with the community</p>
+                <form onSubmit={handleSubmit} className="p-5 sm:p-8">
+                    <h2 className="text-xl sm:text-2xl font-serif font-bold text-gray-900 dark:text-white mb-1">Create Discussion</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">Share your thoughts with the community</p>
 
-                    <div className="space-y-5">
+                    <div className="space-y-4">
                         <div>
                             <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">Title *</label>
                             <input type="text" value={title} onChange={e => setTitle(e.target.value)}
@@ -397,35 +491,139 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                             <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">Content *</label>
                             <textarea value={content} onChange={e => setContent(e.target.value)}
                                 placeholder="What do you want to discuss?"
-                                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white h-32 resize-none focus:outline-none focus:border-amber-500 dark:focus:border-gold text-sm" required />
+                                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white h-28 resize-none focus:outline-none focus:border-amber-500 dark:focus:border-gold text-sm" required />
                         </div>
+
+                        {/* ==================== MEDIA UPLOAD SECTION ==================== */}
                         <div>
                             <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wider">Attach Media</label>
+
                             {file ? (
-                                <div className="flex items-center gap-3 bg-amber-50 dark:bg-amber-900/10 p-3 rounded-xl border border-amber-200 dark:border-amber-800/30">
-                                    {file.type.startsWith('video/') ? <Video className="text-blue-500 w-4 h-4" /> : <ImageIcon className="text-pink-500 w-4 h-4" />}
-                                    <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1">{file.name}</span>
-                                    <button type="button" onClick={() => setFile(null)} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
+                                <div className="rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden bg-gray-50 dark:bg-white/[0.03]">
+                                    {/* Video Preview */}
+                                    {isVideo && videoPreview && (
+                                        <div className="relative aspect-video bg-black">
+                                            <img src={videoPreview} alt="Video preview" className="w-full h-full object-contain" />
+                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
+                                                    <Play className="w-5 h-5 text-white ml-0.5" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {/* Image Preview */}
+                                    {!isVideo && (
+                                        <div className="relative aspect-video bg-gray-100 dark:bg-white/5">
+                                            <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-contain" />
+                                        </div>
+                                    )}
+
+                                    {/* File Info Bar */}
+                                    <div className="flex items-center gap-3 px-3 py-2.5">
+                                        {isVideo ? <Film className="w-4 h-4 text-blue-500 flex-shrink-0" /> : <ImageIcon className="w-4 h-4 text-pink-500 flex-shrink-0" />}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm text-gray-700 dark:text-gray-300 truncate">{file.name}</p>
+                                            <div className="flex items-center gap-2 text-[11px] text-gray-400">
+                                                <span>{formatFileSize(file.size)}</span>
+                                                {videoMeta && (
+                                                    <>
+                                                        <span>·</span>
+                                                        <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" />{formatDuration(videoMeta.duration)}</span>
+                                                        <span>·</span>
+                                                        <span>{videoMeta.width}×{videoMeta.height}</span>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <button type="button" onClick={() => { setFile(null); setVideoPreview(null); setVideoMeta(null); setValidationWarning(null); }}
+                                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all">
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+
+                                    {/* Server compression notice for videos */}
+                                    {isVideo && (
+                                        <div className="px-3 pb-2.5">
+                                            <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg px-2.5 py-1.5">
+                                                <Film className="w-3 h-3" />
+                                                Auto-compressed on server · H.264 · Mobile optimized
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
-                                <button type="button" onClick={() => fileInputRef.current?.click()}
-                                    className="w-full py-5 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl text-gray-400 dark:text-gray-500 hover:border-amber-400 dark:hover:border-gold/40 hover:text-amber-500 dark:hover:text-gold transition-all flex items-center justify-center gap-2 text-sm">
-                                    <ImageIcon className="w-4 h-4" /> Upload Image or Video
-                                </button>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button type="button" onClick={() => fileInputRef.current?.click()}
+                                        className="py-4 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl text-gray-400 dark:text-gray-500 hover:border-pink-400 dark:hover:border-pink-500/40 hover:text-pink-500 transition-all flex flex-col items-center justify-center gap-1.5 text-xs">
+                                        <ImageIcon className="w-5 h-5" />
+                                        <span className="font-semibold">Image</span>
+                                    </button>
+                                    <button type="button" onClick={() => videoInputRef.current?.click()}
+                                        className="py-4 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl text-gray-400 dark:text-gray-500 hover:border-blue-400 dark:hover:border-blue-500/40 hover:text-blue-500 transition-all flex flex-col items-center justify-center gap-1.5 text-xs">
+                                        <Film className="w-5 h-5" />
+                                        <span className="font-semibold">Video</span>
+                                        <span className="text-[10px] opacity-60">Max 5 min · 150MB</span>
+                                    </button>
+                                </div>
                             )}
-                            <input type="file" ref={fileInputRef} accept="image/*,video/*" className="hidden"
-                                onChange={e => { if (e.target.files?.length) setFile(e.target.files[0]); }} />
+
+                            {/* Hidden file inputs */}
+                            <input type="file" ref={fileInputRef} accept="image/*" className="hidden"
+                                onChange={e => { if (e.target.files?.length) handleFileSelect(e.target.files[0]); }} />
+                            <input type="file" ref={videoInputRef} accept="video/mp4,video/webm,video/ogg,video/quicktime" capture="environment" className="hidden"
+                                onChange={e => { if (e.target.files?.length) handleFileSelect(e.target.files[0]); }} />
+
+                            {/* Validation Error */}
+                            {validationError && (
+                                <div className="mt-2 flex items-center gap-2 text-xs text-red-500 bg-red-50 dark:bg-red-500/10 p-2.5 rounded-lg">
+                                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                                    {validationError}
+                                </div>
+                            )}
+                            {/* Validation Warning */}
+                            {validationWarning && !validationError && (
+                                <div className="mt-2 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 p-2.5 rounded-lg">
+                                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                                    {validationWarning}
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    <div className="mt-8 flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-white/5">
+                    {/* ==================== UPLOAD PROGRESS BAR ==================== */}
+                    {isUploading && (
+                        <div className="mt-4 space-y-2">
+                            <div className="h-2 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full rounded-full transition-all duration-300 ease-out"
+                                    style={{
+                                        width: uploadPhase === 'compressing' ? '100%' : `${uploadProgress}%`,
+                                        background: uploadPhase === 'compressing'
+                                            ? 'linear-gradient(90deg, #f59e0b, #d97706, #f59e0b)'
+                                            : 'linear-gradient(90deg, #C9A84C, #B08D57)',
+                                        backgroundSize: uploadPhase === 'compressing' ? '200% 100%' : 'auto',
+                                        animation: uploadPhase === 'compressing' ? 'shimmer 1.5s ease-in-out infinite' : 'none',
+                                    }}
+                                />
+                            </div>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400 text-center font-medium">
+                                {uploadPhase === 'uploading' && `Uploading... ${uploadProgress}%`}
+                                {uploadPhase === 'compressing' && '⚡ Server compressing video...'}
+                                {uploadPhase === 'done' && '✅ Upload complete'}
+                            </p>
+                        </div>
+                    )}
+
+                    <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-white/5">
                         <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5 transition-all">Cancel</button>
-                        <Button type="submit" variant="gold" isLoading={isUploading || createThread.isPending} className="rounded-xl px-6">
+                        <Button type="submit" variant="gold" isLoading={isUploading || createThread.isPending} className="rounded-xl px-6"
+                            disabled={!!validationError}>
                             Post Discussion
                         </Button>
                     </div>
                 </form>
             </div>
+            <style>{`@keyframes shimmer { 0%,100% { background-position: 0% 0%; } 50% { background-position: 100% 0%; } }`}</style>
         </div>
     );
 }
@@ -676,15 +874,27 @@ export function ThreadView() {
         return (
             <div key={item.id} className={isNested ? 'ml-11 sm:ml-14' : ''}>
                 <div className={`flex gap-2.5 sm:gap-3 py-3 sm:py-4 group ${isNested ? 'px-3 rounded-xl hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors' : ''}`}>
-                    <Avatar
-                        name={replyAuthor}
-                        src={replyAvatar}
-                        size="sm"
-                        className={`w-8 h-8 sm:w-9 sm:h-9 flex-shrink-0 ${itemIsOP ? 'ring-2 ring-amber-400/40 dark:ring-gold/30' : ''}`}
-                    />
+                    <div 
+                        className="cursor-pointer hover:opacity-85 transition-opacity flex-shrink-0"
+                        onClick={() => {
+                            if (itemAuthorId) navigate(`/profile/${itemAuthorId}`);
+                        }}
+                    >
+                        <Avatar
+                            name={replyAuthor}
+                            src={replyAvatar}
+                            size="sm"
+                            className={`w-8 h-8 sm:w-9 sm:h-9 ${itemIsOP ? 'ring-2 ring-amber-400/40 dark:ring-gold/30' : ''}`}
+                        />
+                    </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                            <span className={`font-semibold text-[13px] ${itemIsOP ? 'text-amber-700 dark:text-gold' : 'text-gray-900 dark:text-white'}`}>
+                            <span 
+                                className={`font-semibold text-[13px] cursor-pointer hover:underline ${itemIsOP ? 'text-amber-700 dark:text-gold' : 'text-gray-900 dark:text-white'}`}
+                                onClick={() => {
+                                    if (itemAuthorId) navigate(`/profile/${itemAuthorId}`);
+                                }}
+                            >
                                 {replyAuthor}
                             </span>
                             {itemIsOP && (
@@ -829,23 +1039,32 @@ export function ThreadView() {
                 <div className="p-5 sm:p-7">
                     {/* Author Header */}
                     <div className="flex items-start gap-3 mb-5">
-                        <Avatar
-                            name={authorName}
-                            src={authorAvatar}
-                            size="lg"
-                            className="w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0 ring-2 ring-amber-500/20 dark:ring-gold/20"
-                        />
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-semibold text-sm text-gray-900 dark:text-white">{authorName}</span>
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-100 dark:bg-gold/15 text-amber-700 dark:text-gold">
-                                    OP
+                        <div 
+                            className="flex items-start gap-3 cursor-pointer group"
+                            onClick={() => {
+                                const authorId = thread.author_id || thread.authorId || thread.author?.id;
+                                if (authorId) navigate(`/profile/${authorId}`);
+                            }}
+                        >
+                            <Avatar
+                                name={authorName}
+                                src={authorAvatar}
+                                size="lg"
+                                className="w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0 ring-2 ring-amber-500/20 dark:ring-gold/20 group-hover:opacity-85 transition-opacity"
+                            />
+                            <div className="flex-grow min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-semibold text-sm text-gray-900 dark:text-white group-hover:text-amber-500 dark:group-hover:text-gold transition-colors">{authorName}</span>
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-100 dark:bg-gold/15 text-amber-700 dark:text-gold">
+                                        OP
+                                    </span>
+                                </div>
+                                <span className="text-xs text-gray-400 dark:text-gray-500 block mt-0.5">
+                                    {formatTimeAgo(thread.created_at || thread.createdAt)}
                                 </span>
                             </div>
-                            <span className="text-xs text-gray-400 dark:text-gray-500">
-                                {formatTimeAgo(thread.created_at || thread.createdAt)}
-                            </span>
                         </div>
+                        <div className="flex-1"></div>
                         <div className="flex items-center gap-1.5">
                             {isThreadOwner && (
                                 <button
@@ -881,7 +1100,16 @@ export function ThreadView() {
                     {threadMediaUrl && (
                         <div className="mt-5 rounded-xl overflow-hidden border border-gray-200/50 dark:border-white/[0.06]">
                             {threadMediaType === 'video' ? (
-                                <video src={threadMediaUrl} controls className="w-full max-h-[400px] object-contain bg-black" />
+                                <video
+                                    src={threadMediaUrl}
+                                    controls
+                                    playsInline
+                                    preload="metadata"
+                                    poster={thread.video_thumbnail_url || thread.videoThumbnailUrl || undefined}
+                                    controlsList="nodownload"
+                                    className="w-full max-h-[70vh] object-contain bg-black"
+                                    style={{ aspectRatio: '16/9' }}
+                                />
                             ) : (
                                 <img src={threadMediaUrl} alt="Thread Attachment" className="w-full max-h-[400px] object-cover" loading="lazy" />
                             )}

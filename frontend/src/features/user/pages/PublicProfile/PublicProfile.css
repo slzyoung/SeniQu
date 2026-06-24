@@ -1,0 +1,383 @@
+/* ================================================
+   Public Profile — Premium Mobile-First Design
+   Inspired by Instagram/TikTok profile UX
+   ================================================ */
+
+.pp-page {
+    min-height: 100dvh;
+    background: var(--bg-primary, #faf9f6);
+    position: relative;
+}
+
+.dark .pp-page {
+    background: var(--bg-primary, #0d0d0d);
+}
+
+/* ─── Top Navigation ─── */
+.pp-nav {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+}
+
+.pp-nav-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.pp-nav-btn:hover {
+    background: rgba(255, 255, 255, 0.35);
+    transform: scale(1.05);
+}
+
+/* ─── Hero Section ─── */
+.pp-hero {
+    position: relative;
+    padding-top: 140px;
+    padding-bottom: 32px;
+    text-align: center;
+    overflow: hidden;
+}
+
+.pp-hero-bg {
+    position: absolute;
+    inset: 0;
+    height: 180px;
+    background: linear-gradient(135deg, #C9A84C33, #8B5CF622, #3B82F622);
+    overflow: hidden;
+}
+
+.dark .pp-hero-bg {
+    background: linear-gradient(135deg, #C9A84C22, #8B5CF611, #3B82F611);
+}
+
+.pp-hero-bg::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 80px;
+    background: linear-gradient(to top, var(--bg-primary, #faf9f6), transparent);
+}
+
+.dark .pp-hero-bg::after {
+    background: linear-gradient(to top, var(--bg-primary, #0d0d0d), transparent);
+}
+
+/* ─── Avatar ─── */
+.pp-avatar-wrap {
+    position: relative;
+    z-index: 10;
+    width: 110px;
+    height: 110px;
+    margin: 0 auto 14px;
+}
+
+.pp-avatar-ring {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    padding: 3px;
+    background: conic-gradient(from 45deg, #C9A84C, #E8D48B, #B08D57, #C9A84C);
+    box-shadow: 0 8px 32px rgba(201, 168, 76, 0.2);
+}
+
+.pp-avatar-ring img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid var(--bg-primary, #faf9f6);
+}
+
+.dark .pp-avatar-ring img {
+    border-color: var(--bg-primary, #0d0d0d);
+}
+
+.pp-avatar-fallback {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #C9A84C, #B08D57);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 42px;
+    font-weight: 700;
+    color: #0D0D0D;
+    font-family: 'Playfair Display', serif;
+    border: 3px solid var(--bg-primary, #faf9f6);
+}
+
+.dark .pp-avatar-fallback {
+    border-color: var(--bg-primary, #0d0d0d);
+}
+
+.pp-verified {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #10B981;
+    border: 3px solid var(--bg-primary, #faf9f6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    z-index: 2;
+}
+
+.dark .pp-verified {
+    border-color: var(--bg-primary, #0d0d0d);
+}
+
+/* ─── Name & Role ─── */
+.pp-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary, #1a1a1a);
+    margin: 0 0 2px;
+}
+
+.dark .pp-name { color: #f5f5f5; }
+
+.pp-username {
+    font-size: 13px;
+    color: var(--text-muted, #888);
+    margin: 0 0 4px;
+}
+
+.pp-role {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #C9A84C;
+    margin: 6px 0 0;
+}
+
+.pp-bio {
+    font-size: 13px;
+    color: var(--text-secondary, #555);
+    max-width: 320px;
+    margin: 10px auto 0;
+    line-height: 1.5;
+}
+
+.dark .pp-bio { color: #aaa; }
+
+/* ─── Stats Row ─── */
+.pp-stats {
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    margin: 20px 16px;
+    background: var(--bg-elevated, #fff);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.dark .pp-stats {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.pp-stat {
+    flex: 1;
+    padding: 16px 8px;
+    text-align: center;
+    cursor: default;
+    transition: background 0.2s;
+}
+
+.pp-stat:not(:last-child) {
+    border-right: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+}
+
+.dark .pp-stat:not(:last-child) {
+    border-right-color: rgba(255, 255, 255, 0.06);
+}
+
+.pp-stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary, #1a1a1a);
+    font-family: 'Inter', sans-serif;
+}
+
+.dark .pp-stat-value { color: #f5f5f5; }
+
+.pp-stat-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted, #888);
+    margin-top: 2px;
+}
+
+/* ─── Action Buttons ─── */
+.pp-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    padding: 0 24px;
+    margin-bottom: 24px;
+}
+
+.pp-btn-follow {
+    flex: 1;
+    max-width: 160px;
+    padding: 11px 20px;
+    border-radius: 12px;
+    border: none;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.25s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: 'Inter', sans-serif;
+}
+
+.pp-btn-follow.primary {
+    background: linear-gradient(135deg, #C9A84C, #B08D57);
+    color: #0D0D0D;
+    box-shadow: 0 4px 14px rgba(201, 168, 76, 0.3);
+}
+
+.pp-btn-follow.primary:hover {
+    box-shadow: 0 6px 20px rgba(201, 168, 76, 0.45);
+    transform: translateY(-1px);
+}
+
+.pp-btn-follow.secondary {
+    background: var(--bg-elevated, rgba(0, 0, 0, 0.04));
+    color: var(--text-primary, #333);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+}
+
+.dark .pp-btn-follow.secondary {
+    background: rgba(255, 255, 255, 0.06);
+    color: #ddd;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.pp-btn-follow.secondary:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.dark .pp-btn-follow.secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.pp-btn-follow:active {
+    transform: scale(0.97);
+}
+
+/* ─── Social Links ─── */
+.pp-socials {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    margin-bottom: 24px;
+}
+
+.pp-social-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+    background: var(--bg-elevated, #fff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-primary, #333);
+}
+
+.dark .pp-social-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.08);
+    color: #ddd;
+}
+
+.pp-social-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* ─── Member Since ─── */
+.pp-member-since {
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-muted, #888);
+    padding: 16px;
+    border-top: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+    margin: 0 16px;
+}
+
+.dark .pp-member-since {
+    border-top-color: rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Loading/Error States ─── */
+.pp-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60dvh;
+    gap: 12px;
+}
+
+.pp-error {
+    text-align: center;
+    padding: 60px 24px;
+    color: var(--text-muted, #888);
+}
+
+.pp-error h3 {
+    font-size: 18px;
+    color: var(--text-primary, #333);
+    margin: 12px 0 6px;
+}
+
+.dark .pp-error h3 { color: #f5f5f5; }
+
+/* ─── Responsive ─── */
+@media (min-width: 640px) {
+    .pp-hero { padding-top: 160px; }
+    .pp-hero-bg { height: 220px; }
+    .pp-name { font-size: 28px; }
+    .pp-stats { max-width: 420px; margin-left: auto; margin-right: auto; }
+    .pp-actions { max-width: 360px; margin-left: auto; margin-right: auto; }
+}

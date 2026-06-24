@@ -234,6 +234,32 @@ class UserService {
         const result = await uploadFile(compressedFile, 'avatars');
         return { url: result.url };
     }
+
+    // ============================================
+    // PUBLIC PROFILE + FOLLOW SYSTEM
+    // ============================================
+
+    /**
+     * Get public profile of any user with follow stats
+     */
+    async getPublicProfile(userId: string): Promise<any> {
+        const res = await apiGet<any>(`/users/${userId}/public-profile`);
+        return res.data || res;
+    }
+
+    /**
+     * Follow a user
+     */
+    async followUser(userId: string): Promise<void> {
+        return apiPost(`/users/${userId}/follow`, {});
+    }
+
+    /**
+     * Unfollow a user
+     */
+    async unfollowUser(userId: string): Promise<void> {
+        return apiDelete(`/users/${userId}/follow`);
+    }
 }
 
 export const userService = UserService.getInstance();

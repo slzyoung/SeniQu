@@ -74,6 +74,7 @@ export const ROUTES = {
     MARKETPLACE_ART: '/marketplace/art/:id',
     COMMUNITY: '/community',
     COMMUNITY_THREAD: '/community/thread/:id',
+    REELS: '/reels',
 
     // Auth Routes
     LOGIN: '/auth/login',
@@ -132,6 +133,7 @@ export const ROUTES = {
     AI_GENRE: '/ai/genre',
     AI_CURATION: '/ai/curation',
     AI_CREATE: '/ai/create',
+    USER_PUBLIC_PROFILE: '/profile/:userId',
 } as const;
 
 // API Endpoints

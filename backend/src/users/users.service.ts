@@ -726,4 +726,123 @@ export class UsersService {
 
         return data || []
     }
+    // ============================================
+    // PUBLIC PROFILE + FOLLOW SYSTEM
+    // ============================================
+
+    async getPublicProfile(userId: string, viewerId?: string) {
+        const client = this.db.getAdminClient()
+
+        // Get user basic info
+        const { data: user, error } = await client
+            .from("users")
+            .select("id, display_name, username, bio, avatar_url, role, created_at")
+            .eq("id", userId)
+            .single()
+
+        if (error || !user) {
+            throw new NotFoundException("User not found")
+        }
+
+        // Get followers count
+        const { count: followersCount } = await client
+            .from("follows")
+            .select("*", { count: "exact", head: true })
+            .eq("following_id", userId)
+
+        // Get following count
+        const { count: followingCount } = await client
+            .from("follows")
+            .select("*", { count: "exact", head: true })
+            .eq("follower_id", userId)
+
+        // Get posts count (reels + forum)
+        const { count: reelsCount } = await client
+            .from("reels")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", userId)
+
+        const { count: forumCount } = await client
+            .from("forum_threads")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", userId)
+
+        // Check if viewer is following this user
+        let isFollowing = false
+        if (viewerId && viewerId !== userId) {
+            const { data: followRecord } = await client
+                .from("follows")
+                .select("id")
+                .eq("follower_id", viewerId)
+                .eq("following_id", userId)
+                .single()
+            isFollowing = !!followRecord
+        }
+
+        // Get social links
+        const { data: socialLinks } = await client
+            .from("user_social_links")
+            .select("platform, url")
+            .eq("user_id", userId)
+
+        const socials: Record<string, string> = {}
+        if (socialLinks) {
+            socialLinks.forEach((l: any) => { socials[l.platform] = l.url })
+        }
+
+        return {
+            id: user.id,
+            displayName: user.display_name,
+            username: user.username,
+            bio: user.bio,
+            avatar: user.avatar_url,
+            userType: this.mapRoleToUserType(user.role),
+            createdAt: user.created_at,
+            followersCount: followersCount || 0,
+            followingCount: followingCount || 0,
+            postsCount: (reelsCount || 0) + (forumCount || 0),
+            isFollowing,
+            isOwnProfile: viewerId === userId,
+            socialLinks: socials,
+        }
+    }
+
+    async followUser(followerId: string, followingId: string) {
+        if (followerId === followingId) {
+            throw new ConflictException("Cannot follow yourself")
+        }
+
+        const client = this.db.getAdminClient()
+
+        const { error } = await client
+            .from("follows")
+            .upsert(
+                { follower_id: followerId, following_id: followingId },
+                { onConflict: "follower_id, following_id" }
+            )
+
+        if (error) {
+            this.logger.error(`Follow error: ${error.message}`)
+            throw new Error(error.message)
+        }
+
+        return { success: true, action: "followed" }
+    }
+
+    async unfollowUser(followerId: string, followingId: string) {
+        const client = this.db.getAdminClient()
+
+        const { error } = await client
+            .from("follows")
+            .delete()
+            .eq("follower_id", followerId)
+            .eq("following_id", followingId)
+
+        if (error) {
+            this.logger.error(`Unfollow error: ${error.message}`)
+            throw new Error(error.message)
+        }
+
+        return { success: true, action: "unfollowed" }
+    }
 }

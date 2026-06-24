@@ -502,6 +502,105 @@ export class ForumService {
         return { data: data || [] }
     }
 
+    /**
+     * Save video metadata to forum_videos table and link to thread/post
+     */
+    async saveVideoMetadata(data: {
+        userId: string
+        threadId?: string
+        postId?: string
+        videoUrl: string
+        videoKey: string
+        thumbnailUrl: string | null
+        thumbnailKey: string | null
+        caption?: string
+        metadata: {
+            duration: number
+            width: number
+            height: number
+            videoCodec: string
+            audioCodec: string | null
+            bitrate: number
+            fps: number
+            aspectRatio: string
+            originalFileSize: number
+            compressedFileSize: number
+            compressionRatio: number
+            originalFilename: string
+        }
+    }) {
+        try {
+            // Insert video record
+            const { data: videoRecord, error: insertError } = await this.supabase
+                .from("forum_videos")
+                .insert({
+                    user_id: data.userId,
+                    thread_id: data.threadId || null,
+                    post_id: data.postId || null,
+                    video_url: data.videoUrl,
+                    video_key: data.videoKey,
+                    thumbnail_url: data.thumbnailUrl,
+                    thumbnail_key: data.thumbnailKey,
+                    duration: data.metadata.duration,
+                    width: data.metadata.width,
+                    height: data.metadata.height,
+                    file_size: data.metadata.compressedFileSize,
+                    original_file_size: data.metadata.originalFileSize,
+                    video_codec: data.metadata.videoCodec,
+                    audio_codec: data.metadata.audioCodec,
+                    bitrate: data.metadata.bitrate,
+                    fps: data.metadata.fps,
+                    aspect_ratio: data.metadata.aspectRatio,
+                    content_type: "video/mp4",
+                    original_filename: data.metadata.originalFilename,
+                    caption: data.caption || null,
+                    compression_ratio: data.metadata.compressionRatio,
+                    status: "ready",
+                })
+                .select()
+                .single()
+
+            if (insertError) {
+                this.logger.error(`Failed to save video metadata: ${insertError.message}`)
+                // Don't throw — video is already uploaded, metadata save is secondary
+                return null
+            }
+
+            // Update thread or post with video URL for inline display
+            if (data.threadId) {
+                await this.supabase
+                    .from("forum_threads")
+                    .update({
+                        video_url: data.videoUrl,
+                        video_thumbnail_url: data.thumbnailUrl,
+                        video_duration: data.metadata.duration,
+                        media_url: data.videoUrl,
+                        media_type: "video",
+                    })
+                    .eq("id", data.threadId)
+            }
+
+            if (data.postId) {
+                await this.supabase
+                    .from("forum_posts")
+                    .update({
+                        video_url: data.videoUrl,
+                        video_thumbnail_url: data.thumbnailUrl,
+                        video_duration: data.metadata.duration,
+                        media_url: data.videoUrl,
+                        media_type: "video",
+                    })
+                    .eq("id", data.postId)
+            }
+
+            this.logger.log(`✅ Video metadata saved: ${videoRecord.id}`)
+            return videoRecord
+        } catch (err: any) {
+            this.logger.error(`Video metadata save error: ${err.message}`)
+            return null
+        }
+    }
+
     private generateSlug(title: string): string {
         return title
             .toLowerCase()

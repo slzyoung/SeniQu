@@ -163,6 +163,8 @@ export function ArtDetail() {
                                 imageUrl: res.primaryImageUrl || res.imageUrl || '',
                                 category: res.category || 'Abstract',
                                 artist: {
+                                    id: res.artist?.id || res.artistId || res.userId || res.user_id || '',
+                                    userId: res.artist?.userId || res.userId || res.user_id || res.artistId || '',
                                     displayName: res.artist?.displayName || 'Unknown Artist',
                                     avatarUrl: res.artist?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${res.title}`
                                 },
@@ -408,7 +410,7 @@ export function ArtDetail() {
                     {art.title}
                 </h1>
                 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                <Link to={`/profile/${art.artist.userId || art.artist.id || 'd3b07384-d113-4ec5-a581-2b97d4bd55fa'}`} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, textDecoration: 'none', color: 'inherit' }} className="hover:opacity-85 transition-opacity">
                     <div style={{ width: 32, height: 32, borderRadius: '50%', overflow: 'hidden' }}>
                         <img src={art.artist.avatarUrl} alt={art.artist.displayName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     </div>
@@ -416,7 +418,7 @@ export function ArtDetail() {
                         <p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{art.artist.displayName}</p>
                         <p style={{ fontSize: 11, color: 'var(--mk-text-muted)', margin: 0 }}>{art.institution}</p>
                     </div>
-                </div>
+                </Link>
 
                 {/* Timeline Line */}
                 <div className="art-detail-mockup__timeline">

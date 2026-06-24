@@ -1,307 +1,266 @@
-import { useState, useCallback, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-    Search, 
-    Home, 
-    Compass, 
-    Heart, 
-    User, 
-    Maximize2,
-    MessageCircle,
-    Star,
-    Share2,
-    X,
-    ArrowLeft,
-    ArrowRight,
-    Bookmark
-} from 'lucide-react';
+/**
+ * Bookmarks Page — Premium Tabbed UI
+ * Two tabs: Artworks (from marketplace) and Reels (saved short videos)
+ * Full light + dark theme support. Uses real data from API.
+ */
+
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+    Bookmark,
+    BookmarkX,
+    Image,
+    Heart,
+    Eye,
+    Play,
+    Loader2,
+} from 'lucide-react';
 import { useBookmarks, useRemoveBookmark } from '../../../../hooks/useUser';
+import { useSavedReels, useToggleReelReshare } from '../../../../hooks/useReels';
 import './Bookmarks.css';
 
-// ============================================
-// COMPONENT
-// ============================================
+type Tab = 'artworks' | 'reels';
 
 export default function Bookmarks() {
     const navigate = useNavigate();
-    
-    // Fetch live user bookmarks
-    const { data: bookmarksRes, isLoading } = useBookmarks(1, 50);
+    const [activeTab, setActiveTab] = useState<Tab>('artworks');
+
+    // ── Artwork Bookmarks ──
+    const { data: bookmarksRes, isLoading: artLoading } = useBookmarks(1, 50);
     const removeBookmarkMutation = useRemoveBookmark();
-    
-    const [gallery, setGallery] = useState<any[]>([]);
-    const [activeIndex, setActiveIndex] = useState(0);
-    const [infoOpen, setInfoOpen] = useState(false);
 
-    // Synchronize bookmarks query to state
-    useEffect(() => {
-        if (bookmarksRes?.data) {
-            const mapped = bookmarksRes.data
-                .map((item: any) => {
-                    const art = item.artwork || item;
-                    if (!art) return null;
-                    return {
-                        id: art.id,
-                        title: art.title,
-                        artist: art.artist?.displayName || art.artist?.display_name || 'SeniQu Creator',
-                        image: art.primaryImageUrl || art.primary_image_url || art.image_url,
-                        likes: `${art.likes || 0}`,
-                        comments: '12',
-                        stars: `${art.views || art.views_count || 0}`,
-                        shares: '4',
-                        description: art.description,
-                        artworkType: art.artworkType || art.artwork_type || 'physical',
-                        poaCertificate: art.poaCertificate || art.poa_certificate
-                    };
-                })
-                .filter((x: any) => x !== null);
-            
-            setGallery(mapped);
-            setActiveIndex(mapped.length > 0 ? Math.floor(mapped.length / 2) : 0);
-        }
-    }, [bookmarksRes]);
+    const artworks = (bookmarksRes?.data || [])
+        .map((item: any) => {
+            const art = item.artwork || item;
+            if (!art) return null;
+            return {
+                id: art.id,
+                title: art.title || 'Untitled',
+                artist: art.artist?.displayName || art.artist?.display_name || 'SeniQu Creator',
+                image: art.primaryImageUrl || art.primary_image_url || art.image_url,
+                likes: art.likes || 0,
+                views: art.views || art.views_count || 0,
+                artworkType: art.artworkType || art.artwork_type || 'physical',
+            };
+        })
+        .filter(Boolean);
 
-    const handleUnbookmark = async (id: string, title: string) => {
-        // Only perform database remove if it is not a dummy item
-        if (!id.startsWith('dummy-') && id.length > 5) {
-            try {
-                await removeBookmarkMutation.mutateAsync(id);
-            } catch (e) {
-                console.error('Failed to remove bookmark:', e);
-            }
+    // ── Saved Reels ──
+    const { data: savedReelsRes, isLoading: reelsLoading } = useSavedReels(1, 50);
+    const toggleReshare = useToggleReelReshare();
+
+    const savedReels = (savedReelsRes?.data || []).map((reel: any) => ({
+        id: reel.id,
+        caption: reel.caption || '',
+        thumbnailUrl: reel.thumbnail_url || reel.thumbnailUrl || '',
+        videoUrl: reel.video_url || reel.videoUrl || '',
+        duration: reel.duration || 0,
+        likeCount: reel.like_count ?? reel.likeCount ?? 0,
+        viewCount: reel.view_count ?? reel.viewCount ?? 0,
+        userName: reel.user?.display_name || reel.user?.displayName || 'Anonymous',
+    }));
+
+    const handleUnbookmarkArt = async (id: string) => {
+        if (id.length > 5) {
+            try { await removeBookmarkMutation.mutateAsync(id); } catch (e) { /* handled by hook */ }
         }
-        
-        // Remove item from state with nice transitions
-        setGallery(prev => {
-            const next = prev.filter(item => item.id !== id);
-            // Adjust activeIndex if out of bounds
-            if (activeIndex >= next.length && next.length > 0) {
-                setActiveIndex(next.length - 1);
-            }
-            return next;
-        });
     };
 
-    // Navigation handlers
-    const handleNext = useCallback(() => {
-        if (activeIndex < gallery.length - 1) {
-            setActiveIndex(prev => prev + 1);
-            setInfoOpen(false);
-        }
-    }, [activeIndex, gallery.length]);
+    const handleUnsaveReel = (reelId: string) => {
+        toggleReshare.mutate({ reelId });
+    };
 
-    const handlePrev = useCallback(() => {
-        if (activeIndex > 0) {
-            setActiveIndex(prev => prev - 1);
-            setInfoOpen(false);
-        }
-    }, [activeIndex]);
+    const formatDuration = (s: number) => {
+        if (!s) return '';
+        return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+    };
 
-    // Handle clicking a specific card
-    const handleCardClick = (index: number) => {
-        if (index === activeIndex) {
-            // Toggle info if clicking the active card
-            setInfoOpen(!infoOpen);
-        } else {
-            // Center the clicked card
-            setActiveIndex(index);
-            setInfoOpen(false);
-        }
+    const formatCount = (n: number) => {
+        if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+        if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+        return String(n);
     };
 
     return (
         <div className="bm-page">
-            {/* Background Image that dynamically changes based on active index (parallax effect) */}
-            <div 
-                className="bm-background" 
-                style={{ 
-                    backgroundImage: gallery[activeIndex] ? `url(${gallery[activeIndex].image})` : 'none',
-                    transform: `translateX(${(activeIndex - 3) * -2}%) scale(1.1)` 
-                }} 
-            />
-            <div className="bm-overlay" />
-
-            {/* Top Close Button (for desktop mostly) */}
-            <button className="bm-close-page" onClick={() => navigate(-1)}>
-                <X className="w-5 h-5" />
-            </button>
-
-            {/* Search Bar */}
-            <div className="bm-search-container">
-                <div className="bm-search-bar">
-                    <Search className="w-4 h-4 text-white/60" />
-                    <input type="text" placeholder="Search here..." />
-                </div>
+            {/* Header */}
+            <div className="bm-page-header">
+                <h1 className="bm-page-title">Bookmarks</h1>
+                <p className="bm-page-subtitle">Your saved artworks and reels collection</p>
             </div>
 
-            {/* Sidebar Navigation */}
-            <div className="bm-sidebar">
-                <button className="bm-nav-btn" onClick={() => navigate('/dashboard')}><Home className="w-5 h-5" /></button>
-                <button className="bm-nav-btn"><Search className="w-5 h-5" /></button>
-                <button className="bm-nav-btn"><Compass className="w-5 h-5" /></button>
-                <button className="bm-nav-btn active"><Heart className="w-5 h-5" fill="currentColor" /></button>
-                <button className="bm-nav-btn" onClick={() => navigate('/profile')}><User className="w-5 h-5" /></button>
+            {/* Tab Bar */}
+            <div className="bm-tabs">
+                <button
+                    className={`bm-tab ${activeTab === 'artworks' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('artworks')}
+                >
+                    <Image style={{ width: 16, height: 16 }} />
+                    Artworks
+                    <span className="bm-tab-count">{artworks.length}</span>
+                </button>
+                <button
+                    className={`bm-tab ${activeTab === 'reels' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('reels')}
+                >
+                    <Play style={{ width: 16, height: 16, fill: 'currentColor' }} />
+                    Reels
+                    <span className="bm-tab-count">{savedReels.length}</span>
+                </button>
             </div>
 
-            {gallery.length === 0 ? (
-                <div className="flex flex-col items-center justify-center min-h-[60vh] z-10 text-center px-4 relative mt-20">
-                    <div className="p-4 bg-gold/10 rounded-full mb-4">
-                        <Bookmark className="w-12 h-12 text-gold animate-pulse" />
-                    </div>
-                    <h2 className="text-2xl font-bold text-white mb-2">No Saved Artworks</h2>
-                    <p className="text-white/60 max-w-md mb-6 text-sm">
-                        Explore the marketplace, discover historic masterpieces, and bookmark favorites to view them in your virtual 3D Coverflow gallery.
-                    </p>
-                    <button 
-                        className="px-6 py-2.5 bg-gold text-black font-semibold rounded-full hover:bg-yellow-400 transition-all shadow-lg shadow-gold/20 text-sm"
-                        onClick={() => navigate('/dashboard/marketplace')}
-                    >
-                        Explore Marketplace
-                    </button>
-                </div>
-            ) : (
+            {/* ═══ Artworks Tab ═══ */}
+            {activeTab === 'artworks' && (
                 <>
-                    {/* 3D Coverflow Container with Drag */}
-                    <motion.div 
-                        className="bm-coverflow-wrapper"
-                        drag="x"
-                        dragConstraints={{ left: 0, right: 0 }}
-                        dragElastic={0.2}
-                        onDragEnd={(_, { offset, velocity }) => {
-                            if (offset.x < -50 || velocity.x < -300) {
-                                handleNext();
-                            } else if (offset.x > 50 || velocity.x > 300) {
-                                handlePrev();
-                            }
-                        }}
-                    >
-                        {gallery.map((art, index) => {
-                            const isActive = index === activeIndex;
-                            const diff = index - activeIndex;
-                            const absDiff = Math.abs(diff);
-
-                            // Calculate 3D Transform properties
-                            // Spread items further apart on desktop, tighter on mobile
-                            const isMobile = window.innerWidth < 768;
-                            const xOffset = isMobile ? 80 : 180;
-                            
-                            const x = diff * xOffset;
-                            const scale = isActive ? 1 : Math.max(0.6, 1 - (absDiff * 0.15));
-                            const rotateY = diff === 0 ? 0 : diff < 0 ? 35 : -35;
-                            const zIndex = 100 - absDiff;
-                            const opacity = absDiff > 3 ? 0 : 1; // Hide far items
-
-                            return (
-                                <motion.div
+                    {artLoading ? (
+                        <div className="bm-loading">
+                            <Loader2 style={{ width: 28, height: 28 }} className="animate-spin text-amber-500" />
+                        </div>
+                    ) : artworks.length === 0 ? (
+                        <div className="bm-empty">
+                            <div className="bm-empty-icon artwork">
+                                <Bookmark style={{ width: 32, height: 32, color: '#C9A84C' }} />
+                            </div>
+                            <h3>No Saved Artworks</h3>
+                            <p>
+                                Explore the marketplace and bookmark your favorite artworks to build your personal collection.
+                            </p>
+                            <button
+                                className="bm-empty-btn gold"
+                                onClick={() => navigate('/dashboard/marketplace')}
+                            >
+                                Explore Marketplace
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="bm-art-grid">
+                            {artworks.map((art: any) => (
+                                <div
                                     key={art.id}
-                                    className={`bm-card-wrapper ${isActive ? 'active' : ''}`}
-                                    onClick={() => handleCardClick(index)}
-                                    initial={false}
-                                    animate={{
-                                        x,
-                                        scale,
-                                        rotateY,
-                                        zIndex,
-                                        opacity
-                                    }}
-                                    transition={{
-                                        type: "spring",
-                                        stiffness: 260,
-                                        damping: 25,
-                                        mass: 1
-                                    }}
+                                    className="bm-art-card"
+                                    onClick={() => navigate(`/marketplace/art/${art.id}`)}
                                 >
-                                    <div className={`bm-card ${isActive ? 'active' : ''}`}>
-                                        <img src={art.image} alt={art.title} />
-                                        <div className="bm-card-overlay" />
-                                        
-                                        <button className="bm-expand-btn">
-                                            <Maximize2 className="w-4 h-4" />
+                                    <div className="bm-art-image-wrap">
+                                        {art.image ? (
+                                            <img src={art.image} alt={art.title} className="bm-art-image" loading="lazy" />
+                                        ) : (
+                                            <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #C9A84C22, #C9A84C08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <Image style={{ width: 32, height: 32, color: '#C9A84C', opacity: 0.3 }} />
+                                            </div>
+                                        )}
+                                        <div className="bm-art-card-overlay" />
+
+                                        {/* Type Badge */}
+                                        <span className={`bm-art-type-badge ${art.artworkType === 'digital' ? 'digital' : 'physical'}`}>
+                                            {art.artworkType === 'digital' ? 'Digital' : 'Physical'}
+                                        </span>
+
+                                        {/* Unbookmark Button */}
+                                        <button
+                                            className="bm-art-unbookmark"
+                                            onClick={(e) => { e.stopPropagation(); handleUnbookmarkArt(art.id); }}
+                                            title="Remove bookmark"
+                                        >
+                                            <BookmarkX style={{ width: 14, height: 14 }} />
                                         </button>
-
-                                        <div className="bm-card-info">
-                                            <h2 className="bm-card-title">{art.title}</h2>
-                                            <p className="bm-card-artist">{art.artist}</p>
-                                        </div>
-
-                                        {/* Floating Action Bar (Bottom of card) */}
-                                        <div className="bm-action-bar" onClick={(e) => e.stopPropagation()}>
-                                            <button 
-                                                className="bm-action-item text-gold hover:text-yellow-400 transition-colors flex items-center gap-1.5 font-semibold"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleUnbookmark(art.id, art.title);
-                                                }}
-                                            >
-                                                <Bookmark className="w-3.5 h-3.5 text-gold" fill="currentColor" /> Unbookmark
-                                            </button>
-                                            <div className="bm-action-item">
-                                                <MessageCircle className="w-3.5 h-3.5" /> {art.comments}
-                                            </div>
-                                            <div className="bm-action-item">
-                                                <Star className="w-3.5 h-3.5" /> {art.stars}
-                                            </div>
-                                            <div className="bm-action-item">
-                                                <Share2 className="w-3.5 h-3.5" /> {art.shares}
-                                            </div>
-                                        </div>
                                     </div>
-                                </motion.div>
-                            );
-                        })}
-                    </motion.div>
 
-                    {/* Bottom Swipe Hint */}
-                    <div className="bm-swipe-hint">
-                        <ArrowLeft className="w-4 h-4" />
-                        <div className="bm-swipe-hint-line" />
-                        <span>Swipe or Click</span>
-                        <div className="bm-swipe-hint-line" />
-                        <ArrowRight className="w-4 h-4" />
-                    </div>
+                                    <div className="bm-art-card-info">
+                                        <p className="bm-art-card-title">{art.title}</p>
+                                        <p className="bm-art-card-artist">{art.artist}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </>
             )}
 
-            {/* Information Overlay (Toggled when clicking active image) */}
-            <AnimatePresence>
-                {infoOpen && gallery[activeIndex] && (
-                    <motion.div 
-                        className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-white"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => setInfoOpen(false)}
-                    >
-                        <motion.h1 
-                            initial={{ y: 20, opacity: 0 }}
-                            animate={{ y: 0, opacity: 1 }}
-                            className="text-3xl md:text-5xl font-serif font-bold text-center mb-4"
-                        >
-                            {gallery[activeIndex].title}
-                        </motion.h1>
-                        <motion.p 
-                            initial={{ y: 20, opacity: 0 }}
-                            animate={{ y: 0, opacity: 1 }}
-                            transition={{ delay: 0.1 }}
-                            className="text-lg md:text-xl text-gold"
-                        >
-                            by {gallery[activeIndex].artist}
-                        </motion.p>
-                        <motion.div 
-                            initial={{ y: 20, opacity: 0 }}
-                            animate={{ y: 0, opacity: 1 }}
-                            transition={{ delay: 0.2 }}
-                            className="mt-8 max-w-2xl text-center text-white/70 leading-relaxed"
-                        >
-                            {gallery[activeIndex].description || "This is a beautifully rendered artwork capturing the essence of the scene. The dynamic lighting and composition invite the viewer into a profound narrative space."}
-                            <div className="mt-4 text-xs text-gold/80 flex justify-center gap-4">
-                                <span>Type: {gallery[activeIndex].artworkType === 'digital' ? 'Digital NFT (PoA Proof of Art)' : 'Physical Masterpiece (with PoA)'}</span>
+            {/* ═══ Reels Tab ═══ */}
+            {activeTab === 'reels' && (
+                <>
+                    {reelsLoading ? (
+                        <div className="bm-loading">
+                            <Loader2 style={{ width: 28, height: 28 }} className="animate-spin text-purple-500" />
+                        </div>
+                    ) : savedReels.length === 0 ? (
+                        <div className="bm-empty">
+                            <div className="bm-empty-icon reel">
+                                <Play style={{ width: 32, height: 32, color: '#8B5CF6', fill: '#8B5CF6' }} />
                             </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                            <h3>No Saved Reels</h3>
+                            <p>
+                                Save reels you love while browsing the feed to watch them again anytime.
+                            </p>
+                            <button
+                                className="bm-empty-btn purple"
+                                onClick={() => navigate('/reels')}
+                            >
+                                Browse Reels
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="bm-reels-grid">
+                            {savedReels.map((reel: any) => (
+                                <div
+                                    key={reel.id}
+                                    className="bm-reel-card"
+                                    onClick={() => navigate('/reels')}
+                                >
+                                    {reel.thumbnailUrl ? (
+                                        <img src={reel.thumbnailUrl} alt={reel.caption} className="bm-reel-thumb" loading="lazy" />
+                                    ) : (
+                                        <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #8B5CF622, #8B5CF608)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Play style={{ width: 28, height: 28, color: '#8B5CF6', fill: '#8B5CF6', opacity: 0.3 }} />
+                                        </div>
+                                    )}
+                                    <div className="bm-reel-gradient" />
+
+                                    {/* Play Icon Overlay */}
+                                    <div className="bm-reel-play-icon">
+                                        <Play style={{ width: 18, height: 18, fill: '#fff' }} />
+                                    </div>
+
+                                    {/* Duration Badge */}
+                                    {reel.duration > 0 && (
+                                        <span className="bm-reel-duration">{formatDuration(reel.duration)}</span>
+                                    )}
+
+                                    {/* Unsave Button */}
+                                    <button
+                                        className="bm-reel-unsave"
+                                        onClick={(e) => { e.stopPropagation(); handleUnsaveReel(reel.id); }}
+                                        title="Remove saved reel"
+                                    >
+                                        <BookmarkX style={{ width: 13, height: 13 }} />
+                                    </button>
+
+                                    {/* Info Overlay */}
+                                    <div className="bm-reel-card-info">
+                                        {reel.caption && (
+                                            <p className="bm-reel-card-caption">{reel.caption}</p>
+                                        )}
+                                        <div className="bm-reel-card-meta">
+                                            <span className="bm-reel-card-meta-item">
+                                                <Heart style={{ width: 11, height: 11 }} />
+                                                {formatCount(reel.likeCount)}
+                                            </span>
+                                            <span className="bm-reel-card-meta-item">
+                                                <Eye style={{ width: 11, height: 11 }} />
+                                                {formatCount(reel.viewCount)}
+                                            </span>
+                                            <span style={{ flex: 1 }} />
+                                            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>
+                                                {reel.userName}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </>
+            )}
         </div>
     );
 }

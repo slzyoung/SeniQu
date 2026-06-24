@@ -202,9 +202,16 @@ export function ArtworkView() {
                         <h1 className="text-4xl md:text-5xl font-serif font-bold text-theme-text leading-tight">{artwork.title}</h1>
                         <div className="flex items-center gap-3 mt-4 text-lg">
                             <span className="text-theme-muted">by</span>
-                            <span className="text-gold font-medium">
-                                {artwork.artist?.displayName || 'Unknown Artist'}
-                            </span>
+                            {artwork.artist ? (
+                                <Link 
+                                    to={`/profile/${artwork.artist.userId || artwork.artist.id}`} 
+                                    className="text-gold font-medium hover:underline transition-all"
+                                >
+                                    {artwork.artist.displayName}
+                                </Link>
+                            ) : (
+                                <span className="text-gold font-medium">Unknown Artist</span>
+                            )}
                         </div>
                     </div>
 

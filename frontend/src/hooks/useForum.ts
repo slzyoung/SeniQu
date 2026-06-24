@@ -333,3 +333,32 @@ export function useMarkAsSolution() {
         },
     });
 }
+
+// ============================================
+// VIDEO UPLOAD HOOK
+// ============================================
+
+export function useUploadForumVideo() {
+    const queryClient = useQueryClient();
+    const toast = useToast();
+
+    return useMutation({
+        mutationFn: ({ file, threadId, postId, caption, onProgress }: {
+            file: File;
+            threadId?: string;
+            postId?: string;
+            caption?: string;
+            onProgress?: (progress: number) => void;
+        }) => forumService.uploadVideo(file, { threadId, postId, caption, onProgress }),
+        onSuccess: (result, { threadId }) => {
+            queryClient.invalidateQueries({ queryKey: forumKeys.threads() });
+            if (threadId) {
+                queryClient.invalidateQueries({ queryKey: forumKeys.thread(threadId) });
+            }
+            toast.success('Video Uploaded', 'Your video has been compressed and uploaded.');
+        },
+        onError: (error: Error) => {
+            toast.error('Upload Failed', error.message || 'Could not upload video.');
+        },
+    });
+}

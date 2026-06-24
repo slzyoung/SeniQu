@@ -1401,3 +1401,59 @@
     color: var(--text-muted);
     margin: 2px 0 0;
 }
+
+/* Create Reel & Edit Button in Profile Header */
+.pv2-hero-create-reel {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 100px;
+    background: linear-gradient(135deg, #C9A84C, #B08D57);
+    color: #0D0D0D !important;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    letter-spacing: 0.2px;
+    border: none;
+    box-shadow: 0 4px 14px rgba(201, 168, 76, 0.25);
+}
+
+.pv2-hero-create-reel:hover {
+    box-shadow: 0 6px 20px rgba(201, 168, 76, 0.45);
+    transform: translateY(-1px);
+}
+
+.pv2-hero-create-reel:active {
+    transform: scale(0.97);
+}
+
+.pv2-hero-edit-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 100px;
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    letter-spacing: 0.2px;
+}
+
+.pv2-hero-edit-btn:hover {
+    background: rgba(255, 255, 255, 0.22);
+    transform: translateY(-1px);
+}
+
+.pv2-hero-edit-btn:active {
+    transform: scale(0.97);
+}

@@ -30,3 +30,4 @@ Welcome to the SeniQu documentation hub. Below is an index of all architecture d
 * **[16-Gemini-Heritage-Analyzer.md](16-Gemini-Heritage-Analyzer.md)**: Multimodal heritage object description analyzer.
 * **[17-Gemini-AI-Curation-Lab.md](17-Gemini-AI-Curation-Lab.md)**: Curation Lab features powered by Gemini Models.
 * **[18-Art-Marketplace-Bookmarks.md](18-Art-Marketplace-Bookmarks.md)**: Art Marketplace grid, digital and physical artworks with Proof of Art (PoA), Solana bidding/purchase simulator, database bookmarking, and 3D Coverflow gallery.
+* **[20-Shorts-Reels-And-Social-Follow-System.md](20-Shorts-Reels-And-Social-Follow-System.md)**: Details on short-form Reels, Forum video upload support, the Public Profile view, social follow system, and enterprise sidebar hierarchy.

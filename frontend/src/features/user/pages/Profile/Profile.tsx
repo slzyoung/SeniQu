@@ -17,20 +17,16 @@ import {
     ChevronRight,
     Mail,
     Calendar,
-    Wallet,
     LogOut,
     Shield,
-    Copy,
-    Check,
     Image as ImageIcon,
     Settings as SettingsIcon,
-    User as UserIcon,
+    Plus,
 } from 'lucide-react';
 import { useAuthStore } from '../../../../stores/useAuthStore';
 import { useCurrentUser, useUpdateProfile, useUserStats, useUploadAvatar } from '../../../../hooks/useUser';
 import { usePrivy } from '@privy-io/react-auth';
-import { ConnectedWallets } from '../../components/ConnectedWallets';
-import { WalletSummaryCard } from '../../components/WalletSummaryCard';
+import UploadReelModal from '../../../reels/components/UploadReelModal';
 import './Profile.css';
 
 // ============================================
@@ -82,12 +78,6 @@ const MOCK_RECENT_VISITS = [
     { id: '4', name: 'MACAN Museum', location: 'Jakarta', date: 'Dec 2025', img: 'https://images.unsplash.com/photo-1554907984-15263bfd63bd?w=400&q=80' },
 ];
 
-// Chain logos
-const CHAIN_LOGOS: Record<string, string> = {
-    solana: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
-    ethereum: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
-};
-
 // ============================================
 // TYPES
 // ============================================
@@ -110,7 +100,7 @@ export function Profile() {
 
     const [activeTab, setActiveTab] = useState<TabId>('about');
     const [isEditing, setIsEditing] = useState(false);
-    const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+    const [showUploadReel, setShowUploadReel] = useState(false);
     const [formData, setFormData] = useState({
         displayName: '',
         username: '',
@@ -172,11 +162,7 @@ export function Profile() {
         }
     };
 
-    const handleCopyAddress = (address: string) => {
-        navigator.clipboard.writeText(address);
-        setCopiedAddress(address);
-        setTimeout(() => setCopiedAddress(null), 2000);
-    };
+
 
     const handleLogout = async () => {
         try {
@@ -206,21 +192,7 @@ export function Profile() {
     };
 
     // Get external wallet for compact display
-    const getExternalWallet = () => {
-        if (!displayUser?.wallets) return null;
-        const loginWallet = displayUser.wallets.find((w: any) => {
-            const isEmbedded = w.isEmbedded || w.is_embedded || w.privy_wallet_id || w.walletClientType === 'privy';
-            return !isEmbedded;
-        });
-        if (!loginWallet) return null;
-        const walletAny = loginWallet as any;
-        return {
-            chain: walletAny.chainType || walletAny.chain_type || 'solana',
-            address: walletAny.address || walletAny.wallet_address,
-        };
-    };
 
-    const externalWallet = getExternalWallet();
 
     // ============================================
     // LOADING STATE
@@ -279,9 +251,14 @@ export function Profile() {
                         </button>
                     </div>
                 ) : (
-                    <button className="pv2-hero-edit" onClick={() => setIsEditing(true)}>
-                        <Edit2 style={{ width: 14, height: 14 }} /> Edit
-                    </button>
+                    <div className="pv2-hero-actions">
+                        <button className="pv2-hero-create-reel" onClick={() => setShowUploadReel(true)}>
+                            <Plus style={{ width: 14, height: 14 }} /> Add Reel
+                        </button>
+                        <button className="pv2-hero-edit-btn" onClick={() => setIsEditing(true)}>
+                            <Edit2 style={{ width: 14, height: 14 }} /> Edit
+                        </button>
+                    </div>
                 )}
 
                 {/* Identity — Avatar + Name */}
@@ -673,6 +650,10 @@ export function Profile() {
                     )}
                 </div>
             </div>
+
+            {showUploadReel && (
+                <UploadReelModal onClose={() => setShowUploadReel(false)} />
+            )}
         </div>
     );
 }

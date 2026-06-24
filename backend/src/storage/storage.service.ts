@@ -13,8 +13,9 @@ import {
     HeadObjectCommand,
 } from "@aws-sdk/client-s3"
 import { v4 as uuidv4 } from "uuid"
-import { UploadResult } from "./dto/upload-file.dto"
+import { UploadResult, ForumVideoUploadResult } from "./dto/upload-file.dto"
 import { ImageProcessingService } from "./image-processing.service"
+import { VideoProcessingService } from "./video-processing.service"
 
 // Allowed MIME types
 const ALLOWED_IMAGE_TYPES = [
@@ -66,6 +67,7 @@ export class StorageService implements OnModuleInit {
     constructor(
         private readonly configService: ConfigService,
         private readonly imageProcessor: ImageProcessingService,
+        private readonly videoProcessor: VideoProcessingService,
     ) {}
 
     onModuleInit() {
@@ -167,6 +169,8 @@ export class StorageService implements OnModuleInit {
             "creator-banners": "artists/banners",
             "collector-profiles": "collectors/profiles",
             "collector-banners": "collectors/banners",
+            "forum-videos": "forum/videos",
+            "forum-thumbnails": "forum/thumbnails",
             general: "general",
         }
         let basePath = mapping[folder.toLowerCase()] || folder
@@ -323,6 +327,86 @@ export class StorageService implements OnModuleInit {
                 size: processedBuffer.length,
                 contentType: processedMimetype,
             }
+        }
+    }
+
+    /**
+     * Upload a forum video with automatic compression and thumbnail generation.
+     * Returns video URL, thumbnail URL, and complete metadata for database indexing.
+     */
+    async uploadForumVideo(
+        file: Express.Multer.File,
+        userId: string,
+    ): Promise<ForumVideoUploadResult> {
+        // Validate
+        if (!file || !file.buffer) {
+            throw new BadRequestException("No video file provided")
+        }
+
+        const ALLOWED_VIDEO_MIMES = ["video/mp4", "video/webm", "video/ogg", "video/quicktime"]
+        if (!ALLOWED_VIDEO_MIMES.includes(file.mimetype)) {
+            throw new BadRequestException(
+                `Video type '${file.mimetype}' is not allowed. Accepted: ${ALLOWED_VIDEO_MIMES.join(", ")}`
+            )
+        }
+
+        const MAX_VIDEO_UPLOAD = 150 * 1024 * 1024 // 150MB
+        if (file.size > MAX_VIDEO_UPLOAD) {
+            throw new BadRequestException(
+                `Video too large (${this.formatSize(file.size)}). Maximum: ${this.formatSize(MAX_VIDEO_UPLOAD)}`
+            )
+        }
+
+        this.ensureClientReady()
+
+        this.logger.log(`🎬 Processing forum video upload: ${file.originalname} (${this.formatSize(file.size)})`)
+
+        // Process video: compress + generate thumbnail
+        const { video, thumbnail } = await this.videoProcessor.processVideo(file.buffer, file.mimetype)
+
+        // Upload compressed video and thumbnail to R2 in parallel
+        const fileUuid = require("uuid").v4()
+        const videoKey = `forum/videos/${userId}/${fileUuid}.mp4`
+        const thumbnailKey = `forum/thumbnails/${userId}/${fileUuid}.webp`
+
+        await Promise.all([
+            this.uploadToR2(videoKey, video.buffer, video.contentType),
+            this.uploadToR2(thumbnailKey, thumbnail.buffer, thumbnail.contentType),
+        ])
+
+        const videoUrl = this.buildPublicUrl(videoKey)
+        const thumbnailUrl = this.buildPublicUrl(thumbnailKey)
+
+        const compressionRatio = file.size > 0
+            ? parseFloat(((1 - video.size / file.size) * 100).toFixed(2))
+            : 0
+
+        this.logger.log(
+            `✅ Forum video uploaded: ${this.formatSize(file.size)} → ${this.formatSize(video.size)} ` +
+            `(${compressionRatio}% saved, ${video.metadata.width}x${video.metadata.height})`
+        )
+
+        return {
+            key: videoKey,
+            url: videoUrl,
+            size: video.size,
+            contentType: video.contentType,
+            thumbnailKey,
+            thumbnailUrl,
+            metadata: {
+                duration: video.metadata.duration,
+                width: video.metadata.width,
+                height: video.metadata.height,
+                videoCodec: video.metadata.videoCodec,
+                audioCodec: video.metadata.audioCodec,
+                bitrate: video.metadata.bitrate,
+                fps: video.metadata.fps,
+                aspectRatio: video.metadata.aspectRatio,
+                originalFileSize: file.size,
+                compressedFileSize: video.size,
+                compressionRatio,
+                originalFilename: file.originalname,
+            },
         }
     }
 

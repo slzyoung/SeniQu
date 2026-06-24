@@ -32,6 +32,12 @@ import type { SidebarSection, SidebarItem } from './Sidebar';
  * Paths already shown in MobileBottomNav.
  * We hide these from the mobile sidebar to avoid duplication.
  */
+const MOBILE_HIDDEN_IDS = new Set([
+    'wallet',       // Already in bottom nav
+    'nearby',       // Already in bottom nav as "Explore"
+    'genre-identifier', // Already in bottom nav as "Analyze"
+    'profile',      // Already in bottom nav
+]);
 
 
 /* ──────────────────────────────────── Props ──────────────────────────────── */
@@ -47,6 +53,11 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
     const mobileMenuOpen = useUIStore((s) => s.mobileMenuOpen);
     const setMobileMenuOpen = useUIStore((s) => s.setMobileMenuOpen);
     const location = useLocation();
+
+    // Filter out items already in MobileBottomNav
+    const filteredItems = sections
+        .flatMap(s => s.items)
+        .filter(item => !MOBILE_HIDDEN_IDS.has(item.id));
 
     // ─── Stable close ref — NEVER stale ───
     const closeRef = useRef(() => setMobileMenuOpen(false));
@@ -204,7 +215,7 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
                     // Better scroll physics for iOS
                     style={{ WebkitOverflowScrolling: 'touch' }}
                 >
-                    {sections.flatMap(s => s.items).map((item) => (
+                    {filteredItems.map((item) => (
                         <MobileNavItem
                             key={item.id}
                             item={item}

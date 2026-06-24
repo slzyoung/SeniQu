@@ -3,7 +3,7 @@
  * API service for community forum operations
  */
 
-import { apiGet, apiPost, apiPut, apiDelete } from '../lib/api';
+import api, { apiGet, apiPost, apiPut, apiDelete } from '../lib/api';
 
 // ============================================
 // TYPES
@@ -25,11 +25,15 @@ export interface ForumThread {
     id: string;
     categoryId: string;
     authorId: string;
+    author_id?: string;
     title: string;
     slug: string;
     content: string;
     mediaUrl?: string;
     mediaType?: string;
+    media_type?: string;
+    video_thumbnail_url?: string;
+    videoThumbnailUrl?: string;
     tags: string[];
     isPinned: boolean;
     isLocked: boolean;
@@ -88,6 +92,30 @@ export interface CreatePostData {
     mediaUrl?: string;
     mediaType?: 'image' | 'video' | string;
     parentId?: string;
+}
+
+export interface ForumVideoUploadResult {
+    key: string;
+    url: string;
+    size: number;
+    contentType: string;
+    thumbnailKey?: string;
+    thumbnailUrl?: string;
+    videoId?: string;
+    metadata: {
+        duration: number;
+        width: number;
+        height: number;
+        videoCodec: string;
+        audioCodec: string | null;
+        bitrate: number;
+        fps: number;
+        aspectRatio: string;
+        originalFileSize: number;
+        compressedFileSize: number;
+        compressionRatio: number;
+        originalFilename: string;
+    };
 }
 
 export interface PaginatedResponse<T> {
@@ -209,6 +237,43 @@ export const forumService = {
     },
 
     // ==========================================
+    // VIDEO UPLOAD
+    // ==========================================
+
+    /**
+     * Upload a video to the forum with auto-compression.
+     * Server-side FFmpeg compresses to H.264 + AAC, generates thumbnail.
+     */
+    uploadVideo: async (
+        file: File,
+        options?: {
+            threadId?: string;
+            postId?: string;
+            caption?: string;
+            onProgress?: (progress: number) => void;
+        },
+    ): Promise<ForumVideoUploadResult> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (options?.threadId) formData.append('threadId', options.threadId);
+        if (options?.postId) formData.append('postId', options.postId);
+        if (options?.caption) formData.append('caption', options.caption);
+
+        const response = await api.post('/forum/video/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 300000, // 5 minute timeout for large videos
+            onUploadProgress: (progressEvent) => {
+                if (options?.onProgress && progressEvent.total) {
+                    const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    options.onProgress(progress);
+                }
+            },
+        });
+
+        return response.data?.data || response.data;
+    },
+
+    // ==========================================
     // USER'S THREADS & POSTS
     // ==========================================
 
@@ -252,3 +317,4 @@ export const forumService = {
 };
 
 export default forumService;
+

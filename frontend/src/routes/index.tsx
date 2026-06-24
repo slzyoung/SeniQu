@@ -33,6 +33,7 @@ const UserMyArts = lazyWithRetry(() => import('../features/user/pages/MyArtsPage
 const UserWallet = lazyWithRetry(() => import('../features/user/pages/WalletPage'));
 const UserCommunity = lazyWithRetry(() => import('../features/user/pages/CommunityPage'));
 const UserMessages = lazyWithRetry(() => import('../features/user/pages/MessagesPage'));
+const PublicProfile = lazyWithRetry(() => import('../features/user/pages/PublicProfile/PublicProfile'));
 
 // Lazy load gallery pages
 // Lazy load collections page
@@ -55,6 +56,7 @@ const ArtDetail = lazyWithRetry(() => import('../features/marketplace/pages/ArtD
 // Lazy load community pages
 const CommunityForum = lazyWithRetry(() => import('../features/community/pages/CommunityForum'));
 const ThreadView = lazyWithRetry(() => import('../features/community/pages/ThreadView'));
+const ReelsPage = lazyWithRetry(() => import('../features/community/pages/ReelsPage'));
 
 // Lazy load AI pages
 const GenreIdentifier = lazyWithRetry(() => import('../features/ai/pages/GenreIdentifier'));
@@ -143,6 +145,7 @@ const router = createBrowserRouter(
                 {/* Community Routes */}
                 <Route path={ROUTES.COMMUNITY} element={<CommunityForum />} />
                 <Route path={ROUTES.COMMUNITY_THREAD} element={<ThreadView />} />
+                <Route path={ROUTES.REELS} element={<ReelsPage />} />
 
                 {/* AI Routes */}
                 <Route path={ROUTES.AI_GENRE} element={<GenreIdentifier />} />
@@ -157,6 +160,7 @@ const router = createBrowserRouter(
                 <Route path={ROUTES.GALLERY_ARTWORK} element={<ArtworkView />} />
                 <Route path={ROUTES.NEARBY} element={<NearbyMuseums />} />
                 <Route path={ROUTES.NEARBY_PUBLIC} element={<PublicNearbyPage />} />
+                <Route path={ROUTES.USER_PUBLIC_PROFILE} element={<PublicProfile />} />
 
                 {/* Legal Routes */}
                 <Route path="/terms" element={<TermsOfService />} />

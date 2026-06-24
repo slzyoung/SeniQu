@@ -4,7 +4,6 @@ import {
     Bookmark,
     FolderHeart,
     Settings,
-    Image,
     MapPin,
     ScanLine,
     Brain,
@@ -34,7 +33,9 @@ import {
     Megaphone,
     Images,
     Camera,
-    Mail
+    Mail,
+    Play,
+    GalleryHorizontal
 } from 'lucide-react';
 import { SidebarSection } from '../components/ui/Sidebar';
 import { ROUTES } from '../lib/constants';
@@ -57,8 +58,14 @@ export const userSidebarSections: SidebarSection[] = [
             {
                 id: 'gallery',
                 label: 'Art Gallery',
-                icon: <Image className="w-5 h-5" />,
+                icon: <GalleryHorizontal className="w-5 h-5" />,
                 path: ROUTES.USER_GALLERY,
+            },
+            {
+                id: 'collections',
+                label: 'Photography Hub',
+                icon: <Camera className="w-5 h-5" />,
+                path: ROUTES.USER_COLLECTIONS,
             },
             {
                 id: 'nearby',
@@ -69,14 +76,8 @@ export const userSidebarSections: SidebarSection[] = [
         ],
     },
     {
-        title: 'AI Tools',
+        title: 'AI Studio',
         items: [
-            {
-                id: 'genre-identifier',
-                label: 'Analyze',
-                icon: <ScanLine className="w-5 h-5" />,
-                path: ROUTES.USER_GENRE_IDENTIFIER,
-            },
             {
                 id: 'ai-curation',
                 label: 'AI Curation',
@@ -89,10 +90,16 @@ export const userSidebarSections: SidebarSection[] = [
                 icon: <Wand2 className="w-5 h-5" />,
                 path: ROUTES.USER_AI_CREATE,
             },
+            {
+                id: 'genre-identifier',
+                label: 'Analyze',
+                icon: <ScanLine className="w-5 h-5" />,
+                path: ROUTES.USER_GENRE_IDENTIFIER,
+            },
         ],
     },
     {
-        title: 'Marketplace',
+        title: 'Commerce',
         items: [
             {
                 id: 'marketplace',
@@ -112,6 +119,12 @@ export const userSidebarSections: SidebarSection[] = [
         title: 'Community',
         items: [
             {
+                id: 'reels',
+                label: 'Reels',
+                icon: <Play className="w-5 h-5" />,
+                path: ROUTES.REELS,
+            },
+            {
                 id: 'community',
                 label: 'Forum',
                 icon: <MessageSquare className="w-5 h-5" />,
@@ -126,7 +139,7 @@ export const userSidebarSections: SidebarSection[] = [
         ],
     },
     {
-        title: 'Photography',
+        title: 'Library',
         items: [
             {
                 id: 'bookmarks',
@@ -135,22 +148,16 @@ export const userSidebarSections: SidebarSection[] = [
                 path: ROUTES.USER_BOOKMARKS,
             },
             {
-                id: 'collections',
-                label: 'Photography Hub',
-                icon: <Camera className="w-5 h-5" />,
-                path: ROUTES.USER_COLLECTIONS,
-            },
-        ],
-    },
-    {
-        title: 'Account',
-        items: [
-            {
                 id: 'wallet',
                 label: 'Wallet',
                 icon: <CreditCard className="w-5 h-5" />,
                 path: ROUTES.USER_WALLET,
             },
+        ],
+    },
+    {
+        title: 'Settings',
+        items: [
             {
                 id: 'profile',
                 label: 'Profile',
@@ -521,7 +528,7 @@ export const publicSidebarSections: SidebarSection[] = [
             {
                 id: 'gallery',
                 label: 'Art Gallery',
-                icon: <Image className="w-5 h-5" />,
+                icon: <GalleryHorizontal className="w-5 h-5" />,
                 path: ROUTES.GALLERY,
             },
             {
@@ -533,24 +540,24 @@ export const publicSidebarSections: SidebarSection[] = [
         ],
     },
     {
-        title: 'AI Tools',
+        title: 'AI Studio',
         items: [
-            {
-                id: 'genre-identifier',
-                label: 'Analyze',
-                icon: <ScanLine className="w-5 h-5" />,
-                path: ROUTES.AI_GENRE,
-            },
             {
                 id: 'ai-curation',
                 label: 'AI Curation',
                 icon: <Brain className="w-5 h-5" />,
                 path: ROUTES.AI_CURATION,
             },
+            {
+                id: 'genre-identifier',
+                label: 'Analyze',
+                icon: <ScanLine className="w-5 h-5" />,
+                path: ROUTES.AI_GENRE,
+            },
         ],
     },
     {
-        title: 'Marketplace',
+        title: 'Commerce',
         items: [
             {
                 id: 'marketplace',
@@ -563,6 +570,12 @@ export const publicSidebarSections: SidebarSection[] = [
     {
         title: 'Community',
         items: [
+            {
+                id: 'reels',
+                label: 'Reels',
+                icon: <Play className="w-5 h-5" />,
+                path: ROUTES.REELS,
+            },
             {
                 id: 'community',
                 label: 'Forum',

@@ -1,5 +1,5 @@
 /**
- * Forum Controller - Community threads and posts
+ * Forum Controller - Community threads, posts, and video content
  */
 
 import {
@@ -15,8 +15,10 @@ import {
     ParseUUIDPipe,
     HttpCode,
     HttpStatus,
+    Req,
+    BadRequestException,
 } from "@nestjs/common"
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from "@nestjs/swagger"
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiConsumes, ApiBody } from "@nestjs/swagger"
 import { Throttle, SkipThrottle } from "@nestjs/throttler"
 import { ForumService } from "./forum.service"
 import { CreateThreadDto } from "./dto/create-thread.dto"
@@ -28,11 +30,15 @@ import { RolesGuard } from "../auth/guards/roles.guard"
 import { Roles } from "../auth/decorators/roles.decorator"
 import { GetUser } from "../auth/decorators/get-user.decorator"
 import { Public } from "../auth/decorators/public.decorator"
+import { StorageService } from "../storage/storage.service"
 
 @ApiTags("Forum")
 @Controller("forum")
 export class ForumController {
-    constructor(private readonly forumService: ForumService) { }
+    constructor(
+        private readonly forumService: ForumService,
+        private readonly storageService: StorageService,
+    ) { }
 
     // ===========================================
     // CATEGORIES (Public)
@@ -65,6 +71,85 @@ export class ForumController {
     @ApiOperation({ summary: "Get featured threads" })
     async getFeatured() {
         return this.forumService.getFeatured()
+    }
+
+    // ===========================================
+    // VIDEO UPLOAD (must be before :idOrSlug catch-all)
+    // ===========================================
+
+    @Post("video/upload")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth("JWT-auth")
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
+    @ApiOperation({ summary: "Upload and compress a forum video" })
+    @ApiConsumes("multipart/form-data")
+    @ApiBody({
+        schema: {
+            type: "object",
+            properties: {
+                file: { type: "string", format: "binary", description: "Video file (MP4, WebM, MOV, OGG)" },
+                threadId: { type: "string", description: "Optional thread ID to attach video to" },
+                postId: { type: "string", description: "Optional post ID to attach video to" },
+                caption: { type: "string", description: "Optional video caption" },
+            },
+            required: ["file"],
+        },
+    })
+    async uploadVideo(
+        @Req() req: any,
+        @GetUser("id") userId: string,
+    ) {
+        // Parse multipart form data
+        const data = await req.file()
+        if (!data) {
+            throw new BadRequestException("No video file provided")
+        }
+
+        // Validate MIME type
+        const ALLOWED_VIDEO_MIMES = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime']
+        if (!ALLOWED_VIDEO_MIMES.includes(data.mimetype)) {
+            throw new BadRequestException(
+                `Video type ${data.mimetype} is not allowed. Accepted: ${ALLOWED_VIDEO_MIMES.join(", ")}`
+            )
+        }
+
+        // Read the file buffer
+        const buffer = await data.toBuffer()
+
+        // Extract optional fields
+        const fields = data.fields as Record<string, any>
+        const threadId = fields?.threadId?.value || undefined
+        const postId = fields?.postId?.value || undefined
+        const caption = fields?.caption?.value || undefined
+
+        // Create a compatible file object
+        const file = {
+            buffer,
+            originalname: data.filename,
+            mimetype: data.mimetype,
+            size: buffer.length,
+        }
+
+        // Upload & compress video through StorageService
+        const result = await this.storageService.uploadForumVideo(file as any, userId)
+
+        // Save metadata to database
+        const videoRecord = await this.forumService.saveVideoMetadata({
+            userId,
+            threadId,
+            postId,
+            videoUrl: result.url,
+            videoKey: result.key,
+            thumbnailUrl: result.thumbnailUrl || null,
+            thumbnailKey: result.thumbnailKey || null,
+            caption,
+            metadata: result.metadata,
+        })
+
+        return {
+            ...result,
+            videoId: videoRecord?.id,
+        }
     }
 
     // ===========================================

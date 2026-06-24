@@ -23,6 +23,7 @@ export const userKeys = {
     collections: (page: number, limit: number) => [...userKeys.all, 'me', 'collections', page, limit] as const,
     arts: (page: number, limit: number) => [...userKeys.all, 'me', 'arts', page, limit] as const,
     byId: (id: string) => [...userKeys.all, id] as const,
+    publicProfile: (id: string) => [...userKeys.all, 'public', id] as const,
 };
 
 // ============================================
@@ -280,6 +281,39 @@ export function useUnlinkWallet() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['connected-wallets'] });
             queryClient.invalidateQueries({ queryKey: ['user-stats'] });
+        },
+    });
+}
+
+// ============================================
+// PUBLIC PROFILE + FOLLOW HOOKS
+// ============================================
+
+export function usePublicProfile(userId: string) {
+    return useQuery({
+        queryKey: userKeys.publicProfile(userId),
+        queryFn: () => userService.getPublicProfile(userId),
+        enabled: !!userId,
+        staleTime: 30_000,
+    });
+}
+
+export function useFollowUser() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (userId: string) => userService.followUser(userId),
+        onSuccess: (_data, userId) => {
+            queryClient.invalidateQueries({ queryKey: userKeys.publicProfile(userId) });
+        },
+    });
+}
+
+export function useUnfollowUser() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (userId: string) => userService.unfollowUser(userId),
+        onSuccess: (_data, userId) => {
+            queryClient.invalidateQueries({ queryKey: userKeys.publicProfile(userId) });
         },
     });
 }

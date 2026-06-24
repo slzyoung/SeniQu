@@ -43,9 +43,11 @@ import {
     useLikeHeritageCuration
 } from '../../../../hooks/useAI';
 
+import { useNavigate } from 'react-router-dom';
 import './AICurationPage.css';
 
 export function AICurationPage() {
+    const navigate = useNavigate();
     const currentUser = useAuthStore((s) => s.user);
     const toast = useToast();
 
@@ -784,7 +786,13 @@ Dibuat secara otomatis menggunakan SeniQu Digital Curation Engine.`;
 
                                             {/* Curator Badge */}
                                             {item.users && (
-                                                <div className="masterpiece-card__curator">
+                                                <div 
+                                                    className="masterpiece-card__curator cursor-pointer hover:opacity-85 transition-opacity"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (item.user_id) navigate(`/profile/${item.user_id}`);
+                                                    }}
+                                                >
                                                     {item.users.avatar_url ? (
                                                         <img
                                                             src={item.users.avatar_url}
@@ -1185,7 +1193,13 @@ Dibuat secara otomatis menggunakan SeniQu Digital Curation Engine.`;
                                                     <Award className="w-4 h-4 mr-1 text-gold" />
                                                     {curationResult.valuation_estimate || 'Cultural Value A'}
                                                 </span>
-                                                <span className="meta-item">
+                                                <span 
+                                                    className="meta-item cursor-pointer hover:underline"
+                                                    onClick={() => {
+                                                        const userId = curationResult.user_id;
+                                                        if (userId) navigate(`/profile/${userId}`);
+                                                    }}
+                                                >
                                                     <User className="w-4 h-4 mr-1 text-gold" />
                                                     Curated by @
                                                     {currentUser?.id === curationResult.user_id
@@ -1995,7 +2009,16 @@ Dibuat secara otomatis menggunakan SeniQu Digital Curation Engine.`;
                                         <h2 className="modal-curation-title">{selectedDetailCuration.curation_name}</h2>
                                         
                                         {/* Curator Info */}
-                                        <div className="modal-curator-profile">
+                                        <div 
+                                            className="modal-curator-profile cursor-pointer hover:opacity-85 transition-opacity"
+                                            onClick={() => {
+                                                const userId = selectedDetailCuration.user_id;
+                                                if (userId) {
+                                                    setSelectedDetailCuration(null);
+                                                    navigate(`/profile/${userId}`);
+                                                }
+                                            }}
+                                        >
                                             {selectedDetailCuration.users?.avatar_url ? (
                                                 <img
                                                     src={selectedDetailCuration.users.avatar_url}
@@ -2201,14 +2224,25 @@ Dibuat secara otomatis menggunakan SeniQu Digital Curation Engine.`;
                                                 serverComments.map((comment) => (
                                                     <div key={comment.id} className="comment-bubble-item">
                                                         <div className="comment-header-row">
-                                                            <div className="commenter-avatar-box">
-                                                                {comment.user.avatar_url ? (
-                                                                    <img src={comment.user.avatar_url} alt="" />
-                                                                ) : (
-                                                                    <User className="w-3.5 h-3.5 text-gold" />
-                                                                )}
+                                                            <div 
+                                                                className="flex items-center gap-1.5 cursor-pointer hover:opacity-85 transition-opacity"
+                                                                onClick={() => {
+                                                                    const userId = comment.user_id || comment.user?.id;
+                                                                    if (userId) {
+                                                                        setSelectedDetailCuration(null);
+                                                                        navigate(`/profile/${userId}`);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <div className="commenter-avatar-box">
+                                                                    {comment.user.avatar_url ? (
+                                                                        <img src={comment.user.avatar_url} alt="" />
+                                                                    ) : (
+                                                                        <User className="w-3.5 h-3.5 text-gold" />
+                                                                    )}
+                                                                </div>
+                                                                <span className="commenter-name">{comment.user.display_name}</span>
                                                             </div>
-                                                            <span className="commenter-name">{comment.user.display_name}</span>
                                                             <span className="comment-date">
                                                                 {new Date(comment.created_at).toLocaleDateString('id-ID', {
                                                                     hour: '2-digit',

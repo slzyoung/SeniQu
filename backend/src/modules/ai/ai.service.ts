@@ -150,6 +150,7 @@ export class AiService {
         isLiked: likedArtworkIds.has(item.id),
         style: item.style || 'default',
         author: {
+          id: item.user_id,
           name: author?.display_name || 'Anonymous',
           avatarUrl: author?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
         }
