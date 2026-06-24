@@ -157,6 +157,25 @@ export class MessagesService {
             throw new Error(error.message)
         }
 
+        // Fetch follow relationships to determine mutual follow status
+        const { data: follows } = await client
+            .from("follows")
+            .select("follower_id, following_id")
+            .or(`follower_id.eq.${userId},following_id.eq.${userId}`)
+
+        const followingSet = new Set<string>()
+        const followersSet = new Set<string>()
+        if (follows) {
+            follows.forEach((f: any) => {
+                if (f.follower_id === userId) {
+                    followingSet.add(f.following_id)
+                }
+                if (f.following_id === userId) {
+                    followersSet.add(f.follower_id)
+                }
+            })
+        }
+
         // Fetch unread counts for all conversations of this user
         const { data: unreads } = await client
             .from("messages")
@@ -175,12 +194,16 @@ export class MessagesService {
         return (data || []).map((conv: any) => {
             const isA = conv.participant_a === userId
             const otherUser = isA ? conv.user_b : conv.user_a
+            const otherUserId = otherUser?.id
+            const isMutual = otherUserId ? (followingSet.has(otherUserId) && followersSet.has(otherUserId)) : false
+
             return {
                 id: conv.id,
                 otherUser: otherUser ? {
                     id: otherUser.id,
                     displayName: otherUser.display_name,
                     avatarUrl: otherUser.avatar_url,
+                    isMutual,
                 } : null,
                 lastMessageAt: conv.last_message_at,
                 lastMessagePreview: conv.last_message_preview,
@@ -383,9 +406,6 @@ export class MessagesService {
         entry.count++
     }
 
-    /**
-     * Search users to start a new chat, prioritizing followed users and excluding blocked users for privacy
-     */
     async searchUsers(userId: string, query: string) {
         if (!query || query.trim().length === 0) return []
 
@@ -425,27 +445,35 @@ export class MessagesService {
         // 3. Check follow status for each user
         const userIds = filteredUsers.map(u => u.id)
         let followedUserIds = new Set<string>()
+        let followingMeUserIds = new Set<string>()
 
         if (userIds.length > 0) {
             const { data: follows } = await client
                 .from("follows")
-                .select("following_id")
-                .eq("follower_id", userId)
-                .in("following_id", userIds)
+                .select("follower_id, following_id")
+                .or(`follower_id.eq.${userId},following_id.eq.${userId}`)
 
             if (follows) {
-                follows.forEach((f: any) => followedUserIds.add(f.following_id))
+                follows.forEach((f: any) => {
+                    if (f.follower_id === userId) followedUserIds.add(f.following_id)
+                    if (f.following_id === userId) followingMeUserIds.add(f.follower_id)
+                })
             }
         }
 
         // Map and sort (followed users first)
-        return filteredUsers.map(u => ({
-            id: u.id,
-            displayName: u.display_name,
-            username: u.username,
-            avatarUrl: u.avatar_url,
-            isFollowed: followedUserIds.has(u.id),
-        })).sort((a, b) => {
+        return filteredUsers.map(u => {
+            const isFollowed = followedUserIds.has(u.id)
+            const isMutual = isFollowed && followingMeUserIds.has(u.id)
+            return {
+                id: u.id,
+                displayName: u.display_name,
+                username: u.username,
+                avatarUrl: u.avatar_url,
+                isFollowed,
+                isMutual,
+            }
+        }).sort((a, b) => {
             if (a.isFollowed && !b.isFollowed) return -1
             if (!a.isFollowed && b.isFollowed) return 1
             return 0
@@ -472,6 +500,17 @@ export class MessagesService {
             throw new Error(error.message)
         }
 
+        // Fetch followers to determine mutual follow status
+        const { data: followers } = await client
+            .from("follows")
+            .select("follower_id")
+            .eq("following_id", userId)
+
+        const followersSet = new Set<string>()
+        if (followers) {
+            followers.forEach((f: any) => followersSet.add(f.follower_id))
+        }
+
         // Filter out blocks
         const { data: blocks } = await client
             .from("message_blocks")
@@ -495,6 +534,7 @@ export class MessagesService {
                 username: u.username,
                 avatarUrl: u.avatar_url,
                 isOnline: Math.random() > 0.3,
+                isMutual: followersSet.has(u.id),
             }))
     }
 }

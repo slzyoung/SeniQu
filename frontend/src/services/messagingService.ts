@@ -146,6 +146,7 @@ export interface Conversation {
         id: string;
         displayName: string;
         avatarUrl?: string;
+        isMutual?: boolean;
     } | null;
     lastMessageAt: string;
     lastMessagePreview: string;

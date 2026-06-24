@@ -177,3 +177,22 @@ Nested under NestJS `/messages` path with active JWT authentication guards:
 * **`RequestBoard.tsx`**: Connects clients and bidding photographers using E2E direct messages.
 * **`PhotographerProfile.tsx`**: Hides action bars automatically when viewing own profile to prevent self-chatting.
 
+### 5.6 Messaging Attachment Grid & Privacy Controls
+
+The secure messaging page provides a premium, responsive multi-option attachment drawer (grid layout) containing 8 active features, carefully balanced to preserve user privacy and security:
+
+1. **Document**: Launches a native file picker accepting document extensions (`.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar`) and uploads them to the platform's storage service before sending the E2E encrypted reference.
+2. **Camera**: Triggers the device camera to take a photo. Before upload, the image is compressed and processed client-side via a clean canvas, which automatically strips all private camera/date details and EXIF/GPS tags.
+3. **Gallery**: Triggers the device gallery picker. All image selections are compressed on the client-side to strip metadata/EXIF information before transfer to storage.
+4. **Audio**: Allows file uploads of voice notes and audio memos (`audio/*`).
+5. **Location (Privacy Hardened)**:
+   * **Mutual Constraint**: Location sharing is locked and disabled unless both users have a mutual follow relationship.
+   * **Coordinate Rounding**: Real GPS coordinates retrieved from `navigator.geolocation` are rounded to 3 decimal places (approx. 110-meter accuracy) to disclose general location context while shielding precise home or building details.
+6. **Contact (Privacy Hardened)**:
+   * **Mutual Constraint**: Contact card sharing is locked and disabled unless both users have a mutual follow relationship.
+   * **Dynamic Inputs**: Users can enter custom contact names and phone numbers to send as cards.
+7. **Polling**: Dynamic inline polls. Users can customize questions and up to three options. The conversation displays live interactive voting percentage bars.
+8. **GIF**: Interactive search prompt mapping queries to appropriate assets or direct image URLs.
+
+All media and attachment metadata are transmitted within the E2E encrypted envelope, ensuring only the target recipient can decrypt the reference links and cards.
+
