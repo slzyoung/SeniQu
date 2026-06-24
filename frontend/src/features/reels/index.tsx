@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Search, Loader2, Play, Copy, Link2, X, SlidersHorizontal } from 'lucide-react';
+import { Search, Loader2, Play, Copy, Link2, X, SlidersHorizontal, PlusCircle } from 'lucide-react';
 import { useReelsFeed } from '../../hooks/useReels';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useToast } from '../../stores/useNotificationStore';
@@ -111,13 +111,28 @@ export function ReelsPage() {
             {/* ═══ Header ═══ */}
             <div className="reels-header">
                 <span className="reels-header-title">Reels</span>
-                <button
-                    onClick={() => setShowSearch(true)}
-                    className="reels-header-btn"
-                    aria-label="Search reels"
-                >
-                    <Search style={{ width: 20, height: 20 }} />
-                </button>
+                <div className="reels-header-actions" style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                        onClick={() => {
+                            if (!user) {
+                                toast.error('Login Required', 'Sign in to create a Reel');
+                                return;
+                            }
+                            setShowUpload(true);
+                        }}
+                        className="reels-header-btn"
+                        aria-label="Create reel"
+                    >
+                        <PlusCircle style={{ width: 20, height: 20 }} />
+                    </button>
+                    <button
+                        onClick={() => setShowSearch(true)}
+                        className="reels-header-btn"
+                        aria-label="Search reels"
+                    >
+                        <Search style={{ width: 20, height: 20 }} />
+                    </button>
+                </div>
             </div>
 
             {/* ═══ Search Overlay ═══ */}

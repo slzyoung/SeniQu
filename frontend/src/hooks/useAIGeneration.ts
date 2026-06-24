@@ -15,6 +15,7 @@ import { apiGet, apiPost, apiPatch, apiDelete } from '../lib/api';
 // ============================================
 
 export interface AIFeedAuthor {
+  id?: string;
   name: string;
   isPremium?: boolean;
   avatarUrl: string;
@@ -28,6 +29,8 @@ export interface AIFeedItem {
   likes: number;
   isLiked?: boolean;
   style?: string;
+  user_id?: string;
+  userId?: string;
 }
 
 export interface AIStyle {

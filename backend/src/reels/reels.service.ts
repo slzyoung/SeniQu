@@ -23,7 +23,7 @@ export class ReelsService {
     // FEED
     // ==========================================
 
-    async getFeed(page = 1, limit = 10, userId?: string) {
+    async getFeed(page = 1, limit = 10, userId?: string, creatorId?: string) {
         const offset = (page - 1) * limit
 
         let query = this.supabase
@@ -33,7 +33,12 @@ export class ReelsService {
                 user:users!reels_user_id_fkey(id, display_name, avatar_url, role)
             `, { count: "exact" })
             .eq("status", "active")
-            .order("created_at", { ascending: false })
+
+        if (creatorId) {
+            query = query.eq("user_id", creatorId)
+        }
+
+        query = query.order("created_at", { ascending: false })
             .range(offset, offset + limit - 1)
 
         const { data, count, error } = await query
@@ -98,6 +103,7 @@ export class ReelsService {
         videoUrl: string; videoKey: string; thumbnailUrl?: string; thumbnailKey?: string;
         caption?: string; hashtags?: string[];
         duration?: number; width?: number; height?: number; fileSize?: number; aspectRatio?: string;
+        audioMetadata?: any;
     }) {
         const { data: reel, error } = await this.supabase
             .from("reels")
@@ -114,6 +120,7 @@ export class ReelsService {
                 height: data.height || 0,
                 file_size: data.fileSize || 0,
                 aspect_ratio: data.aspectRatio || "9:16",
+                audio_metadata: data.audioMetadata || {},
                 status: "active",
             })
             .select(`*, user:users!reels_user_id_fkey(id, display_name, avatar_url, role)`)

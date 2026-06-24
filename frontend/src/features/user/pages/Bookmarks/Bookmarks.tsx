@@ -49,7 +49,15 @@ export default function Bookmarks() {
     const { data: savedReelsRes, isLoading: reelsLoading } = useSavedReels(1, 50);
     const toggleReshare = useToggleReelReshare();
 
-    const savedReels = (savedReelsRes?.data || []).map((reel: any) => ({
+    const reelsArray = Array.isArray(savedReelsRes)
+        ? savedReelsRes
+        : Array.isArray(savedReelsRes?.data)
+            ? savedReelsRes.data
+            : Array.isArray(savedReelsRes?.data?.data)
+                ? savedReelsRes.data.data
+                : [];
+
+    const savedReels = reelsArray.map((reel: any) => ({
         id: reel.id,
         caption: reel.caption || '',
         thumbnailUrl: reel.thumbnail_url || reel.thumbnailUrl || '',

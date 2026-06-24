@@ -33,12 +33,14 @@ export class ReelsController {
     @ApiOperation({ summary: "Get reels feed" })
     @ApiQuery({ name: "page", required: false })
     @ApiQuery({ name: "limit", required: false })
+    @ApiQuery({ name: "creatorId", required: false })
     async getFeed(
         @Query("page") page?: number,
         @Query("limit") limit?: number,
+        @Query("creatorId") creatorId?: string,
         @GetUser("id") userId?: string,
     ) {
-        return this.reelsService.getFeed(page || 1, limit || 10, userId)
+        return this.reelsService.getFeed(page || 1, limit || 10, userId, creatorId)
     }
 
     // ==========================================
@@ -93,6 +95,10 @@ export class ReelsController {
         let hashtags: string[] = []
         try { hashtags = JSON.parse(hashtagsRaw) } catch { /* ignore */ }
 
+        const audioMetadataRaw = fields?.audioMetadata?.value || "{}"
+        let audioMetadata: any = {}
+        try { audioMetadata = JSON.parse(audioMetadataRaw) } catch { /* ignore */ }
+
         // Compress video via storage pipeline (FFmpeg H.264 + AAC + faststart)
         const file = { buffer, originalname: data.filename, mimetype: data.mimetype, size: buffer.length }
         const result = await this.storageService.uploadForumVideo(file as any, userId)
@@ -117,6 +123,7 @@ export class ReelsController {
             height: result.metadata.height,
             fileSize: result.metadata.compressedFileSize,
             aspectRatio: result.metadata.aspectRatio,
+            audioMetadata,
         })
 
         return reel

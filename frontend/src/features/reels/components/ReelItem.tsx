@@ -36,6 +36,7 @@ interface Props {
 export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpenComments, onShare, observerRef }: Props) {
     const navigate = useNavigate();
     const videoRef = useRef<HTMLVideoElement>(null);
+    const audioTrackRef = useRef<HTMLAudioElement | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [showHeart, setShowHeart] = useState(false);
     const [showPlayIcon, setShowPlayIcon] = useState(false);
@@ -69,23 +70,107 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
     const reelUserId = reel.user_id || reel.userId;
     const dur = reel.duration || 0;
 
+    // Parse audio metadata & editing parameters
+    const audioMeta = reel.audio_metadata || reel.audioMetadata || {};
+    const editing = audioMeta.editing || {};
+    const selectedFilter = editing.filter || 'none';
+    const playbackSpeed = editing.playbackSpeed || 1;
+    const aspectRatio = editing.aspectRatio || '9/16';
+    const trimStart = editing.trimStart || 0;
+    const trimEnd = editing.trimEnd || 60;
+    const originalVolume = editing.originalVolume ?? 1;
+
+    const trackTitle = audioMeta.title || 'Soundtrack';
+    const trackArtist = audioMeta.artist || 'Artist';
+
+    const getFilterCss = (filterName: string) => {
+        switch (filterName) {
+            case 'cinematic': return 'contrast(1.2) brightness(0.95) saturate(1.2) sepia(0.05)';
+            case 'vintage': return 'contrast(0.9) brightness(1.05) saturate(0.85) sepia(0.35) hue-rotate(5deg)';
+            case 'mono': return 'grayscale(1) contrast(1.1) brightness(0.95)';
+            case 'warm': return 'sepia(0.15) saturate(1.1) hue-rotate(5deg)';
+            case 'cool': return 'hue-rotate(-10deg) saturate(0.95) brightness(1.02)';
+            case 'vibrant': return 'contrast(1.1) saturate(1.4) brightness(1.0)';
+            default: return 'none';
+        }
+    };
+
     // Auto-play/pause on visibility
     useEffect(() => {
         if (!videoRef.current) return;
         if (isActive) {
-            videoRef.current.currentTime = 0;
+            videoRef.current.currentTime = trimStart;
             viewRecordedRef.current = false;
             videoRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
         } else {
             videoRef.current.pause();
             setIsPlaying(false);
         }
-    }, [isActive]);
+    }, [isActive, trimStart]);
 
-    // Sync muted state
+    // Sync muted state, speed, and volume
     useEffect(() => {
-        if (videoRef.current) videoRef.current.muted = isMuted;
-    }, [isMuted]);
+        if (videoRef.current) {
+            videoRef.current.muted = isMuted || originalVolume === 0 || !!audioMeta.url;
+            videoRef.current.volume = originalVolume * (isMuted ? 0 : 1);
+            videoRef.current.playbackRate = playbackSpeed;
+        }
+    }, [isMuted, originalVolume, playbackSpeed, isActive, audioMeta.url]);
+
+    // Sync external soundtrack
+    useEffect(() => {
+        if (!audioMeta.url) return;
+
+        if (!audioTrackRef.current) {
+            audioTrackRef.current = new Audio(audioMeta.url);
+            audioTrackRef.current.loop = true;
+        }
+
+        const audio = audioTrackRef.current;
+        audio.volume = (audioMeta.volume ?? 0.8) * (isMuted ? 0 : 1);
+
+        if (isActive && isPlaying) {
+            audio.currentTime = (audioMeta.offset || 0) + (videoRef.current?.currentTime || 0) - trimStart;
+            audio.play().catch(() => {});
+        } else {
+            audio.pause();
+        }
+
+        return () => {
+            audio.pause();
+        };
+    }, [isActive, isPlaying, isMuted, audioMeta.url, audioMeta.offset, audioMeta.volume, trimStart]);
+
+    // Handle loop limits for trimmed video
+    useEffect(() => {
+        const video = videoRef.current;
+        if (!video) return;
+
+        const handleTimeUpdateLoop = () => {
+            if (video.currentTime < trimStart) {
+                video.currentTime = trimStart;
+            }
+            if (video.currentTime >= trimEnd) {
+                video.currentTime = trimStart;
+                if (audioTrackRef.current) {
+                    audioTrackRef.current.currentTime = audioMeta.offset || 0;
+                }
+            }
+        };
+
+        video.addEventListener('timeupdate', handleTimeUpdateLoop);
+        return () => video.removeEventListener('timeupdate', handleTimeUpdateLoop);
+    }, [trimStart, trimEnd, audioMeta.offset]);
+
+    // Cleanup audio track on unmount
+    useEffect(() => {
+        return () => {
+            if (audioTrackRef.current) {
+                audioTrackRef.current.pause();
+                audioTrackRef.current = null;
+            }
+        };
+    }, []);
 
     // Double-tap to like, single-tap to play/pause
     const handleTap = useCallback(() => {
@@ -141,11 +226,15 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
                 loop
                 playsInline
                 preload="metadata"
-                muted={isMuted}
+                muted={isMuted || originalVolume === 0 || !!audioMeta.url}
                 onClick={handleTap}
                 onTimeUpdate={handleTimeUpdate}
                 className="reel-video"
                 poster={thumbUrl}
+                style={{ 
+                    filter: getFilterCss(selectedFilter),
+                    objectFit: aspectRatio === '1/1' || aspectRatio === '9/16' ? 'cover' : 'contain'
+                }}
             />
 
             {/* Gradient Overlays */}
@@ -242,7 +331,10 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
                     <Music style={{ width: 14, height: 14 }} className="reel-music-icon" />
                     <div className="reel-music-track-wrap">
                         <span className="reel-music-track-text">
-                            Original Audio — {userName} • {userName} Original Audio
+                            {audioMeta.source && audioMeta.source !== 'original'
+                                ? `${trackTitle} — ${trackArtist} • ${audioMeta.source === 'spotify' ? 'Spotify' : 'Device'} Audio`
+                                : `Original Audio — ${userName} • ${userName} Original Audio`
+                            }
                         </span>
                     </div>
                 </div>

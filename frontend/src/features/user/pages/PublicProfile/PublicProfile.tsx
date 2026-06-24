@@ -5,6 +5,7 @@
  */
 
 import { useParams, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import {
     ArrowLeft,
     Share2,
@@ -15,8 +16,15 @@ import {
     Check,
     Loader2,
     AlertCircle,
+    LayoutGrid,
+    Film,
+    BookOpen,
+    Bookmark,
 } from 'lucide-react';
 import { usePublicProfile, useFollowUser, useUnfollowUser } from '../../../../hooks/useUser';
+import { usePublicArtistArtworks } from '../../../../hooks/useArtist';
+import { useReelsFeed, useSavedReels } from '../../../../hooks/useReels';
+import { useForumThreads } from '../../../../hooks/useForum';
 import { useAuthStore } from '../../../../stores/useAuthStore';
 import { useToast } from '../../../../stores/useNotificationStore';
 import './PublicProfile.css';
@@ -59,9 +67,17 @@ export default function PublicProfile() {
     const { user: currentUser } = useAuthStore();
     const toast = useToast();
 
+    const [activeTab, setActiveTab] = useState<'artworks' | 'reels' | 'posts' | 'saved'>('artworks');
+
     const { data: profile, isLoading, isError } = usePublicProfile(userId || '');
     const followUser = useFollowUser();
     const unfollowUser = useUnfollowUser();
+
+    // Content Queries
+    const { data: artworksRes, isLoading: isArtworksLoading } = usePublicArtistArtworks(userId || '');
+    const { data: reelsData, isLoading: isReelsLoading } = useReelsFeed(12, userId);
+    const { data: threadsRes, isLoading: isThreadsLoading } = useForumThreads({ authorId: userId });
+    const { data: savedReelsRes, isLoading: isSavedLoading } = useSavedReels();
 
     const handleFollow = () => {
         if (!currentUser) {
@@ -136,27 +152,56 @@ export default function PublicProfile() {
         telegram: <TelegramIcon />,
     };
 
+    // Safely extract lists
+    const artworksList = artworksRes?.data || [];
+    const reelsList = reelsData?.pages.flatMap((page: any) => page.data || []) || [];
+    const threadsList = threadsRes?.data || [];
+
+    let savedReelsList: any[] = [];
+    const savedRes: any = savedReelsRes;
+    if (savedRes) {
+        if (Array.isArray(savedRes)) {
+            savedReelsList = savedRes;
+        } else if (Array.isArray(savedRes.data)) {
+            savedReelsList = savedRes.data;
+        } else if (Array.isArray(savedRes.data?.data)) {
+            savedReelsList = savedRes.data.data;
+        }
+    }
+
     return (
         <div className="pp-page">
-            {/* Navigation */}
+            {/* Header Actions */}
             <div className="pp-nav">
-                <button className="pp-nav-btn" onClick={() => navigate(-1)}>
+                <button className="pp-nav-btn" onClick={() => navigate(-1)} aria-label="Go Back">
                     <ArrowLeft style={{ width: 20, height: 20 }} />
                 </button>
-                <button className="pp-nav-btn" onClick={handleShare}>
+                <button className="pp-nav-btn" onClick={handleShare} aria-label="Share Profile">
                     <Share2 style={{ width: 18, height: 18 }} />
                 </button>
             </div>
 
-            {/* Hero */}
-            <div className="pp-hero">
-                <div className="pp-hero-bg" />
+            {/* Profile Header Block */}
+            <div className="pp-header-card">
+                {/* Banner / Cover */}
+                <div className="pp-banner">
+                    {profile.avatar ? (
+                        <img src={profile.avatar} alt="Profile Cover" className="pp-banner-img blurred" />
+                    ) : (
+                        <img 
+                            src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80" 
+                            alt="Default Cover" 
+                            className="pp-banner-img" 
+                        />
+                    )}
+                    <div className="pp-banner-overlay" />
+                </div>
 
-                {/* Avatar */}
+                {/* Avatar Centered */}
                 <div className="pp-avatar-wrap">
                     <div className="pp-avatar-ring">
                         {profile.avatar ? (
-                            <img src={profile.avatar} alt={profile.displayName} />
+                            <img src={profile.avatar} alt={profile.displayName} className="pp-avatar-img-core" />
                         ) : (
                             <div className="pp-avatar-fallback">{initial}</div>
                         )}
@@ -166,80 +211,251 @@ export default function PublicProfile() {
                     </div>
                 </div>
 
-                {/* Name */}
-                <h1 className="pp-name">{profile.displayName || profile.username}</h1>
-                {profile.username && <p className="pp-username">@{profile.username}</p>}
-                <p className="pp-role">◈ {getRoleLabel(profile.userType)}</p>
-                {profile.bio && <p className="pp-bio">{profile.bio}</p>}
+                {/* Profile Identity */}
+                <div className="pp-info">
+                    <div className="pp-name-row">
+                        <h1 className="pp-name">{profile.displayName || profile.username}</h1>
+                    </div>
+                    {profile.username && <p className="pp-username">@{profile.username}</p>}
+                    <p className="pp-role-badge">◈ {getRoleLabel(profile.userType)} ◈</p>
+                    {profile.bio && <p className="pp-bio">{profile.bio}</p>}
+                </div>
+
+                {/* Profile Stats */}
+                <div className="pp-stats-row">
+                    <div className="pp-stat-item">
+                        <div className="pp-stat-num">{formatCount(profile.followersCount || 0)}</div>
+                        <div className="pp-stat-lbl">Followers</div>
+                    </div>
+                    <div className="pp-stat-item">
+                        <div className="pp-stat-num">{formatCount(profile.followingCount || 0)}</div>
+                        <div className="pp-stat-lbl">Following</div>
+                    </div>
+                    <div className="pp-stat-item">
+                        <div className="pp-stat-num">{formatCount(profile.postsCount || 0)}</div>
+                        <div className="pp-stat-lbl">Posts</div>
+                    </div>
+                </div>
+
+                {/* Profile Actions */}
+                <div className="pp-actions-row">
+                    {!isOwnProfile ? (
+                        <>
+                            <button
+                                className={`pp-action-btn ${profile.isFollowing ? 'secondary' : 'primary'}`}
+                                onClick={handleFollow}
+                                disabled={isFollowLoading}
+                            >
+                                {isFollowLoading ? (
+                                    <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} />
+                                ) : profile.isFollowing ? (
+                                    <><UserCheck style={{ width: 16, height: 16 }} /> Following</>
+                                ) : (
+                                    <><UserPlus style={{ width: 16, height: 16 }} /> Follow</>
+                                )}
+                            </button>
+                            <button className="pp-action-btn secondary" onClick={handleMessage}>
+                                <MessageSquare style={{ width: 16, height: 16 }} /> Message
+                            </button>
+                        </>
+                    ) : (
+                        <button className="pp-action-btn primary full-width" onClick={() => navigate('/dashboard/profile')}>
+                            Edit Profile
+                        </button>
+                    )}
+                </div>
+
+                {/* Social links & Member Info */}
+                {socialEntries.length > 0 && (
+                    <div className="pp-socials">
+                        {socialEntries.map(([platform, url]) => (
+                            <a
+                                key={platform}
+                                href={url as string}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="pp-social-btn"
+                            >
+                                {socialIcons[platform] || platform[0].toUpperCase()}
+                            </a>
+                        ))}
+                    </div>
+                )}
+
+                <div className="pp-member-since">
+                    <Calendar style={{ width: 13, height: 13, display: 'inline', verticalAlign: -2, marginRight: 5 }} />
+                    Member since {new Date(profile.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                </div>
             </div>
 
-            {/* Stats */}
-            <div className="pp-stats">
-                <div className="pp-stat">
-                    <div className="pp-stat-value">{formatCount(profile.followersCount)}</div>
-                    <div className="pp-stat-label">Followers</div>
-                </div>
-                <div className="pp-stat">
-                    <div className="pp-stat-value">{formatCount(profile.followingCount)}</div>
-                    <div className="pp-stat-label">Following</div>
-                </div>
-                <div className="pp-stat">
-                    <div className="pp-stat-value">{formatCount(profile.postsCount)}</div>
-                    <div className="pp-stat-label">Posts</div>
-                </div>
-            </div>
-
-            {/* Actions */}
-            {!isOwnProfile && (
-                <div className="pp-actions">
-                    <button
-                        className={`pp-btn-follow ${profile.isFollowing ? 'secondary' : 'primary'}`}
-                        onClick={handleFollow}
-                        disabled={isFollowLoading}
+            {/* Profile Tabs Navigation */}
+            <div className="pp-tabs-bar">
+                <button 
+                    className={`pp-tab-btn ${activeTab === 'artworks' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('artworks')}
+                    aria-label="Artworks"
+                >
+                    <LayoutGrid style={{ width: 20, height: 20 }} />
+                </button>
+                <button 
+                    className={`pp-tab-btn ${activeTab === 'reels' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('reels')}
+                    aria-label="Reels"
+                >
+                    <Film style={{ width: 20, height: 20 }} />
+                </button>
+                <button 
+                    className={`pp-tab-btn ${activeTab === 'posts' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('posts')}
+                    aria-label="Forum Posts"
+                >
+                    <BookOpen style={{ width: 20, height: 20 }} />
+                </button>
+                {isOwnProfile && (
+                    <button 
+                        className={`pp-tab-btn ${activeTab === 'saved' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('saved')}
+                        aria-label="Saved Reels"
                     >
-                        {isFollowLoading ? (
-                            <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} />
-                        ) : profile.isFollowing ? (
-                            <><UserCheck style={{ width: 16, height: 16 }} /> Following</>
+                        <Bookmark style={{ width: 20, height: 20 }} />
+                    </button>
+                )}
+            </div>
+
+            {/* Tabs Content */}
+            <div className="pp-tab-viewport">
+                {activeTab === 'artworks' && (
+                    <div className="pp-tab-content">
+                        {isArtworksLoading ? (
+                            <div className="pp-tab-loading">
+                                <Loader2 style={{ width: 24, height: 24, animation: 'spin 1s linear infinite', color: '#C9A84C' }} />
+                            </div>
+                        ) : artworksList.length > 0 ? (
+                            <div className="pp-artworks-grid">
+                                {artworksList.map((art: any) => (
+                                    <div 
+                                        key={art.id} 
+                                        className="pp-artwork-card"
+                                        onClick={() => navigate(`/marketplace/artwork/${art.id}`)}
+                                    >
+                                        <img src={art.imageUrl || art.thumbnailUrl} alt={art.title} className="pp-artwork-img" />
+                                        <div className="pp-artwork-overlay">
+                                            <span className="pp-artwork-title">{art.title}</span>
+                                            <span className="pp-artwork-price">
+                                                {art.price ? `${art.price} SOL` : 'Not for sale'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         ) : (
-                            <><UserPlus style={{ width: 16, height: 16 }} /> Follow</>
+                            <div className="pp-empty-state">
+                                <LayoutGrid style={{ width: 36, height: 36, opacity: 0.4 }} />
+                                <p>No artworks published yet</p>
+                            </div>
                         )}
-                    </button>
-                    <button className="pp-btn-follow secondary" onClick={handleMessage}>
-                        <MessageSquare style={{ width: 16, height: 16 }} /> Message
-                    </button>
-                </div>
-            )}
+                    </div>
+                )}
 
-            {isOwnProfile && (
-                <div className="pp-actions">
-                    <button className="pp-btn-follow primary" onClick={() => navigate('/dashboard/profile')}>
-                        Edit Profile
-                    </button>
-                </div>
-            )}
+                {activeTab === 'reels' && (
+                    <div className="pp-tab-content">
+                        {isReelsLoading ? (
+                            <div className="pp-tab-loading">
+                                <Loader2 style={{ width: 24, height: 24, animation: 'spin 1s linear infinite', color: '#C9A84C' }} />
+                            </div>
+                        ) : reelsList.length > 0 ? (
+                            <div className="pp-reels-grid">
+                                {reelsList.map((reel: any) => (
+                                    <div 
+                                        key={reel.id} 
+                                        className="pp-reel-card"
+                                        onClick={() => navigate('/reels', { state: { initialReelId: reel.id } })}
+                                    >
+                                        <img src={reel.thumbnailUrl || reel.thumbnail_url} alt={reel.caption} className="pp-reel-thumb" />
+                                        <div className="pp-reel-overlay">
+                                            <Film style={{ width: 14, height: 14 }} />
+                                            <span>{formatCount(reel.viewCount ?? reel.view_count ?? 0)}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="pp-empty-state">
+                                <Film style={{ width: 36, height: 36, opacity: 0.4 }} />
+                                <p>No reels shared yet</p>
+                            </div>
+                        )}
+                    </div>
+                )}
 
-            {/* Social Links */}
-            {socialEntries.length > 0 && (
-                <div className="pp-socials">
-                    {socialEntries.map(([platform, url]) => (
-                        <a
-                            key={platform}
-                            href={url as string}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="pp-social-btn"
-                        >
-                            {socialIcons[platform] || platform[0].toUpperCase()}
-                        </a>
-                    ))}
-                </div>
-            )}
+                {activeTab === 'posts' && (
+                    <div className="pp-tab-content">
+                        {isThreadsLoading ? (
+                            <div className="pp-tab-loading">
+                                <Loader2 style={{ width: 24, height: 24, animation: 'spin 1s linear infinite', color: '#C9A84C' }} />
+                            </div>
+                        ) : threadsList.length > 0 ? (
+                            <div className="pp-posts-list">
+                                {threadsList.map((thread: any) => (
+                                    <div 
+                                        key={thread.id} 
+                                        className="pp-post-card"
+                                        onClick={() => navigate(`/forum/thread/${thread.slug || thread.id}`)}
+                                    >
+                                        <div className="pp-post-header">
+                                            <span className="pp-post-category">{thread.category?.name}</span>
+                                            <span className="pp-post-time">
+                                                {new Date(thread.created_at || thread.createdAt).toLocaleDateString()}
+                                            </span>
+                                        </div>
+                                        <h4 className="pp-post-title">{thread.title}</h4>
+                                        <div className="pp-post-footer">
+                                            <span>{formatCount(thread.likes || 0)} likes</span>
+                                            <span>•</span>
+                                            <span>{formatCount(thread.reply_count || thread.replies || 0)} replies</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="pp-empty-state">
+                                <BookOpen style={{ width: 36, height: 36, opacity: 0.4 }} />
+                                <p>No forum discussions started yet</p>
+                            </div>
+                        )}
+                    </div>
+                )}
 
-            {/* Member Since */}
-            <div className="pp-member-since">
-                <Calendar style={{ width: 14, height: 14, display: 'inline', verticalAlign: -2, marginRight: 6 }} />
-                Member since {new Date(profile.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                {isOwnProfile && activeTab === 'saved' && (
+                    <div className="pp-tab-content">
+                        {isSavedLoading ? (
+                            <div className="pp-tab-loading">
+                                <Loader2 style={{ width: 24, height: 24, animation: 'spin 1s linear infinite', color: '#C9A84C' }} />
+                            </div>
+                        ) : savedReelsList.length > 0 ? (
+                            <div className="pp-reels-grid">
+                                {savedReelsList.map((reel: any) => (
+                                    <div 
+                                        key={reel.id} 
+                                        className="pp-reel-card"
+                                        onClick={() => navigate('/reels', { state: { initialReelId: reel.id } })}
+                                    >
+                                        <img src={reel.thumbnailUrl || reel.thumbnail_url} alt={reel.caption} className="pp-reel-thumb" />
+                                        <div className="pp-reel-overlay">
+                                            <Film style={{ width: 14, height: 14 }} />
+                                            <span>{formatCount(reel.viewCount ?? reel.view_count ?? 0)}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="pp-empty-state">
+                                <Bookmark style={{ width: 36, height: 36, opacity: 0.4 }} />
+                                <p>No bookmarked reels yet</p>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

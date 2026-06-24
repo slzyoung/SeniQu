@@ -25,6 +25,7 @@ import {
   Crown,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../../../stores/useAuthStore';
 import { useToast } from '../../../../stores/useNotificationStore';
 import {
@@ -94,6 +95,7 @@ type Screen = 'hero' | 'dashboard' | 'edit';
 // ============================================
 
 export default function AIDashboardPage() {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const toast = useToast();
   const [isDownloading, setIsDownloading] = useState(false);
@@ -554,7 +556,7 @@ export default function AIDashboardPage() {
                         alt={comment.user?.display_name}
                         className="aic-comment-card__avatar cursor-pointer hover:opacity-80 transition-opacity"
                         onClick={() => {
-                          const authorId = comment.user?.id || comment.user_id || comment.userId;
+                          const authorId = comment.user?.id;
                           if (authorId) navigate(`/profile/${authorId}`);
                         }}
                       />
@@ -563,7 +565,7 @@ export default function AIDashboardPage() {
                           <span 
                             className="aic-comment-card__username cursor-pointer hover:underline"
                             onClick={() => {
-                              const authorId = comment.user?.id || comment.user_id || comment.userId;
+                              const authorId = comment.user?.id;
                               if (authorId) navigate(`/profile/${authorId}`);
                             }}
                           >

@@ -68,11 +68,11 @@ export const reelsService = {
     /**
      * Get the list of active reels for the feed
      */
-    getFeed: async (page = 1, limit = 10): Promise<ReelsFeedResponse> => {
+    getFeed: async (page = 1, limit = 10, creatorId?: string): Promise<ReelsFeedResponse> => {
         const response = await api.get('/reels/feed', {
-            params: { page, limit },
+            params: { page, limit, creatorId },
         });
-        return response.data;
+        return response.data?.success !== undefined ? response.data.data : response.data;
     },
 
     /**
@@ -82,7 +82,7 @@ export const reelsService = {
         const response = await api.get('/reels/saved', {
             params: { page, limit },
         });
-        return response.data;
+        return response.data?.success !== undefined ? response.data.data : response.data;
     },
 
     /**
@@ -93,6 +93,7 @@ export const reelsService = {
         options?: {
             caption?: string;
             hashtags?: string[];
+            audioMetadata?: any;
             onProgress?: (progress: number) => void;
         },
     ): Promise<Reel> => {
@@ -103,6 +104,9 @@ export const reelsService = {
         }
         if (options?.hashtags) {
             formData.append('hashtags', JSON.stringify(options.hashtags));
+        }
+        if (options?.audioMetadata) {
+            formData.append('audioMetadata', JSON.stringify(options.audioMetadata));
         }
 
         const response = await api.post('/reels/upload', formData, {
@@ -115,7 +119,7 @@ export const reelsService = {
                 }
             },
         });
-        return response.data;
+        return response.data?.success !== undefined ? response.data.data : response.data;
     },
 
     /**
@@ -123,7 +127,7 @@ export const reelsService = {
      */
     toggleLike: async (reelId: string): Promise<{ liked: boolean }> => {
         const response = await api.post(`/reels/${reelId}/like`);
-        return response.data;
+        return response.data?.success !== undefined ? response.data.data : response.data;
     },
 
     /**
@@ -131,7 +135,7 @@ export const reelsService = {
      */
     toggleReshare: async (reelId: string, caption?: string): Promise<{ reshared: boolean }> => {
         const response = await api.post(`/reels/${reelId}/reshare`, { caption });
-        return response.data;
+        return response.data?.success !== undefined ? response.data.data : response.data;
     },
 
     /**
@@ -141,7 +145,7 @@ export const reelsService = {
         const response = await api.get(`/reels/${reelId}/comments`, {
             params: { page, limit },
         });
-        return response.data;
+        return response.data?.success !== undefined ? response.data.data : response.data;
     },
 
     /**
@@ -152,7 +156,7 @@ export const reelsService = {
             content,
             parentId,
         });
-        return response.data;
+        return response.data?.success !== undefined ? response.data.data : response.data;
     },
 
     /**
@@ -163,7 +167,7 @@ export const reelsService = {
             watchDuration,
             completed,
         });
-        return response.data;
+        return response.data?.success !== undefined ? response.data.data : response.data;
     },
 
     /**

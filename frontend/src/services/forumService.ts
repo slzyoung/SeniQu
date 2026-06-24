@@ -155,6 +155,7 @@ export const forumService = {
         limit?: number;
         sortBy?: 'latest' | 'popular' | 'views';
         tag?: string;
+        authorId?: string;
     }): Promise<PaginatedResponse<ForumThread>> => {
         return apiGet('/forum/threads', { params });
     },

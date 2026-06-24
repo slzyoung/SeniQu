@@ -222,7 +222,7 @@
 
 @media (max-width: 767px) {
     .reel-bottom-info {
-        bottom: 14px;
+        bottom: calc(80px + env(safe-area-inset-bottom, 0px));
     }
 }
 
@@ -422,7 +422,7 @@
 
 @media (max-width: 767px) {
     .reel-sidebar {
-        bottom: 16px;
+        bottom: calc(80px + env(safe-area-inset-bottom, 0px));
     }
 }
 

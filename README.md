@@ -146,7 +146,7 @@ Deep-dive into SenaQu's internal architecture via the [`/doc`](./doc) directory:
 - 🤖 **[Cloudflare Workers AI](./doc/15-Cloudflare-Workers-AI.md)**: Flux generative artwork pipeline and fallback architecture.
 - 📸 **[Gemini AI Heritage Analyzer](./doc/16-Gemini-Heritage-Analyzer.md)**: Multimodal Gemini 2.5 Flash scanner, daily quota tracking, Web Speech audio narration, and R2 backup storage.
 - 🧪 **[Gemini AI Curation Lab](./doc/17-Gemini-AI-Curation-Lab.md)**: Interactive Before/After digital restoration lab, authentic color palette, Dublin Core metadata, and TTS audio guides.
-- 🎥 **[Shorts, Reels, & Social Follow System](./doc/20-Shorts-Reels-And-Social-Follow-System.md)**: Custom player short-form Reels feed, forum video uploads, user follow network, and sidebar UX hierarchy.
+- 🎥 **[Shorts, Reels, & Social Follow System](./doc/20-Shorts-Reels-And-Social-Follow-System.md)**: Custom player short-form Reels feed, interactive multi-step video editor (trimming, playback speed, aspect ratio crop, visual filters), Spotify soundtrack & local audio uploads, forum video uploads, user follow network, and sidebar UX hierarchy.
 
 ---
 

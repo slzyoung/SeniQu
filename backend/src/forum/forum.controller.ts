@@ -164,13 +164,15 @@ export class ForumController {
     @ApiQuery({ name: "page", required: false })
     @ApiQuery({ name: "limit", required: false })
     @ApiQuery({ name: "sortBy", required: false })
+    @ApiQuery({ name: "authorId", required: false })
     async getThreads(
         @Query("categoryId") categoryId?: string,
         @Query("page") page?: number,
         @Query("limit") limit?: number,
         @Query("sortBy") sortBy?: "latest" | "popular" | "views",
+        @Query("authorId") authorId?: string,
     ) {
-        return this.forumService.getThreads(categoryId, page, limit, sortBy)
+        return this.forumService.getThreads(categoryId, page, limit, sortBy, authorId)
     }
 
     @Public()

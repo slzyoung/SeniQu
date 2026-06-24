@@ -9,7 +9,7 @@ import { useToast } from '../stores/useNotificationStore';
 
 export const reelsKeys = {
     all: ['reels'] as const,
-    feed: () => [...reelsKeys.all, 'feed'] as const,
+    feed: (creatorId?: string) => creatorId ? [...reelsKeys.all, 'feed', { creatorId }] as const : [...reelsKeys.all, 'feed'] as const,
     saved: () => [...reelsKeys.all, 'saved'] as const,
     reel: (id: string) => [...reelsKeys.all, 'reel', id] as const,
     comments: (reelId: string) => [...reelsKeys.all, 'comments', reelId] as const,
@@ -18,10 +18,10 @@ export const reelsKeys = {
 /**
  * Hook to retrieve the Reels feed using infinite scroll
  */
-export function useReelsFeed(limit = 10) {
+export function useReelsFeed(limit = 10, creatorId?: string) {
     return useInfiniteQuery({
-        queryKey: reelsKeys.feed(),
-        queryFn: ({ pageParam = 1 }) => reelsService.getFeed(pageParam, limit),
+        queryKey: reelsKeys.feed(creatorId),
+        queryFn: ({ pageParam = 1 }) => reelsService.getFeed(pageParam, limit, creatorId),
         initialPageParam: 1,
         getNextPageParam: (lastPage) => {
             const { page, totalPages } = lastPage.meta;
@@ -48,12 +48,13 @@ export function useUploadReel() {
     const toast = useToast();
 
     return useMutation({
-        mutationFn: ({ file, caption, hashtags, onProgress }: {
+        mutationFn: ({ file, caption, hashtags, audioMetadata, onProgress }: {
             file: File;
             caption?: string;
             hashtags?: string[];
+            audioMetadata?: any;
             onProgress?: (progress: number) => void;
-        }) => reelsService.uploadReel(file, { caption, hashtags, onProgress }),
+        }) => reelsService.uploadReel(file, { caption, hashtags, audioMetadata, onProgress }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: reelsKeys.feed() });
             toast.success('Reel Shared', 'Your Reel has been uploaded and processed successfully.');

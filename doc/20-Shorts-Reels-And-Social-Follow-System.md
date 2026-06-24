@@ -15,8 +15,17 @@ The Reels feature brings engaging, vertical short-form video streaming to the Se
 2. **Streaming Optimization**:
    * Delivers responsive HLS/DASH streaming endpoints or fallback standard mp4 streaming.
    * Utilizes Cloudflare CDN caching for video distribution.
-3. **Frontend Player Experience**:
+3. **Immersive Video Editing & Audio Controls**:
+   * **Multi-Step Upload Wizard**: A clean 3-step creator funnel (File Upload → Aesthetic Editing & Audio Binding → Metadata & Publication).
+   * **Aesthetic Visual Filters**: Support for real-time CSS filters on video playback (Original, Cinematic, Vintage, Mono, Warm, Cool, Vibrant).
+   * **Video Editing Controls**: Granular video trimming (start/end sliders), aspect ratio cropping (9:16 portrait, 1:1 square, 16:9 landscape, original size), and playback speed selection (0.5x, 1x, 1.5x, 2x).
+   * **Custom Soundtracks & Audio Selection**:
+     * *Original Audio*: Native soundtrack volume controls.
+     * *Spotify Soundtrack*: Searchable library of global/traditional tracks with real-time preview playback, audio offset selection (0s - 30s), and volume mixing.
+     * *Device Audio Upload*: Local audio file upload support (MP3, WAV, M4A, OGG) with preview playback and offset adjustments.
+4. **Frontend Player Experience**:
    * Uses a custom video player overlay with controls for volume, play/pause state, progress indicator, and immersive full-screen vertical feed scrolling.
+   * Dynamically applies playback speeds, aesthetic filters, volume, and synchronized custom audio tracks based on the Reel's database configuration.
    * Integrated interaction panel for liking, commenting, and bookmarking.
 
 ### DB Schema / Table structure:
@@ -24,13 +33,18 @@ The Reels feature brings engaging, vertical short-form video streaming to the Se
 CREATE TABLE public.reels (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    title TEXT NOT NULL,
-    caption TEXT,
     video_url TEXT NOT NULL,
-    video_thumbnail_url TEXT,
-    likes_count INT DEFAULT 0,
-    comments_count INT DEFAULT 0,
-    views_count INT DEFAULT 0,
+    video_key TEXT,
+    thumbnail_url TEXT,
+    thumbnail_key TEXT,
+    caption TEXT,
+    hashtags TEXT[] DEFAULT '{}',
+    duration NUMERIC DEFAULT 0,
+    width INT DEFAULT 0,
+    height INT DEFAULT 0,
+    file_size INT DEFAULT 0,
+    aspect_ratio TEXT DEFAULT '9:16',
+    audio_metadata JSONB DEFAULT '{}'::jsonb, -- Stores selected Spotify/internal track info, offset, speed, volume, and filter configurations
     status TEXT DEFAULT 'active',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()

@@ -56,6 +56,7 @@ export function useForumThreads(params?: {
     limit?: number;
     sortBy?: 'latest' | 'popular' | 'views';
     tag?: string;
+    authorId?: string;
 }) {
     return useQuery({
         queryKey: forumKeys.threads(params),

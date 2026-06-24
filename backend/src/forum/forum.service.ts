@@ -46,7 +46,7 @@ export class ForumService {
         return { data: mappedData }
     }
 
-    async getThreads(categoryId?: string, page = 1, limit = 20, sortBy: "latest" | "popular" | "views" = "latest") {
+    async getThreads(categoryId?: string, page = 1, limit = 20, sortBy: "latest" | "popular" | "views" = "latest", authorId?: string) {
         const offset = (page - 1) * limit
 
         let query = this.supabase
@@ -59,6 +59,10 @@ export class ForumService {
 
         if (categoryId) {
             query = query.eq("category_id", categoryId)
+        }
+
+        if (authorId) {
+            query = query.eq("author_id", authorId)
         }
 
         // Apply sorting based on frontend choice
