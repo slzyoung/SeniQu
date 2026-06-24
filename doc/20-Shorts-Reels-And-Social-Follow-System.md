@@ -27,6 +27,10 @@ The Reels feature brings engaging, vertical short-form video streaming to the Se
    * Uses a custom video player overlay with controls for volume, play/pause state, progress indicator, and immersive full-screen vertical feed scrolling.
    * Dynamically applies playback speeds, aesthetic filters, volume, and synchronized custom audio tracks based on the Reel's database configuration.
    * Integrated interaction panel for liking, commenting, and bookmarking.
+5. **High-Fidelity Social Sharing Sheet**:
+   * **React Portal Mount**: To prevent the share drawer from being hidden behind or cut off by the mobile bottom navigation bar (`MobileBottomNav` with `z-50`), the modal backdrop and menu are mounted directly into `document.body` using a React Portal (`createPortal`), bypassing local CSS stacking contexts.
+   * **Social Network Integrations**: Built-in support for sharing to WhatsApp, Telegram, Facebook, and X (formerly Twitter) using brand-compliant colored backgrounds and high-quality vector brand logos, along with standard link copying.
+   * **Theme-Aware Adaptability**: Uses specialized CSS selectors (`.reel-share-icon--x` / `.dark .reel-share-icon--x`) to dynamically transition the X (Twitter) icon styling between light mode (charcoal logo on light-grey circular backdrop) and dark mode (pure white logo on translucent backdrop) for optimal legibility.
 
 ### DB Schema / Table structure:
 ```sql
