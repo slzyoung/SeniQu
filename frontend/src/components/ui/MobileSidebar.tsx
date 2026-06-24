@@ -137,6 +137,7 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
             {/* ──── Drawer ──── */}
             <aside
                 aria-hidden={!mobileMenuOpen}
+                {...(!mobileMenuOpen ? { inert: '' } : {})}
                 className={`
                     fixed inset-y-0 left-0 z-[65] w-[88px]
                     bg-theme-surface/95 backdrop-blur-2xl

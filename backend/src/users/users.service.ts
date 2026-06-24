@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, Logger, Inject, forwardRef } from "@nestjs/common"
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger, Inject, forwardRef } from "@nestjs/common"
 import { DatabaseService } from "../database/database.service"
 import { CreateUserDto } from "./dto/create-user.dto"
 import { UpdateUserDto } from "./dto/update-user.dto"
@@ -12,6 +12,9 @@ export interface User {
     displayName?: string
     bio?: string
     avatar?: string
+    avatarChangeCount?: number
+    profileVideoUrl?: string
+    profileVideoChangeCount?: number
     userType: string
     adminRole?: string
     adminLevel?: number
@@ -207,6 +210,32 @@ export class UsersService {
     async update(id: string, dto: UpdateUserDto): Promise<User> {
         const client = this.db.getAdminClient()
 
+        // Fetch current profile to validate and track changes
+        const currentUser = await this.findById(id)
+        if (!currentUser) {
+            throw new NotFoundException("User not found")
+        }
+
+        let nextAvatarChangeCount = currentUser.avatarChangeCount || 0
+        let isChangingAvatar = false
+        if (dto.avatarUrl !== undefined && dto.avatarUrl !== currentUser.avatar) {
+            if (nextAvatarChangeCount >= 3) {
+                throw new BadRequestException("You have reached the maximum limit of 3 profile picture changes.")
+            }
+            nextAvatarChangeCount++
+            isChangingAvatar = true
+        }
+
+        let nextProfileVideoChangeCount = currentUser.profileVideoChangeCount || 0
+        let isChangingProfileVideo = false
+        if (dto.profileVideoUrl !== undefined && dto.profileVideoUrl !== currentUser.profileVideoUrl) {
+            if (nextProfileVideoChangeCount >= 3) {
+                throw new BadRequestException("You have reached the maximum limit of 3 profile video changes.")
+            }
+            nextProfileVideoChangeCount++
+            isChangingProfileVideo = true
+        }
+
         const { data, error } = await client
             .from("users")
             .update({
@@ -215,6 +244,9 @@ export class UsersService {
                 ...(dto.userType && { role: this.mapUserTypeToRole(dto.userType) }),
                 ...(dto.bio !== undefined && { bio: dto.bio }),
                 ...(dto.avatarUrl !== undefined && { avatar_url: dto.avatarUrl }),
+                ...(isChangingAvatar && { avatar_change_count: nextAvatarChangeCount }),
+                ...(dto.profileVideoUrl !== undefined && { profile_video_url: dto.profileVideoUrl }),
+                ...(isChangingProfileVideo && { profile_video_change_count: nextProfileVideoChangeCount }),
                 ...(dto.notificationPrefs && { notification_prefs: dto.notificationPrefs }),
                 ...(dto.isTwoFactorEnabled !== undefined && { is_two_factor_enabled: dto.isTwoFactorEnabled }),
                 ...(dto.loginAlertsEnabled !== undefined && { login_alerts_enabled: dto.loginAlertsEnabled }),
@@ -324,6 +356,9 @@ export class UsersService {
             displayName: data.display_name,
             bio: data.bio,
             avatar: data.avatar_url,
+            avatarChangeCount: data.avatar_change_count || 0,
+            profileVideoUrl: data.profile_video_url || null,
+            profileVideoChangeCount: data.profile_video_change_count || 0,
             userType: this.mapRoleToUserType(data.role),
             adminRole: data.admin_role_typed || data.admin_role,
             adminLevel: data.admin_level,

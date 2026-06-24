@@ -15,6 +15,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from "@nestjs/swagg
 import { PhotosService } from "./photos.service"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { GetUser } from "../auth/decorators/get-user.decorator"
+import { BypassSecurity } from "../common/decorators/bypass-security.decorator"
 import {
     CreatePhotoDto,
     UpdatePhotoDto,
@@ -39,6 +40,7 @@ export class PhotosController {
 
     @Post("upload")
     @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
     @ApiConsumes("multipart/form-data")
     @ApiOperation({ summary: "Upload a photo to CDN and index in Supabase" })
     async uploadPhoto(

@@ -28,6 +28,11 @@ export class UpdateUserDto {
     avatarUrl?: string
 
     @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    profileVideoUrl?: string
+
+    @ApiPropertyOptional()
     @IsObject()
     @IsOptional()
     socialLinks?: Record<string, string>

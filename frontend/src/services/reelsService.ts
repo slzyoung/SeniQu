@@ -29,7 +29,14 @@ export interface Reel {
     createdAt: string;
     updatedAt: string;
     isLiked?: boolean;
+    is_liked?: boolean;
     isReshared?: boolean;
+    is_reshared?: boolean;
+    isFollowing?: boolean;
+    is_following?: boolean;
+    like_count?: number;
+    reshare_count?: number;
+    comment_count?: number;
     user?: {
         id: string;
         displayName: string;

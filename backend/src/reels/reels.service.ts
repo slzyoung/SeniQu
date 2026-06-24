@@ -48,23 +48,27 @@ export class ReelsService {
             throw new BadRequestException("Failed to load reels feed")
         }
 
-        // Check if current user liked/reshared each reel
+        // Check if current user liked/reshared each reel, and follows the creator
         let enriched = data || []
         if (userId && enriched.length > 0) {
             const reelIds = enriched.map(r => r.id)
+            const creatorIds = enriched.map(r => r.user_id).filter(Boolean)
 
-            const [likesRes, resharesRes] = await Promise.all([
+            const [likesRes, resharesRes, followsRes] = await Promise.all([
                 this.supabase.from("reel_likes").select("reel_id").eq("user_id", userId).in("reel_id", reelIds),
                 this.supabase.from("reel_reshares").select("reel_id").eq("user_id", userId).in("reel_id", reelIds),
+                this.supabase.from("follows").select("following_id").eq("follower_id", userId).in("following_id", creatorIds),
             ])
 
             const likedIds = new Set((likesRes.data || []).map(l => l.reel_id))
             const resharedIds = new Set((resharesRes.data || []).map(r => r.reel_id))
+            const followedCreatorIds = new Set((followsRes.data || []).map(f => f.following_id))
 
             enriched = enriched.map(r => ({
                 ...r,
                 isLiked: likedIds.has(r.id),
                 isReshared: resharedIds.has(r.id),
+                isFollowing: followedCreatorIds.has(r.user_id),
             }))
         }
 
@@ -85,11 +89,12 @@ export class ReelsService {
         if (error || !data) throw new NotFoundException("Reel not found")
 
         if (userId) {
-            const [likeRes, reshareRes] = await Promise.all([
+            const [likeRes, reshareRes, followRes] = await Promise.all([
                 this.supabase.from("reel_likes").select("id").eq("reel_id", id).eq("user_id", userId).maybeSingle(),
                 this.supabase.from("reel_reshares").select("id").eq("reel_id", id).eq("user_id", userId).maybeSingle(),
+                this.supabase.from("follows").select("id").eq("follower_id", userId).eq("following_id", data.user_id).maybeSingle(),
             ])
-            return { ...data, isLiked: !!likeRes.data, isReshared: !!reshareRes.data }
+            return { ...data, isLiked: !!likeRes.data, isReshared: !!reshareRes.data, isFollowing: !!followRes.data }
         }
 
         return data
@@ -294,16 +299,20 @@ export class ReelsService {
             isReshared: true, // all saved reels are reshared by definition
         }))
 
-        // Check likes
+        // Check likes and follows
         if (ordered.length > 0) {
-            const { data: likes } = await this.supabase
-                .from("reel_likes")
-                .select("reel_id")
-                .eq("user_id", userId)
-                .in("reel_id", reelIds)
+            const creatorIds = ordered.map(r => r.user_id).filter(Boolean)
+            const [likes, followsRes] = await Promise.all([
+                this.supabase.from("reel_likes").select("reel_id").eq("user_id", userId).in("reel_id", reelIds),
+                this.supabase.from("follows").select("following_id").eq("follower_id", userId).in("following_id", creatorIds),
+            ])
 
-            const likedIds = new Set((likes || []).map(l => l.reel_id))
-            ordered.forEach(r => { (r as any).isLiked = likedIds.has(r.id) })
+            const likedIds = new Set((likes.data || []).map(l => l.reel_id))
+            const followedCreatorIds = new Set((followsRes.data || []).map(f => f.following_id))
+            ordered.forEach(r => { 
+                (r as any).isLiked = likedIds.has(r.id);
+                (r as any).isFollowing = followedCreatorIds.has(r.user_id);
+            })
         }
 
         return {

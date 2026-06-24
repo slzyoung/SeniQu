@@ -44,39 +44,45 @@ export interface VideoValidationResult {
  * Validate a video file on the client side before uploading.
  * Returns validation result with extracted metadata.
  */
-export async function validateVideo(file: File): Promise<VideoValidationResult> {
+export async function validateVideo(
+    file: File,
+    options?: { maxFileSize?: number; maxDuration?: number }
+): Promise<VideoValidationResult> {
+    const maxFileSize = options?.maxFileSize ?? VIDEO_CONSTRAINTS.maxFileSize;
+    const maxDuration = options?.maxDuration ?? VIDEO_CONSTRAINTS.maxDuration;
+
     // Check file type
     if (!VIDEO_CONSTRAINTS.allowedTypes.includes(file.type)) {
         return {
             valid: false,
             error: `Unsupported format: ${file.type}. Use MP4, WebM, or OGG.`,
-        }
+        };
     }
 
     // Check file size
-    if (file.size > VIDEO_CONSTRAINTS.maxFileSize) {
+    if (file.size > maxFileSize) {
         return {
             valid: false,
-            error: `Video too large (${formatFileSize(file.size)}). Maximum: ${formatFileSize(VIDEO_CONSTRAINTS.maxFileSize)}.`,
-        }
+            error: `Video too large (${formatFileSize(file.size)}). Maximum: ${formatFileSize(maxFileSize)}.`,
+        };
     }
 
     // Extract metadata using HTML5 video element
     try {
-        const metadata = await extractVideoMetadata(file)
+        const metadata = await extractVideoMetadata(file);
 
         // Check duration
-        if (metadata.duration > VIDEO_CONSTRAINTS.maxDuration) {
+        if (metadata.duration > maxDuration) {
             return {
                 valid: false,
-                error: `Video too long (${formatDuration(metadata.duration)}). Maximum: ${formatDuration(VIDEO_CONSTRAINTS.maxDuration)}.`,
-            }
+                error: `Video too long (${formatDuration(metadata.duration)}). Maximum: ${formatDuration(maxDuration)}.`,
+            };
         }
 
         // Warn if file is large but valid
-        let warning: string | undefined
+        let warning: string | undefined;
         if (file.size > VIDEO_CONSTRAINTS.recommendedMaxSize) {
-            warning = `Large file (${formatFileSize(file.size)}). Upload may take a while on mobile data. Server will auto-compress.`
+            warning = `Large file (${formatFileSize(file.size)}). Upload may take a while on mobile data. Server will auto-compress.`;
         }
 
         return {
@@ -89,14 +95,14 @@ export async function validateVideo(file: File): Promise<VideoValidationResult> 
                 size: file.size,
                 type: file.type,
             },
-        }
+        };
     } catch (err: any) {
-        console.warn('[VideoValidator] Metadata extraction failed, allowing upload:', err)
+        console.warn('[VideoValidator] Metadata extraction failed, allowing upload:', err);
         // Allow upload even if we can't extract metadata — server will validate
         return {
             valid: true,
             warning: 'Could not preview video. File will be validated server-side.',
-        }
+        };
     }
 }
 

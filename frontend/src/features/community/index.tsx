@@ -4,7 +4,7 @@
  * Mobile-first, iOS/Android safe, Light/Dark mode
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Avatar, Button } from '../../components/ui';
 import {
@@ -365,7 +365,7 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadPhase, setUploadPhase] = useState<'idle' | 'uploading' | 'compressing' | 'done'>('idle');
-    const [videoPreview, setVideoPreview] = useState<string | null>(null);
+    const [mediaPreview, setMediaPreview] = useState<string | null>(null);
     const [videoMeta, setVideoMeta] = useState<{ duration: number; width: number; height: number; size: number } | null>(null);
     const [validationError, setValidationError] = useState<string | null>(null);
     const [validationWarning, setValidationWarning] = useState<string | null>(null);
@@ -377,15 +377,32 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
 
     const isVideo = file?.type.startsWith('video/');
 
+    // Clean up object URLs to avoid memory leaks
+    useEffect(() => {
+        return () => {
+            if (mediaPreview && file && !file.type.startsWith('video/')) {
+                URL.revokeObjectURL(mediaPreview);
+            }
+        };
+    }, [mediaPreview, file]);
+
     // Handle file selection with validation
     const handleFileSelect = async (selectedFile: File) => {
         setValidationError(null);
         setValidationWarning(null);
-        setVideoPreview(null);
+        
+        // Clean up previous image preview URL if it exists
+        if (mediaPreview && file && !file.type.startsWith('video/')) {
+            URL.revokeObjectURL(mediaPreview);
+        }
+        setMediaPreview(null);
         setVideoMeta(null);
 
         if (selectedFile.type.startsWith('video/')) {
-            const validation = await validateVideo(selectedFile);
+            const validation = await validateVideo(selectedFile, {
+                maxFileSize: 150 * 1024 * 1024, // 150MB
+                maxDuration: 5 * 60, // 5 minutes
+            });
             if (!validation.valid) {
                 setValidationError(validation.error || 'Invalid video file');
                 return;
@@ -396,8 +413,12 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
             // Generate preview thumbnail
             try {
                 const thumb = await generateVideoThumbnail(selectedFile);
-                setVideoPreview(thumb);
+                setMediaPreview(thumb);
             } catch { /* non-critical */ }
+        } else {
+            // Synchronously create a single object URL for image previews
+            const url = URL.createObjectURL(selectedFile);
+            setMediaPreview(url);
         }
 
         setFile(selectedFile);
@@ -436,7 +457,9 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                     mediaType = 'image';
                     setUploadPhase('uploading');
                     const compressed = await compressImage(file, { maxWidth: 1600, quality: 0.82 });
-                    const uploadResult = await uploadFile(compressed, 'general');
+                    const uploadResult = await uploadFile(compressed, 'general', (p) => {
+                        setUploadProgress(p);
+                    });
                     mediaUrl = uploadResult.url;
                     setUploadPhase('done');
                 }
@@ -501,9 +524,9 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                             {file ? (
                                 <div className="rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden bg-gray-50 dark:bg-white/[0.03]">
                                     {/* Video Preview */}
-                                    {isVideo && videoPreview && (
+                                    {isVideo && mediaPreview && (
                                         <div className="relative aspect-video bg-black">
-                                            <img src={videoPreview} alt="Video preview" className="w-full h-full object-contain" />
+                                            <img src={mediaPreview} alt="Video preview" className="w-full h-full object-contain" />
                                             <div className="absolute inset-0 flex items-center justify-center">
                                                 <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
                                                     <Play className="w-5 h-5 text-white ml-0.5" />
@@ -512,9 +535,9 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                                         </div>
                                     )}
                                     {/* Image Preview */}
-                                    {!isVideo && (
+                                    {!isVideo && mediaPreview && (
                                         <div className="relative aspect-video bg-gray-100 dark:bg-white/5">
-                                            <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-contain" />
+                                            <img src={mediaPreview} alt="Preview" className="w-full h-full object-contain" />
                                         </div>
                                     )}
 
@@ -535,7 +558,15 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                                                 )}
                                             </div>
                                         </div>
-                                        <button type="button" onClick={() => { setFile(null); setVideoPreview(null); setVideoMeta(null); setValidationWarning(null); }}
+                                        <button type="button" onClick={() => {
+                                            if (mediaPreview && !file.type.startsWith('video/')) {
+                                                URL.revokeObjectURL(mediaPreview);
+                                            }
+                                            setFile(null);
+                                            setMediaPreview(null);
+                                            setVideoMeta(null);
+                                            setValidationWarning(null);
+                                        }}
                                             className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all">
                                             <Trash2 className="w-4 h-4" />
                                         </button>
@@ -570,7 +601,7 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                             {/* Hidden file inputs */}
                             <input type="file" ref={fileInputRef} accept="image/*" className="hidden"
                                 onChange={e => { if (e.target.files?.length) handleFileSelect(e.target.files[0]); }} />
-                            <input type="file" ref={videoInputRef} accept="video/mp4,video/webm,video/ogg,video/quicktime" capture="environment" className="hidden"
+                            <input type="file" ref={videoInputRef} accept="video/mp4,video/webm,video/ogg,video/quicktime" className="hidden"
                                 onChange={e => { if (e.target.files?.length) handleFileSelect(e.target.files[0]); }} />
 
                             {/* Validation Error */}
@@ -590,27 +621,64 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                         </div>
                     </div>
 
-                    {/* ==================== UPLOAD PROGRESS BAR ==================== */}
+                    {/* ==================== PREMIUM UPLOAD PROGRESS CONTAINER ==================== */}
                     {isUploading && (
-                        <div className="mt-4 space-y-2">
-                            <div className="h-2 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full rounded-full transition-all duration-300 ease-out"
-                                    style={{
-                                        width: uploadPhase === 'compressing' ? '100%' : `${uploadProgress}%`,
-                                        background: uploadPhase === 'compressing'
-                                            ? 'linear-gradient(90deg, #f59e0b, #d97706, #f59e0b)'
-                                            : 'linear-gradient(90deg, #C9A84C, #B08D57)',
-                                        backgroundSize: uploadPhase === 'compressing' ? '200% 100%' : 'auto',
-                                        animation: uploadPhase === 'compressing' ? 'shimmer 1.5s ease-in-out infinite' : 'none',
-                                    }}
-                                />
+                        <div className="mt-4 p-5 rounded-2xl bg-amber-500/5 dark:bg-[#1f1a10] border border-amber-500/20 flex flex-col space-y-4 relative overflow-hidden backdrop-blur-md">
+                            {/* Animated scanning bar overlay */}
+                            <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-amber-500/0 via-amber-500/5 to-amber-500/0 animate-pulse" />
+                            
+                            <div className="relative z-10 flex items-start gap-4">
+                                {/* Left icon wrapper with conditional animations */}
+                                <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-500 flex-shrink-0 flex items-center justify-center shadow-inner">
+                                    {uploadPhase === 'uploading' && (
+                                        isVideo ? (
+                                            <Film className="w-6 h-6 animate-pulse" />
+                                        ) : (
+                                            <ImageIcon className="w-6 h-6 animate-pulse" />
+                                        )
+                                    )}
+                                    {uploadPhase === 'compressing' && (
+                                        <Loader2 className="w-6 h-6 animate-spin" />
+                                    )}
+                                    {uploadPhase === 'done' && (
+                                        <svg className="w-6 h-6 text-emerald-500 animate-[scaleIn_0.3s_ease-out_forwards]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    )}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <h4 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight flex items-center gap-1.5">
+                                            {uploadPhase === 'uploading' && (isVideo ? 'Uploading HD video...' : 'Uploading photo...')}
+                                            {uploadPhase === 'compressing' && 'Optimizing video for mobile...'}
+                                            {uploadPhase === 'done' && 'Upload Successful!'}
+                                        </h4>
+                                        <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400">
+                                            {uploadPhase === 'compressing' ? '90%' : `${uploadProgress}%`}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-normal">
+                                        {uploadPhase === 'uploading' && `Transferring files to secure Cloudflare R2 CDN (${uploadProgress}% completed)`}
+                                        {uploadPhase === 'compressing' && 'Processing streams, transcoding H.264 video profiles'}
+                                        {uploadPhase === 'done' && 'Your discussion post is being published...'}
+                                    </p>
+                                </div>
                             </div>
-                            <p className="text-[11px] text-gray-500 dark:text-gray-400 text-center font-medium">
-                                {uploadPhase === 'uploading' && `Uploading... ${uploadProgress}%`}
-                                {uploadPhase === 'compressing' && '⚡ Server compressing video...'}
-                                {uploadPhase === 'done' && '✅ Upload complete'}
-                            </p>
+
+                            {/* Custom progress track */}
+                            <div className="relative z-10 w-full font-sans">
+                                <div className="h-2.5 bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden p-[1px] border border-gray-200/20 dark:border-white/5">
+                                    <div
+                                        className={`h-full rounded-full transition-all duration-300 ease-out ${
+                                            uploadPhase === 'done' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'bg-gradient-to-r from-amber-500 via-[#C9A84C] to-[#E5C158] shadow-[0_0_8px_rgba(201,168,76,0.25)]'
+                                        }`}
+                                        style={{
+                                            width: uploadPhase === 'compressing' ? '90%' : `${uploadProgress}%`,
+                                        }}
+                                    />
+                                </div>
+                            </div>
                         </div>
                     )}
 

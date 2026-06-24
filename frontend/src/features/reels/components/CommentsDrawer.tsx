@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Loader2, SendHorizontal } from 'lucide-react';
 import { useReelComments, useCreateReelComment } from '../../../hooks/useReels';
 import { useAuthStore } from '../../../stores/useAuthStore';
@@ -30,7 +31,7 @@ export default function CommentsDrawer({ reelId, onClose }: Props) {
         post.mutate({ reelId, content: text }, { onSuccess: () => setText('') });
     };
 
-    return (
+    return createPortal(
         <>
             <div className="reel-drawer-backdrop" onClick={onClose} />
             <div className="reel-drawer">
@@ -67,6 +68,7 @@ export default function CommentsDrawer({ reelId, onClose }: Props) {
                     </button>
                 </form>
             </div>
-        </>
+        </>,
+        document.body
     );
 }

@@ -40,6 +40,7 @@ export const updateProfileSchema = z.object({
     displayName: z.string().min(2).max(50).optional().transform(val => val ? sanitizeInput(val) : val),
     bio: z.string().max(500).optional().transform(val => val ? sanitizeInput(val) : val),
     avatarUrl: z.string().optional().or(z.literal('')),
+    profileVideoUrl: z.string().optional().or(z.literal('')),
     socialLinks: z.object({
         twitter: z.string().optional().or(z.literal('')),
         instagram: z.string().optional().or(z.literal('')),
@@ -104,6 +105,9 @@ class UserService {
             ...user,
             username: user.username || '',
             displayName: user.displayName || user.display_name || '',
+            avatarChangeCount: user.avatarChangeCount || user.avatar_change_count || 0,
+            profileVideoUrl: user.profileVideoUrl || user.profile_video_url || '',
+            profileVideoChangeCount: user.profileVideoChangeCount || user.profile_video_change_count || 0,
             role: role as any,
             wallets: (user.wallets || []).map((w: any) => ({
                 chainType: w.chainType || w.chain_type,
@@ -232,6 +236,14 @@ class UserService {
             quality: 0.75,
         });
         const result = await uploadFile(compressedFile, 'avatars');
+        return { url: result.url };
+    }
+
+    /**
+     * Upload profile video
+     */
+    async uploadProfileVideo(file: File): Promise<{ url: string }> {
+        const result = await uploadFile(file, 'videos');
         return { url: result.url };
     }
 

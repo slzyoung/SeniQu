@@ -13,6 +13,7 @@ import { CreateReelCommentDto, ReshareReelDto } from "./dto/reels.dto"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { GetUser } from "../auth/decorators/get-user.decorator"
 import { Public } from "../auth/decorators/public.decorator"
+import { BypassSecurity } from "../common/decorators/bypass-security.decorator"
 import { StorageService } from "../storage/storage.service"
 
 @ApiTags("Reels")
@@ -28,6 +29,7 @@ export class ReelsController {
     // ==========================================
 
     @Public()
+    @UseGuards(JwtAuthGuard)
     @SkipThrottle()
     @Get("feed")
     @ApiOperation({ summary: "Get reels feed" })
@@ -68,6 +70,7 @@ export class ReelsController {
 
     @Post("upload")
     @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
     @ApiBearerAuth("JWT-auth")
     @Throttle({ default: { limit: 5, ttl: 60000 } })
     @ApiOperation({ summary: "Upload a new reel" })
@@ -134,6 +137,7 @@ export class ReelsController {
     // ==========================================
 
     @Public()
+    @UseGuards(JwtAuthGuard)
     @SkipThrottle()
     @Get(":id")
     @ApiOperation({ summary: "Get a reel by ID" })

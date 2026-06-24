@@ -30,6 +30,7 @@ import { RolesGuard } from "../auth/guards/roles.guard"
 import { Roles } from "../auth/decorators/roles.decorator"
 import { GetUser } from "../auth/decorators/get-user.decorator"
 import { Public } from "../auth/decorators/public.decorator"
+import { BypassSecurity } from "../common/decorators/bypass-security.decorator"
 import { StorageService } from "../storage/storage.service"
 
 @ApiTags("Forum")
@@ -79,6 +80,7 @@ export class ForumController {
 
     @Post("video/upload")
     @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
     @ApiBearerAuth("JWT-auth")
     @Throttle({ default: { limit: 5, ttl: 60000 } })
     @ApiOperation({ summary: "Upload and compress a forum video" })

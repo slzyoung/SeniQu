@@ -333,28 +333,65 @@ export class VideoProcessingService {
         }
     }
 
-    /**
-     * Full video processing pipeline:
-     * 1. Extract metadata
-     * 2. Compress video
-     * 3. Generate thumbnail
-     */
     async processVideo(buffer: Buffer, mimetype: string): Promise<{
         video: ProcessedVideo
         thumbnail: VideoThumbnail
     }> {
         this.logger.log(`🎬 Starting full video processing pipeline (${this.formatSize(buffer.length)})...`)
 
-        // Run compression and thumbnail generation
-        // Use compressed buffer for thumbnail to ensure consistency
-        const video = await this.compressVideo(buffer, mimetype)
-        const thumbnail = await this.generateThumbnail(video.buffer, "video/mp4")
+        try {
+            // Check if ffmpeg/ffprobe is available
+            await new Promise<void>((resolve, reject) => {
+                ffmpeg.getAvailableCodecs((err) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
+            });
 
-        this.logger.log(
-            `✅ Video pipeline complete: Video ${this.formatSize(video.size)}, Thumbnail ${this.formatSize(thumbnail.size)}`
-        )
+            // Run compression and thumbnail generation
+            const video = await this.compressVideo(buffer, mimetype)
+            const thumbnail = await this.generateThumbnail(video.buffer, "video/mp4")
 
-        return { video, thumbnail }
+            this.logger.log(
+                `✅ Video pipeline complete: Video ${this.formatSize(video.size)}, Thumbnail ${this.formatSize(thumbnail.size)}`
+            )
+
+            return { video, thumbnail }
+        } catch (ffmpegErr: any) {
+            this.logger.warn(`⚠️ FFmpeg/ffprobe is not available or failed. Falling back to direct video upload without compression. Error: ${ffmpegErr.message}`);
+
+            // Base64 transparent WebP 1x1 image as fallback thumbnail
+            const transparentWebpBase64 = "UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==";
+            const fallbackThumbnailBuffer = Buffer.from(transparentWebpBase64, 'base64');
+
+            return {
+                video: {
+                    buffer,
+                    contentType: mimetype,
+                    extension: this.getExtForMime(mimetype),
+                    size: buffer.length,
+                    metadata: {
+                        duration: 0,
+                        width: 1080,
+                        height: 1920,
+                        videoCodec: "unknown",
+                        audioCodec: "unknown",
+                        bitrate: 0,
+                        fps: 30,
+                        fileSize: buffer.length,
+                        aspectRatio: "9:16"
+                    }
+                },
+                thumbnail: {
+                    buffer: fallbackThumbnailBuffer,
+                    contentType: "image/webp",
+                    extension: ".webp",
+                    size: fallbackThumbnailBuffer.length,
+                    width: 480,
+                    height: 270
+                }
+            };
+        }
     }
 
     // ─── Private Helpers ──────────────────────────

@@ -251,6 +251,22 @@ export function useUploadAvatar() {
     });
 }
 
+export function useUploadProfileVideo() {
+    const queryClient = useQueryClient();
+    const toast = useToast();
+
+    return useMutation({
+        mutationFn: (file: File) => userService.uploadProfileVideo(file),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: userKeys.currentUser() });
+            toast.success('Profile Video Updated', 'Your profile video has been updated.');
+        },
+        onError: () => {
+            toast.error('Upload Failed', 'Could not upload profile video.');
+        },
+    });
+}
+
 // ============================================
 // WALLET HOOKS
 // ============================================
@@ -304,6 +320,29 @@ export function useFollowUser() {
         mutationFn: (userId: string) => userService.followUser(userId),
         onSuccess: (_data, userId) => {
             queryClient.invalidateQueries({ queryKey: userKeys.publicProfile(userId) });
+            
+            // Optimistically update all reels in the query cache
+            queryClient.setQueriesData({ queryKey: ['reels'] }, (old: any) => {
+                if (!old) return old;
+                if (old.pages) {
+                    return {
+                        ...old,
+                        pages: old.pages.map((page: any) => ({
+                            ...page,
+                            data: page.data.map((reel: any) => {
+                                if (reel.user_id === userId || reel.user?.id === userId) {
+                                    return { ...reel, isFollowing: true, is_following: true };
+                                }
+                                return reel;
+                            })
+                        }))
+                    };
+                }
+                if (old.user_id === userId || old.user?.id === userId) {
+                    return { ...old, isFollowing: true, is_following: true };
+                }
+                return old;
+            });
         },
     });
 }
@@ -314,6 +353,29 @@ export function useUnfollowUser() {
         mutationFn: (userId: string) => userService.unfollowUser(userId),
         onSuccess: (_data, userId) => {
             queryClient.invalidateQueries({ queryKey: userKeys.publicProfile(userId) });
+            
+            // Optimistically update all reels in the query cache
+            queryClient.setQueriesData({ queryKey: ['reels'] }, (old: any) => {
+                if (!old) return old;
+                if (old.pages) {
+                    return {
+                        ...old,
+                        pages: old.pages.map((page: any) => ({
+                            ...page,
+                            data: page.data.map((reel: any) => {
+                                if (reel.user_id === userId || reel.user?.id === userId) {
+                                    return { ...reel, isFollowing: false, is_following: false };
+                                }
+                                return reel;
+                            })
+                        }))
+                    };
+                }
+                if (old.user_id === userId || old.user?.id === userId) {
+                    return { ...old, isFollowing: false, is_following: false };
+                }
+                return old;
+            });
         },
     });
 }

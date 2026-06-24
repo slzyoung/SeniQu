@@ -9,6 +9,9 @@ export interface User {
     username?: string;
     displayName?: string;
     avatar?: string;
+    avatarChangeCount?: number;
+    profileVideoUrl?: string;
+    profileVideoChangeCount?: number;
     bio?: string;
     role: typeof ROLES[keyof typeof ROLES];
     // walletAddress removed

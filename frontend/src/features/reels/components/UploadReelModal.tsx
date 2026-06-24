@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
     X, Play, Pause, Upload, Music, Search, Scissors, 
     Sparkles, AlertCircle, Video, FastForward, Crop
 } from 'lucide-react';
+import '../reels.css';
 import { useUploadReel } from '../../../hooks/useReels';
 import { validateVideo, generateVideoThumbnail, formatFileSize } from '../../../lib/videoCompressor';
 import Button from '../../../components/ui/Button';
@@ -229,7 +231,7 @@ export default function UploadReelModal({ onClose }: Props) {
         t.artist.toLowerCase().includes(spotifySearch.toLowerCase())
     );
 
-    return (
+    return createPortal(
         <div className="reel-upload-overlay" onClick={e => { if (e.target === e.currentTarget && !uploading) onClose(); }}>
             <div className="reel-upload-modal !max-w-xl md:!max-w-2xl" style={{ height: 'auto', maxHeight: '90dvh' }}>
                 {/* Header */}
@@ -791,6 +793,7 @@ export default function UploadReelModal({ onClose }: Props) {
             {/* Hidden inputs & audio elements for preview */}
             <input type="file" ref={fileRef} accept="video/mp4,video/webm,video/ogg,video/quicktime" className="hidden" onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]); }} />
             <audio ref={audioPreviewRef} className="hidden" loop />
-        </div>
+        </div>,
+        document.body
     );
 }

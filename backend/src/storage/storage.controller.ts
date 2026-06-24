@@ -11,6 +11,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from "@nes
 import { Throttle } from "@nestjs/throttler"
 import { StorageService } from "./storage.service"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
+import { BypassSecurity } from "../common/decorators/bypass-security.decorator"
 
 // Allowed MIME types for upload validation
 const ALLOWED_MIMES = [
@@ -27,6 +28,7 @@ export class StorageController {
 
     @Post("upload")
     @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
     @ApiBearerAuth("JWT-auth")
     @Throttle({ default: { limit: 10, ttl: 60000 } })
     @ApiOperation({ summary: "Upload a file to R2 CDN" })

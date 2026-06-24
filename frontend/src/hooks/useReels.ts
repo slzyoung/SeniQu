@@ -90,13 +90,16 @@ export function useToggleReelLike() {
                             ...page,
                             data: page.data.map((reel: Reel) => {
                                 if (reel.id === reelId) {
-                                    const nextLiked = !reel.isLiked;
+                                    const currentLiked = reel.isLiked || reel.is_liked || false;
+                                    const nextLiked = !currentLiked;
+                                    const currentLikes = reel.likeCount ?? reel.like_count ?? 0;
+                                    const nextLikes = nextLiked ? currentLikes + 1 : Math.max(currentLikes - 1, 0);
                                     return {
                                         ...reel,
                                         isLiked: nextLiked,
-                                        likeCount: nextLiked
-                                            ? (reel.likeCount || 0) + 1
-                                            : Math.max((reel.likeCount || 0) - 1, 0),
+                                        is_liked: nextLiked,
+                                        likeCount: nextLikes,
+                                        like_count: nextLikes,
                                     };
                                 }
                                 return reel;
@@ -142,13 +145,16 @@ export function useToggleReelReshare() {
                             ...page,
                             data: page.data.map((reel: Reel) => {
                                 if (reel.id === reelId) {
-                                    const nextReshared = !reel.isReshared;
+                                    const currentReshared = reel.isReshared || reel.is_reshared || false;
+                                    const nextReshared = !currentReshared;
+                                    const currentReshares = reel.reshareCount ?? reel.reshare_count ?? 0;
+                                    const nextReshares = nextReshared ? currentReshares + 1 : Math.max(currentReshares - 1, 0);
                                     return {
                                         ...reel,
                                         isReshared: nextReshared,
-                                        reshareCount: nextReshared
-                                            ? (reel.reshareCount || 0) + 1
-                                            : Math.max((reel.reshareCount || 0) - 1, 0),
+                                        is_reshared: nextReshared,
+                                        reshareCount: nextReshares,
+                                        reshare_count: nextReshares,
                                     };
                                 }
                                 return reel;
@@ -164,12 +170,12 @@ export function useToggleReelReshare() {
             if (context?.previousFeed) {
                 queryClient.setQueryData(reelsKeys.feed(), context.previousFeed);
             }
-            toast.error('Reshare Failed', 'Unable to complete action.');
+            toast.error('Bookmark Failed', 'Unable to complete action.');
         },
         onSuccess: (res) => {
             toast.success(
-                res.reshared ? 'Reel Reshared' : 'Reshare Removed',
-                res.reshared ? 'Successfully reshared to your timeline.' : 'Successfully removed reshare.'
+                res.reshared ? 'Added to Bookmarks' : 'Removed from Bookmarks',
+                res.reshared ? 'Successfully saved to your bookmarks.' : 'Successfully removed from bookmarks.'
             );
         },
         onSettled: (_data, _err, { reelId }) => {
@@ -212,9 +218,11 @@ export function useCreateReelComment() {
                         ...page,
                         data: page.data.map((reel: Reel) => {
                             if (reel.id === reelId) {
+                                const currentComments = reel.commentCount ?? reel.comment_count ?? 0;
                                 return {
                                     ...reel,
-                                    commentCount: (reel.commentCount || 0) + 1,
+                                    commentCount: currentComments + 1,
+                                    comment_count: currentComments + 1,
                                 };
                             }
                             return reel;

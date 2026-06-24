@@ -3,6 +3,7 @@ import { Heart, MessageCircle, Share2, Volume2, VolumeX, Play, Pause, Trash2, Bo
 import { useToggleReelLike, useToggleReelReshare, useRecordReelView, useDeleteReel } from '../../../hooks/useReels';
 import { useAuthStore } from '../../../stores/useAuthStore';
 import { useToast } from '../../../stores/useNotificationStore';
+import { useFollowUser, useUnfollowUser } from '../../../hooks/useUser';
 import Avatar from '../../../components/ui/Avatar';
 import { useNavigate } from 'react-router-dom';
 
@@ -42,15 +43,21 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
     const [showPlayIcon, setShowPlayIcon] = useState(false);
     const [progress, setProgress] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
-    const [isFollowing, setIsFollowing] = useState(false);
+    const [isFollowing, setIsFollowing] = useState(reel.is_following || reel.isFollowing || false);
     const [showOptions, setShowOptions] = useState(false);
     const lastTapRef = useRef(0);
     const viewRecordedRef = useRef(false);
+
+    useEffect(() => {
+        setIsFollowing(reel.is_following || reel.isFollowing || false);
+    }, [reel.is_following, reel.isFollowing]);
 
     const toggleLike = useToggleReelLike();
     const toggleReshare = useToggleReelReshare();
     const deleteReel = useDeleteReel();
     const recordView = useRecordReelView();
+    const followUser = useFollowUser();
+    const unfollowUser = useUnfollowUser();
     const { user } = useAuthStore();
     const toast = useToast();
 
@@ -290,13 +297,22 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
 
                     {!isOwner && (
                         <button
-                            onClick={() => {
+                            onClick={async () => {
                                 if (!user) { toast.error('Login Required', 'Sign in to follow creators'); return; }
-                                setIsFollowing(!isFollowing);
-                                toast.success(
-                                    isFollowing ? 'Unfollowed' : 'Following',
-                                    isFollowing ? `You unfollowed ${userName}.` : `You are now following ${userName}.`
-                                );
+                                const targetFollowState = !isFollowing;
+                                setIsFollowing(targetFollowState);
+                                try {
+                                    if (targetFollowState) {
+                                        await followUser.mutateAsync(reelUserId);
+                                        toast.success('Following', `You are now following ${userName}.`);
+                                    } else {
+                                        await unfollowUser.mutateAsync(reelUserId);
+                                        toast.success('Unfollowed', `You unfollowed ${userName}.`);
+                                    }
+                                } catch (err: any) {
+                                    setIsFollowing(!targetFollowState);
+                                    toast.error('Error', err.message || 'Failed to update follow status.');
+                                }
                             }}
                             className={`reel-follow-btn ${isFollowing ? 'reel-following' : ''}`}
                         >
