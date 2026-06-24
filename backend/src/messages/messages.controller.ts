@@ -41,6 +41,21 @@ export class MessagesController {
         return this.messagesService.getConversations(userId)
     }
 
+    @Get("search-users")
+    @ApiOperation({ summary: "Search users to start a conversation, prioritizing followed users and excluding blocked users" })
+    async searchUsers(
+        @Query("q") query: string,
+        @GetUser("id") userId: string,
+    ) {
+        return this.messagesService.searchUsers(userId, query)
+    }
+
+    @Get("followed-users")
+    @ApiOperation({ summary: "Get list of users followed by the current user" })
+    async getFollowedUsers(@GetUser("id") userId: string) {
+        return this.messagesService.getFollowedUsers(userId)
+    }
+
     @Get("conversations/:conversationId")
     @ApiOperation({ summary: "Get messages in a conversation" })
     async getMessages(

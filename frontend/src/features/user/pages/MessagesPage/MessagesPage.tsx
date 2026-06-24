@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search, Lock, Shield, Send, ArrowLeft, Ban,
     Flag, Check, CheckCheck, Loader2, AlertTriangle,
-    MessageSquare, MoreVertical, ShieldCheck
+    MessageSquare, MoreVertical, ShieldCheck, MessageSquarePlus, X
 } from 'lucide-react';
 import { messagingService, type Conversation, type Message } from '../../../../services/messagingService';
 import { useAuthStore } from '../../../../stores/useAuthStore';
@@ -78,6 +78,9 @@ export function MessagesPage() {
     const [selectedConvo, setSelectedConvo] = useState<Conversation | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [followedUsers, setFollowedUsers] = useState<any[]>([]);
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [isSearchingUsers, setIsSearchingUsers] = useState(false);
     const [newMessage, setNewMessage] = useState('');
     const [isConvosLoading, setIsConvosLoading] = useState(true);
     const [isMessagesLoading, setIsMessagesLoading] = useState(false);
@@ -128,12 +131,51 @@ export function MessagesPage() {
         return () => { if (convosPollRef.current) clearInterval(convosPollRef.current); };
     }, [fetchConversations]);
 
+    // Load followed users on mount
+    useEffect(() => {
+        const loadFollowed = async () => {
+            try {
+                const data = await messagingService.getFollowedUsers();
+                setFollowedUsers(data);
+            } catch (err) {
+                console.error('Failed to fetch followed users:', err);
+            }
+        };
+        loadFollowed();
+    }, []);
+
+    // Debounced user search
+    useEffect(() => {
+        if (!searchQuery.trim()) {
+            setSearchResults([]);
+            return;
+        }
+
+        const delayDebounce = setTimeout(async () => {
+            setIsSearchingUsers(true);
+            try {
+                const results = await messagingService.searchUsers(searchQuery);
+                setSearchResults(results);
+            } catch (err) {
+                console.error('Failed to search users:', err);
+            } finally {
+                setIsSearchingUsers(false);
+            }
+        }, 300);
+
+        return () => clearTimeout(delayDebounce);
+    }, [searchQuery]);
+
     // Poll messages for selected convo
     useEffect(() => {
         if (msgsPollRef.current) clearInterval(msgsPollRef.current);
         if (selectedConvo) {
-            fetchMessages(selectedConvo, true);
-            msgsPollRef.current = setInterval(() => fetchMessages(selectedConvo, false), 4000);
+            if (!selectedConvo.id.startsWith('temp-')) {
+                fetchMessages(selectedConvo, true);
+                msgsPollRef.current = setInterval(() => fetchMessages(selectedConvo, false), 4000);
+            } else {
+                setMessages([]);
+            }
         } else {
             setMessages([]);
         }
@@ -164,9 +206,15 @@ export function MessagesPage() {
             const recipientId = selectedConvo.otherUser.id;
             const result = await messagingService.sendMessage(myUserId, recipientId, text);
 
+            let actualConvoId = selectedConvo.id;
+            if (selectedConvo.id.startsWith('temp-')) {
+                actualConvoId = result.conversationId;
+                setSelectedConvo(prev => prev ? { ...prev, id: result.conversationId } : null);
+            }
+
             const optimisticMsg: Message = {
                 id: result.id || `temp-${Date.now()}`,
-                conversationId: selectedConvo.id,
+                conversationId: actualConvoId,
                 senderId: myUserId,
                 recipientId,
                 encryptedContent: '',
@@ -216,12 +264,37 @@ export function MessagesPage() {
         setShowActionsMenu(false);
     };
 
+    const startOrSelectConversation = (targetUser: any) => {
+        const existing = conversations.find(c => c.otherUser?.id === targetUser.id);
+        if (existing) {
+            selectConversation(existing);
+        } else {
+            const tempConvo: Conversation = {
+                id: `temp-${targetUser.id}`,
+                otherUser: {
+                    id: targetUser.id,
+                    displayName: targetUser.displayName || targetUser.username,
+                    avatarUrl: targetUser.avatarUrl || targetUser.avatar,
+                },
+                lastMessageAt: new Date().toISOString(),
+                lastMessagePreview: "Start a new E2E encrypted chat",
+                createdAt: new Date().toISOString(),
+                unreadCount: 0,
+            };
+            setConversations(prev => [tempConvo, ...prev.filter(c => c.id !== tempConvo.id)]);
+            setSelectedConvo(tempConvo);
+            setMobilePane('chat');
+            setShowActionsMenu(false);
+        }
+        setSearchQuery('');
+    };
+
     const goBackToList = () => {
         setSelectedConvo(null);
         setMobilePane('list');
     };
 
-    // ── Filtered Conversations ─────────────────────────
+    // ── Filtered Conversations (local list filtering) ───
 
     const filteredConvos = conversations.filter(c => {
         const name = c.otherUser?.displayName?.toLowerCase() || '';
@@ -278,9 +351,45 @@ export function MessagesPage() {
         });
     };
 
+    const renderConvoItem = (c: Conversation) => {
+        const isActive = selectedConvo?.id === c.id;
+        return (
+            <div
+                key={c.id}
+                onClick={() => selectConversation(c)}
+                className={`msg-convo-item ${isActive ? 'msg-convo-item--active' : ''}`}
+            >
+                <div className="msg-convo-item__avatar">
+                    {c.otherUser?.avatarUrl ? (
+                        <img src={c.otherUser.avatarUrl} alt={c.otherUser.displayName} />
+                    ) : (
+                        <span>{getInitial(c.otherUser?.displayName)}</span>
+                    )}
+                    <div className="msg-convo-item__online" />
+                </div>
+
+                <div className="msg-convo-item__body">
+                    <div className="msg-convo-item__top">
+                        <h4 className="msg-convo-item__name">{c.otherUser?.displayName}</h4>
+                        <span className="msg-convo-item__time">{formatTime(c.lastMessageAt)}</span>
+                    </div>
+                    <div className="msg-convo-item__meta-row">
+                        <p className="msg-convo-item__preview">
+                            <Lock className="w-2.5 h-2.5 inline-block mr-1 opacity-40" />
+                            {c.lastMessagePreview || 'Encrypted message'}
+                        </p>
+                        {!!c.unreadCount && c.unreadCount > 0 && (
+                            <span className="msg-convo-item__unread">{c.unreadCount}</span>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="msg-page">
-            {/* ─── LEFT: CONVERSATIONS LIST ─── */}
+            {/* ─── LEFT: CONVERSATIONS LIST & SEARCH ─── */}
             <aside className={`msg-sidebar ${mobilePane === 'chat' ? 'msg-sidebar--hidden-mobile' : ''}`}>
                 {/* Header */}
                 <div className="msg-sidebar__header">
@@ -289,67 +398,135 @@ export function MessagesPage() {
                             <Lock className="w-4 h-4" />
                         </div>
                         <h2 className="msg-sidebar__title">Messages</h2>
-                        <span className="msg-sidebar__badge">{conversations.length}</span>
+                        <button className="msg-sidebar__new-btn" onClick={() => inputRef.current?.focus()}>
+                            <MessageSquarePlus className="w-4 h-4" />
+                        </button>
                     </div>
 
                     <div className="msg-sidebar__search">
                         <Search className="msg-sidebar__search-icon" />
                         <input
                             type="text"
-                            placeholder="Search conversations..."
+                            placeholder="Search by username or name..."
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             className="msg-sidebar__search-input"
                         />
+                        {searchQuery && (
+                            <button className="msg-sidebar__search-clear" onClick={() => setSearchQuery('')}>
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        )}
                     </div>
                 </div>
 
-                {/* Conversation List */}
+                {/* Conversation List / Search Results */}
                 <div className="msg-sidebar__list">
-                    {isConvosLoading ? (
-                        <div className="msg-sidebar__empty">
-                            <Loader2 className="w-6 h-6 animate-spin msg-gold-icon" />
-                            <span>Loading conversations...</span>
-                        </div>
-                    ) : filteredConvos.length === 0 ? (
-                        <div className="msg-sidebar__empty">
-                            <div className="msg-sidebar__empty-icon-wrap">
-                                <MessageSquare className="w-6 h-6" />
+                    {searchQuery.trim() ? (
+                        <div className="msg-sidebar__search-results">
+                            {/* Active Conversations Matching Query */}
+                            {filteredConvos.length > 0 && (
+                                <div className="msg-search-section">
+                                    <h4 className="msg-search-section__title">Recent Chats</h4>
+                                    {filteredConvos.map(c => renderConvoItem(c))}
+                                </div>
+                            )}
+
+                            {/* Global User Search */}
+                            <div className="msg-search-section">
+                                <h4 className="msg-search-section__title">Start a New Chat</h4>
+                                {isSearchingUsers ? (
+                                    <div className="msg-sidebar__loading-users">
+                                        <Loader2 className="w-4 h-4 animate-spin msg-gold-icon" />
+                                        <span>Searching users...</span>
+                                    </div>
+                                ) : searchResults.length === 0 ? (
+                                    <div className="msg-sidebar__empty-search">
+                                        <span>No users matching &quot;{searchQuery}&quot;</span>
+                                    </div>
+                                ) : (
+                                    searchResults.map(u => (
+                                        <div
+                                            key={u.id}
+                                            onClick={() => startOrSelectConversation(u)}
+                                            className="msg-search-user-item"
+                                        >
+                                            <div className="msg-search-user-item__avatar">
+                                                {u.avatarUrl ? (
+                                                    <img src={u.avatarUrl} alt="" />
+                                                ) : (
+                                                    <span>{getInitial(u.displayName || u.username)}</span>
+                                                )}
+                                            </div>
+                                            <div className="msg-search-user-item__body">
+                                                <h5 className="msg-search-user-item__name">{u.displayName || u.username}</h5>
+                                                <span className="msg-search-user-item__username">@{u.username}</span>
+                                            </div>
+                                            {u.isFollowed && (
+                                                <span className="msg-search-user-item__badge">Followed</span>
+                                            )}
+                                        </div>
+                                    ))
+                                )}
                             </div>
-                            <h4>No conversations yet</h4>
-                            <p>Start chatting from a photographer&apos;s profile or the Request Board.</p>
                         </div>
                     ) : (
-                        filteredConvos.map(c => {
-                            const isActive = selectedConvo?.id === c.id;
-                            return (
-                                <div
-                                    key={c.id}
-                                    onClick={() => selectConversation(c)}
-                                    className={`msg-convo-item ${isActive ? 'msg-convo-item--active' : ''}`}
-                                >
-                                    <div className="msg-convo-item__avatar">
-                                        {c.otherUser?.avatarUrl ? (
-                                            <img src={c.otherUser.avatarUrl} alt={c.otherUser.displayName} />
-                                        ) : (
-                                            <span>{getInitial(c.otherUser?.displayName)}</span>
-                                        )}
-                                        <div className="msg-convo-item__online" />
+                        /* Default Inbox View: Online Friends Carousel + All Convos */
+                        <>
+                            {/* Online Friends (Followed Users) Carousel */}
+                            {followedUsers.length > 0 && (
+                                <div className="msg-online-carousel">
+                                    <div className="msg-online-carousel__header">
+                                        <h4 className="msg-online-carousel__title">Online friends</h4>
+                                        <span className="msg-online-carousel__count">{followedUsers.length}</span>
                                     </div>
-
-                                    <div className="msg-convo-item__body">
-                                        <div className="msg-convo-item__top">
-                                            <h4 className="msg-convo-item__name">{c.otherUser?.displayName}</h4>
-                                            <span className="msg-convo-item__time">{formatTime(c.lastMessageAt)}</span>
-                                        </div>
-                                        <p className="msg-convo-item__preview">
-                                            <Lock className="w-2.5 h-2.5 inline-block mr-1 opacity-40" />
-                                            {c.lastMessagePreview || 'Encrypted message'}
-                                        </p>
+                                    <div className="msg-online-carousel__items">
+                                        {followedUsers.map(u => (
+                                            <div
+                                                key={u.id}
+                                                onClick={() => startOrSelectConversation(u)}
+                                                className="msg-online-user-card"
+                                            >
+                                                <div className="msg-online-user-card__avatar-container">
+                                                    <div className="msg-online-user-card__avatar">
+                                                        {u.avatarUrl ? (
+                                                            <img src={u.avatarUrl} alt="" />
+                                                        ) : (
+                                                            <span>{getInitial(u.displayName || u.username)}</span>
+                                                        )}
+                                                    </div>
+                                                    {u.isOnline && <div className="msg-online-user-card__status" />}
+                                                </div>
+                                                <span className="msg-online-user-card__name">
+                                                    {u.displayName || u.username}
+                                                </span>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
-                            );
-                        })
+                            )}
+
+                            {/* Recent messages list */}
+                            <div className="msg-inbox-section">
+                                <h4 className="msg-inbox-section__title">Recent Messages</h4>
+                                {isConvosLoading ? (
+                                    <div className="msg-sidebar__empty">
+                                        <Loader2 className="w-5 h-5 animate-spin msg-gold-icon" />
+                                        <span className="mt-2">Loading inbox...</span>
+                                    </div>
+                                ) : conversations.length === 0 ? (
+                                    <div className="msg-sidebar__empty">
+                                        <div className="msg-sidebar__empty-icon-wrap">
+                                            <MessageSquare className="w-5 h-5" />
+                                        </div>
+                                        <h4>No messages yet</h4>
+                                        <p>Search above to start a secure AES-256 E2E chat with followed artists.</p>
+                                    </div>
+                                ) : (
+                                    conversations.map(c => renderConvoItem(c))
+                                )}
+                            </div>
+                        </>
                     )}
                 </div>
 
@@ -543,3 +720,4 @@ export function MessagesPage() {
 }
 
 export default MessagesPage;
+

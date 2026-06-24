@@ -150,6 +150,7 @@ export interface Conversation {
     lastMessageAt: string;
     lastMessagePreview: string;
     createdAt: string;
+    unreadCount?: number;
 }
 
 export interface Message {
@@ -322,6 +323,22 @@ class MessagingService {
     async unblockUser(userId: string): Promise<any> {
         const res = await apiDelete<any>(`/messages/block/${userId}`);
         return this.unwrap(res);
+    }
+
+    /**
+     * Search users for a new conversation, prioritizing followed users
+     */
+    async searchUsers(query: string): Promise<any[]> {
+        const res = await apiGet<any>('/messages/search-users', { params: { q: query } });
+        return this.unwrap<any[]>(res);
+    }
+
+    /**
+     * Get followed users for the horizontal header list
+     */
+    async getFollowedUsers(): Promise<any[]> {
+        const res = await apiGet<any>('/messages/followed-users');
+        return this.unwrap<any[]>(res);
     }
 }
 

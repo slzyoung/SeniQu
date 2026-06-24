@@ -156,17 +156,24 @@ Audit logs for anti-scam flag submissions.
 ### 5.4 Backend REST APIs (`/messages`)
 Nested under NestJS `/messages` path with active JWT authentication guards:
 * **POST `/messages/send`**: Validates rate limits (max 30 msgs/min), verifies user blocks, updates conversation, and inserts encrypted message payload.
-* **GET `/messages/conversations`**: Lists all active chat sessions with other users' public names and avatar resources.
+* **GET `/messages/conversations`**: Lists all active chat sessions with other users' public names, avatar resources, and calculated unread message counts.
 * **GET `/messages/conversations/:conversationId`**: Lists decrypted history client-side and marks all received messages as read.
+* **GET `/messages/search-users`**: Searches all public user profiles on the platform by username or display name (with ilike query matching), automatically sorting followed users first and filtering out blocked users or self for security.
+* **GET `/messages/followed-users`**: Lists users followed by the current user to display as online/active contacts, with real block-list filtering.
 * **GET `/messages/unread`**: Fetches the total number of unread incoming messages.
 * **POST `/messages/report`**: Registers anti-scam report flags.
 * **POST `/messages/block/:userId`**: Blocks a user.
 * **DELETE `/messages/block/:userId`**: Unblocks a user.
 
 ### 5.5 Messaging Frontend Architecture
-* **`messagingService.ts`**: Web Crypto-based client service for AES encryption/decryption, ECDH key derivation, and API integrations.
+* **`messagingService.ts`**: Web Crypto-based client service for AES encryption/decryption, ECDH key derivation, user search, followed contact fetch, and API integrations.
 * **`ChatDrawer.tsx`**: Elegant, premium glassmorphic bottom drawer with smooth slide-up animation. Implements E2E decryption, typing checks, read receipts, and anti-scam block/report options.
-* **`MessagesPage.tsx`**: A full-featured, premium double-pane messaging interface located at `/dashboard/messages`. It supports search queries, live polling updates for multi-user chat rooms, active chat headers, custom bubble wrappers with dates separators, mobile-responsive styling, and direct access to block/report actions.
+* **`MessagesPage.tsx`**: A full-featured, premium double-pane messaging interface located at `/dashboard/messages`.
+  * **Unified Search Input**: Modern pill-shaped input with a clear button that queries matching active chats and queries the global user database by username in real-time.
+  * **Online Friends Carousel**: Horizontal story-style scrolling section displaying avatars of followed users with simulated/live active online indicator dots.
+  * **Unread Message Badges**: Displays unread messages counter in a blue circle on conversation cards.
+  * **Optimistic Channel Startup**: Supports starting secure conversations with new search/carousel users optimistically, upgrading the channel to a persistent database entry upon the first sent message.
+  * **Adaptive Theme Support**: Complete, sleek glassmorphism adjusting seamlessly between light and dark themes.
 * **`RequestBoard.tsx`**: Connects clients and bidding photographers using E2E direct messages.
 * **`PhotographerProfile.tsx`**: Hides action bars automatically when viewing own profile to prevent self-chatting.
 

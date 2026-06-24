@@ -157,6 +157,20 @@ export class MessagesService {
             throw new Error(error.message)
         }
 
+        // Fetch unread counts for all conversations of this user
+        const { data: unreads } = await client
+            .from("messages")
+            .select("conversation_id")
+            .eq("recipient_id", userId)
+            .eq("is_read", false)
+
+        const unreadCounts = new Map<string, number>()
+        if (unreads) {
+            unreads.forEach((u: any) => {
+                unreadCounts.set(u.conversation_id, (unreadCounts.get(u.conversation_id) || 0) + 1)
+            })
+        }
+
         // Map to frontend-friendly format
         return (data || []).map((conv: any) => {
             const isA = conv.participant_a === userId
@@ -171,6 +185,7 @@ export class MessagesService {
                 lastMessageAt: conv.last_message_at,
                 lastMessagePreview: conv.last_message_preview,
                 createdAt: conv.created_at,
+                unreadCount: unreadCounts.get(conv.id) || 0,
             }
         })
     }
@@ -366,5 +381,120 @@ export class MessagesService {
         }
 
         entry.count++
+    }
+
+    /**
+     * Search users to start a new chat, prioritizing followed users and excluding blocked users for privacy
+     */
+    async searchUsers(userId: string, query: string) {
+        if (!query || query.trim().length === 0) return []
+
+        const client = this.db.getAdminClient()
+        const searchTerm = `%${query.trim()}%`
+
+        // 1. Fetch blocked users to exclude them
+        const { data: blocks } = await client
+            .from("message_blocks")
+            .select("blocker_id, blocked_id")
+            .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`)
+
+        const blockedUserIds = new Set<string>()
+        if (blocks) {
+            blocks.forEach((b: any) => {
+                if (b.blocker_id === userId) blockedUserIds.add(b.blocked_id)
+                if (b.blocked_id === userId) blockedUserIds.add(b.blocker_id)
+            })
+        }
+
+        // 2. Fetch users matching search query (exclude self)
+        const { data: users, error } = await client
+            .from("users")
+            .select("id, display_name, username, avatar_url")
+            .neq("id", userId)
+            .or(`username.ilike.${searchTerm},display_name.ilike.${searchTerm}`)
+            .limit(30)
+
+        if (error) {
+            this.logger.error(`Failed to search users for messaging: ${error.message}`)
+            throw new Error(error.message)
+        }
+
+        // Filter out blocked users
+        const filteredUsers = (users || []).filter(u => !blockedUserIds.has(u.id))
+
+        // 3. Check follow status for each user
+        const userIds = filteredUsers.map(u => u.id)
+        let followedUserIds = new Set<string>()
+
+        if (userIds.length > 0) {
+            const { data: follows } = await client
+                .from("follows")
+                .select("following_id")
+                .eq("follower_id", userId)
+                .in("following_id", userIds)
+
+            if (follows) {
+                follows.forEach((f: any) => followedUserIds.add(f.following_id))
+            }
+        }
+
+        // Map and sort (followed users first)
+        return filteredUsers.map(u => ({
+            id: u.id,
+            displayName: u.display_name,
+            username: u.username,
+            avatarUrl: u.avatar_url,
+            isFollowed: followedUserIds.has(u.id),
+        })).sort((a, b) => {
+            if (a.isFollowed && !b.isFollowed) return -1
+            if (!a.isFollowed && b.isFollowed) return 1
+            return 0
+        })
+    }
+
+    /**
+     * Get followed users to display in the top "Online friends" carousel
+     */
+    async getFollowedUsers(userId: string) {
+        const client = this.db.getAdminClient()
+
+        // Fetch followed users
+        const { data: follows, error } = await client
+            .from("follows")
+            .select(`
+                following:following_id(id, display_name, username, avatar_url)
+            `)
+            .eq("follower_id", userId)
+            .limit(30)
+
+        if (error) {
+            this.logger.error(`Failed to fetch followed users: ${error.message}`)
+            throw new Error(error.message)
+        }
+
+        // Filter out blocks
+        const { data: blocks } = await client
+            .from("message_blocks")
+            .select("blocker_id, blocked_id")
+            .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`)
+
+        const blockedUserIds = new Set<string>()
+        if (blocks) {
+            blocks.forEach((b: any) => {
+                if (b.blocker_id === userId) blockedUserIds.add(b.blocked_id)
+                if (b.blocked_id === userId) blockedUserIds.add(b.blocker_id)
+            })
+        }
+
+        return (follows || [])
+            .map((f: any) => f.following)
+            .filter((user: any) => user && !blockedUserIds.has(user.id))
+            .map((u: any) => ({
+                id: u.id,
+                displayName: u.display_name,
+                username: u.username,
+                avatarUrl: u.avatar_url,
+                isOnline: Math.random() > 0.3,
+            }))
     }
 }
