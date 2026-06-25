@@ -144,7 +144,11 @@ const router = createBrowserRouter(
 
                 {/* Community Routes */}
                 <Route path={ROUTES.COMMUNITY} element={<CommunityForum />} />
-                <Route path={ROUTES.COMMUNITY_THREAD} element={<ThreadView />} />
+                <Route path={ROUTES.COMMUNITY_THREAD} element={
+                    <ProtectedRoute>
+                        <ThreadView />
+                    </ProtectedRoute>
+                } />
                 <Route path={ROUTES.REELS} element={<ReelsPage />} />
 
                 {/* AI Routes */}

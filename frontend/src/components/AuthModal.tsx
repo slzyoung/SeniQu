@@ -16,7 +16,7 @@ import { useAppKit, useAppKitAccount, useAppKitProvider } from '../lib/reownConf
 import { useAuthStore } from '../stores/useAuthStore';
 import { useToast } from '../stores/useNotificationStore';
 import { z } from 'zod';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getDashboardRoute } from '../lib/utils';
 import { useManualWallet, isWalletInstalled } from '../hooks/useManualWallet';
 import { needsProfileCompletion } from '../lib/authHelpers';
@@ -131,6 +131,7 @@ function WalletConnectionStatus({ state, walletName }: { state: WalletConnection
 
 export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
   const { login: storeLogin } = useAuthStore();
   const manualWallet = useManualWallet();
@@ -263,31 +264,25 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     }
   }, []);
 
+  // Helper to determine redirect path based on role and location state
+  const getRedirectPath = useCallback((userObj: any) => {
+    const defaultRedirect = needsProfileCompletion(userObj)
+      ? '/complete-profile'
+      : getDashboardRoute(userObj);
+    
+    const from = (location.state as { from?: Location })?.from?.pathname || defaultRedirect;
+    return from;
+  }, [location.state]);
+
   // Helper: Handle successful login result
   const onLoginSuccess = useCallback((result: any) => {
-    if (result.isNewUser) {
-      // New user — switch to profile completion page
-      storeLogin(result.user, result.accessToken, result.refreshToken);
+    storeLogin(result.user, result.accessToken, result.refreshToken);
+    const targetPath = getRedirectPath(result.user);
+    setTimeout(() => {
       handleClose();
-      navigate('/complete-profile');
-    } else {
-      // Existing user — check if profile is complete
-      const needsCompletion = needsProfileCompletion(result.user);
-
-      if (needsCompletion) {
-        // Incomplete profile -> redirect
-        storeLogin(result.user, result.accessToken, result.refreshToken);
-        handleClose();
-        navigate('/complete-profile');
-      } else {
-        // Fully complete — success & close
-        setTimeout(() => {
-          handleClose();
-          // manualWallet.reset(); // Already called in handleClose
-        }, 800);
-      }
-    }
-  }, [storeLogin, handleClose, navigate]);
+      navigate(targetPath, { replace: true });
+    }, 800);
+  }, [storeLogin, handleClose, navigate, getRedirectPath]);
 
   // Handle Google login
   const handleGoogleLogin = useCallback(async () => {
@@ -500,12 +495,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
             toast.success('Welcome!', 'Connected via WalletConnect');
             handleClose();
 
-            // Redirect to profile completion or dashboard
-            const redirectPath = needsCompletion
-              ? '/complete-profile'
-              : getDashboardRoute(response.user);
-
-            navigate(redirectPath);
+            const targetPath = getRedirectPath(response.user);
+            navigate(targetPath, { replace: true });
           }
         } catch (error) {
           console.error('Privy backend auth failed:', error);
@@ -553,11 +544,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
       const authResponse = response;
       storeLogin(authResponse.user, authResponse.accessToken, authResponse.refreshToken);
       toast.success('Welcome back!', 'You have successfully signed in.');
-
-      const { needsProfileCompletion } = await import('../lib/authHelpers');
-      const needsCompletion = needsProfileCompletion(authResponse.user);
-      const redirectPath = needsCompletion ? '/complete-profile' : getDashboardRoute(authResponse.user);
-      navigate(redirectPath);
+      const targetPath = getRedirectPath(authResponse.user);
+      navigate(targetPath, { replace: true });
       handleClose();
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -613,8 +601,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
       const authResponse = response;
       storeLogin(authResponse.user, authResponse.accessToken, authResponse.refreshToken);
       toast.success('Welcome to SeniQu!', 'Your account has been created successfully.');
-      const redirectPath = getDashboardRoute(authResponse.user);
-      navigate(redirectPath);
+      const targetPath = getRedirectPath(authResponse.user);
+      navigate(targetPath, { replace: true });
       handleClose();
     } catch (error) {
       // Reset Turnstile on registration failure so a new challenge can be completed
@@ -653,11 +641,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
       storeLogin(response.user, response.accessToken, response.refreshToken);
       toast.success('Welcome back!', 'Authentication successful.');
-
-      const { needsProfileCompletion } = await import('../lib/authHelpers');
-      const needsCompletion = needsProfileCompletion(response.user);
-      const redirectPath = needsCompletion ? '/complete-profile' : getDashboardRoute(response.user);
-      navigate(redirectPath);
+      const targetPath = getRedirectPath(response.user);
+      navigate(targetPath, { replace: true });
       handleClose();
     } catch (error) {
       const authError = error as AuthError;
