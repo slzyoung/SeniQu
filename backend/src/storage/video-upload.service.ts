@@ -17,6 +17,8 @@
  *   - Supports 100MB+ videos reliably
  */
 
+import { createClient, SupabaseClient } from "@supabase/supabase-js"
+import { moderateContent } from "../common/utils/moderation.util"
 import {
     Injectable,
     Logger,
@@ -91,6 +93,7 @@ export class VideoUploadService implements OnModuleInit {
     private s3Client: S3Client
     private bucketName: string
     private publicUrl: string
+    private supabase: SupabaseClient
 
     /** In-memory session store (production would use Redis) */
     private sessions = new Map<string, UploadSession>()
@@ -109,6 +112,11 @@ export class VideoUploadService implements OnModuleInit {
         const secretAccessKey = this.configService.get<string>("r2.secretAccessKey")
         this.bucketName = this.configService.get<string>("r2.bucketName") || "seniqu"
         this.publicUrl = this.configService.get<string>("r2.publicUrl") || ""
+
+        // Initialize Supabase Client
+        const supabaseUrl = this.configService.get<string>("SUPABASE_URL") || ""
+        const supabaseServiceKey = this.configService.get<string>("SUPABASE_SERVICE_ROLE_KEY") || ""
+        this.supabase = createClient(supabaseUrl, supabaseServiceKey)
 
         if (!accountId || !accessKeyId || !secretAccessKey) {
             this.logger.warn("⚠️ R2 credentials not configured. Video upload service will not work.")
@@ -346,6 +354,70 @@ export class VideoUploadService implements OnModuleInit {
                 "video/mp4"
             )
 
+            // PHASE 3.5: Moderate Thumbnail
+            jobTracker.status = "moderating"
+            this.logger.log(`🔍 Moderating video thumbnail for session ${sessionId}...`)
+            const geminiApiKey = this.configService.get<string>("ai.geminiApiKey") || ""
+            const moderation = await moderateContent(
+                thumbnail.buffer,
+                thumbnail.contentType,
+                geminiApiKey,
+                this.logger
+            )
+
+            if (!moderation.isAppropriate) {
+                this.logger.warn(`🚫 Video blocked by content moderation: ${moderation.reason} | Session: ${sessionId}`)
+                
+                // If it is a reel, set status to 'deleted'
+                if (session.context === "reel" && session.reelId) {
+                    this.logger.log(`🗑️ Hiding inappropriate reel in database: ${session.reelId}`)
+                    await this.supabase
+                        .from("reels")
+                        .update({ status: "deleted" })
+                        .eq("id", session.reelId)
+                }
+
+                // If it is a forum video, clean up thread/post video fields
+                if (session.context === "forum") {
+                    if (session.threadId) {
+                        this.logger.log(`🗑️ Removing video fields from thread in database: ${session.threadId}`)
+                        await this.supabase
+                            .from("forum_threads")
+                            .update({
+                                video_url: null,
+                                video_thumbnail_url: null,
+                                video_duration: null,
+                                media_url: null,
+                                media_type: null,
+                            })
+                            .eq("id", session.threadId)
+                    }
+                    if (session.postId) {
+                        this.logger.log(`🗑️ Removing video fields from post in database: ${session.postId}`)
+                        await this.supabase
+                            .from("forum_posts")
+                            .update({
+                                video_url: null,
+                                video_thumbnail_url: null,
+                                video_duration: null,
+                                media_url: null,
+                                media_type: null,
+                            })
+                            .eq("id", session.postId)
+                    }
+
+                    // Delete forum_videos record
+                    await this.supabase
+                        .from("forum_videos")
+                        .delete()
+                        .eq("video_key", session.compressedKey)
+                }
+
+                throw new BadRequestException(
+                    `Video terdeteksi mengandung konten tidak pantas (SARA, pornografi, kekerasan). Alasan: ${moderation.reason}`
+                )
+            }
+
             jobTracker.progress = 80
             session.progress = 80
 
@@ -522,6 +594,23 @@ export class VideoUploadService implements OnModuleInit {
 
         // Process video: compress + generate thumbnail
         const { video, thumbnail } = await this.videoProcessor.processVideo(buffer, mimeType)
+
+        // Moderate Thumbnail
+        this.logger.log(`🔍 Moderating stream video thumbnail for user ${userId}...`)
+        const geminiApiKey = this.configService.get<string>("ai.geminiApiKey") || ""
+        const moderation = await moderateContent(
+            thumbnail.buffer,
+            thumbnail.contentType,
+            geminiApiKey,
+            this.logger
+        )
+
+        if (!moderation.isAppropriate) {
+            this.logger.warn(`🚫 Stream video blocked by content moderation: ${moderation.reason}`)
+            throw new BadRequestException(
+                `Video terdeteksi mengandung konten tidak pantas (SARA, pornografi, kekerasan). Alasan: ${moderation.reason}`
+            )
+        }
 
         // Validate duration
         const maxDuration = context === "reel" ? MAX_REEL_DURATION : MAX_FORUM_DURATION

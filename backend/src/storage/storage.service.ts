@@ -1,3 +1,4 @@
+import { moderateContent } from "../common/utils/moderation.util"
 import {
     Injectable,
     Logger,
@@ -207,6 +208,25 @@ export class StorageService implements OnModuleInit {
         const fileUuid = uuidv4()
         const isImage = ALLOWED_IMAGE_TYPES.includes(file.mimetype)
 
+        // Moderate uploaded images (screen out NSFW/violence for forum, avatars, artworks)
+        if (isImage) {
+            this.logger.log(`🔍 Moderating image upload in folder: ${folder}...`)
+            const geminiApiKey = this.configService.get<string>("ai.geminiApiKey") || ""
+            const moderation = await moderateContent(
+                file.buffer,
+                file.mimetype,
+                geminiApiKey,
+                this.logger
+            )
+
+            if (!moderation.isAppropriate) {
+                this.logger.warn(`🚫 Image upload blocked by content moderation: ${moderation.reason}`)
+                throw new BadRequestException(
+                    `Gambar terdeteksi mengandung konten tidak pantas (SARA, pornografi, kekerasan). Alasan: ${moderation.reason}`
+                )
+            }
+        }
+
         // ─── Case A: Artwork Upload with Automated Multi-size Variants ───
         if (folder === "artworks" && isImage && this.imageProcessor.canProcess(file.mimetype)) {
             try {
@@ -363,6 +383,23 @@ export class StorageService implements OnModuleInit {
 
         // Process video: compress + generate thumbnail
         const { video, thumbnail } = await this.videoProcessor.processVideo(file.buffer, file.mimetype)
+
+        // Moderate Thumbnail
+        this.logger.log(`🔍 Moderating forum video thumbnail for user ${userId}...`)
+        const geminiApiKey = this.configService.get<string>("ai.geminiApiKey") || ""
+        const moderation = await moderateContent(
+            thumbnail.buffer,
+            thumbnail.contentType,
+            geminiApiKey,
+            this.logger
+        )
+
+        if (!moderation.isAppropriate) {
+            this.logger.warn(`🚫 Forum video blocked by content moderation: ${moderation.reason}`)
+            throw new BadRequestException(
+                `Video terdeteksi mengandung konten tidak pantas (SARA, pornografi, kekerasan). Alasan: ${moderation.reason}`
+            )
+        }
 
         // Upload compressed video and thumbnail to R2 in parallel
         const fileUuid = require("uuid").v4()
