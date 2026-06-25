@@ -77,8 +77,8 @@ export interface VideoThumbnail {
 const MAX_WIDTH = 1080
 const MAX_HEIGHT = 1920  // Allow portrait videos (9:16)
 
-/** CRF value: 18 = near-lossless, 23 = good quality, 28 = acceptable */
-const CRF_QUALITY = 23
+/** CRF value: 18 = near-lossless, 22 = high quality, 23 = good quality, 28 = acceptable */
+const CRF_QUALITY = 22
 
 /** Audio bitrate for mobile */
 const AUDIO_BITRATE = "128k"
@@ -224,17 +224,20 @@ export class VideoProcessingService {
                 let cmd = ffmpeg(inputFile)
                     .outputOptions([
                         `-c:v libx264`,         // H.264 codec — widest compatibility
-                        `-preset medium`,        // Encoding speed vs compression tradeoff
+                        `-preset faster`,        // Faster encoding — still good compression
                         `-crf ${CRF_QUALITY}`,   // Constant Rate Factor quality
                         `-profile:v main`,       // Main profile for mobile compatibility
                         `-level 4.0`,            // Level 4.0 for 1080p support
                         `-pix_fmt yuv420p`,      // Standard pixel format
                         `-movflags +faststart`,  // Enable progressive download
+                        `-maxrate 4M`,           // Cap bitrate to prevent bloat on complex scenes
+                        `-bufsize 8M`,           // VBV buffer size
                         `-c:a aac`,              // AAC audio codec
                         `-b:a ${AUDIO_BITRATE}`, // Audio bitrate
                         `-ac 2`,                 // Stereo audio
                         `-ar 44100`,             // Standard sample rate
-                        `-max_muxing_queue_size 1024`,
+                        `-max_muxing_queue_size 2048`,
+                        `-threads 0`,            // Use all available CPU threads
                     ])
                     .outputFormat("mp4")
 

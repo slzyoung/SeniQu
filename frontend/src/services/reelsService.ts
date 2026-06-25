@@ -1,9 +1,17 @@
 /**
  * Reels Service
  * API client operations for short-form Reels video feature.
+ *
+ * Upload Strategy (v2):
+ *   - Files > 20MB: Direct-to-CDN via presigned URL (3-step flow)
+ *   - Files ≤ 20MB: Legacy multipart upload (single request)
+ *   Both paths are transparent to the caller.
  */
 
 import api from '../lib/api';
+
+/** Threshold for switching to direct-to-CDN upload */
+const DIRECT_CDN_THRESHOLD = 20 * 1024 * 1024; // 20MB
 
 export interface Reel {
     id: string;
@@ -93,7 +101,9 @@ export const reelsService = {
     },
 
     /**
-     * Upload a new short-form Reel video
+     * Smart upload — automatically picks the best upload strategy.
+     * Large files (>20MB) use direct-to-CDN presigned URL flow.
+     * Small files use traditional multipart upload.
      */
     uploadReel: async (
         file: File,
@@ -102,8 +112,181 @@ export const reelsService = {
             hashtags?: string[];
             audioMetadata?: any;
             onProgress?: (progress: number) => void;
+            onStatus?: (status: string) => void;
         },
     ): Promise<Reel> => {
+        if (file.size > DIRECT_CDN_THRESHOLD) {
+            return reelsService.uploadReelDirectCDN(file, options);
+        }
+        return reelsService.uploadReelLegacy(file, options);
+    },
+
+    /**
+     * DIRECT-TO-CDN UPLOAD (for files > 20MB)
+     * 3-step flow: init → PUT to CDN → complete + poll
+     */
+    uploadReelDirectCDN: async (
+        file: File,
+        options?: {
+            caption?: string;
+            hashtags?: string[];
+            audioMetadata?: any;
+            onProgress?: (progress: number) => void;
+            onStatus?: (status: string) => void;
+        },
+    ): Promise<Reel> => {
+        const { onProgress, onStatus } = options || {};
+
+        // ── STEP 1: Initialize upload session ──
+        onStatus?.('Preparing upload...');
+        onProgress?.(2);
+
+        const initResponse = await api.post('/reels/upload/init', {
+            filename: file.name,
+            mimeType: file.type,
+            fileSize: file.size,
+            caption: options?.caption,
+            hashtags: options?.hashtags,
+            audioMetadata: options?.audioMetadata,
+        });
+
+        const initData = initResponse.data?.success !== undefined
+            ? initResponse.data.data
+            : initResponse.data;
+
+        const { sessionId, uploadUrl } = initData;
+
+        onProgress?.(5);
+        onStatus?.('Uploading to CDN...');
+
+        // ── STEP 2: Upload video directly to R2 CDN via presigned URL ──
+        await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', uploadUrl, true);
+            xhr.setRequestHeader('Content-Type', file.type);
+
+            xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable && onProgress) {
+                    // Map upload progress to 5-75% range
+                    const uploadPercent = Math.round((event.loaded / event.total) * 70) + 5;
+                    onProgress(Math.min(uploadPercent, 75));
+                }
+            };
+
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve();
+                } else {
+                    reject(new Error(`CDN upload failed with status ${xhr.status}`));
+                }
+            };
+
+            xhr.onerror = () => reject(new Error('CDN upload failed — check your network connection'));
+            xhr.ontimeout = () => reject(new Error('CDN upload timed out'));
+            xhr.timeout = 600000; // 10 min timeout for large files
+
+            xhr.send(file);
+        });
+
+        onProgress?.(78);
+        onStatus?.('Processing video...');
+
+        // ── STEP 3: Confirm upload + start async compression ──
+        const completeResponse = await api.post('/reels/upload/complete', {
+            sessionId,
+        });
+
+        const completeData = completeResponse.data?.success !== undefined
+            ? completeResponse.data.data
+            : completeResponse.data;
+
+        // ── STEP 4: Poll for compression completion ──
+        onProgress?.(80);
+        onStatus?.('Compressing video...');
+
+        await reelsService.pollUploadStatus(
+            sessionId,
+            (progress, status) => {
+                // Map compression progress to 80-100% range
+                const totalProgress = 80 + Math.round(progress * 0.2);
+                onProgress?.(Math.min(totalProgress, 99));
+                if (status) onStatus?.(status);
+            }
+        );
+
+        onProgress?.(100);
+        onStatus?.('Complete!');
+
+        return completeData.reel || completeData;
+    },
+
+    /**
+     * Poll the upload status until compression completes or fails
+     */
+    pollUploadStatus: async (
+        sessionId: string,
+        onUpdate?: (progress: number, status?: string) => void,
+    ): Promise<any> => {
+        const MAX_POLLS = 180; // Max 3 minutes (1s interval)
+        const POLL_INTERVAL = 1000; // 1 second
+
+        for (let i = 0; i < MAX_POLLS; i++) {
+            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+
+            try {
+                const response = await api.get(`/reels/upload/status/${sessionId}`);
+                const data = response.data?.success !== undefined
+                    ? response.data.data
+                    : response.data;
+
+                const statusMap: Record<string, string> = {
+                    'awaiting_upload': 'Waiting for upload...',
+                    'processing': 'Compressing video...',
+                    'completed': 'Upload complete!',
+                    'failed': 'Processing failed',
+                };
+
+                onUpdate?.(data.progress || 0, statusMap[data.status] || data.status);
+
+                if (data.status === 'completed') {
+                    return data;
+                }
+
+                if (data.status === 'failed') {
+                    throw new Error(data.error || 'Video processing failed');
+                }
+            } catch (err: any) {
+                // If it's a poll error (not a processing failure), continue polling
+                if (err.response?.status === 404) {
+                    throw new Error('Upload session expired');
+                }
+                // Network errors — wait and retry
+                if (!err.response) {
+                    continue;
+                }
+                throw err;
+            }
+        }
+
+        throw new Error('Video processing timed out. Your video may still be processing — check back in a moment.');
+    },
+
+    /**
+     * LEGACY MULTIPART UPLOAD (for files ≤ 20MB)
+     * Single request — simpler but loads video into backend memory
+     */
+    uploadReelLegacy: async (
+        file: File,
+        options?: {
+            caption?: string;
+            hashtags?: string[];
+            audioMetadata?: any;
+            onProgress?: (progress: number) => void;
+            onStatus?: (status: string) => void;
+        },
+    ): Promise<Reel> => {
+        options?.onStatus?.('Uploading...');
+
         const formData = new FormData();
         formData.append('file', file);
         if (options?.caption) {
@@ -126,6 +309,8 @@ export const reelsService = {
                 }
             },
         });
+
+        options?.onStatus?.('Complete!');
         return response.data?.success !== undefined ? response.data.data : response.data;
     },
 

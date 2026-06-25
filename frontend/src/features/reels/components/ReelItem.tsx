@@ -3,6 +3,7 @@ import { Heart, MessageCircle, Share2, Volume2, VolumeX, Play, Pause, Trash2, Bo
 import { useToggleReelLike, useToggleReelReshare, useRecordReelView, useDeleteReel } from '../../../hooks/useReels';
 import { useAuthStore } from '../../../stores/useAuthStore';
 import { useToast } from '../../../stores/useNotificationStore';
+import { useAuthModalStore } from '../../../stores/useAuthModalStore';
 import { useFollowUser, useUnfollowUser } from '../../../hooks/useUser';
 import Avatar from '../../../components/ui/Avatar';
 import { useNavigate } from 'react-router-dom';
@@ -59,6 +60,7 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
     const followUser = useFollowUser();
     const unfollowUser = useUnfollowUser();
     const { user } = useAuthStore();
+    const { openAuthModal } = useAuthModalStore();
     const toast = useToast();
 
     // Resolve snake_case vs camelCase from DB
@@ -138,7 +140,7 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
 
         if (isActive && isPlaying) {
             audio.currentTime = (audioMeta.offset || 0) + (videoRef.current?.currentTime || 0) - trimStart;
-            audio.play().catch(() => {});
+            audio.play().catch(() => { });
         } else {
             audio.pause();
         }
@@ -184,9 +186,15 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
         const now = Date.now();
         if (now - lastTapRef.current < 300) {
             // Double tap — like
+            if (!user) {
+                toast.error('Login Required', 'Sign in to like this reel');
+                openAuthModal();
+                lastTapRef.current = 0;
+                return;
+            }
             setShowHeart(true);
             setTimeout(() => setShowHeart(false), 900);
-            if (!isLiked && user) toggleLike.mutate(reel.id);
+            if (!isLiked) toggleLike.mutate(reel.id);
             lastTapRef.current = 0;
         } else {
             lastTapRef.current = now;
@@ -205,7 +213,7 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
                 }
             }, 310);
         }
-    }, [isPlaying, isLiked, reel.id, user]);
+    }, [isPlaying, isLiked, reel.id, user, openAuthModal]);
 
     // Track progress + view recording
     const handleTimeUpdate = () => {
@@ -238,7 +246,7 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
                 onTimeUpdate={handleTimeUpdate}
                 className="reel-video"
                 poster={thumbUrl}
-                style={{ 
+                style={{
                     filter: getFilterCss(selectedFilter),
                     objectFit: aspectRatio === '1/1' || aspectRatio === '9/16' ? 'cover' : 'contain'
                 }}
@@ -274,7 +282,7 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
             <div className="reel-bottom-info">
                 {/* User Row */}
                 <div className="reel-user-row">
-                    <div 
+                    <div
                         className="flex items-center gap-2.5 cursor-pointer hover:opacity-85 transition-opacity"
                         style={{ minWidth: 0, flex: '0 1 auto' }}
                         onClick={() => {
@@ -298,7 +306,11 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
                     {!isOwner && (
                         <button
                             onClick={async () => {
-                                if (!user) { toast.error('Login Required', 'Sign in to follow creators'); return; }
+                                if (!user) { 
+                                    toast.error('Login Required', 'Sign in to follow creators'); 
+                                    openAuthModal(); 
+                                    return; 
+                                }
                                 const targetFollowState = !isFollowing;
                                 setIsFollowing(targetFollowState);
                                 try {
@@ -371,7 +383,11 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
                     {/* Like */}
                     <button
                         onClick={() => {
-                            if (!user) { toast.error('Login Required', 'Sign in to like'); return; }
+                            if (!user) { 
+                                toast.error('Login Required', 'Sign in to like'); 
+                                openAuthModal();
+                                return; 
+                            }
                             toggleLike.mutate(reel.id);
                         }}
                         className={`reel-action-btn ${isLiked ? 'reel-liked' : ''}`}
@@ -383,7 +399,17 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
                     </button>
 
                     {/* Comment */}
-                    <button onClick={onOpenComments} className="reel-action-btn">
+                    <button 
+                        onClick={() => {
+                            if (!user) {
+                                toast.error('Login Required', 'Sign in to view or post comments');
+                                openAuthModal();
+                                return;
+                            }
+                            onOpenComments();
+                        }} 
+                        className="reel-action-btn"
+                    >
                         <div className="reel-action-icon">
                             <MessageCircle style={{ width: 20, height: 20 }} />
                         </div>
@@ -393,7 +419,11 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
                     {/* Save / Bookmark */}
                     <button
                         onClick={() => {
-                            if (!user) { toast.error('Login Required', 'Sign in to save'); return; }
+                            if (!user) { 
+                                toast.error('Login Required', 'Sign in to save'); 
+                                openAuthModal();
+                                return; 
+                            }
                             toggleReshare.mutate({ reelId: reel.id });
                         }}
                         className={`reel-action-btn ${isReshared ? 'reel-saved' : ''}`}
@@ -405,7 +435,17 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
                     </button>
 
                     {/* Share */}
-                    <button onClick={onShare} className="reel-action-btn">
+                    <button 
+                        onClick={() => {
+                            if (!user) {
+                                toast.error('Login Required', 'Sign in to share');
+                                openAuthModal();
+                                return;
+                            }
+                            onShare();
+                        }} 
+                        className="reel-action-btn"
+                    >
                         <div className="reel-action-icon">
                             <Share2 style={{ width: 18, height: 18 }} />
                         </div>

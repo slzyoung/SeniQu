@@ -31,6 +31,13 @@ The Reels feature brings engaging, vertical short-form video streaming to the Se
    * **React Portal Mount**: To prevent the share drawer from being hidden behind or cut off by the mobile bottom navigation bar (`MobileBottomNav` with `z-50`), the modal backdrop and menu are mounted directly into `document.body` using a React Portal (`createPortal`), bypassing local CSS stacking contexts.
    * **Social Network Integrations**: Built-in support for sharing to WhatsApp, Telegram, Facebook, and X (formerly Twitter) using brand-compliant colored backgrounds and high-quality vector brand logos, along with standard link copying.
    * **Theme-Aware Adaptability**: Uses specialized CSS selectors (`.reel-share-icon--x` / `.dark .reel-share-icon--x`) to dynamically transition the X (Twitter) icon styling between light mode (charcoal logo on light-grey circular backdrop) and dark mode (pure white logo on translucent backdrop) for optimal legibility.
+6. **Adaptive Mobile Header Overlay & Full-Bleed Video Canvas**:
+   * **Guest (Unauthenticated) Layout**: The video feed container (`.reels-container.reels-guest`) is pinned at `top: 0` on mobile, producing a seamless cinematic display. The mobile header navbar (`Navbar`) overlays on top of the video container using a vertical dark gradient background (`bg-gradient-to-b from-black/80 via-black/30 to-transparent`) and glassy translucent circular buttons (`bg-white/10`) for the search, theme toggle, and hamburger menu. This ensures maximum text legibility and button contrast regardless of whether light or dark mode is active. The Solana badge is hidden on mobile reels to optimize height.
+   * **Member (Authenticated) Layout**: To preserve standard dashboard layouts, the container (`.reels-container.reels-auth`) defaults back to `top: 64px` on mobile, aligning right below the dashboard's persistent navigation header. This restores user access to the notifications drawer, search toggle, and the mobile sidebar toggle button.
+7. **Search Overlay Collision Prevention**:
+   * **Global Body State Class**: Opening the Reels in-page search overlay mounts a temporary `.reels-search-active` class to `document.body`.
+   * **Visual Navbar De-collision**: A responsive CSS selector (`body.reels-search-active nav.fixed`) hides the global navbar on mobile by setting `opacity: 0`, `visibility: hidden`, and `pointer-events: none`. This eliminates overlapping and clashing between the global logo/icons and the search panel.
+   * **Safe Area Margin Preservation**: The search panel utilizes mobile safe area top margins (`env(safe-area-inset-top)`) to ensure the search input row is perfectly aligned with the device's status bar.
 
 ### DB Schema / Table structure:
 ```sql

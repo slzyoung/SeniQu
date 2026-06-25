@@ -42,25 +42,29 @@ export function useSavedReels(page = 1, limit = 20) {
 
 /**
  * Hook to upload a new Reel
+ * Supports both direct-to-CDN (large files) and legacy multipart (small files).
+ * The reelsService automatically picks the best strategy.
  */
 export function useUploadReel() {
     const queryClient = useQueryClient();
     const toast = useToast();
 
     return useMutation({
-        mutationFn: ({ file, caption, hashtags, audioMetadata, onProgress }: {
+        mutationFn: ({ file, caption, hashtags, audioMetadata, onProgress, onStatus }: {
             file: File;
             caption?: string;
             hashtags?: string[];
             audioMetadata?: any;
             onProgress?: (progress: number) => void;
-        }) => reelsService.uploadReel(file, { caption, hashtags, audioMetadata, onProgress }),
+            onStatus?: (status: string) => void;
+        }) => reelsService.uploadReel(file, { caption, hashtags, audioMetadata, onProgress, onStatus }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: reelsKeys.feed() });
             toast.success('Reel Shared', 'Your Reel has been uploaded and processed successfully.');
         },
         onError: (err: any) => {
-            toast.error('Upload Failed', err.response?.data?.message || 'Could not upload your video.');
+            const message = err.response?.data?.message || err.message || 'Could not upload your video.';
+            toast.error('Upload Failed', message);
         },
     });
 }

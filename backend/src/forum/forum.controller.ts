@@ -32,6 +32,7 @@ import { GetUser } from "../auth/decorators/get-user.decorator"
 import { Public } from "../auth/decorators/public.decorator"
 import { BypassSecurity } from "../common/decorators/bypass-security.decorator"
 import { StorageService } from "../storage/storage.service"
+import { VideoUploadService } from "../storage/video-upload.service"
 
 @ApiTags("Forum")
 @Controller("forum")
@@ -39,6 +40,7 @@ export class ForumController {
     constructor(
         private readonly forumService: ForumService,
         private readonly storageService: StorageService,
+        private readonly videoUploadService: VideoUploadService,
     ) { }
 
     // ===========================================
@@ -78,12 +80,97 @@ export class ForumController {
     // VIDEO UPLOAD (must be before :idOrSlug catch-all)
     // ===========================================
 
+    /**
+     * Direct-to-CDN: Initialize forum video upload
+     */
+    @Post("video/upload/init")
+    @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
+    @ApiBearerAuth("JWT-auth")
+    @Throttle({ default: { limit: 10, ttl: 60000 } })
+    @ApiOperation({ summary: "Initialize forum video upload — get presigned CDN URL" })
+    async initVideoUpload(
+        @Body() body: {
+            filename: string
+            mimeType: string
+            fileSize: number
+            threadId?: string
+            postId?: string
+            caption?: string
+        },
+        @GetUser("id") userId: string,
+    ) {
+        return this.videoUploadService.initUpload({
+            userId,
+            filename: body.filename,
+            mimeType: body.mimeType,
+            fileSize: body.fileSize,
+            context: "forum",
+            threadId: body.threadId,
+            postId: body.postId,
+            caption: body.caption,
+        })
+    }
+
+    /**
+     * Direct-to-CDN: Confirm forum video upload + start compression
+     */
+    @Post("video/upload/complete")
+    @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
+    @ApiBearerAuth("JWT-auth")
+    @ApiOperation({ summary: "Confirm forum video upload + start compression" })
+    async completeVideoUpload(
+        @Body() body: { sessionId: string },
+        @GetUser("id") userId: string,
+    ) {
+        const result = await this.videoUploadService.completeUpload(body.sessionId, userId)
+        const session = this.videoUploadService.getSession(body.sessionId)
+
+        if (session) {
+            const videoRecord = await this.forumService.saveVideoMetadata({
+                userId,
+                threadId: session.threadId,
+                postId: session.postId,
+                videoUrl: result.videoUrl,
+                videoKey: session.compressedKey,
+                thumbnailUrl: result.thumbnailUrl || null,
+                thumbnailKey: session.thumbnailKey || null,
+                caption: session.caption,
+                metadata: session.metadata || {},
+            })
+
+            return { ...result, videoId: videoRecord?.id }
+        }
+
+        return result
+    }
+
+    /**
+     * Direct-to-CDN: Poll forum video status
+     */
+    @Get("video/upload/status/:sessionId")
+    @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
+    @ApiBearerAuth("JWT-auth")
+    @SkipThrottle()
+    @ApiOperation({ summary: "Get forum video upload/compression progress" })
+    async getVideoUploadStatus(
+        @Param("sessionId") sessionId: string,
+        @GetUser("id") userId: string,
+    ) {
+        return this.videoUploadService.getUploadStatus(sessionId, userId)
+    }
+
+    /**
+     * Legacy: Multipart upload (streaming — works for all sizes)
+     */
     @Post("video/upload")
     @UseGuards(JwtAuthGuard)
     @BypassSecurity()
     @ApiBearerAuth("JWT-auth")
     @Throttle({ default: { limit: 5, ttl: 60000 } })
-    @ApiOperation({ summary: "Upload and compress a forum video" })
+    @ApiOperation({ summary: "Upload and compress a forum video (legacy multipart)" })
     @ApiConsumes("multipart/form-data")
     @ApiBody({
         schema: {
@@ -124,16 +211,16 @@ export class ForumController {
         const postId = fields?.postId?.value || undefined
         const caption = fields?.caption?.value || undefined
 
-        // Create a compatible file object
-        const file = {
+        // Upload & compress video through new streaming service
+        const result = await this.videoUploadService.streamUploadAndProcess(
             buffer,
-            originalname: data.filename,
-            mimetype: data.mimetype,
-            size: buffer.length,
-        }
-
-        // Upload & compress video through StorageService
-        const result = await this.storageService.uploadForumVideo(file as any, userId)
+            data.filename,
+            data.mimetype,
+            buffer.length,
+            userId,
+            "forum",
+            { caption },
+        )
 
         // Save metadata to database
         const videoRecord = await this.forumService.saveVideoMetadata({

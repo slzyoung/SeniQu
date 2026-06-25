@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { User, LogOut, LayoutDashboard, Image, ChevronLeft, ChevronRight, X, Camera } from 'lucide-react';
+import { User, LogOut, LayoutDashboard, Image, ChevronLeft, ChevronRight, X, Camera, Search } from 'lucide-react';
 import { QuickSearch } from './common/QuickSearch';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle } from './ThemeToggle';
@@ -8,7 +8,7 @@ import { useAuthModalStore } from '../stores/useAuthModalStore';
 import { useUIStore } from '../stores/useUIStore';
 import { getDashboardRoute } from '../lib/utils';
 import { ROUTES } from '../lib/constants';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useLogout } from '../hooks/useLogout';
 
 export function Navbar() {
@@ -18,7 +18,11 @@ export function Navbar() {
   const { openAuthModal } = useAuthModalStore();
   const { isAuthenticated, user } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const handleLogout = useLogout();
+
+  const isReelsPage = location.pathname === '/reels';
+  const useReelsStyle = isReelsPage && !mobileMenuOpen;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -43,7 +47,13 @@ export function Navbar() {
   return (
     <>
       <nav
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${isScrolled ? 'bg-theme-glass backdrop-blur-xl border-b border-theme-glass-border py-4 shadow-sm' : 'bg-transparent py-6'}`}>
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+          useReelsStyle
+            ? 'bg-gradient-to-b from-black/80 via-black/30 to-transparent py-3 border-none md:bg-transparent md:py-6 md:border-b-0 md:shadow-none'
+            : isScrolled
+            ? 'bg-theme-glass backdrop-blur-xl border-b border-theme-glass-border py-4 shadow-sm'
+            : 'bg-transparent py-6'
+        }`}>
 
         <div className="max-w-7xl mx-auto px-6 md:px-8 flex items-center justify-between">
           {/* Logo Container */}
@@ -66,7 +76,7 @@ export function Navbar() {
                 SeniQu
               </span>
               <motion.div
-                className="relative mt-1 cursor-pointer overflow-hidden rounded-md p-[1px] group"
+                className={`relative mt-1 cursor-pointer overflow-hidden rounded-md p-[1px] group ${isReelsPage ? 'hidden md:block' : ''}`}
                 initial={{ opacity: 0.85 }}
                 whileHover={{ 
                   opacity: 1, 
@@ -167,10 +177,27 @@ export function Navbar() {
 
           {/* Mobile Menu Toggle - Animated Hamburger */}
           <div className="md:hidden flex items-center gap-4">
+            {location.pathname === '/reels' && (
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent('open-reels-search'))}
+                className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 ${
+                  useReelsStyle
+                    ? 'text-white hover:text-gold bg-white/10'
+                    : 'text-theme-text hover:text-gold bg-theme-elevated'
+                }`}
+                aria-label="Search reels"
+              >
+                <Search className="w-5 h-5" />
+              </button>
+            )}
             <ThemeToggle />
             <button
               onClick={toggleMobileMenu}
-              className="relative w-10 h-10 flex items-center justify-center text-theme-text hover:text-gold transition-colors focus:outline-none"
+              className={`relative w-10 h-10 flex items-center justify-center transition-colors focus:outline-none ${
+                useReelsStyle
+                  ? 'text-white hover:text-gold'
+                  : 'text-theme-text hover:text-gold'
+              }`}
               aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
             >
               <AnimatePresence mode="wait">
@@ -196,7 +223,9 @@ export function Navbar() {
                     animate={{ rotate: 0, opacity: 1 }}
                     exit={{ rotate: -90, opacity: 0 }}
                     transition={{ duration: 0.2 }}
-                    className="w-10 h-10 rounded-full bg-theme-elevated flex items-center justify-center"
+                    className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      useReelsStyle ? 'bg-white/10' : 'bg-theme-elevated'
+                    }`}
                   >
                     {isAuthenticated ? (
                       <ChevronRight className="w-6 h-6" />

@@ -28,6 +28,30 @@ export class ForumService {
         )
     }
 
+    /**
+     * Sanitize title/content — strips malformed HTML entity chains
+     * that cause the "&amp;amp;amp;" bug when data passes through
+     * multiple encode/decode layers (Supabase → TransformInterceptor → frontend).
+     */
+    private cleanText(text: string): string {
+        if (!text) return text
+        // Collapse malformed &ampamp... chains (without semicolons)
+        let cleaned = text.replace(/&(amp)+/gi, '&')
+        // Decode standard HTML entities iteratively
+        let prev = ''
+        for (let i = 0; i < 5 && cleaned !== prev; i++) {
+            prev = cleaned
+            cleaned = cleaned
+                .replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&quot;/g, '"')
+                .replace(/&#039;/g, "'")
+                .replace(/&#x27;/g, "'")
+        }
+        return cleaned
+    }
+
     async getCategories() {
         const { data, error } = await this.supabase
             .from("forum_categories")
@@ -80,8 +104,15 @@ export class ForumService {
 
         if (error) throw error
 
+        // Sanitize titles on read to fix existing corrupted &amp;amp; data
+        const cleanedData = (data || []).map((thread: any) => ({
+            ...thread,
+            title: this.cleanText(thread.title),
+            content: thread.content ? this.cleanText(thread.content) : thread.content,
+        }))
+
         return {
-            data,
+            data: cleanedData,
             meta: {
                 total: count,
                 page,
@@ -112,7 +143,7 @@ export class ForumService {
             .update({ views: data.views + 1 })
             .eq("id", data.id)
 
-        return { data }
+        return { data: { ...data, title: this.cleanText(data.title), content: data.content ? this.cleanText(data.content) : data.content } }
     }
 
     async getThreadById(id: string) {
@@ -136,19 +167,24 @@ export class ForumService {
             .update({ views: data.views + 1 })
             .eq("id", data.id)
 
-        return { data }
+        return { data: { ...data, title: this.cleanText(data.title), content: data.content ? this.cleanText(data.content) : data.content } }
     }
 
     async createThread(dto: CreateThreadDto, authorId: string) {
-        const slug = this.generateSlug(dto.title)
+        const cleanTitle = this.cleanText(dto.title)
+        const slug = this.generateSlug(cleanTitle)
+
+        const insertData = {
+            ...dto,
+            title: cleanTitle,
+            content: dto.content ? this.cleanText(dto.content) : dto.content,
+            author_id: authorId,
+            slug,
+        }
 
         const { data, error } = await this.supabase
             .from("forum_threads")
-            .insert({
-                ...dto,
-                author_id: authorId,
-                slug,
-            })
+            .insert(insertData)
             .select()
             .single()
 
@@ -180,8 +216,8 @@ export class ForumService {
         }
 
         const updates: any = { updated_at: new Date().toISOString() }
-        if (dto.title !== undefined) updates.title = dto.title
-        if (dto.content !== undefined) updates.content = dto.content
+        if (dto.title !== undefined) updates.title = this.cleanText(dto.title)
+        if (dto.content !== undefined) updates.content = this.cleanText(dto.content)
         if (dto.tags !== undefined) updates.tags = dto.tags
 
         const { data, error } = await this.supabase

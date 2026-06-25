@@ -54,6 +54,7 @@ export default function UploadReelModal({ onClose }: Props) {
     const [hashtags, setHashtags] = useState('');
     const [progress, setProgress] = useState(0);
     const [uploading, setUploading] = useState(false);
+    const [uploadStatus, setUploadStatus] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
     const [warning, setWarning] = useState<string | null>(null);
     const [meta, setMeta] = useState<any>(null);
@@ -197,7 +198,7 @@ export default function UploadReelModal({ onClose }: Props) {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!file) return;
-        setUploading(true); setProgress(0);
+        setUploading(true); setProgress(0); setUploadStatus('Preparing...');
         const tags = hashtags.split(',').map(h => h.trim()).filter(Boolean);
 
         // Bundle audio metadata & editing parameters
@@ -219,9 +220,16 @@ export default function UploadReelModal({ onClose }: Props) {
             }
         };
 
-        upload.mutate({ file, caption, hashtags: tags, audioMetadata, onProgress: setProgress }, {
-            onSuccess: () => { setUploading(false); onClose(); },
-            onError: () => setUploading(false),
+        upload.mutate({
+            file,
+            caption,
+            hashtags: tags,
+            audioMetadata,
+            onProgress: setProgress,
+            onStatus: setUploadStatus,
+        }, {
+            onSuccess: () => { setUploading(false); setUploadStatus(''); onClose(); },
+            onError: () => { setUploading(false); setUploadStatus(''); },
         });
     };
 
@@ -721,10 +729,13 @@ export default function UploadReelModal({ onClose }: Props) {
                             {/* Upload Progress */}
                             {uploading && (
                                 <div className="space-y-1.5">
-                                    <div className="h-1.5 w-full bg-theme-border/30 rounded-full overflow-hidden">
-                                        <div className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-300 rounded-full" style={{ width: `${progress}%` }} />
+                                    <div className="h-2 w-full bg-theme-border/30 rounded-full overflow-hidden">
+                                        <div className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 transition-all duration-500 ease-out rounded-full" style={{ width: `${progress}%`, backgroundSize: '200% 100%', animation: progress < 100 ? 'shimmer 1.5s ease-in-out infinite' : 'none' }} />
                                     </div>
-                                    <p className="text-[10px] text-theme-muted text-center">{progress < 100 ? `Uploading ${progress}%` : 'Compressing video on CDN server...'}</p>
+                                    <p className="text-[10px] text-theme-muted text-center">
+                                        {uploadStatus || (progress < 100 ? `Uploading ${progress}%` : 'Processing...')}
+                                        {progress > 0 && progress < 100 && <span className="ml-1 opacity-60">({progress}%)</span>}
+                                    </p>
                                 </div>
                             )}
                         </form>

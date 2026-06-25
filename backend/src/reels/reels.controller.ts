@@ -1,5 +1,14 @@
 /**
  * Reels Controller — Short-form video content API
+ *
+ * Upload Architecture (v2 — Direct-to-CDN):
+ *   1. POST /upload/init     → Get presigned R2 URL + session ID
+ *   2. Client PUTs video directly to R2 CDN (no backend memory)
+ *   3. POST /upload/complete → Confirm + start async compression
+ *   4. GET  /upload/status   → Poll compression progress
+ *
+ * Legacy fallback:
+ *   POST /upload → Multipart streaming for files < 30MB
  */
 
 import {
@@ -15,6 +24,7 @@ import { GetUser } from "../auth/decorators/get-user.decorator"
 import { Public } from "../auth/decorators/public.decorator"
 import { BypassSecurity } from "../common/decorators/bypass-security.decorator"
 import { StorageService } from "../storage/storage.service"
+import { VideoUploadService } from "../storage/video-upload.service"
 
 @ApiTags("Reels")
 @Controller("reels")
@@ -22,6 +32,7 @@ export class ReelsController {
     constructor(
         private readonly reelsService: ReelsService,
         private readonly storageService: StorageService,
+        private readonly videoUploadService: VideoUploadService,
     ) {}
 
     // ==========================================
@@ -65,15 +76,156 @@ export class ReelsController {
     }
 
     // ==========================================
-    // UPLOAD REEL
+    // UPLOAD v2 — Direct-to-CDN (Presigned URL)
     // ==========================================
 
+    /**
+     * STEP 1: Initialize upload session — returns presigned R2 PUT URL
+     * Client sends only metadata (no video data), gets back a URL to upload directly to CDN.
+     */
+    @Post("upload/init")
+    @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
+    @ApiBearerAuth("JWT-auth")
+    @Throttle({ default: { limit: 10, ttl: 60000 } })
+    @ApiOperation({ summary: "Initialize reel upload — get presigned CDN URL" })
+    @ApiBody({
+        schema: {
+            type: "object",
+            properties: {
+                filename: { type: "string", description: "Original filename" },
+                mimeType: { type: "string", description: "Video MIME type (video/mp4, etc.)" },
+                fileSize: { type: "number", description: "File size in bytes" },
+                caption: { type: "string", description: "Reel caption" },
+                hashtags: { type: "array", items: { type: "string" } },
+                audioMetadata: { type: "object" },
+            },
+            required: ["filename", "mimeType", "fileSize"],
+        },
+    })
+    async initUpload(
+        @Body() body: {
+            filename: string
+            mimeType: string
+            fileSize: number
+            caption?: string
+            hashtags?: string[]
+            audioMetadata?: any
+        },
+        @GetUser("id") userId: string,
+    ) {
+        return this.videoUploadService.initUpload({
+            userId,
+            filename: body.filename,
+            mimeType: body.mimeType,
+            fileSize: body.fileSize,
+            context: "reel",
+            caption: body.caption,
+            hashtags: body.hashtags,
+            audioMetadata: body.audioMetadata,
+        })
+    }
+
+    /**
+     * STEP 2: Confirm upload completed — triggers async compression pipeline
+     * Client calls this after successfully PUTting the video to the presigned R2 URL.
+     */
+    @Post("upload/complete")
+    @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
+    @ApiBearerAuth("JWT-auth")
+    @ApiOperation({ summary: "Confirm reel upload + start compression" })
+    @ApiBody({
+        schema: {
+            type: "object",
+            properties: {
+                sessionId: { type: "string", description: "Upload session ID from init" },
+            },
+            required: ["sessionId"],
+        },
+    })
+    async completeUpload(
+        @Body() body: { sessionId: string },
+        @GetUser("id") userId: string,
+    ) {
+        const result = await this.videoUploadService.completeUpload(body.sessionId, userId)
+
+        // Get session data
+        const session = this.videoUploadService.getSession(body.sessionId)
+
+        // Create a 'processing' reel record immediately so the user sees it in their feed
+        if (session) {
+            const reel = await this.reelsService.createReel(userId, {
+                videoUrl: result.videoUrl,
+                videoKey: session.compressedKey,
+                thumbnailUrl: result.thumbnailUrl,
+                thumbnailKey: session.thumbnailKey,
+                caption: session.caption,
+                hashtags: session.hashtags,
+                duration: 0, // Will be updated after compression
+                width: 0,
+                height: 0,
+                fileSize: 0,
+                aspectRatio: "9:16",
+                audioMetadata: session.audioMetadata,
+            })
+
+            // Store reelId in session for status updates
+            session.reelId = reel.id
+
+            return { ...result, reelId: reel.id, reel }
+        }
+
+        return result
+    }
+
+    /**
+     * STEP 3: Poll upload/compression status
+     */
+    @Get("upload/status/:sessionId")
+    @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
+    @ApiBearerAuth("JWT-auth")
+    @SkipThrottle()
+    @ApiOperation({ summary: "Get upload/compression progress" })
+    async getUploadStatus(
+        @Param("sessionId") sessionId: string,
+        @GetUser("id") userId: string,
+    ) {
+        const status = this.videoUploadService.getUploadStatus(sessionId, userId)
+
+        // If compression is completed, update the reel record with final metadata
+        if (status.status === "completed" && status.metadata) {
+            const session = this.videoUploadService.getSession(sessionId)
+            if (session?.reelId) {
+                // Update reel metadata in database
+                await this.reelsService.updateReelMetadata(session.reelId, {
+                    duration: status.metadata.duration,
+                    width: status.metadata.width,
+                    height: status.metadata.height,
+                    fileSize: status.metadata.compressedFileSize,
+                    aspectRatio: status.metadata.aspectRatio,
+                })
+            }
+        }
+
+        return status
+    }
+
+    // ==========================================
+    // UPLOAD LEGACY — Multipart Streaming (Fallback)
+    // ==========================================
+
+    /**
+     * Legacy upload endpoint. Streams video through backend.
+     * Still works for all file sizes but uses the new streaming service.
+     */
     @Post("upload")
     @UseGuards(JwtAuthGuard)
     @BypassSecurity()
     @ApiBearerAuth("JWT-auth")
     @Throttle({ default: { limit: 5, ttl: 60000 } })
-    @ApiOperation({ summary: "Upload a new reel" })
+    @ApiOperation({ summary: "Upload a new reel (legacy multipart)" })
     @ApiConsumes("multipart/form-data")
     async uploadReel(@Req() req: any, @GetUser("id") userId: string) {
         const data = await req.file()
@@ -86,10 +238,10 @@ export class ReelsController {
 
         const buffer = await data.toBuffer()
 
-        // Enforce max size 150MB
-        const MAX_REEL_SIZE = 150 * 1024 * 1024
+        // Enforce max size 100MB
+        const MAX_REEL_SIZE = 100 * 1024 * 1024
         if (buffer.length > MAX_REEL_SIZE) {
-            throw new BadRequestException(`Video too large. Maximum 150MB allowed.`)
+            throw new BadRequestException(`Video too large. Maximum 100MB allowed.`)
         }
 
         const fields = data.fields as Record<string, any>
@@ -102,9 +254,16 @@ export class ReelsController {
         let audioMetadata: any = {}
         try { audioMetadata = JSON.parse(audioMetadataRaw) } catch { /* ignore */ }
 
-        // Compress video via storage pipeline (FFmpeg H.264 + AAC + faststart)
-        const file = { buffer, originalname: data.filename, mimetype: data.mimetype, size: buffer.length }
-        const result = await this.storageService.uploadForumVideo(file as any, userId)
+        // Use the new streaming upload service
+        const result = await this.videoUploadService.streamUploadAndProcess(
+            buffer,
+            data.filename,
+            data.mimetype,
+            buffer.length,
+            userId,
+            "reel",
+            { caption, hashtags, audioMetadata },
+        )
 
         // Enforce max 60 seconds for Reels
         if (result.metadata.duration > 60) {

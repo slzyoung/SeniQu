@@ -17,7 +17,19 @@
 }
 
 @media (max-width: 767px) {
-    .reels-container {
+    .reels-container.reels-guest {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: auto;
+        margin: 0;
+        width: 100%;
+        z-index: 40;
+    }
+
+    .reels-container.reels-auth {
         position: fixed;
         top: 64px;
         left: 0;
@@ -57,6 +69,12 @@
     padding-top: calc(12px + env(safe-area-inset-top, 0px));
     background: linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.2) 60%, transparent 100%);
     pointer-events: none;
+}
+
+@media (max-width: 767px) {
+    .reels-header {
+        display: none !important;
+    }
 }
 
 .reels-header > * {
@@ -1159,4 +1177,19 @@
 
 .reels-search-reset-btn:hover {
     opacity: 0.7;
+}
+
+/* ─── Upload Progress Shimmer ─── */
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* ─── Hide global navbar when reels search overlay is open on mobile ─── */
+@media (max-width: 767px) {
+    body.reels-search-active nav.fixed {
+        opacity: 0 !important;
+        pointer-events: none !important;
+        visibility: hidden !important;
+    }
 }

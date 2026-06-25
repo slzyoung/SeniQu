@@ -151,6 +151,38 @@ export class ReelsService {
         return { message: "Reel deleted" }
     }
 
+    /**
+     * Update reel metadata after async compression completes.
+     * Called by the upload status polling endpoint when compression is done.
+     */
+    async updateReelMetadata(reelId: string, metadata: {
+        duration?: number
+        width?: number
+        height?: number
+        fileSize?: number
+        aspectRatio?: string
+    }) {
+        const updateData: any = {}
+        if (metadata.duration !== undefined) updateData.duration = metadata.duration
+        if (metadata.width !== undefined) updateData.width = metadata.width
+        if (metadata.height !== undefined) updateData.height = metadata.height
+        if (metadata.fileSize !== undefined) updateData.file_size = metadata.fileSize
+        if (metadata.aspectRatio !== undefined) updateData.aspect_ratio = metadata.aspectRatio
+
+        if (Object.keys(updateData).length === 0) return
+
+        const { error } = await this.supabase
+            .from("reels")
+            .update(updateData)
+            .eq("id", reelId)
+
+        if (error) {
+            this.logger.error(`Failed to update reel metadata for ${reelId}: ${error.message}`)
+        } else {
+            this.logger.log(`📊 Updated reel metadata: ${reelId}`)
+        }
+    }
+
     // ==========================================
     // LIKES
     // ==========================================

@@ -61,7 +61,10 @@ export function useForumThreads(params?: {
     return useQuery({
         queryKey: forumKeys.threads(params),
         queryFn: () => forumService.getThreads(params),
-        staleTime: 1000 * 30, // 30 seconds
+        staleTime: 1000 * 60 * 2,  // 2 minutes — avoid refetch on tab switch
+        gcTime: 1000 * 60 * 10,    // Keep in cache for 10 minutes
+        refetchOnWindowFocus: false,
+        placeholderData: (prev: any) => prev, // Keep previous data while refetching
     });
 }
 
@@ -89,6 +92,9 @@ export function useForumThread(id: string) {
         queryKey: forumKeys.thread(id),
         queryFn: () => forumService.getThread(id),
         enabled: !!id,
+        staleTime: 1000 * 60 * 5, // 5 min — thread content rarely changes
+        gcTime: 1000 * 60 * 15,
+        refetchOnWindowFocus: false,
     });
 }
 
@@ -134,6 +140,10 @@ export function useForumPosts(threadId: string, params?: { page?: number; limit?
         queryKey: forumKeys.posts(threadId, params),
         queryFn: () => forumService.getPosts(threadId, params),
         enabled: !!threadId,
+        staleTime: 1000 * 60,      // 1 minute
+        gcTime: 1000 * 60 * 5,
+        refetchOnWindowFocus: false,
+        placeholderData: (prev: any) => prev,
     });
 }
 
@@ -351,7 +361,7 @@ export function useUploadForumVideo() {
             caption?: string;
             onProgress?: (progress: number) => void;
         }) => forumService.uploadVideo(file, { threadId, postId, caption, onProgress }),
-        onSuccess: (result, { threadId }) => {
+        onSuccess: (_result, { threadId }) => {
             queryClient.invalidateQueries({ queryKey: forumKeys.threads() });
             if (threadId) {
                 queryClient.invalidateQueries({ queryKey: forumKeys.thread(threadId) });

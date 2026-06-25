@@ -20,7 +20,7 @@ import './reels.css';
 const REEL_CATEGORIES = ['All', 'Art', 'Music', 'Dance', 'Nature', 'Culture', 'Photography', 'Creative'] as const;
 
 export function ReelsPage() {
-    const { user } = useAuthStore();
+    const { user, isAuthenticated } = useAuthStore();
     const toast = useToast();
     const { data, fetchNextPage, hasNextPage, isFetching, isLoading } = useReelsFeed();
     const [isMuted, setIsMuted] = useState(true);
@@ -70,6 +70,25 @@ export function ReelsPage() {
         }
     }, [showSearch]);
 
+    // Toggle body class when search overlay is active to prevent navbar overlap on mobile
+    useEffect(() => {
+        if (showSearch) {
+            document.body.classList.add('reels-search-active');
+        } else {
+            document.body.classList.remove('reels-search-active');
+        }
+        return () => {
+            document.body.classList.remove('reels-search-active');
+        };
+    }, [showSearch]);
+
+    // Listen for mobile nav header search button event
+    useEffect(() => {
+        const handleOpenSearch = () => setShowSearch(true);
+        window.addEventListener('open-reels-search', handleOpenSearch);
+        return () => window.removeEventListener('open-reels-search', handleOpenSearch);
+    }, []);
+
     // Intersection observer for auto-play detection
     const observer = useRef<IntersectionObserver | null>(null);
     useEffect(() => {
@@ -108,7 +127,7 @@ export function ReelsPage() {
     };
 
     return (
-        <div className="reels-container">
+        <div className={`reels-container ${isAuthenticated ? 'reels-auth' : 'reels-guest'}`}>
             {/* ═══ Header ═══ */}
             <div className="reels-header">
                 <span className="reels-header-title">Reels</span>
