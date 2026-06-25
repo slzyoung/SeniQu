@@ -260,7 +260,13 @@ export const forumService = {
         },
     ): Promise<ForumVideoUploadResult> => {
         if (file.size > forumService.DIRECT_CDN_THRESHOLD) {
-            return forumService.uploadVideoDirectCDN(file, options);
+            try {
+                return await forumService.uploadVideoDirectCDN(file, options);
+            } catch (err: any) {
+                console.warn('Direct-to-CDN upload failed:', err);
+                options?.onStatus?.('Direct upload failed. Retrying via backend...');
+                return await forumService.uploadVideoLegacy(file, options);
+            }
         }
         return forumService.uploadVideoLegacy(file, options);
     },

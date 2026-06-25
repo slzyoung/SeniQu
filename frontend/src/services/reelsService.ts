@@ -116,7 +116,13 @@ export const reelsService = {
         },
     ): Promise<Reel> => {
         if (file.size > DIRECT_CDN_THRESHOLD) {
-            return reelsService.uploadReelDirectCDN(file, options);
+            try {
+                return await reelsService.uploadReelDirectCDN(file, options);
+            } catch (err: any) {
+                console.warn('Direct-to-CDN upload failed:', err);
+                options?.onStatus?.('Direct upload failed. Retrying via backend...');
+                return await reelsService.uploadReelLegacy(file, options);
+            }
         }
         return reelsService.uploadReelLegacy(file, options);
     },

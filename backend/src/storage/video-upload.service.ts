@@ -197,6 +197,7 @@ export class VideoUploadService implements OnModuleInit {
 
         const uploadUrl = await getSignedUrl(this.s3Client, command, {
             expiresIn: PRESIGNED_URL_EXPIRY,
+            signableHeaders: new Set(["host"]),
         })
 
         // Create session
