@@ -6,13 +6,19 @@
 import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import { createClient, SupabaseClient } from "@supabase/supabase-js"
+import { EmailNotificationService } from "../email/email-notification.service"
+import { NotificationsService } from "../notifications/notifications.service"
 
 @Injectable()
 export class ReelsService {
     private readonly logger = new Logger(ReelsService.name)
     private supabase: SupabaseClient
 
-    constructor(private readonly configService: ConfigService) {
+    constructor(
+        private readonly configService: ConfigService,
+        private readonly emailNotification: EmailNotificationService,
+        private readonly notificationsService: NotificationsService
+    ) {
         this.supabase = createClient(
             this.configService.get<string>("SUPABASE_URL") || "",
             this.configService.get<string>("SUPABASE_SERVICE_ROLE_KEY") || "",
@@ -196,6 +202,12 @@ export class ReelsService {
             return { liked: false }
         } else {
             await this.supabase.from("reel_likes").insert({ reel_id: reelId, user_id: userId })
+
+            // Trigger like email notification (non-blocking)
+            this.triggerReelLikeNotification(userId, reelId).catch(err => {
+                this.logger.error(`Failed to send reel like notification: ${err.message}`)
+            })
+
             return { liked: true }
         }
     }
@@ -230,6 +242,12 @@ export class ReelsService {
             .single()
 
         if (error) throw new BadRequestException("Failed to post comment")
+
+        // Trigger comment email notification (non-blocking)
+        this.triggerReelCommentNotification(userId, reelId, content).catch(err => {
+            this.logger.error(`Failed to send reel comment notification: ${err.message}`)
+        })
+
         return data
     }
 
@@ -355,6 +373,81 @@ export class ReelsService {
                 limit,
                 totalPages: Math.ceil((count || 0) / limit),
             },
+        }
+    }
+
+    private async triggerReelLikeNotification(likerId: string, reelId: string) {
+        try {
+            const [likerRes, reelRes] = await Promise.all([
+                this.supabase.from("users").select("display_name, username").eq("id", likerId).single(),
+                this.supabase.from("reels").select("user_id, caption").eq("id", reelId).single()
+            ])
+
+            if (likerRes.data && reelRes.data && reelRes.data.user_id) {
+                const likerName = likerRes.data.display_name || likerRes.data.username || "Seseorang"
+                const reel = reelRes.data
+
+                if (reel.user_id !== likerId) {
+                    await this.notificationsService.create({
+                        userId: reel.user_id,
+                        type: "artwork",
+                        title: "Sukai Baru di Reels",
+                        message: `${likerName} menyukai Reels Anda`,
+                        referenceId: reelId,
+                        referenceType: "reel"
+                    }).catch(err => {
+                        this.logger.error(`Failed to create reel like in-app notification: ${err.message}`)
+                    })
+                }
+
+                await this.emailNotification.sendLikeNotification(
+                    likerId,
+                    reel.user_id,
+                    "reel",
+                    reelId,
+                    reel.caption || "Reels"
+                )
+            }
+        } catch (err: any) {
+            this.logger.error(`Error in triggerReelLikeNotification: ${err.message}`)
+        }
+    }
+
+    private async triggerReelCommentNotification(commenterId: string, reelId: string, content: string) {
+        try {
+            const [commenterRes, reelRes] = await Promise.all([
+                this.supabase.from("users").select("display_name, username").eq("id", commenterId).single(),
+                this.supabase.from("reels").select("user_id, caption").eq("id", reelId).single()
+            ])
+
+            if (commenterRes.data && reelRes.data && reelRes.data.user_id) {
+                const commenterName = commenterRes.data.display_name || commenterRes.data.username || "Seseorang"
+                const reel = reelRes.data
+
+                if (reel.user_id !== commenterId) {
+                    await this.notificationsService.create({
+                        userId: reel.user_id,
+                        type: "artwork",
+                        title: "Komentar Baru di Reels",
+                        message: `${commenterName} mengomentari Reels Anda: "${reel.caption || 'Reels'}"`,
+                        referenceId: reelId,
+                        referenceType: "reel"
+                    }).catch(err => {
+                        this.logger.error(`Failed to create reel comment in-app notification: ${err.message}`)
+                    })
+                }
+
+                await this.emailNotification.sendCommentNotification(
+                    commenterId,
+                    reel.user_id,
+                    "reel",
+                    reelId,
+                    reel.caption || "Reels",
+                    content
+                )
+            }
+        } catch (err: any) {
+            this.logger.error(`Error in triggerReelCommentNotification: ${err.message}`)
         }
     }
 }

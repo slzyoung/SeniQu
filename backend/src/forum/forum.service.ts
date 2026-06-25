@@ -15,13 +15,19 @@ import { CreateThreadDto } from "./dto/create-thread.dto"
 import { UpdateThreadDto } from "./dto/update-thread.dto"
 import { CreatePostDto } from "./dto/create-post.dto"
 import { UpdatePostDto } from "./dto/update-post.dto"
+import { EmailNotificationService } from "../email/email-notification.service"
+import { NotificationsService } from "../notifications/notifications.service"
 
 @Injectable()
 export class ForumService {
     private readonly logger = new Logger(ForumService.name)
     private readonly supabase: SupabaseClient
 
-    constructor(private configService: ConfigService) {
+    constructor(
+        private readonly configService: ConfigService,
+        private readonly emailNotification: EmailNotificationService,
+        private readonly notificationsService: NotificationsService
+    ) {
         this.supabase = createClient(
             this.configService.get<string>("SUPABASE_URL")!,
             this.configService.get<string>("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -306,7 +312,7 @@ export class ForumService {
         // Check if thread is locked
         const { data: thread } = await this.supabase
             .from("forum_threads")
-            .select("is_locked")
+            .select("is_locked, user_id, title")
             .eq("id", threadId)
             .single()
 
@@ -327,6 +333,40 @@ export class ForumService {
         if (error) {
             this.logger.error(`Failed to create post: ${error.message}`)
             throw error
+        }
+
+        if (thread && thread.user_id) {
+            // Trigger email notification (non-blocking)
+            this.emailNotification.sendCommentNotification(
+                authorId,
+                thread.user_id,
+                "thread",
+                threadId,
+                thread.title || "Thread Forum",
+                dto.content
+            ).catch(err => {
+                this.logger.error(`Failed to send forum comment email notification: ${err.message}`)
+            })
+
+            // Trigger in-app notification (non-blocking)
+            if (thread.user_id !== authorId) {
+                (async () => {
+                    const { data: commenter } = await this.supabase.from("users").select("display_name, username").eq("id", authorId).single()
+                    if (commenter) {
+                        const commenterName = commenter.display_name || commenter.username || "Seseorang"
+                        await this.notificationsService.create({
+                            userId: thread.user_id,
+                            type: "forum",
+                            title: "Komentar Utas Baru",
+                            message: `${commenterName} mengomentari utas Anda: "${thread.title || 'Utas Forum'}"`,
+                            referenceId: threadId,
+                            referenceType: "forum_thread"
+                        })
+                    }
+                })().catch((err: any) => {
+                    this.logger.error(`Failed to send forum in-app comment notification: ${err.message}`)
+                })
+            }
         }
 
         return { data }
@@ -443,6 +483,11 @@ export class ForumService {
                 if (data) {
                     await this.supabase.from(tableName).update({ likes: (data.likes || 0) + 1 }).eq('id', targetId)
                 }
+
+                // Trigger like email notification (non-blocking)
+                this.triggerForumLikeNotification(userId, targetId, type).catch(err => {
+                    this.logger.error(`Failed to send like notification: ${err.message}`)
+                })
             }
             return { success: true, liked: true }
         } else {
@@ -638,6 +683,77 @@ export class ForumService {
         } catch (err: any) {
             this.logger.error(`Video metadata save error: ${err.message}`)
             return null
+        }
+    }
+
+    private async triggerForumLikeNotification(likerId: string, targetId: string, type: 'forum_thread' | 'forum_post') {
+        try {
+            const { data: liker } = await this.supabase
+                .from("users")
+                .select("display_name, username")
+                .eq("id", likerId)
+                .single()
+            const likerName = liker?.display_name || liker?.username || "Seseorang"
+
+            if (type === 'forum_thread') {
+                const { data: thread } = await this.supabase
+                    .from('forum_threads')
+                    .select('user_id, title')
+                    .eq('id', targetId)
+                    .single()
+                if (thread && thread.user_id) {
+                    if (thread.user_id !== likerId) {
+                        await this.notificationsService.create({
+                            userId: thread.user_id,
+                            type: "forum",
+                            title: "Sukai Utas Baru",
+                            message: `${likerName} menyukai utas Anda: "${thread.title || 'Utas Forum'}"`,
+                            referenceId: targetId,
+                            referenceType: "forum_thread"
+                        }).catch(err => {
+                            this.logger.error(`Failed to create like in-app notification: ${err.message}`)
+                        })
+                    }
+
+                    await this.emailNotification.sendLikeNotification(
+                        likerId,
+                        thread.user_id,
+                        'thread',
+                        targetId,
+                        thread.title || 'Utas Forum'
+                    )
+                }
+            } else {
+                const { data: post } = await this.supabase
+                    .from('forum_posts')
+                    .select('author_id, content, thread_id')
+                    .eq('id', targetId)
+                    .single()
+                if (post && post.author_id) {
+                    if (post.author_id !== likerId) {
+                        await this.notificationsService.create({
+                            userId: post.author_id,
+                            type: "forum",
+                            title: "Sukai Postingan Baru",
+                            message: `${likerName} menyukai postingan Anda di utas`,
+                            referenceId: post.thread_id || targetId,
+                            referenceType: "forum_post"
+                        }).catch(err => {
+                            this.logger.error(`Failed to create post like in-app notification: ${err.message}`)
+                        })
+                    }
+
+                    await this.emailNotification.sendLikeNotification(
+                        likerId,
+                        post.author_id,
+                        'post',
+                        post.thread_id || targetId,
+                        post.content || 'Postingan Forum'
+                    )
+                }
+            }
+        } catch (err: any) {
+            this.logger.error(`Error in triggerForumLikeNotification: ${err.message}`)
         }
     }
 

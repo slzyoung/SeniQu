@@ -3,6 +3,8 @@ import { DatabaseService } from "../database/database.service"
 import { CreateUserDto } from "./dto/create-user.dto"
 import { UpdateUserDto } from "./dto/update-user.dto"
 import { PrivyService } from "../auth/privy.service"
+import { EmailNotificationService } from "../email/email-notification.service"
+import { NotificationsService } from "../notifications/notifications.service"
 
 export interface User {
     id: string
@@ -38,7 +40,9 @@ export class UsersService {
     constructor(
         private readonly db: DatabaseService,
         @Inject(forwardRef(() => PrivyService))
-        private readonly privyService: PrivyService
+        private readonly privyService: PrivyService,
+        private readonly emailNotification: EmailNotificationService,
+        private readonly notificationsService: NotificationsService
     ) { }
 
     async create(dto: CreateUserDto): Promise<User> {
@@ -860,6 +864,22 @@ export class UsersService {
             this.logger.error(`Follow error: ${error.message}`)
             throw new Error(error.message)
         }
+
+        // Trigger follow in-app notification (non-blocking)
+        (async () => {
+            const { data } = await client.from("users").select("display_name, username").eq("id", followerId).single()
+            if (data) {
+                const followerName = data.display_name || data.username || "Seseorang"
+                await this.notificationsService.notifyNewFollower(followingId, followerName)
+            }
+        })().catch((err: any) => {
+            this.logger.error(`Failed to send follow in-app notification: ${err.message}`)
+        })
+
+        // Trigger follow email notification (non-blocking)
+        this.emailNotification.sendFollowNotification(followerId, followingId).catch(err => {
+            this.logger.error(`Failed to send follow email notification: ${err.message}`)
+        })
 
         return { success: true, action: "followed" }
     }

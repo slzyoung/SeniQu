@@ -21,6 +21,8 @@ import {
 } from "@nestjs/common"
 import { DatabaseService } from "../database/database.service"
 import { SendMessageDto, ReportMessageDto } from "./dto/message.dto"
+import { EmailNotificationService } from "../email/email-notification.service"
+import { NotificationsService } from "../notifications/notifications.service"
 
 // Anti-spam: max messages per minute per user
 const MAX_MESSAGES_PER_MINUTE = 30
@@ -33,7 +35,11 @@ export class MessagesService {
     // In-memory rate limiting (per-instance; use Redis for multi-instance)
     private rateLimits = new Map<string, { count: number; resetAt: number }>()
 
-    constructor(private readonly db: DatabaseService) {}
+    constructor(
+        private readonly db: DatabaseService,
+        private readonly emailNotification: EmailNotificationService,
+        private readonly notificationsService: NotificationsService
+    ) {}
 
     /**
      * Send an encrypted message
@@ -120,6 +126,29 @@ export class MessagesService {
             .eq("id", conversationId)
 
         this.logger.log(`💬 Message sent: ${message.id} from ${senderId} to ${dto.recipientId}`)
+
+        // Trigger email notification (non-blocking, throttled internally)
+        this.emailNotification.sendChatNotification(senderId, dto.recipientId).catch(err => {
+            this.logger.error(`Failed to send email notification: ${err.message}`)
+        });
+
+        // Trigger in-app notification (non-blocking)
+        (async () => {
+            const { data } = await client.from("users").select("display_name, username").eq("id", senderId).single()
+            if (data) {
+                const senderName = data.display_name || data.username || "Seseorang"
+                await this.notificationsService.create({
+                    userId: dto.recipientId,
+                    type: "system",
+                    title: "Pesan Baru",
+                    message: `${senderName} mengirimkan pesan baru untuk Anda`,
+                    referenceId: message.id,
+                    referenceType: "message",
+                })
+            }
+        })().catch((err: any) => {
+            this.logger.error(`Failed to send message in-app notification: ${err.message}`)
+        })
 
         return {
             id: message.id,

@@ -147,6 +147,7 @@ Deep-dive into SenaQu's internal architecture via the [`/doc`](./doc) directory:
 - 📸 **[Gemini AI Heritage Analyzer](./doc/16-Gemini-Heritage-Analyzer.md)**: Multimodal Gemini 2.5 Flash scanner, daily quota tracking, Web Speech audio narration, and R2 backup storage.
 - 🧪 **[Gemini AI Curation Lab](./doc/17-Gemini-AI-Curation-Lab.md)**: Interactive Before/After digital restoration lab, authentic color palette, Dublin Core metadata, and TTS audio guides.
 - 🎥 **[Shorts, Reels, & Social Follow System](./doc/20-Shorts-Reels-And-Social-Follow-System.md)**: Custom player short-form Reels feed, interactive multi-step video editor (trimming, playback speed, aspect ratio crop, visual filters), Spotify soundtrack & local audio uploads, forum video uploads, user follow network, and sidebar UX hierarchy.
+- 🔔 **[AI Moderation & Notifications](./doc/21-Content-Moderation-And-Notifications.md)**: AI image/video screening with Google Cloud Vision & Video Intelligence, real-time in-app notifications, and anti-spam throttled email delivery.
 
 ---
 

@@ -12,6 +12,7 @@ import { AppService } from "./app.service"
 import { DatabaseModule } from "./database/database.module"
 import { HealthModule } from "./health/health.module"
 import { AuditModule } from "./audit/audit.module"
+import { EmailModule } from "./email/email.module"
 
 // Feature Modules
 import { AuthModule } from "./auth/auth.module"
@@ -80,6 +81,7 @@ import { ReelsModule } from "./reels/reels.module"
         DatabaseModule,
         HealthModule,
         AuditModule, // Global security audit logging
+        EmailModule,
 
         // ===========================================
         // FEATURE MODULES

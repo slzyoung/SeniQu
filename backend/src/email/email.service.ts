@@ -183,7 +183,7 @@ export class EmailService {
     /**
      * Core send method with fallback to console logging
      */
-    private async sendMail(to: string, subject: string, html: string): Promise<boolean> {
+    public async sendMail(to: string, subject: string, html: string): Promise<boolean> {
         const from = this.configService.get<string>("smtp.from") || "SeniQu <noreply@seniqu.com>"
 
         if (!this.transporter) {
