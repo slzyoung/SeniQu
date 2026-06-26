@@ -128,19 +128,51 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
 
     // Sync external soundtrack
     useEffect(() => {
-        if (!audioMeta.url) return;
+        if (!audioMeta.url) {
+            if (audioTrackRef.current) {
+                audioTrackRef.current.pause();
+                audioTrackRef.current = null;
+            }
+            return;
+        }
 
+        // Initialize or update source
         if (!audioTrackRef.current) {
             audioTrackRef.current = new Audio(audioMeta.url);
             audioTrackRef.current.loop = true;
+        } else if (audioTrackRef.current.src !== audioMeta.url) {
+            audioTrackRef.current.pause();
+            audioTrackRef.current.src = audioMeta.url;
+            audioTrackRef.current.load();
         }
 
         const audio = audioTrackRef.current;
         audio.volume = (audioMeta.volume ?? 0.8) * (isMuted ? 0 : 1);
 
+        const syncAndPlay = () => {
+            const targetTime = (audioMeta.offset || 0) + (videoRef.current?.currentTime || 0) - trimStart;
+            if (audio.readyState >= 1) { // HAVE_METADATA or higher
+                try {
+                    audio.currentTime = targetTime;
+                } catch (e) {
+                    console.warn("Failed to set audio currentTime:", e);
+                }
+            } else {
+                const onLoadedMetadata = () => {
+                    try {
+                        audio.currentTime = targetTime;
+                    } catch (e) {
+                        console.warn("Failed to set audio currentTime on loadedmetadata:", e);
+                    }
+                    audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+                };
+                audio.addEventListener('loadedmetadata', onLoadedMetadata);
+            }
+            audio.play().catch(err => console.warn("Failed to play audio:", err));
+        };
+
         if (isActive && isPlaying) {
-            audio.currentTime = (audioMeta.offset || 0) + (videoRef.current?.currentTime || 0) - trimStart;
-            audio.play().catch(() => { });
+            syncAndPlay();
         } else {
             audio.pause();
         }

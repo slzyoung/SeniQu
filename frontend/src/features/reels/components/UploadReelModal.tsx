@@ -427,10 +427,29 @@ export default function UploadReelModal({ onClose }: Props) {
             }
             setIsPlayingSpotifyPreview(true);
             setTimeout(() => {
-                if (audioPreviewRef.current) {
-                    audioPreviewRef.current.src = track.url;
-                    audioPreviewRef.current.currentTime = spotifyOffset;
-                    audioPreviewRef.current.play().catch(err => console.log('Audio playback blocked', err));
+                const audio = audioPreviewRef.current;
+                if (audio) {
+                    audio.src = track.url;
+                    audio.load();
+
+                    const setTimeAndPlay = () => {
+                        try {
+                            audio.currentTime = spotifyOffset;
+                        } catch (err) {
+                            console.warn('Failed to set currentTime directly:', err);
+                        }
+                        audio.play().catch(err => console.log('Audio playback blocked', err));
+                    };
+
+                    if (audio.readyState >= 1) {
+                        setTimeAndPlay();
+                    } else {
+                        const onLoadedMetadata = () => {
+                            setTimeAndPlay();
+                            audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+                        };
+                        audio.addEventListener('loadedmetadata', onLoadedMetadata);
+                    }
                 }
             }, 50);
         }
@@ -443,10 +462,29 @@ export default function UploadReelModal({ onClose }: Props) {
             setIsPlayingInternalPreview(false);
         } else {
             setIsPlayingInternalPreview(true);
-            if (audioPreviewRef.current) {
-                audioPreviewRef.current.src = internalAudioUrl;
-                audioPreviewRef.current.currentTime = internalAudioOffset;
-                audioPreviewRef.current.play().catch(err => console.log('Audio playback blocked', err));
+            const audio = audioPreviewRef.current;
+            if (audio) {
+                audio.src = internalAudioUrl;
+                audio.load();
+
+                const setTimeAndPlay = () => {
+                    try {
+                        audio.currentTime = internalAudioOffset;
+                    } catch (err) {
+                        console.warn('Failed to set currentTime directly:', err);
+                    }
+                    audio.play().catch(err => console.log('Audio playback blocked', err));
+                };
+
+                if (audio.readyState >= 1) {
+                    setTimeAndPlay();
+                } else {
+                    const onLoadedMetadata = () => {
+                        setTimeAndPlay();
+                        audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+                    };
+                    audio.addEventListener('loadedmetadata', onLoadedMetadata);
+                }
             }
         }
     };
