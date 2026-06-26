@@ -97,6 +97,7 @@ export class ForumController {
             threadId?: string
             postId?: string
             caption?: string
+            mute?: boolean
         },
         @GetUser("id") userId: string,
     ) {
@@ -109,6 +110,7 @@ export class ForumController {
             threadId: body.threadId,
             postId: body.postId,
             caption: body.caption,
+            audioMetadata: body.mute ? { mute: true, originalVolume: 0 } : undefined
         })
     }
 
@@ -219,6 +221,7 @@ export class ForumController {
         const threadId = fields?.threadId?.value || undefined
         const postId = fields?.postId?.value || undefined
         const caption = fields?.caption?.value || undefined
+        const muteVal = fields?.mute?.value === 'true' || fields?.mute?.value === true;
 
         // Upload & compress video through new streaming service
         const result = await this.videoUploadService.streamUploadAndProcess(
@@ -228,7 +231,10 @@ export class ForumController {
             buffer.length,
             userId,
             "forum",
-            { caption },
+            { 
+                caption,
+                audioMetadata: muteVal ? { mute: true, originalVolume: 0 } : undefined
+            },
         )
 
         // Save metadata to database

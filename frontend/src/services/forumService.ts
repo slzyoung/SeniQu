@@ -255,6 +255,7 @@ export const forumService = {
             threadId?: string;
             postId?: string;
             caption?: string;
+            mute?: boolean;
             onProgress?: (progress: number) => void;
             onStatus?: (status: string) => void;
         },
@@ -281,6 +282,7 @@ export const forumService = {
             threadId?: string;
             postId?: string;
             caption?: string;
+            mute?: boolean;
             onProgress?: (progress: number) => void;
             onStatus?: (status: string) => void;
         },
@@ -298,6 +300,7 @@ export const forumService = {
             threadId: options?.threadId,
             postId: options?.postId,
             caption: options?.caption,
+            mute: options?.mute,
         });
 
         const initData = initResponse.data?.success !== undefined
@@ -406,6 +409,7 @@ export const forumService = {
             threadId?: string;
             postId?: string;
             caption?: string;
+            mute?: boolean;
             onProgress?: (progress: number) => void;
             onStatus?: (status: string) => void;
         },
@@ -417,6 +421,7 @@ export const forumService = {
         if (options?.threadId) formData.append('threadId', options.threadId);
         if (options?.postId) formData.append('postId', options.postId);
         if (options?.caption) formData.append('caption', options.caption);
+        if (options?.mute) formData.append('mute', String(options.mute));
 
         const response = await api.post('/forum/video/upload', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },

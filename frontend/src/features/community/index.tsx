@@ -667,6 +667,7 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
     const [videoMeta, setVideoMeta] = useState<{ duration: number; width: number; height: number; size: number } | null>(null);
     const [validationError, setValidationError] = useState<string | null>(null);
     const [validationWarning, setValidationWarning] = useState<string | null>(null);
+    const [muteVideoSound, setMuteVideoSound] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const videoInputRef = useRef<HTMLInputElement>(null);
@@ -766,6 +767,7 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
             setVideoMeta(null);
             setValidationWarning(null);
             setValidationError(null);
+            setMuteVideoSound(false);
         }
     };
 
@@ -790,6 +792,7 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                     setUploadPhase('uploading');
 
                     const videoResult = await forumService.uploadVideo(firstFile, {
+                        mute: muteVideoSound,
                         onProgress: (p) => {
                             setUploadProgress(p);
                             if (p >= 80) setUploadPhase('compressing');
@@ -1053,6 +1056,23 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                                             </select>
                                         </div>
                                     </div>
+
+                                    {/* Mute Audio Option for Videos */}
+                                    {isVideo && (
+                                        <div className="px-4 py-2.5 bg-gray-50/50 dark:bg-white/[0.01] border-t border-gray-100 dark:border-white/5">
+                                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={muteVideoSound}
+                                                    onChange={e => setMuteVideoSound(e.target.checked)}
+                                                    className="w-4.5 h-4.5 accent-amber-500 rounded border-gray-200 dark:border-white/10 focus:ring-amber-500 dark:focus:ring-gold bg-white dark:bg-[#151515]"
+                                                />
+                                                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                                                    Mute original sound from this video (silent video)
+                                                </span>
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-2 gap-2">

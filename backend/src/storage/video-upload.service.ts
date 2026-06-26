@@ -351,9 +351,13 @@ export class VideoUploadService implements OnModuleInit {
                 `${metadata.width}x${metadata.height} | ${metadata.videoCodec}`
             )
 
+            const audioMeta = session.audioMetadata || {}
+            const isMuted = audioMeta.originalVolume === 0 || audioMeta.mute === true
+
             const { video, thumbnail } = await this.videoProcessor.processVideoFromFile(
                 rawFilePath,
-                "video/mp4"
+                "video/mp4",
+                isMuted
             )
             tempFiles.push(video.videoPath, thumbnail.thumbnailPath)
 
@@ -597,8 +601,11 @@ export class VideoUploadService implements OnModuleInit {
             const actualSize = fs.statSync(tmpInputPath).size
             this.logger.log(`🎬 Stream upload: ${filename} (${this.videoProcessor.formatSize(actualSize)})`)
 
+            const audioMeta = options?.audioMetadata || {}
+            const isMuted = audioMeta.originalVolume === 0 || audioMeta.mute === true
+
             // Process video from file path — NO buffer in memory
-            const { video, thumbnail } = await this.videoProcessor.processVideoFromFile(tmpInputPath, mimeType)
+            const { video, thumbnail } = await this.videoProcessor.processVideoFromFile(tmpInputPath, mimeType, isMuted)
             tempFiles.push(video.videoPath, thumbnail.thumbnailPath)
 
             // Moderate Thumbnail (thumbnail buffer is tiny ~50KB)

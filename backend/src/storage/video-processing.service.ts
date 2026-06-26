@@ -217,7 +217,7 @@ export class VideoProcessingService {
      *
      * Returns the OUTPUT FILE PATH — caller is responsible for cleanup.
      */
-    async compressVideoFile(inputFile: string, mimetype: string): Promise<ProcessedVideoResult> {
+    async compressVideoFile(inputFile: string, mimetype: string, mute = false): Promise<ProcessedVideoResult> {
         const outputFile = path.join(os.tmpdir(), `seniqu-vc-${uuidv4()}.mp4`)
 
         try {
@@ -243,6 +243,7 @@ export class VideoProcessingService {
 
             // Determine if we need to re-encode
             const isAlreadyOptimal =
+                !mute &&
                 metadata.videoCodec === "h264" &&
                 metadata.width <= MAX_WIDTH &&
                 metadata.height <= MAX_HEIGHT &&
@@ -263,7 +264,7 @@ export class VideoProcessingService {
             }
 
             this.logger.log(
-                `🎬 Compressing video: ${metadata.width}x${metadata.height} → ${targetWidth}x${targetHeight} ` +
+                `🎬 Compressing video (mute=${mute}): ${metadata.width}x${metadata.height} → ${targetWidth}x${targetHeight} ` +
                 `(${metadata.videoCodec} → h264, CRF ${CRF_QUALITY}, ${this.formatSize(inputSize)})`
             )
 
@@ -274,24 +275,36 @@ export class VideoProcessingService {
                 : null
 
             await new Promise<void>((resolve, reject) => {
-                let cmd = ffmpeg(inputFile)
-                    .outputOptions([
-                        `-c:v libx264`,         // H.264 codec — widest compatibility
-                        `-preset faster`,        // Faster encoding — still good compression
-                        `-crf ${CRF_QUALITY}`,   // Constant Rate Factor quality
-                        `-profile:v main`,       // Main profile for mobile compatibility
-                        `-level 4.0`,            // Level 4.0 for 1080p support
-                        `-pix_fmt yuv420p`,      // Standard pixel format
-                        `-movflags +faststart`,  // Enable progressive download
-                        `-maxrate 4M`,           // Cap bitrate to prevent bloat on complex scenes
-                        `-bufsize 8M`,           // VBV buffer size
+                const options = [
+                    `-c:v libx264`,         // H.264 codec — widest compatibility
+                    `-preset faster`,        // Faster encoding — still good compression
+                    `-crf ${CRF_QUALITY}`,   // Constant Rate Factor quality
+                    `-profile:v main`,       // Main profile for mobile compatibility
+                    `-level 4.0`,            // Level 4.0 for 1080p support
+                    `-pix_fmt yuv420p`,      // Standard pixel format
+                    `-movflags +faststart`,  // Enable progressive download
+                    `-maxrate 4M`,           // Cap bitrate to prevent bloat on complex scenes
+                    `-bufsize 8M`,           // VBV buffer size
+                ];
+
+                if (mute) {
+                    options.push(`-an`);     // Completely strip audio track (mute)
+                } else {
+                    options.push(
                         `-c:a aac`,              // AAC audio codec
                         `-b:a ${AUDIO_BITRATE}`, // Audio bitrate
                         `-ac 2`,                 // Stereo audio
                         `-ar 44100`,             // Standard sample rate
-                        `-max_muxing_queue_size 2048`,
-                        `-threads 0`,            // Use all available CPU threads
-                    ])
+                    );
+                }
+
+                options.push(
+                    `-max_muxing_queue_size 2048`,
+                    `-threads 0`,            // Use all available CPU threads
+                );
+
+                let cmd = ffmpeg(inputFile)
+                    .outputOptions(options)
                     .outputFormat("mp4")
 
                 if (scaleFilter) {
@@ -444,7 +457,7 @@ export class VideoProcessingService {
      *
      * IMPORTANT: Caller is responsible for cleaning up returned file paths.
      */
-    async processVideoFromFile(inputFile: string, mimetype: string): Promise<{
+    async processVideoFromFile(inputFile: string, mimetype: string, mute = false): Promise<{
         video: ProcessedVideoResult
         thumbnail: VideoThumbnailResult
     }> {
@@ -461,7 +474,7 @@ export class VideoProcessingService {
             });
 
             // Run compression (file path → file path, NO buffer in memory)
-            const video = await this.compressVideoFile(inputFile, mimetype)
+            const video = await this.compressVideoFile(inputFile, mimetype, mute)
 
             // Generate thumbnail from COMPRESSED video (already on disk)
             const thumbnail = await this.generateThumbnailFromFile(video.videoPath)

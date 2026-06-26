@@ -153,3 +153,63 @@ SeniQu provides a comprehensive in-app sharing system that bridges internal thre
 * The sharing drawer features official third-party vector branding.
 * **WhatsApp Icon**: Updated to use the official two-part SVG logo (white handset enclosed inside a `#25D366` green bubble background) for maximum brand accuracy.
 * **Dynamic Sharing Layouts**: Seamless grid structures that transition gracefully between mobile sheets and desktop overlays.
+
+---
+
+## 7. Video Audio Editing: Mute and Spotify Integration
+
+To provide creators with professional sound design options, SeniQu features active original-sound muting at both the player level and the transcoding pipeline level, alongside a Spotify-linked audio system.
+
+### 7.1. Video Mute Pipeline (FFmpeg-Level Mute)
+* **Backend Processing**: 
+  * The backend `VideoProcessingService` detects if a video has been configured to have no audio (via `mute: true` or `originalVolume: 0` in the upload session/payload).
+  * During FFmpeg compression, if muting is requested, the system omits the standard AAC encoder options (`-c:a aac -b:a 128k`) and appends the `-an` flag (disable audio stream).
+  * This strips the audio track directly from the resulting `.mp4` file, saving storage and bandwidth while guaranteeing complete silence in all players.
+* **Frontend Toggles**:
+  * **Reels Upload Wizard**: Included in the trimming/audio step, allowing creators to mute original audio or mix Spotify sounds.
+  * **Forum Thread Creator**: Added a checkbox toggle `"Mute original sound from this video (silent video)"` when a video attachment is selected. It transmits `mute: true` in the multipart or Direct-to-CDN upload requests.
+
+### 7.2. Spotify Account Connection Guide (How it works)
+SeniQu connects users to their personal Spotify accounts dynamically to retrieve metadata and play audio.
+
+#### 1. OAuth Authentication
+* To connect a Spotify account, the user must authorize SeniQu via Spotify's Accounts Service:
+  ```
+  GET https://accounts.spotify.com/authorize?
+    client_id=YOUR_CLIENT_ID
+    &response_type=code
+    &redirect_uri=YOUR_CALLBACK_URL
+    &scope=user-read-private%20user-read-email%20streaming%20user-modify-playback-state
+  ```
+* Upon authorization, the backend exchanges the authorization code for an Access Token and Refresh Token, storing them securely in the user's session profile.
+
+#### 2. Spotify Web Playback SDK Integration
+* The frontend loads the Spotify Web Playback SDK (`https://sdk.scdn.co/spotify-player.js`) in a custom script element.
+* When the SDK initializes, it creates an in-browser virtual playback device connected to the user's Spotify account:
+  ```javascript
+  const player = new window.Spotify.Player({
+    name: 'SeniQu Reels Player',
+    getOAuthToken: cb => { cb(accessToken); }
+  });
+  player.connect();
+  ```
+
+#### 3. High-Fidelity Audio Synchronization
+* When a Reel starts playing, the custom video player uses Spotify's Web API to trigger playback of the selected Track ID on the virtual player device:
+  ```javascript
+  // Play selected Spotify track at the designated offset
+  await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${accessToken}` },
+    body: JSON.stringify({
+      uris: [`spotify:track:${trackId}`],
+      position_ms: offsetSeconds * 1000
+    })
+  });
+  ```
+* Playback states (play, pause, volume, time update) are synchronized between the HTML5 `<video>` tag and the Spotify Player object.
+
+#### 4. Important Considerations & Spotify Terms
+* **Spotify Premium Requirement**: Spotify's Web Playback SDK is strictly limited to **Spotify Premium** subscribers. Users with free accounts will get a 30-second audio preview via `preview_url` rather than a full, synced playback experience.
+* **Copyright Restrictions**: Under Spotify Developer Terms, Spotify audio streams cannot be combined/multiplexed directly into the MP4 file on the backend for raw download or sharing to platforms like WhatsApp. Audio remains hosted on Spotify, synced dynamically on-client in the browser.
+
