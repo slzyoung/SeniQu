@@ -258,6 +258,7 @@ export const forumService = {
             mute?: boolean;
             onProgress?: (progress: number) => void;
             onStatus?: (status: string) => void;
+            xhrRef?: { current: XMLHttpRequest | null };
         },
     ): Promise<ForumVideoUploadResult> => {
         if (file.size > forumService.DIRECT_CDN_THRESHOLD) {
@@ -285,6 +286,7 @@ export const forumService = {
             mute?: boolean;
             onProgress?: (progress: number) => void;
             onStatus?: (status: string) => void;
+            xhrRef?: { current: XMLHttpRequest | null };
         },
     ): Promise<ForumVideoUploadResult> => {
         const { onProgress, onStatus } = options || {};
@@ -315,6 +317,9 @@ export const forumService = {
         // ── STEP 2: Upload video directly to R2 CDN via presigned URL ──
         await new Promise<void>((resolve, reject) => {
             const xhr = new XMLHttpRequest();
+            if (options?.xhrRef) {
+                options.xhrRef.current = xhr;
+            }
             xhr.open('PUT', uploadUrl, true);
             xhr.setRequestHeader('Content-Type', file.type);
 

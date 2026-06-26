@@ -8,6 +8,7 @@ import { useAuthModalStore } from '../../stores/useAuthModalStore';
 import { PrivyAuthBridge } from '../providers/PrivyAuthBridge';
 import { SpotifyAuthBridge } from '../providers/SpotifyAuthBridge';
 import { CookieConsent } from './CookieConsent';
+import { BackgroundUploadWidget } from './BackgroundUploadWidget';
 
 import { LoadingFallback } from './LoadingFallback';
 
@@ -43,6 +44,7 @@ export const GlobalLayout: React.FC = () => {
 
                 {/* Global Auth Modal - Available on all pages */}
                 <AuthModal isOpen={isOpen} onClose={closeAuthModal} initialView={initialView} />
+                <BackgroundUploadWidget />
             </PrivyAuthBridge>
         </>
     );

@@ -5,9 +5,10 @@ import {
     Sparkles, AlertCircle, Video, FastForward, Crop, LogOut
 } from 'lucide-react';
 import '../reels.css';
-import { useUploadReel } from '../../../hooks/useReels';
 import { validateVideo, generateVideoThumbnail, formatFileSize } from '../../../lib/videoCompressor';
 import Button from '../../../components/ui/Button';
+import { useUploadStore } from '../../../stores/useUploadStore';
+import { useToast } from '../../../stores/useNotificationStore';
 
 interface Props { onClose: () => void; }
 
@@ -116,7 +117,8 @@ export default function UploadReelModal({ onClose }: Props) {
     const [internalAudioOffset, setInternalAudioOffset] = useState(0);
     const [isPlayingInternalPreview, setIsPlayingInternalPreview] = useState(false);
 
-    const upload = useUploadReel();
+    const addUpload = useUploadStore(state => state.addUpload);
+    const toast = useToast();
 
     // On mount, listen to global Spotify token updates and check url params
     useEffect(() => {
@@ -492,7 +494,7 @@ export default function UploadReelModal({ onClose }: Props) {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!file) return;
-        setUploading(true); setProgress(0); setUploadStatus('Preparing...');
+        
         const tags = hashtags.split(',').map(h => h.trim()).filter(Boolean);
 
         // Bundle audio metadata & editing parameters
@@ -514,17 +516,26 @@ export default function UploadReelModal({ onClose }: Props) {
             }
         };
 
-        upload.mutate({
+        const taskId = 'reel-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+
+        addUpload({
+            id: taskId,
+            type: 'reel',
+            fileName: file.name,
+            fileSize: file.size,
             file,
             caption,
             hashtags: tags,
             audioMetadata,
-            onProgress: setProgress,
-            onStatus: setUploadStatus,
-        }, {
-            onSuccess: () => { setUploading(false); setUploadStatus(''); onClose(); },
-            onError: () => { setUploading(false); setUploadStatus(''); },
+            thumbnailUrl: preview || undefined,
         });
+
+        toast.success(
+            'Mengunggah di Latar Belakang',
+            'Proses upload video Anda sedang berjalan. Anda bisa melanjutkan aktivitas di SeniQu.'
+        );
+
+        onClose();
     };
 
     // Curated filtering

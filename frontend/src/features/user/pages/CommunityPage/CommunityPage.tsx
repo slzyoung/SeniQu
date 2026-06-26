@@ -36,6 +36,7 @@ import { compressImage } from '../../../../lib/imageCompressor';
 import { useToast } from '../../../../stores/useNotificationStore';
 import { useDebounce } from '../../../../hooks/useDebounce';
 import { validateVideo, formatFileSize, formatDuration, generateVideoThumbnail } from '../../../../lib/videoCompressor';
+import { useUploadStore } from '../../../../stores/useUploadStore';
 import { forumService } from '../../../../services/forumService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect } from 'react';
@@ -206,6 +207,7 @@ function CreateThreadModal({
     const videoInputRef = useRef<HTMLInputElement>(null);
     const createThread = useCreateThread();
     const toast = useToast();
+    const addUpload = useUploadStore(state => state.addUpload);
 
     const isVideo = files.length > 0 && files[0].type.startsWith('video/');
 
@@ -325,33 +327,33 @@ function CreateThreadModal({
             if (files.length > 0) {
                 const firstFile = files[0];
                 if (firstFile.type.startsWith('video/')) {
-                    // === VIDEO ===
-                    mediaType = 'video';
-                    setUploadPhase('uploading');
-
-                    const videoResult = await forumService.uploadVideo(firstFile, {
-                        mute: muteVideoSound,
-                        onProgress: (p) => {
-                            setUploadProgress(p);
-                            if (p >= 80) setUploadPhase('compressing');
+                    const taskId = 'forum-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+                    
+                    addUpload({
+                        id: taskId,
+                        type: 'forum',
+                        fileName: firstFile.name,
+                        fileSize: firstFile.size,
+                        file: firstFile,
+                        caption: title,
+                        forumOptions: {
+                            title,
+                            content,
+                            categoryId,
+                            selectedAspect,
+                            selectedSize,
+                            tags: [],
                         },
-                        onStatus: (status) => {
-                            setUploadStatusText(status);
-                        },
+                        thumbnailUrl: mediaPreviews[0] || undefined,
                     });
 
-                    if (selectedAspect !== 'original' || selectedSize !== 'default') {
-                        mediaUrl = JSON.stringify({
-                            videoUrl: videoResult.url,
-                            aspectRatio: selectedAspect,
-                            sizePreset: selectedSize,
-                            thumbnailUrl: videoResult.thumbnailUrl || undefined
-                        });
-                    } else {
-                        mediaUrl = videoResult.url;
-                    }
-                    setUploadPhase('done');
-                    setUploadStatusText('');
+                    toast.success(
+                        'Mengunggah di Latar Belakang',
+                        'Video forum Anda sedang diunggah di latar belakang. Thread akan otomatis dibuat setelah upload selesai.'
+                    );
+
+                    setIsCreateModalOpen(false);
+                    return;
                 } else {
                     // === IMAGE ===
                     mediaType = 'image';

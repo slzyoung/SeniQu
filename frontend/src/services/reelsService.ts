@@ -113,6 +113,7 @@ export const reelsService = {
             audioMetadata?: any;
             onProgress?: (progress: number) => void;
             onStatus?: (status: string) => void;
+            xhrRef?: { current: XMLHttpRequest | null };
         },
     ): Promise<Reel> => {
         if (file.size > DIRECT_CDN_THRESHOLD) {
@@ -139,6 +140,7 @@ export const reelsService = {
             audioMetadata?: any;
             onProgress?: (progress: number) => void;
             onStatus?: (status: string) => void;
+            xhrRef?: { current: XMLHttpRequest | null };
         },
     ): Promise<Reel> => {
         const { onProgress, onStatus } = options || {};
@@ -168,6 +170,9 @@ export const reelsService = {
         // ── STEP 2: Upload video directly to R2 CDN via presigned URL ──
         await new Promise<void>((resolve, reject) => {
             const xhr = new XMLHttpRequest();
+            if (options?.xhrRef) {
+                options.xhrRef.current = xhr;
+            }
             xhr.open('PUT', uploadUrl, true);
             xhr.setRequestHeader('Content-Type', file.type);
 
