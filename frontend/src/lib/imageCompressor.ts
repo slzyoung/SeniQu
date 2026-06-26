@@ -18,6 +18,8 @@ interface CompressOptions {
     maxSizeBytes?: number;
     /** Output type (default: 'image/webp') */
     outputType?: string;
+    /** Aspect ratio crop target (e.g. "1:1", "4:3", "16:9", "9:16", "original") */
+    aspectRatio?: string;
 }
 
 const DEFAULT_OPTIONS: Required<CompressOptions> = {
@@ -26,6 +28,7 @@ const DEFAULT_OPTIONS: Required<CompressOptions> = {
     quality: 0.85,
     maxSizeBytes: 5 * 1024 * 1024, // 5MB
     outputType: 'image/webp',
+    aspectRatio: 'original',
 };
 
 /**
@@ -55,15 +58,47 @@ export async function compressImage(
 
     try {
         const bitmap = await createImageBitmap(file);
-        const { width, height } = calculateDimensions(
-            bitmap.width,
-            bitmap.height,
-            opts.maxWidth,
-            opts.maxHeight,
-        );
+
+        let cropX = 0;
+        let cropY = 0;
+        let cropWidth = bitmap.width;
+        let cropHeight = bitmap.height;
+        let targetWidth = bitmap.width;
+        let targetHeight = bitmap.height;
+
+        if (opts.aspectRatio && opts.aspectRatio !== 'original') {
+            const [wRatio, hRatio] = opts.aspectRatio.split(':').map(Number);
+            if (wRatio && hRatio) {
+                const targetAspect = wRatio / hRatio;
+                const currentAspect = bitmap.width / bitmap.height;
+
+                if (currentAspect > targetAspect) {
+                    cropHeight = bitmap.height;
+                    cropWidth = Math.round(bitmap.height * targetAspect);
+                    cropX = Math.round((bitmap.width - cropWidth) / 2);
+                    cropY = 0;
+                } else {
+                    cropWidth = bitmap.width;
+                    cropHeight = Math.round(bitmap.width / targetAspect);
+                    cropX = 0;
+                    cropY = Math.round((bitmap.height - cropHeight) / 2);
+                }
+                const dimensions = calculateDimensions(cropWidth, cropHeight, opts.maxWidth, opts.maxHeight);
+                targetWidth = dimensions.width;
+                targetHeight = dimensions.height;
+            } else {
+                const dimensions = calculateDimensions(bitmap.width, bitmap.height, opts.maxWidth, opts.maxHeight);
+                targetWidth = dimensions.width;
+                targetHeight = dimensions.height;
+            }
+        } else {
+            const dimensions = calculateDimensions(bitmap.width, bitmap.height, opts.maxWidth, opts.maxHeight);
+            targetWidth = dimensions.width;
+            targetHeight = dimensions.height;
+        }
 
         // Use OffscreenCanvas if available (better performance)
-        const canvas = new OffscreenCanvas(width, height);
+        const canvas = new OffscreenCanvas(targetWidth, targetHeight);
         const ctx = canvas.getContext('2d');
 
         if (!ctx) {
@@ -71,7 +106,7 @@ export async function compressImage(
             return file;
         }
 
-        ctx.drawImage(bitmap, 0, 0, width, height);
+        ctx.drawImage(bitmap, cropX, cropY, cropWidth, cropHeight, 0, 0, targetWidth, targetHeight);
         bitmap.close();
 
         // Try WebP first, fallback to JPEG
@@ -112,7 +147,7 @@ export async function compressImage(
 
         const compressionRatio = ((1 - blob.size / file.size) * 100).toFixed(0);
         console.log(
-            `[ImageCompressor] ${formatSize(file.size)} → ${formatSize(blob.size)} (${compressionRatio}% reduction, ${width}x${height})`
+            `[ImageCompressor] ${formatSize(file.size)} → ${formatSize(blob.size)} (${compressionRatio}% reduction, ${targetWidth}x${targetHeight})`
         );
 
         return new File([blob], newName, { type: outputType, lastModified: Date.now() });

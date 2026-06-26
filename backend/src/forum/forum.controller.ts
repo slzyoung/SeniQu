@@ -205,6 +205,15 @@ export class ForumController {
         // Read the file buffer
         const buffer = await data.toBuffer()
 
+        // Enforce max size for legacy backend-through uploads
+        // Files >10MB should use direct-to-CDN presigned URL flow instead
+        const MAX_LEGACY_SIZE = 50 * 1024 * 1024 // 50MB
+        if (buffer.length > MAX_LEGACY_SIZE) {
+            throw new BadRequestException(
+                `Video too large for legacy upload (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Maximum 50MB. Use direct-to-CDN upload for larger files.`
+            )
+        }
+
         // Extract optional fields
         const fields = data.fields as Record<string, any>
         const threadId = fields?.threadId?.value || undefined

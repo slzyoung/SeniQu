@@ -353,6 +353,8 @@ export class StorageService implements OnModuleInit {
     /**
      * Upload a forum video with automatic compression and thumbnail generation.
      * Returns video URL, thumbnail URL, and complete metadata for database indexing.
+     *
+     * Memory-efficient: writes file to disk first, processes via file paths.
      */
     async uploadForumVideo(
         file: Express.Multer.File,
@@ -381,69 +383,97 @@ export class StorageService implements OnModuleInit {
 
         this.logger.log(`🎬 Processing forum video upload: ${file.originalname} (${this.formatSize(file.size)})`)
 
-        // Process video: compress + generate thumbnail
-        const { video, thumbnail } = await this.videoProcessor.processVideo(file.buffer, file.mimetype)
+        // Write buffer to temp file immediately, then release buffer from memory
+        const tmpDir = require("os").tmpdir()
+        const tmpInputPath = require("path").join(tmpDir, `seniqu-fv-${require("uuid").v4()}${this.getExtension(file.originalname) || ".mp4"}`)
+        const fs = require("fs")
+        const tempFiles: string[] = [tmpInputPath]
 
-        // Moderate Thumbnail
-        this.logger.log(`🔍 Moderating forum video thumbnail for user ${userId}...`)
-        const geminiApiKey = this.configService.get<string>("ai.geminiApiKey") || ""
-        const moderation = await moderateContent(
-            thumbnail.buffer,
-            thumbnail.contentType,
-            geminiApiKey,
-            this.logger
-        )
+        try {
+            fs.writeFileSync(tmpInputPath, file.buffer)
 
-        if (!moderation.isAppropriate) {
-            this.logger.warn(`🚫 Forum video blocked by content moderation: ${moderation.reason}`)
-            throw new BadRequestException(
-                `Video terdeteksi mengandung konten tidak pantas (SARA, pornografi, kekerasan). Alasan: ${moderation.reason}`
+            // Process video from file path — NO buffer in memory
+            const { video, thumbnail } = await this.videoProcessor.processVideoFromFile(tmpInputPath, file.mimetype)
+            tempFiles.push(video.videoPath, thumbnail.thumbnailPath)
+
+            // Moderate Thumbnail (thumbnail buffer is tiny ~50KB)
+            this.logger.log(`🔍 Moderating forum video thumbnail for user ${userId}...`)
+            const geminiApiKey = this.configService.get<string>("ai.geminiApiKey") || ""
+            const moderation = await moderateContent(
+                thumbnail.buffer,
+                thumbnail.contentType,
+                geminiApiKey,
+                this.logger
             )
-        }
 
-        // Upload compressed video and thumbnail to R2 in parallel
-        const fileUuid = require("uuid").v4()
-        const videoKey = `forum/videos/${userId}/${fileUuid}.mp4`
-        const thumbnailKey = `forum/thumbnails/${userId}/${fileUuid}.webp`
+            if (!moderation.isAppropriate) {
+                this.logger.warn(`🚫 Forum video blocked by content moderation: ${moderation.reason}`)
+                throw new BadRequestException(
+                    `Video terdeteksi mengandung konten tidak pantas (SARA, pornografi, kekerasan). Alasan: ${moderation.reason}`
+                )
+            }
 
-        await Promise.all([
-            this.uploadToR2(videoKey, video.buffer, video.contentType),
-            this.uploadToR2(thumbnailKey, thumbnail.buffer, thumbnail.contentType),
-        ])
+            // Upload compressed video (streaming from file) and thumbnail to R2 in parallel
+            const fileUuid = require("uuid").v4()
+            const videoKey = `forum/videos/${userId}/${fileUuid}.mp4`
+            const thumbnailKey = `forum/thumbnails/${userId}/${fileUuid}.webp`
 
-        const videoUrl = this.buildPublicUrl(videoKey)
-        const thumbnailUrl = this.buildPublicUrl(thumbnailKey)
+            const fileSize = fs.statSync(video.videoPath).size
+            const readStream = fs.createReadStream(video.videoPath)
 
-        const compressionRatio = file.size > 0
-            ? parseFloat(((1 - video.size / file.size) * 100).toFixed(2))
-            : 0
+            await Promise.all([
+                this.s3Client.send(
+                    new PutObjectCommand({
+                        Bucket: this.bucketName,
+                        Key: videoKey,
+                        Body: readStream,
+                        ContentType: video.contentType,
+                        ContentLength: fileSize,
+                        CacheControl: "public, max-age=31536000, immutable",
+                    })
+                ),
+                this.uploadToR2(thumbnailKey, thumbnail.buffer, thumbnail.contentType),
+            ])
 
-        this.logger.log(
-            `✅ Forum video uploaded: ${this.formatSize(file.size)} → ${this.formatSize(video.size)} ` +
-            `(${compressionRatio}% saved, ${video.metadata.width}x${video.metadata.height})`
-        )
+            const videoUrl = this.buildPublicUrl(videoKey)
+            const thumbnailUrl = this.buildPublicUrl(thumbnailKey)
 
-        return {
-            key: videoKey,
-            url: videoUrl,
-            size: video.size,
-            contentType: video.contentType,
-            thumbnailKey,
-            thumbnailUrl,
-            metadata: {
-                duration: video.metadata.duration,
-                width: video.metadata.width,
-                height: video.metadata.height,
-                videoCodec: video.metadata.videoCodec,
-                audioCodec: video.metadata.audioCodec,
-                bitrate: video.metadata.bitrate,
-                fps: video.metadata.fps,
-                aspectRatio: video.metadata.aspectRatio,
-                originalFileSize: file.size,
-                compressedFileSize: video.size,
-                compressionRatio,
-                originalFilename: file.originalname,
-            },
+            const compressionRatio = file.size > 0
+                ? parseFloat(((1 - video.size / file.size) * 100).toFixed(2))
+                : 0
+
+            this.logger.log(
+                `✅ Forum video uploaded: ${this.formatSize(file.size)} → ${this.formatSize(video.size)} ` +
+                `(${compressionRatio}% saved, ${video.metadata.width}x${video.metadata.height})`
+            )
+
+            return {
+                key: videoKey,
+                url: videoUrl,
+                size: video.size,
+                contentType: video.contentType,
+                thumbnailKey,
+                thumbnailUrl,
+                metadata: {
+                    duration: video.metadata.duration,
+                    width: video.metadata.width,
+                    height: video.metadata.height,
+                    videoCodec: video.metadata.videoCodec,
+                    audioCodec: video.metadata.audioCodec,
+                    bitrate: video.metadata.bitrate,
+                    fps: video.metadata.fps,
+                    aspectRatio: video.metadata.aspectRatio,
+                    originalFileSize: file.size,
+                    compressedFileSize: video.size,
+                    compressionRatio,
+                    originalFilename: file.originalname,
+                },
+            }
+        } finally {
+            // Guaranteed cleanup of ALL temp files
+            for (const f of tempFiles) {
+                this.videoProcessor.cleanupTempFile(f)
+            }
         }
     }
 

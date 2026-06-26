@@ -238,10 +238,11 @@ export class ReelsController {
 
         const buffer = await data.toBuffer()
 
-        // Enforce max size 100MB
-        const MAX_REEL_SIZE = 100 * 1024 * 1024
+        // Enforce max size 50MB for legacy backend-through uploads
+        // Files >20MB should use presigned URL direct-to-CDN flow instead
+        const MAX_REEL_SIZE = 50 * 1024 * 1024
         if (buffer.length > MAX_REEL_SIZE) {
-            throw new BadRequestException(`Video too large. Maximum 100MB allowed.`)
+            throw new BadRequestException(`Video too large for legacy upload. Maximum 50MB. Use direct-to-CDN upload for larger files.`)
         }
 
         const fields = data.fields as Record<string, any>

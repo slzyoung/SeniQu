@@ -10,8 +10,8 @@
 
 import api from '../lib/api';
 
-/** Threshold for switching to direct-to-CDN upload */
-const DIRECT_CDN_THRESHOLD = 20 * 1024 * 1024; // 20MB
+/** Threshold for switching to direct-to-CDN upload (lower = less backend memory pressure) */
+const DIRECT_CDN_THRESHOLD = 10 * 1024 * 1024; // 10MB
 
 export interface Reel {
     id: string;

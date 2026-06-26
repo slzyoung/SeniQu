@@ -241,8 +241,8 @@ export const forumService = {
     // VIDEO UPLOAD — Smart Strategy (CDN Direct for >20MB)
     // ==========================================
 
-    /** Threshold for switching to direct-to-CDN upload */
-    DIRECT_CDN_THRESHOLD: 20 * 1024 * 1024,
+    /** Threshold for switching to direct-to-CDN upload (lower = less backend memory pressure) */
+    DIRECT_CDN_THRESHOLD: 10 * 1024 * 1024,
 
     /**
      * Smart upload — automatically picks the best upload strategy.

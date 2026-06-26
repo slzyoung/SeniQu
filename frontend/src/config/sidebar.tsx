@@ -127,13 +127,26 @@ export const userSidebarSections: SidebarSection[] = [
             {
                 id: 'community',
                 label: 'Forum',
-                icon: <MessageSquare className="w-5 h-5" />,
+                icon: (
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 9V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h1.5l2 2 2-2H16a2 2 0 0 0 2-2z" />
+                        <circle cx="9.5" cy="6.5" r="0.75" fill="currentColor" stroke="none" />
+                        <circle cx="12" cy="6.5" r="0.75" fill="currentColor" stroke="none" />
+                        <circle cx="14.5" cy="6.5" r="0.75" fill="currentColor" stroke="none" />
+                        <circle cx="7" cy="16" r="1.75" />
+                        <path d="M4 21.5a3 3 0 0 1 6 0" />
+                        <circle cx="17" cy="16" r="1.75" />
+                        <path d="M14 21.5a3 3 0 0 1 6 0" />
+                        <circle cx="12" cy="15" r="2" />
+                        <path d="M8.5 21.5a3.5 3.5 0 0 1 7 0" />
+                    </svg>
+                ),
                 path: ROUTES.USER_COMMUNITY,
             },
             {
                 id: 'messages',
                 label: 'Messages',
-                icon: <Mail className="w-5 h-5" />,
+                icon: <MessageSquare className="w-5 h-5" />,
                 path: ROUTES.USER_MESSAGES,
             },
         ],
@@ -579,7 +592,20 @@ export const publicSidebarSections: SidebarSection[] = [
             {
                 id: 'community',
                 label: 'Forum',
-                icon: <MessageSquare className="w-5 h-5" />,
+                icon: (
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 9V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h1.5l2 2 2-2H16a2 2 0 0 0 2-2z" />
+                        <circle cx="9.5" cy="6.5" r="0.75" fill="currentColor" stroke="none" />
+                        <circle cx="12" cy="6.5" r="0.75" fill="currentColor" stroke="none" />
+                        <circle cx="14.5" cy="6.5" r="0.75" fill="currentColor" stroke="none" />
+                        <circle cx="7" cy="16" r="1.75" />
+                        <path d="M4 21.5a3 3 0 0 1 6 0" />
+                        <circle cx="17" cy="16" r="1.75" />
+                        <path d="M14 21.5a3 3 0 0 1 6 0" />
+                        <circle cx="12" cy="15" r="2" />
+                        <path d="M8.5 21.5a3.5 3.5 0 0 1 7 0" />
+                    </svg>
+                ),
                 path: ROUTES.COMMUNITY,
             },
         ],

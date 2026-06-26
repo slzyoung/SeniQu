@@ -309,28 +309,29 @@ export class VideoUploadService implements OnModuleInit {
         this.activeJobs.set(sessionId, jobTracker)
 
         const tmpDir = path.join(os.tmpdir(), `seniqu-vp-${sessionId}`)
+        // Track all temp files for guaranteed cleanup
+        const tempFiles: string[] = []
+
         try {
             // Create temp directory
             fs.mkdirSync(tmpDir, { recursive: true })
 
-            // PHASE 1: Download raw video from R2 (streaming to temp file)
+            // PHASE 1: Download raw video from R2 (streaming to temp file — NO buffer)
             jobTracker.status = "downloading"
             jobTracker.progress = 5
             session.progress = 5
 
             const rawFilePath = path.join(tmpDir, "raw_video.mp4")
             await this.downloadFromR2(session.rawKey, rawFilePath)
+            tempFiles.push(rawFilePath)
 
+            const rawSize = fs.statSync(rawFilePath).size
             jobTracker.progress = 20
             session.progress = 20
 
-            // PHASE 2: Read the raw video file
+            // PHASE 2: Analyze metadata directly from file (NO buffer loading)
             jobTracker.status = "analyzing"
-            const rawBuffer = fs.readFileSync(rawFilePath)
-            const rawSize = rawBuffer.length
-
-            // Validate duration based on context
-            const metadata = await this.videoProcessor.getMetadata(rawBuffer)
+            const metadata = await this.videoProcessor.getMetadataFromFile(rawFilePath)
             const maxDuration = session.context === "reel" ? MAX_REEL_DURATION : MAX_FORUM_DURATION
 
             if (metadata.duration > maxDuration) {
@@ -343,19 +344,20 @@ export class VideoUploadService implements OnModuleInit {
             jobTracker.progress = 30
             session.progress = 30
 
-            // PHASE 3: Compress video
+            // PHASE 3: Compress video — FILE-PATH based (zero buffer memory)
             jobTracker.status = "compressing"
             this.logger.log(
                 `🔄 Compressing video: ${this.formatSize(rawSize)} | ` +
                 `${metadata.width}x${metadata.height} | ${metadata.videoCodec}`
             )
 
-            const { video, thumbnail } = await this.videoProcessor.processVideo(
-                rawBuffer,
+            const { video, thumbnail } = await this.videoProcessor.processVideoFromFile(
+                rawFilePath,
                 "video/mp4"
             )
+            tempFiles.push(video.videoPath, thumbnail.thumbnailPath)
 
-            // PHASE 3.5: Moderate Thumbnail
+            // PHASE 3.5: Moderate Thumbnail (thumbnail buffer is tiny ~50KB, safe for memory)
             jobTracker.status = "moderating"
             this.logger.log(`🔍 Moderating video thumbnail for session ${sessionId}...`)
             const geminiApiKey = this.configService.get<string>("ai.geminiApiKey") || ""
@@ -422,10 +424,10 @@ export class VideoUploadService implements OnModuleInit {
             jobTracker.progress = 80
             session.progress = 80
 
-            // PHASE 4: Upload compressed video + thumbnail to R2
+            // PHASE 4: Upload compressed video (streaming from disk) + thumbnail to R2
             jobTracker.status = "uploading_compressed"
             await Promise.all([
-                this.uploadToR2(session.compressedKey, video.buffer, video.contentType),
+                this.uploadFileToR2(session.compressedKey, video.videoPath, video.contentType),
                 this.uploadToR2(session.thumbnailKey, thumbnail.buffer, thumbnail.contentType),
             ])
 
@@ -482,6 +484,10 @@ export class VideoUploadService implements OnModuleInit {
 
             this.logger.error(`❌ Video processing failed for ${sessionId}: ${err.message}`)
         } finally {
+            // Cleanup all temp files individually
+            for (const f of tempFiles) {
+                this.videoProcessor.cleanupTempFile(f)
+            }
             // Cleanup temp directory
             try {
                 fs.rmSync(tmpDir, { recursive: true, force: true })
@@ -534,14 +540,9 @@ export class VideoUploadService implements OnModuleInit {
         return this.sessions.get(sessionId)
     }
 
-    // =========================================
-    // LEGACY STREAMING UPLOAD (Fallback for < 20MB)
-    // =========================================
-
     /**
-     * Stream-based upload that pipes the multipart file directly to R2
-     * without loading the entire buffer into memory.
-     * For files under 20MB, this is simpler than the presigned URL flow.
+     * File-based upload that writes the multipart stream to disk first,
+     * then processes entirely via file paths — zero large-buffer memory pressure.
      */
     async streamUploadAndProcess(
         fileStream: Readable | Buffer,
@@ -579,82 +580,92 @@ export class VideoUploadService implements OnModuleInit {
         const videoKey = `${prefix}/videos/${userId}/${fileUuid}.mp4`
         const thumbnailKey = `${prefix}/thumbnails/${userId}/${fileUuid}.webp`
 
-        // Convert stream to buffer if needed (for FFmpeg processing)
-        let buffer: Buffer
-        if (Buffer.isBuffer(fileStream)) {
-            buffer = fileStream
-        } else {
-            const chunks: Buffer[] = []
-            for await (const chunk of fileStream) {
-                chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+        // Write stream/buffer to temp file FIRST — never hold full video in memory
+        const ext = this.videoProcessor.getExtForMime(mimeType)
+        const tmpInputPath = path.join(os.tmpdir(), `seniqu-stream-${uuidv4()}${ext}`)
+        const tempFiles: string[] = [tmpInputPath]
+
+        try {
+            if (Buffer.isBuffer(fileStream)) {
+                fs.writeFileSync(tmpInputPath, fileStream)
+                // Release buffer reference immediately
+            } else {
+                const writeStream = fs.createWriteStream(tmpInputPath)
+                await pipeline(fileStream, writeStream)
             }
-            buffer = Buffer.concat(chunks)
-        }
 
-        this.logger.log(`🎬 Stream upload: ${filename} (${this.formatSize(buffer.length)})`)
+            const actualSize = fs.statSync(tmpInputPath).size
+            this.logger.log(`🎬 Stream upload: ${filename} (${this.videoProcessor.formatSize(actualSize)})`)
 
-        // Process video: compress + generate thumbnail
-        const { video, thumbnail } = await this.videoProcessor.processVideo(buffer, mimeType)
+            // Process video from file path — NO buffer in memory
+            const { video, thumbnail } = await this.videoProcessor.processVideoFromFile(tmpInputPath, mimeType)
+            tempFiles.push(video.videoPath, thumbnail.thumbnailPath)
 
-        // Moderate Thumbnail
-        this.logger.log(`🔍 Moderating stream video thumbnail for user ${userId}...`)
-        const geminiApiKey = this.configService.get<string>("ai.geminiApiKey") || ""
-        const moderation = await moderateContent(
-            thumbnail.buffer,
-            thumbnail.contentType,
-            geminiApiKey,
-            this.logger
-        )
-
-        if (!moderation.isAppropriate) {
-            this.logger.warn(`🚫 Stream video blocked by content moderation: ${moderation.reason}`)
-            throw new BadRequestException(
-                `Video terdeteksi mengandung konten tidak pantas (SARA, pornografi, kekerasan). Alasan: ${moderation.reason}`
+            // Moderate Thumbnail (thumbnail buffer is tiny ~50KB)
+            this.logger.log(`🔍 Moderating stream video thumbnail for user ${userId}...`)
+            const geminiApiKey = this.configService.get<string>("ai.geminiApiKey") || ""
+            const moderation = await moderateContent(
+                thumbnail.buffer,
+                thumbnail.contentType,
+                geminiApiKey,
+                this.logger
             )
-        }
 
-        // Validate duration
-        const maxDuration = context === "reel" ? MAX_REEL_DURATION : MAX_FORUM_DURATION
-        if (video.metadata.duration > maxDuration) {
-            throw new BadRequestException(
-                `Video too long (${Math.round(video.metadata.duration)}s). Maximum: ${maxDuration}s.`
+            if (!moderation.isAppropriate) {
+                this.logger.warn(`🚫 Stream video blocked by content moderation: ${moderation.reason}`)
+                throw new BadRequestException(
+                    `Video terdeteksi mengandung konten tidak pantas (SARA, pornografi, kekerasan). Alasan: ${moderation.reason}`
+                )
+            }
+
+            // Validate duration
+            const maxDuration = context === "reel" ? MAX_REEL_DURATION : MAX_FORUM_DURATION
+            if (video.metadata.duration > maxDuration) {
+                throw new BadRequestException(
+                    `Video too long (${Math.round(video.metadata.duration)}s). Maximum: ${maxDuration}s.`
+                )
+            }
+
+            // Upload compressed video (streaming from file) + thumbnail in parallel
+            await Promise.all([
+                this.uploadFileToR2(videoKey, video.videoPath, video.contentType),
+                this.uploadToR2(thumbnailKey, thumbnail.buffer, thumbnail.contentType),
+            ])
+
+            const compressionRatio = actualSize > 0
+                ? parseFloat(((1 - video.size / actualSize) * 100).toFixed(2))
+                : 0
+
+            this.logger.log(
+                `✅ Stream upload complete: ${this.videoProcessor.formatSize(actualSize)} → ${this.videoProcessor.formatSize(video.size)} ` +
+                `(${compressionRatio}% saved)`
             )
-        }
 
-        // Upload compressed video + thumbnail in parallel
-        await Promise.all([
-            this.uploadToR2(videoKey, video.buffer, video.contentType),
-            this.uploadToR2(thumbnailKey, thumbnail.buffer, thumbnail.contentType),
-        ])
-
-        const compressionRatio = buffer.length > 0
-            ? parseFloat(((1 - video.size / buffer.length) * 100).toFixed(2))
-            : 0
-
-        this.logger.log(
-            `✅ Stream upload complete: ${this.formatSize(buffer.length)} → ${this.formatSize(video.size)} ` +
-            `(${compressionRatio}% saved)`
-        )
-
-        return {
-            url: this.buildPublicUrl(videoKey),
-            key: videoKey,
-            thumbnailUrl: this.buildPublicUrl(thumbnailKey),
-            thumbnailKey,
-            metadata: {
-                duration: video.metadata.duration,
-                width: video.metadata.width,
-                height: video.metadata.height,
-                videoCodec: video.metadata.videoCodec,
-                audioCodec: video.metadata.audioCodec,
-                bitrate: video.metadata.bitrate,
-                fps: video.metadata.fps,
-                aspectRatio: video.metadata.aspectRatio,
-                originalFileSize: buffer.length,
-                compressedFileSize: video.size,
-                compressionRatio,
-                originalFilename: filename,
-            },
+            return {
+                url: this.buildPublicUrl(videoKey),
+                key: videoKey,
+                thumbnailUrl: this.buildPublicUrl(thumbnailKey),
+                thumbnailKey,
+                metadata: {
+                    duration: video.metadata.duration,
+                    width: video.metadata.width,
+                    height: video.metadata.height,
+                    videoCodec: video.metadata.videoCodec,
+                    audioCodec: video.metadata.audioCodec,
+                    bitrate: video.metadata.bitrate,
+                    fps: video.metadata.fps,
+                    aspectRatio: video.metadata.aspectRatio,
+                    originalFileSize: actualSize,
+                    compressedFileSize: video.size,
+                    compressionRatio,
+                    originalFilename: filename,
+                },
+            }
+        } finally {
+            // Guaranteed cleanup of ALL temp files
+            for (const f of tempFiles) {
+                this.videoProcessor.cleanupTempFile(f)
+            }
         }
     }
 
@@ -691,6 +702,29 @@ export class VideoUploadService implements OnModuleInit {
             })
         )
     }
+
+    /**
+     * Upload a file from disk to R2 via streaming — avoids loading into memory.
+     * Critical for large compressed videos (50-100MB+).
+     */
+    private async uploadFileToR2(key: string, filePath: string, contentType: string): Promise<void> {
+        const fileSize = fs.statSync(filePath).size
+        const readStream = fs.createReadStream(filePath)
+
+        await this.s3Client.send(
+            new PutObjectCommand({
+                Bucket: this.bucketName,
+                Key: key,
+                Body: readStream,
+                ContentType: contentType,
+                ContentLength: fileSize,
+                CacheControl: "public, max-age=31536000, immutable",
+            })
+        )
+
+        this.logger.log(`📤 Uploaded to R2 (streamed): ${key} (${this.formatSize(fileSize)})`)
+    }
+
 
     private buildPublicUrl(key: string): string {
         if (this.publicUrl) {

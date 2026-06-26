@@ -19,6 +19,10 @@ import {
     Trash2,
     ChevronDown,
     ChevronUp,
+    ChevronLeft,
+    ChevronRight,
+    Grid,
+    Layers,
     Share2,
     ArrowLeft,
     MessageCircle,
@@ -79,15 +83,50 @@ function formatTimeAgo(dateStr: string) {
     return date.toLocaleDateString();
 }
 
+interface MultiMediaData {
+    images: string[];
+    layout: 'separate' | 'grid' | 'carousel';
+}
+
+function parseMediaUrl(mediaUrl?: string): { isMulti: boolean; images: string[]; layout: 'separate' | 'grid' | 'carousel'; singleUrl?: string } {
+    if (!mediaUrl) {
+        return { isMulti: false, images: [], layout: 'separate' };
+    }
+    if (mediaUrl.trim().startsWith('{')) {
+        try {
+            const parsed = JSON.parse(mediaUrl) as MultiMediaData;
+            if (parsed && Array.isArray(parsed.images)) {
+                return {
+                    isMulti: true,
+                    images: parsed.images,
+                    layout: parsed.layout || 'separate',
+                };
+            }
+        } catch (e) {
+            // fallback
+        }
+    }
+    return {
+        isMulti: false,
+        images: [mediaUrl],
+        layout: 'separate',
+        singleUrl: mediaUrl,
+    };
+}
+
+
 // ============================================
 // PUBLIC COMMUNITY FORUM — LISTING PAGE
 // ============================================
 
 export function CommunityForum() {
     const navigate = useNavigate();
+    const toast = useToast();
     const [activeCategorySlug, setActiveCategorySlug] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [sharingThread, setSharingThread] = useState<any | null>(null);
+    const [copied, setCopied] = useState(false);
     const { isAuthenticated } = useAuthStore();
 
     const { data: categoriesData } = useForumCategories();
@@ -188,14 +227,24 @@ export function CommunityForum() {
                         >
                             {(featuredThread.mediaType || featuredThread.media_type) === 'video' ? (
                                 <>
-                                    <img src={featuredThread.video_thumbnail_url || featuredThread.videoThumbnailUrl || featuredThread.mediaUrl} alt={decodeHTML(featuredThread.title)} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                                    <img src={featuredThread.video_thumbnail_url || featuredThread.videoThumbnailUrl || parseMediaUrl(featuredThread.mediaUrl).images[0]} alt={decodeHTML(featuredThread.title)} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
                                     <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm text-white text-[10px] font-semibold">
                                         <Play className="w-3 h-3" /> Video
                                     </div>
                                 </>
-                            ) : (
-                                <img src={featuredThread.mediaUrl} alt={decodeHTML(featuredThread.title)} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
-                            )}
+                            ) : (() => {
+                                const parsed = parseMediaUrl(featuredThread.mediaUrl);
+                                return (
+                                    <div className="w-full h-full relative overflow-hidden">
+                                        <img src={parsed.images[0]} alt={decodeHTML(featuredThread.title)} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                                        {parsed.isMulti && parsed.images.length > 1 && (
+                                            <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold uppercase tracking-wider">
+                                                <Layers className="w-3.5 h-3.5" /> Gallery
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent flex flex-col justify-end p-5">
                                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/90 text-charcoal text-[10px] font-bold uppercase tracking-wider w-fit mb-2">
                                     Featured
@@ -244,11 +293,21 @@ export function CommunityForum() {
                                     return (
                                         <div
                                             key={thread.id}
-                                            className="p-4 sm:p-6 bg-white dark:bg-[#111111] rounded-2xl border border-gray-200/60 dark:border-white/[0.06] shadow-sm cursor-pointer hover:border-amber-500/30 dark:hover:border-gold/30 transition-all"
+                                            className="p-4 sm:p-5 bg-white dark:bg-[#111111] rounded-2xl border border-gray-200/60 dark:border-white/[0.06] shadow-sm cursor-pointer hover:border-amber-500/30 dark:hover:border-gold/30 transition-all"
                                             onClick={() => navigate(`/community/thread/${thread.id}`)}
                                         >
-                                            {/* Author Header — compact row */}
-                                            <div className="flex items-center gap-3 mb-4">
+                                            {/* Category badge */}
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-50 dark:bg-gold/10 text-amber-700 dark:text-gold border border-amber-200/60 dark:border-gold/20">
+                                                    {thread.category?.name || 'Discussion'}
+                                                </span>
+                                                {thread.isPinned && (
+                                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">Pinned</span>
+                                                )}
+                                            </div>
+
+                                            {/* Author Header */}
+                                            <div className="flex items-center gap-2.5 mb-3">
                                                 <div 
                                                     className="cursor-pointer group flex-shrink-0"
                                                     onClick={(e) => {
@@ -259,30 +318,22 @@ export function CommunityForum() {
                                                     <Avatar
                                                         name={authorName}
                                                         src={authorAvatar}
-                                                        size="md"
-                                                        className="w-10 h-10 ring-2 ring-amber-500/20 dark:ring-gold/20 group-hover:ring-amber-500/40 transition-all"
+                                                        size="sm"
+                                                        className="w-8 h-8 ring-1 ring-gray-200/80 dark:ring-white/10 group-hover:ring-amber-500/40 transition-all"
                                                     />
                                                 </div>
-                                                <div className="flex-grow min-w-0">
-                                                    <div className="flex items-center gap-2">
-                                                        <span 
-                                                            className="font-semibold text-sm text-gray-900 dark:text-white hover:text-amber-600 dark:hover:text-gold transition-colors"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (authorId) navigate(`/profile/${authorId}`);
-                                                            }}
-                                                        >{authorName}</span>
-                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider bg-orange-500 text-white">
-                                                            OP
-                                                        </span>
-                                                    </div>
-                                                    <span className="text-xs text-gray-400 dark:text-gray-500">
-                                                        {formatTimeAgo(thread.createdAt)}
+                                                <div className="min-w-0">
+                                                    <span 
+                                                        className="font-bold text-[13px] text-gray-900 dark:text-white cursor-pointer hover:text-amber-600 dark:hover:text-gold transition-colors block leading-tight"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (authorId) navigate(`/profile/${authorId}`);
+                                                        }}
+                                                    >{authorName}</span>
+                                                    <span className="text-[11px] text-gray-400 dark:text-gray-500">
+                                                        Posted {formatTimeAgo(thread.createdAt)}
                                                     </span>
                                                 </div>
-                                                {thread.isPinned && (
-                                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">Pinned</span>
-                                                )}
                                             </div>
 
                                             {/* Title */}
@@ -301,7 +352,7 @@ export function CommunityForum() {
                                             {mediaUrl && (
                                                 <div 
                                                     className="rounded-2xl overflow-hidden border border-gray-200/50 dark:border-white/[0.06] bg-black mb-4"
-                                                    onClick={(e) => e.stopPropagation()} // Prevent card navigation when interacting with player
+                                                    onClick={(e) => e.stopPropagation()}
                                                 >
                                                     <video
                                                         src={mediaUrl}
@@ -317,35 +368,18 @@ export function CommunityForum() {
                                             )}
 
                                             {/* Bottom Action Bar */}
-                                            <div className="flex items-center gap-1 pt-3 border-t border-gray-100 dark:border-white/5">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        navigate(`/community/thread/${thread.id}`);
-                                                    }}
-                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-all"
-                                                >
-                                                    <Heart className="w-4 h-4" />
-                                                    {thread.likes || 0}
-                                                </button>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        navigate(`/community/thread/${thread.id}`);
-                                                    }}
-                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-all"
-                                                >
-                                                    <MessageCircle className="w-4 h-4" />
-                                                    {thread.replyCount}
-                                                </button>
+                                            <div className="flex items-center gap-3 pt-3 border-t border-gray-100 dark:border-white/5 text-[11px] text-gray-400 dark:text-gray-500">
+                                                <span className="flex items-center gap-1"><Heart className="w-3.5 h-3.5" />{thread.likes || 0} Vote</span>
+                                                <span className="flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5" />{thread.replyCount} Discussion</span>
                                                 <button 
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        // share logic or toast
+                                                        setSharingThread(thread);
                                                     }}
-                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-all ml-auto"
+                                                    className="p-1 rounded-lg text-gray-400 hover:text-amber-600 dark:hover:text-gold hover:bg-amber-50 dark:hover:bg-gold/10 transition-all ml-auto"
+                                                    title="Share thread"
                                                 >
-                                                    <Share2 className="w-4 h-4" />
+                                                    <Share2 className="w-3.5 h-3.5" />
                                                 </button>
                                             </div>
                                         </div>
@@ -356,42 +390,85 @@ export function CommunityForum() {
                                 return (
                                     <div
                                         key={thread.id}
-                                        className="p-4 sm:p-6 bg-white dark:bg-[#111111] rounded-2xl border border-gray-200/60 dark:border-white/[0.06] shadow-sm cursor-pointer hover:border-amber-500/30 dark:hover:border-gold/30 transition-all flex gap-4"
+                                        className="p-4 sm:p-5 bg-white dark:bg-[#111111] rounded-2xl border border-gray-200/60 dark:border-white/[0.06] shadow-sm cursor-pointer hover:border-amber-500/30 dark:hover:border-gold/30 transition-all"
                                         onClick={() => navigate(`/community/thread/${thread.id}`)}
                                     >
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1.5 text-xs text-gray-400 dark:text-gray-500">
-                                                <div 
-                                                    className="flex items-center gap-2 cursor-pointer hover:text-amber-500 dark:hover:text-gold transition-colors"
+                                        {/* Category badge */}
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-50 dark:bg-gold/10 text-amber-700 dark:text-gold border border-amber-200/60 dark:border-gold/20">
+                                                {thread.category?.name || 'Discussion'}
+                                            </span>
+                                            {thread.isPinned && (
+                                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">Pinned</span>
+                                            )}
+                                        </div>
+
+                                        {/* Author row */}
+                                        <div className="flex items-center gap-2.5 mb-3">
+                                            <div 
+                                                className="cursor-pointer group flex-shrink-0"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (authorId) navigate(`/profile/${authorId}`);
+                                                }}
+                                            >
+                                                <Avatar name={authorName} src={authorAvatar} size="sm" className="w-8 h-8 ring-1 ring-gray-200/80 dark:ring-white/10 group-hover:ring-amber-500/40 transition-all" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <span 
+                                                    className="font-bold text-[13px] text-gray-900 dark:text-white cursor-pointer hover:text-amber-600 dark:hover:text-gold transition-colors block leading-tight"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         if (authorId) navigate(`/profile/${authorId}`);
                                                     }}
-                                                >
-                                                    <Avatar name={authorName} src={authorAvatar} size="xs" className="w-5 h-5" />
-                                                    <span className="font-medium text-gray-600 dark:text-gray-300">{authorName}</span>
-                                                </div>
-                                                <span>·</span>
-                                                <span>{formatTimeAgo(thread.createdAt)}</span>
-                                                {thread.isPinned && (
-                                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">Pinned</span>
-                                                )}
-                                            </div>
-                                            <h3 className="font-serif font-bold text-base sm:text-lg text-gray-900 dark:text-white leading-snug line-clamp-2 mb-1 hover:text-amber-600 dark:hover:text-gold transition-colors">{decodeHTML(thread.title)}</h3>
-                                            {thread.content && (
-                                                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed mb-2.5">{thread.content}</p>
-                                            )}
-                                            <div className="flex items-center gap-3 text-[11px] text-gray-400 dark:text-gray-500">
-                                                <span className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/5 font-medium">{thread.category?.name || 'Discussion'}</span>
-                                                <span className="flex items-center gap-0.5"><Heart className="w-3.5 h-3.5" />{thread.likes || 0}</span>
-                                                <span className="flex items-center gap-0.5"><MessageCircle className="w-3.5 h-3.5" />{thread.replyCount}</span>
+                                                >{authorName}</span>
+                                                <span className="text-[11px] text-gray-400 dark:text-gray-500">
+                                                    Posted {formatTimeAgo(thread.createdAt)}
+                                                </span>
                                             </div>
                                         </div>
-                                        {mediaUrl && (
-                                            <div className="w-20 h-16 sm:w-28 sm:h-20 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100 dark:bg-white/5 relative">
-                                                <img src={mediaUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+
+                                        {/* Content body + thumbnail */}
+                                        <div className="flex gap-4">
+                                            <div className="flex-1 min-w-0">
+                                                <h3 className="font-serif font-bold text-base sm:text-lg text-gray-900 dark:text-white leading-snug line-clamp-2 mb-1 hover:text-amber-600 dark:hover:text-gold transition-colors">{decodeHTML(thread.title)}</h3>
+                                                {thread.content && (
+                                                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed mb-2.5">{thread.content}</p>
+                                                )}
                                             </div>
-                                        )}
+                                            {mediaUrl && (() => {
+                                                const parsed = parseMediaUrl(mediaUrl);
+                                                const firstImg = parsed.images[0];
+                                                if (!firstImg) return null;
+                                                return (
+                                                    <div className="w-20 h-16 sm:w-28 sm:h-20 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100 dark:bg-white/5 relative shadow-sm">
+                                                        <img src={firstImg} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                                                        {parsed.isMulti && parsed.images.length > 1 && (
+                                                            <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/70 rounded text-[9px] font-bold text-white flex items-center gap-0.5 shadow-sm">
+                                                                <Layers className="w-2.5 h-2.5" />
+                                                                <span>+{parsed.images.length - 1}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+
+                                        {/* Bottom stats bar */}
+                                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100 dark:border-white/5 text-[11px] text-gray-400 dark:text-gray-500">
+                                            <span className="flex items-center gap-1"><Heart className="w-3.5 h-3.5" />{thread.likes || 0} Vote</span>
+                                            <span className="flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5" />{thread.replyCount} Discussion</span>
+                                            <button 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSharingThread(thread);
+                                                }}
+                                                className="p-1 rounded-lg text-gray-400 hover:text-amber-600 dark:hover:text-gold hover:bg-amber-50 dark:hover:bg-gold/10 transition-all ml-auto"
+                                                title="Share thread"
+                                            >
+                                                <Share2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -457,6 +534,111 @@ export function CommunityForum() {
                     categories={categories}
                 />
             )}
+
+            {/* Overlaid Premium Share Drawer - Portalled to body */}
+            {sharingThread && createPortal(
+                <>
+                    <div className="reel-drawer-backdrop" style={{ zIndex: 99998 }} onClick={() => setSharingThread(null)} />
+                    <div className="reel-drawer text-left bg-white dark:bg-[#121212] border-t border-gray-200 dark:border-white/10" style={{ zIndex: 99999 }}>
+                        <div className="reel-drawer-handle bg-gray-300 dark:bg-white/20" />
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-white/10">
+                            <h3 className="text-gray-900 dark:text-white font-bold text-sm font-serif">Share Thread</h3>
+                            <button 
+                                onClick={() => setSharingThread(null)} 
+                                className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="px-4 py-4 space-y-4" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' }}>
+                            {/* Horizontal / Grid of Sharing Options */}
+                            <div className="grid grid-cols-4 gap-3 text-center">
+                                {/* WhatsApp */}
+                                <a 
+                                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Check out this thread on SeniQu: "${sharingThread.title}" ${window.location.origin}/community/thread/${sharingThread.id}`)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex flex-col items-center gap-1.5 group cursor-pointer"
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-[#25D366]/15 hover:bg-[#25D366]/25 border border-[#25D366]/20 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+                                        <svg className="w-5.5 h-5.5" viewBox="0 0 24 24">
+                                            <path d="M12.004 2C6.51 2 2.014 6.5 2.014 12c0 1.89.5 3.63 1.39 5.16L2 22l5.07-1.32c1.47.8 3.12 1.26 4.88 1.26 5.5 0 9.99-4.5 9.99-10S17.49 2 12.004 2z" fill="#25D366" />
+                                            <path d="M17.3 14.86c-.287-.144-1.702-.84-1.965-.935-.264-.096-.456-.144-.648.144-.192.288-.744.935-.912 1.127-.168.193-.336.216-.624.072-2.844-1.417-4.66-2.56-6.137-5.099-.136-.233-.036-.37.07-.487.165-.183.33-.298.485-.434.15-.132.227-.225.32-.397.094-.173.048-.337-.024-.481-.072-.144-.648-1.56-.888-2.136-.233-.56-.47-.482-.648-.49-.168-.008-.36-.01-.552-.01-.192 0-.504.072-.768.36-.264.288-1.008.984-1.008 2.4 0 1.416 1.032 2.784 1.176 2.976.144.192 2.032 3.102 4.921 4.348 2.889 1.246 2.889.83 3.4.78.513-.05 1.703-.696 1.943-1.368.24-.672.24-1.248.168-1.368-.072-.12-.264-.192-.552-.336z" fill="white" />
+                                        </svg>
+                                    </div>
+                                    <span className="text-gray-700 dark:text-gray-300 text-[10px] font-medium">WhatsApp</span>
+                                </a>
+
+                                {/* Telegram */}
+                                <a 
+                                    href={`https://t.me/share/url?url=${encodeURIComponent(`${window.location.origin}/community/thread/${sharingThread.id}`)}&text=${encodeURIComponent(`Check out this thread on SeniQu: "${sharingThread.title}"`)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex flex-col items-center gap-1.5 group cursor-pointer"
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/20 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+                                        <svg className="w-5.5 h-5.5 text-sky-400" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.87 4.326-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.46c.538-.196 1.006.128.832.941z" />
+                                        </svg>
+                                    </div>
+                                    <span className="text-gray-700 dark:text-gray-300 text-[10px] font-medium">Telegram</span>
+                                </a>
+
+                                {/* Twitter / X */}
+                                <a 
+                                    href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(`${window.location.origin}/community/thread/${sharingThread.id}`)}&text=${encodeURIComponent(`Check out this thread on SeniQu: "${sharingThread.title}"`)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex flex-col items-center gap-1.5 group cursor-pointer"
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/15 border border-gray-200 dark:border-white/10 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+                                        <svg className="w-4 h-4 text-gray-900 dark:text-white" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                                        </svg>
+                                    </div>
+                                    <span className="text-gray-700 dark:text-gray-300 text-[10px] font-medium">Twitter / X</span>
+                                </a>
+
+                                {/* Facebook */}
+                                <a 
+                                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/community/thread/${sharingThread.id}`)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex flex-col items-center gap-1.5 group cursor-pointer"
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/20 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+                                        <svg className="w-5 h-5 text-blue-400" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M22.675 0h-21.35c-.732 0-1.325.593-1.325 1.325v21.351c0 .731.593 1.324 1.325 1.324h11.495v-9.294h-3.128v-3.622h3.128v-2.671c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.099 2.795.143v3.24l-1.918.001c-1.504 0-1.795.715-1.795 1.763v2.313h3.587l-.467 3.622h-3.12v9.293h6.116c.73 0 1.323-.593 1.323-1.325v-21.35c0-.732-.593-1.325-1.325-1.325z" />
+                                        </svg>
+                                    </div>
+                                    <span className="text-gray-700 dark:text-gray-300 text-[10px] font-medium">Facebook</span>
+                                </a>
+                            </div>
+
+                            {/* Copy Link URL Copy Field */}
+                            <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-2 flex items-center justify-between gap-3">
+                                <div className="flex-1 overflow-hidden px-2">
+                                    <div className="text-[11px] text-gray-700 dark:text-gray-300 truncate select-all">
+                                        {`${window.location.origin}/community/thread/${sharingThread.id}`}
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(`${window.location.origin}/community/thread/${sharingThread.id}`);
+                                        setCopied(true);
+                                        toast.success('Copied!', 'Link copied to clipboard');
+                                        setTimeout(() => setCopied(false), 2000);
+                                    }}
+                                    className={copied ? "shrink-0 p-1.5 rounded-lg border flex items-center justify-center transition-all bg-emerald-600/20 border-emerald-500/30 text-emerald-400" : "shrink-0 p-1.5 rounded-lg border flex items-center justify-center transition-all bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/15 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white"}
+                                >
+                                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            , document.body)}
         </div>
     );
 }
@@ -473,12 +655,15 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [categoryId, setCategoryId] = useState('');
-    const [file, setFile] = useState<File | null>(null);
+    const [files, setFiles] = useState<File[]>([]);
+    const [layout, setLayout] = useState<'separate' | 'grid' | 'carousel'>('grid');
+    const [selectedAspect, setSelectedAspect] = useState<string>('original');
+    const [selectedSize, setSelectedSize] = useState<string>('1080p');
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadPhase, setUploadPhase] = useState<'idle' | 'uploading' | 'compressing' | 'done'>('idle');
     const [uploadStatusText, setUploadStatusText] = useState('');
-    const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+    const [mediaPreviews, setMediaPreviews] = useState<string[]>([]);
     const [videoMeta, setVideoMeta] = useState<{ duration: number; width: number; height: number; size: number } | null>(null);
     const [validationError, setValidationError] = useState<string | null>(null);
     const [validationWarning, setValidationWarning] = useState<string | null>(null);
@@ -488,30 +673,32 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
     const createThread = useCreateThread();
     const toast = useToast();
 
-    const isVideo = file?.type.startsWith('video/');
+    const isVideo = files.length > 0 && files[0].type.startsWith('video/');
 
     // Clean up object URLs to avoid memory leaks
     useEffect(() => {
         return () => {
-            if (mediaPreview && file && !file.type.startsWith('video/')) {
-                URL.revokeObjectURL(mediaPreview);
-            }
+            mediaPreviews.forEach(url => {
+                if (url.startsWith('blob:')) {
+                    URL.revokeObjectURL(url);
+                }
+            });
         };
-    }, [mediaPreview, file]);
+    }, [mediaPreviews]);
 
-    // Handle file selection with validation
-    const handleFileSelect = async (selectedFile: File) => {
+    // Handle files selection with validation
+    const handleFilesSelect = async (selectedFiles: File[]) => {
         setValidationError(null);
         setValidationWarning(null);
-        
-        // Clean up previous image preview URL if it exists
-        if (mediaPreview && file && !file.type.startsWith('video/')) {
-            URL.revokeObjectURL(mediaPreview);
-        }
-        setMediaPreview(null);
-        setVideoMeta(null);
 
-        if (selectedFile.type.startsWith('video/')) {
+        const hasVideo = selectedFiles.some(f => f.type.startsWith('video/'));
+
+        if (hasVideo) {
+            if (selectedFiles.length > 1) {
+                setValidationError('Videos cannot be uploaded with other files.');
+                return;
+            }
+            const selectedFile = selectedFiles[0];
             const validation = await validateVideo(selectedFile, {
                 maxFileSize: 150 * 1024 * 1024, // 150MB
                 maxDuration: 5 * 60, // 5 minutes
@@ -523,18 +710,63 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
             if (validation.warning) setValidationWarning(validation.warning);
             if (validation.metadata) setVideoMeta(validation.metadata);
 
+            // Clean up previous previews
+            mediaPreviews.forEach(url => {
+                if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+            });
+            setMediaPreviews([]);
+
             // Generate preview thumbnail
             try {
                 const thumb = await generateVideoThumbnail(selectedFile);
-                setMediaPreview(thumb);
-            } catch { /* non-critical */ }
+                setMediaPreviews([thumb]);
+            } catch {
+                setMediaPreviews([URL.createObjectURL(selectedFile)]);
+            }
+            setFiles([selectedFile]);
         } else {
-            // Synchronously create a single object URL for image previews
-            const url = URL.createObjectURL(selectedFile);
-            setMediaPreview(url);
+            // Handle multiple images
+            // If current files contain a video, clear it
+            let currentImageFiles = files;
+            let currentPreviews = mediaPreviews;
+            if (files.some(f => f.type.startsWith('video/'))) {
+                mediaPreviews.forEach(url => {
+                    if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+                });
+                currentImageFiles = [];
+                currentPreviews = [];
+                setVideoMeta(null);
+            }
+
+            const combinedFiles = [...currentImageFiles, ...selectedFiles].slice(0, 8); // Limit to 8 images
+            if (currentImageFiles.length + selectedFiles.length > 8) {
+                setValidationWarning('Maximum 8 images allowed. Only the first 8 were added.');
+            }
+
+            const newPreviews = selectedFiles.map(f => URL.createObjectURL(f));
+            const combinedPreviews = [...currentPreviews, ...newPreviews].slice(0, 8);
+
+            setMediaPreviews(combinedPreviews);
+            setFiles(combinedFiles);
+        }
+    };
+
+    const handleRemoveFile = (index: number) => {
+        const fileToRemove = files[index];
+        const previewToRemove = mediaPreviews[index];
+
+        if (previewToRemove && previewToRemove.startsWith('blob:')) {
+            URL.revokeObjectURL(previewToRemove);
         }
 
-        setFile(selectedFile);
+        setFiles(prev => prev.filter((_, i) => i !== index));
+        setMediaPreviews(prev => prev.filter((_, i) => i !== index));
+
+        if (fileToRemove.type.startsWith('video/')) {
+            setVideoMeta(null);
+            setValidationWarning(null);
+            setValidationError(null);
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -550,13 +782,14 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
             let mediaUrl: string | undefined;
             let mediaType: string | undefined;
 
-            if (file) {
-                if (file.type.startsWith('video/')) {
+            if (files.length > 0) {
+                const firstFile = files[0];
+                if (firstFile.type.startsWith('video/')) {
                     // === VIDEO: Use smart CDN-direct or legacy upload ===
                     mediaType = 'video';
                     setUploadPhase('uploading');
 
-                    const videoResult = await forumService.uploadVideo(file, {
+                    const videoResult = await forumService.uploadVideo(firstFile, {
                         onProgress: (p) => {
                             setUploadProgress(p);
                             if (p >= 80) setUploadPhase('compressing');
@@ -566,18 +799,58 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                         },
                     });
 
-                    mediaUrl = videoResult.url;
+                    // Store URL, aspect ratio, and size preset in the mediaUrl JSON
+                    if (selectedAspect !== 'original' || selectedSize !== 'default') {
+                        mediaUrl = JSON.stringify({
+                            videoUrl: videoResult.url,
+                            aspectRatio: selectedAspect,
+                            sizePreset: selectedSize,
+                            thumbnailUrl: videoResult.thumbnailUrl || undefined
+                        });
+                    } else {
+                        mediaUrl = videoResult.url;
+                    }
                     setUploadPhase('done');
                     setUploadStatusText('');
                 } else {
                     // === IMAGE: Client-side compress + standard upload ===
                     mediaType = 'image';
                     setUploadPhase('uploading');
-                    const compressed = await compressImage(file, { maxWidth: 1600, quality: 0.82 });
-                    const uploadResult = await uploadFile(compressed, 'general', (p) => {
-                        setUploadProgress(p);
-                    });
-                    mediaUrl = uploadResult.url;
+
+                    let maxWidth = 2048; // Default
+                    if (selectedSize === '4k') maxWidth = 3840;
+                    else if (selectedSize === '1080p') maxWidth = 1920;
+                    else if (selectedSize === '720p') maxWidth = 1280;
+                    else if (selectedSize === '480p') maxWidth = 854;
+                    else if (selectedSize === 'original') maxWidth = 4096;
+                    
+                    const uploadedUrls: string[] = [];
+                    for (let i = 0; i < files.length; i++) {
+                        setUploadStatusText(`Compressing photo ${i + 1} of ${files.length}...`);
+                        const compressed = await compressImage(files[i], { 
+                            maxWidth: maxWidth, 
+                            quality: 0.92,
+                            aspectRatio: selectedAspect
+                        });
+                        
+                        setUploadStatusText(`Uploading photo ${i + 1} of ${files.length}...`);
+                        const uploadResult = await uploadFile(compressed, 'general', (progress) => {
+                            const baseProgress = (i / files.length) * 100;
+                            const fileWeight = (progress / files.length);
+                            setUploadProgress(Math.round(baseProgress + fileWeight));
+                        });
+                        uploadedUrls.push(uploadResult.url);
+                    }
+
+                    if (uploadedUrls.length === 1) {
+                        mediaUrl = uploadedUrls[0];
+                    } else {
+                        mediaUrl = JSON.stringify({
+                            images: uploadedUrls,
+                            layout: layout,
+                        });
+                    }
+                    
                     setUploadPhase('done');
                 }
             }
@@ -638,12 +911,12 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                         <div>
                             <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wider">Attach Media</label>
 
-                            {file ? (
+                            {files.length > 0 ? (
                                 <div className="rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden bg-gray-50 dark:bg-white/[0.03]">
                                     {/* Video Preview */}
-                                    {isVideo && mediaPreview && (
+                                    {isVideo && mediaPreviews[0] && (
                                         <div className="relative aspect-video bg-black">
-                                            <img src={mediaPreview} alt="Video preview" className="w-full h-full object-contain" />
+                                            <img src={mediaPreviews[0]} alt="Video preview" className="w-full h-full object-contain" />
                                             <div className="absolute inset-0 flex items-center justify-center">
                                                 <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
                                                     <Play className="w-5 h-5 text-white ml-0.5" />
@@ -651,10 +924,34 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                                             </div>
                                         </div>
                                     )}
-                                    {/* Image Preview */}
-                                    {!isVideo && mediaPreview && (
-                                        <div className="relative aspect-video bg-gray-100 dark:bg-white/5">
-                                            <img src={mediaPreview} alt="Preview" className="w-full h-full object-contain" />
+                                    {/* Images Preview Grid */}
+                                    {!isVideo && mediaPreviews.length > 0 && (
+                                        <div className="p-3 bg-gray-100 dark:bg-white/5 border-b border-gray-200 dark:border-white/10">
+                                            <div className="grid grid-cols-4 gap-2">
+                                                {mediaPreviews.map((url, idx) => (
+                                                    <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-white/10 bg-black/20 group">
+                                                        <img src={url} alt={`Preview ${idx}`} className="w-full h-full object-cover" />
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => handleRemoveFile(idx)}
+                                                            className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white hover:bg-red-600 transition-all shadow-md"
+                                                        >
+                                                            <X className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                                {/* Add more slot */}
+                                                {mediaPreviews.length < 8 && (
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => fileInputRef.current?.click()}
+                                                        className="aspect-square rounded-lg border-2 border-dashed border-gray-300 dark:border-white/10 flex flex-col items-center justify-center text-gray-400 hover:border-amber-500 hover:text-amber-500 transition-all text-[10px] font-semibold gap-1"
+                                                    >
+                                                        <Plus className="w-4 h-4" />
+                                                        <span>Add More</span>
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
 
@@ -662,10 +959,14 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                                     <div className="flex items-center gap-3 px-3 py-2.5">
                                         {isVideo ? <Film className="w-4 h-4 text-blue-500 flex-shrink-0" /> : <ImageIcon className="w-4 h-4 text-pink-500 flex-shrink-0" />}
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm text-gray-700 dark:text-gray-300 truncate">{file.name}</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                                                {isVideo ? files[0].name : `${files.length} Photo${files.length > 1 ? 's' : ''} Selected`}
+                                            </p>
                                             <div className="flex items-center gap-2 text-[11px] text-gray-400">
-                                                <span>{formatFileSize(file.size)}</span>
-                                                {videoMeta && (
+                                                <span>
+                                                    {isVideo ? formatFileSize(files[0].size) : formatFileSize(files.reduce((acc, f) => acc + f.size, 0))}
+                                                </span>
+                                                {isVideo && videoMeta && (
                                                     <>
                                                         <span>·</span>
                                                         <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" />{formatDuration(videoMeta.duration)}</span>
@@ -675,18 +976,28 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                                                 )}
                                             </div>
                                         </div>
-                                        <button type="button" onClick={() => {
-                                            if (mediaPreview && !file.type.startsWith('video/')) {
-                                                URL.revokeObjectURL(mediaPreview);
-                                            }
-                                            setFile(null);
-                                            setMediaPreview(null);
-                                            setVideoMeta(null);
-                                            setValidationWarning(null);
-                                        }}
-                                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        {isVideo && (
+                                            <button type="button" onClick={() => handleRemoveFile(0)}
+                                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        {!isVideo && (
+                                            <button type="button" onClick={() => {
+                                                mediaPreviews.forEach(url => {
+                                                    if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+                                                });
+                                                setFiles([]);
+                                                setMediaPreviews([]);
+                                                setVideoMeta(null);
+                                                setValidationWarning(null);
+                                            }}
+                                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
+                                                title="Remove all photos"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        )}
                                     </div>
 
                                     {/* Server compression notice for videos */}
@@ -698,6 +1009,50 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                                             </div>
                                         </div>
                                     )}
+
+                                    {/* Scale & Aspect Controls */}
+                                    <div className="px-4 py-3 bg-gray-50 dark:bg-white/[0.02] border-t border-gray-100 dark:border-white/5 grid grid-cols-2 gap-3.5">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 uppercase tracking-wider">Aspect Ratio</label>
+                                            <select 
+                                                value={selectedAspect} 
+                                                onChange={e => setSelectedAspect(e.target.value)}
+                                                className="w-full px-2.5 py-1.5 bg-white dark:bg-[#151515] border border-gray-200 dark:border-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:border-amber-500 dark:focus:border-gold transition-all"
+                                            >
+                                                <option value="original">Original Aspect Ratio</option>
+                                                <option value="1:1">Square (1:1)</option>
+                                                <option value="4:3">Standard Landscape (4:3)</option>
+                                                <option value="3:4">Classic Portrait (3:4)</option>
+                                                <option value="16:9">Widescreen (16:9)</option>
+                                                <option value="9:16">Vertical Video (9:16)</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 uppercase tracking-wider">{isVideo ? 'Compression Profile' : 'Size Profile / Scale'}</label>
+                                            <select 
+                                                value={selectedSize} 
+                                                onChange={e => setSelectedSize(e.target.value)}
+                                                className="w-full px-2.5 py-1.5 bg-white dark:bg-[#151515] border border-gray-200 dark:border-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:border-amber-500 dark:focus:border-gold transition-all"
+                                            >
+                                                {isVideo ? (
+                                                    <>
+                                                        <option value="default">Original Preset (Default)</option>
+                                                        <option value="1080p">High Quality (1080p)</option>
+                                                        <option value="720p">Standard HD (720p)</option>
+                                                        <option value="480p">Mobile Data Saver (480p)</option>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <option value="1080p">Full HD (1080p) - Recommended</option>
+                                                        <option value="720p">Standard HD (720p)</option>
+                                                        <option value="4k">Ultra HD (4K)</option>
+                                                        <option value="480p">Mobile Data Saver (480p)</option>
+                                                        <option value="original">Original (No Resize)</option>
+                                                    </>
+                                                )}
+                                            </select>
+                                        </div>
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-2 gap-2">
@@ -705,6 +1060,7 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                                         className="py-4 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl text-gray-400 dark:text-gray-500 hover:border-pink-400 dark:hover:border-pink-500/40 hover:text-pink-500 transition-all flex flex-col items-center justify-center gap-1.5 text-xs">
                                         <ImageIcon className="w-5 h-5" />
                                         <span className="font-semibold">Image</span>
+                                        <span className="text-[10px] opacity-60">Max 8 Images</span>
                                     </button>
                                     <button type="button" onClick={() => videoInputRef.current?.click()}
                                         className="py-4 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl text-gray-400 dark:text-gray-500 hover:border-blue-400 dark:hover:border-blue-500/40 hover:text-blue-500 transition-all flex flex-col items-center justify-center gap-1.5 text-xs">
@@ -715,11 +1071,57 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                                 </div>
                             )}
 
+                            {/* Multiple image layout choices */}
+                            {!isVideo && files.length > 1 && (
+                                <div className="mt-4 p-4 rounded-xl border border-amber-500/20 bg-amber-500/[0.02] dark:bg-white/[0.02]">
+                                    <span className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2.5 uppercase tracking-wider">Display Options</span>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <button 
+                                            type="button"
+                                            onClick={() => setLayout('separate')}
+                                            className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center gap-1.5 ${layout === 'separate' 
+                                                ? 'bg-amber-500 dark:bg-gold text-charcoal border-transparent shadow-sm' 
+                                                : 'bg-white dark:bg-white/5 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10'}`}
+                                        >
+                                            <Layers className="w-4 h-4" />
+                                            <span>Separates</span>
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setLayout('grid')}
+                                            className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center gap-1.5 ${layout === 'grid' 
+                                                ? 'bg-amber-500 dark:bg-gold text-charcoal border-transparent shadow-sm' 
+                                                : 'bg-white dark:bg-white/5 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10'}`}
+                                        >
+                                            <Grid className="w-4 h-4" />
+                                            <span>Grid Collage</span>
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setLayout('carousel')}
+                                            className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center gap-1.5 ${layout === 'carousel' 
+                                                ? 'bg-amber-500 dark:bg-gold text-charcoal border-transparent shadow-sm' 
+                                                : 'bg-white dark:bg-white/5 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10'}`}
+                                        >
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                                            </svg>
+                                            <span>Carousel</span>
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-2.5 leading-relaxed">
+                                        {layout === 'separate' && 'Images will be stacked vertically in full size.'}
+                                        {layout === 'grid' && 'Images will be displayed in a premium collage grid.'}
+                                        {layout === 'carousel' && 'Images will be displayed in an interactive swipable slider.'}
+                                    </p>
+                                </div>
+                            )}
+
                             {/* Hidden file inputs */}
-                            <input type="file" ref={fileInputRef} accept="image/*" className="hidden"
-                                onChange={e => { if (e.target.files?.length) handleFileSelect(e.target.files[0]); }} />
+                            <input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden"
+                                onChange={e => { if (e.target.files?.length) handleFilesSelect(Array.from(e.target.files)); }} />
                             <input type="file" ref={videoInputRef} accept="video/mp4,video/webm,video/ogg,video/quicktime" className="hidden"
-                                onChange={e => { if (e.target.files?.length) handleFileSelect(e.target.files[0]); }} />
+                                onChange={e => { if (e.target.files?.length) handleFilesSelect(Array.from(e.target.files)); }} />
 
                             {/* Validation Error */}
                             {validationError && (
@@ -813,6 +1215,291 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                 </form>
             </div>
             <style>{`@keyframes shimmer { 0%,100% { background-position: 0% 0%; } 50% { background-position: 100% 0%; } }`}</style>
+        </div>
+    );
+}
+
+// ============================================
+// THREAD MEDIA RENDERER
+// ============================================
+
+interface ThreadMediaRendererProps {
+    mediaUrl?: string;
+    mediaType?: string;
+    threadTitle: string;
+    posterUrl?: string;
+}
+
+export function ThreadMediaRenderer({ mediaUrl, mediaType, threadTitle, posterUrl }: ThreadMediaRendererProps) {
+    const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+    const [carouselIndex, setCarouselIndex] = useState(0);
+
+    if (!mediaUrl) return null;
+
+    if (mediaType === 'video') {
+        let videoSrc = mediaUrl;
+        let videoAspect: string | undefined = undefined;
+        let videoPoster = posterUrl;
+
+        if (mediaUrl.startsWith('{')) {
+            try {
+                const parsedVideo = JSON.parse(mediaUrl);
+                videoSrc = parsedVideo.videoUrl || parsedVideo.url || mediaUrl;
+                videoAspect = parsedVideo.aspectRatio;
+                if (parsedVideo.thumbnailUrl) {
+                    videoPoster = parsedVideo.thumbnailUrl;
+                }
+            } catch (e) {
+                console.error('Failed to parse video mediaUrl JSON', e);
+            }
+        }
+
+        const aspectValue = videoAspect && videoAspect !== 'original' ? videoAspect.replace(':', '/') : '16/9';
+
+        return (
+            <div 
+                className="rounded-2xl overflow-hidden border border-gray-200/50 dark:border-white/[0.06] bg-black mx-auto" 
+                style={{ 
+                    aspectRatio: aspectValue, 
+                    maxWidth: aspectValue === '9/16' ? '380px' : '100%' 
+                }}
+            >
+                <video
+                    src={videoSrc}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    poster={videoPoster}
+                    controlsList="nodownload"
+                    className="w-full h-full object-cover"
+                />
+            </div>
+        );
+    }
+
+    const parsed = parseMediaUrl(mediaUrl);
+    if (!parsed.images || parsed.images.length === 0) return null;
+
+    const handlePrevCarousel = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setCarouselIndex(prev => (prev === 0 ? parsed.images.length - 1 : prev - 1));
+    };
+
+    const handleNextCarousel = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setCarouselIndex(prev => (prev === parsed.images.length - 1 ? 0 : prev + 1));
+    };
+
+    const handlePrevLightbox = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (lightboxIndex !== null) {
+            setLightboxIndex(prev => (prev === 0 ? parsed.images.length - 1 : prev! - 1));
+        }
+    };
+
+    const handleNextLightbox = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (lightboxIndex !== null) {
+            setLightboxIndex(prev => (prev === parsed.images.length - 1 ? 0 : prev! + 1));
+        }
+    };
+
+    return (
+        <div className="mt-4">
+            {/* 1. SEPARATES LAYOUT (Vertical List) */}
+            {parsed.layout === 'separate' && (
+                <div className="flex flex-col gap-4">
+                    {parsed.images.map((url, idx) => (
+                        <div 
+                            key={idx} 
+                            onClick={() => setLightboxIndex(idx)}
+                            className="rounded-2xl overflow-hidden border border-gray-200/50 dark:border-white/[0.06] bg-gray-50 dark:bg-black cursor-zoom-in transition-all hover:opacity-95"
+                        >
+                            <img
+                                src={url}
+                                alt={`${threadTitle} - Image ${idx + 1}`}
+                                className="w-full object-contain"
+                                loading="lazy"
+                                style={{ maxHeight: '75vh', imageRendering: 'auto' }}
+                                decoding="async"
+                            />
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* 2. GRID COLLAGE LAYOUT */}
+            {parsed.layout === 'grid' && (
+                <div className="rounded-2xl overflow-hidden border border-gray-200/50 dark:border-white/[0.06] bg-gray-50 dark:bg-black">
+                    {parsed.images.length === 1 ? (
+                        <div onClick={() => setLightboxIndex(0)} className="cursor-zoom-in">
+                            <img
+                                src={parsed.images[0]}
+                                alt={threadTitle}
+                                className="w-full object-contain"
+                                loading="lazy"
+                                style={{ maxHeight: '75vh', imageRendering: 'auto' }}
+                                decoding="async"
+                            />
+                        </div>
+                    ) : parsed.images.length === 2 ? (
+                        <div className="grid grid-cols-2 gap-1 bg-gray-200 dark:bg-white/10">
+                            {parsed.images.map((url, idx) => (
+                                <div key={idx} onClick={() => setLightboxIndex(idx)} className="aspect-[4/3] cursor-zoom-in overflow-hidden relative group">
+                                    <img src={url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                                </div>
+                            ))}
+                        </div>
+                    ) : parsed.images.length === 3 ? (
+                        <div className="grid grid-cols-3 gap-1 bg-gray-200 dark:bg-white/10">
+                            <div onClick={() => setLightboxIndex(0)} className="col-span-2 aspect-[4/3] cursor-zoom-in overflow-hidden relative group">
+                                <img src={parsed.images[0]} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                            </div>
+                            <div className="grid grid-rows-2 gap-1">
+                                {parsed.images.slice(1).map((url, idx) => (
+                                    <div key={idx} onClick={() => setLightboxIndex(idx + 1)} className="h-full cursor-zoom-in overflow-hidden relative group">
+                                        <img src={url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : parsed.images.length === 4 ? (
+                        <div className="grid grid-cols-2 gap-1 bg-gray-200 dark:bg-white/10">
+                            {parsed.images.map((url, idx) => (
+                                <div key={idx} onClick={() => setLightboxIndex(idx)} className="aspect-[4/3] cursor-zoom-in overflow-hidden relative group">
+                                    <img src={url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        // 5 or more images
+                        <div className="grid grid-cols-3 gap-1 bg-gray-200 dark:bg-white/10">
+                            <div onClick={() => setLightboxIndex(0)} className="col-span-2 aspect-[4/3] cursor-zoom-in overflow-hidden relative group">
+                                <img src={parsed.images[0]} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                            </div>
+                            <div className="grid grid-rows-3 gap-1">
+                                {parsed.images.slice(1, 3).map((url, idx) => (
+                                    <div key={idx} onClick={() => setLightboxIndex(idx + 1)} className="h-full cursor-zoom-in overflow-hidden relative group">
+                                        <img src={url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                                    </div>
+                                ))}
+                                <div onClick={() => setLightboxIndex(3)} className="h-full cursor-zoom-in overflow-hidden relative group bg-black/45">
+                                    <img src={parsed.images[3]} alt="" className="w-full h-full object-cover opacity-60 transition-transform duration-300 group-hover:scale-105" />
+                                    {parsed.images.length > 4 && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-[2px]">
+                                            <span className="text-white text-lg font-bold">+{parsed.images.length - 4}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* 3. CAROUSEL LAYOUT */}
+            {parsed.layout === 'carousel' && (
+                <div className="rounded-2xl overflow-hidden border border-gray-200/50 dark:border-white/[0.06] bg-gray-50 dark:bg-black relative aspect-[16/10] group">
+                    {/* Images container */}
+                    <div className="w-full h-full relative cursor-zoom-in" onClick={() => setLightboxIndex(carouselIndex)}>
+                        <img 
+                            src={parsed.images[carouselIndex]} 
+                            alt={`${threadTitle} - Slide ${carouselIndex + 1}`} 
+                            className="w-full h-full object-contain"
+                        />
+                    </div>
+
+                    {/* Navigation Arrows */}
+                    <button 
+                        type="button" 
+                        onClick={handlePrevCarousel}
+                        className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 hover:bg-black/60 text-white border border-white/10 backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10"
+                    >
+                        <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <button 
+                        type="button" 
+                        onClick={handleNextCarousel}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/40 hover:bg-black/60 text-white border border-white/10 backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10"
+                    >
+                        <ChevronRight className="w-5 h-5" />
+                    </button>
+
+                    {/* Counter Indicator badge */}
+                    <div className="absolute top-4 right-4 px-2 py-1 bg-black/50 backdrop-blur-sm border border-white/10 text-white rounded-full text-[10px] font-mono font-bold z-10">
+                        {carouselIndex + 1} / {parsed.images.length}
+                    </div>
+
+                    {/* Indicator Dots */}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10 bg-black/35 px-2.5 py-1.5 rounded-full backdrop-blur-[2px]">
+                        {parsed.images.map((_, idx) => (
+                            <button
+                                key={idx}
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCarouselIndex(idx);
+                                }}
+                                className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${carouselIndex === idx ? 'bg-amber-400 dark:bg-gold w-3' : 'bg-white/50 hover:bg-white/80'}`}
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* LIGHTBOX MODAL */}
+            {lightboxIndex !== null && (
+                <div 
+                    className="fixed inset-0 z-[999] bg-black/95 flex flex-col items-center justify-center p-4 backdrop-blur-md transition-all select-none"
+                    onClick={() => setLightboxIndex(null)}
+                >
+                    {/* Close button */}
+                    <button 
+                        type="button"
+                        onClick={() => setLightboxIndex(null)}
+                        className="absolute top-6 right-6 p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-white border border-white/10 backdrop-blur-md transition-all z-50 cursor-pointer shadow-lg"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+
+                    {/* Lightbox Content Container */}
+                    <div className="relative max-w-5xl w-full max-h-[85vh] flex items-center justify-center">
+                        <img 
+                            src={parsed.images[lightboxIndex]} 
+                            alt="" 
+                            className="max-w-full max-h-[85vh] object-contain rounded-lg transition-transform duration-300 shadow-2xl"
+                            onClick={(e) => e.stopPropagation()}
+                        />
+
+                        {/* Navigation Arrows for Lightbox */}
+                        {parsed.images.length > 1 && (
+                            <>
+                                <button 
+                                    type="button"
+                                    onClick={handlePrevLightbox}
+                                    className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/5 hover:bg-white/10 text-white border border-white/10 backdrop-blur-md transition-all z-20 cursor-pointer"
+                                >
+                                    <ChevronLeft className="w-6 h-6" />
+                                </button>
+                                <button 
+                                    type="button"
+                                    onClick={handleNextLightbox}
+                                    className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/5 hover:bg-white/10 text-white border border-white/10 backdrop-blur-md transition-all z-20 cursor-pointer"
+                                >
+                                    <ChevronRight className="w-6 h-6" />
+                                </button>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Counter details below image */}
+                    {parsed.images.length > 1 && (
+                        <div className="mt-4 px-3 py-1 bg-white/5 backdrop-blur-sm border border-white/10 text-white rounded-full text-xs font-mono font-bold">
+                            {lightboxIndex + 1} / {parsed.images.length}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -923,6 +1610,7 @@ export function ThreadView() {
     const [progress, setProgress] = useState(0);
     const [showShare, setShowShare] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [isCommentsExpanded, setIsCommentsExpanded] = useState(false);
     const lastTapRef = useRef(0);
 
     const handleTimeUpdate = () => {
@@ -979,6 +1667,19 @@ export function ThreadView() {
 
     const topLevelReplies = replies.filter((r: any) => !r.parent_id && !r.parentId);
     const childReplies = replies.filter((r: any) => r.parent_id || r.parentId);
+
+    const toggleComments = () => {
+        const targetState = !isCommentsExpanded;
+        setIsCommentsExpanded(targetState);
+        if (targetState) {
+            setTimeout(() => {
+                const el = document.getElementById('comments-section-header');
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 100);
+        }
+    };
 
     const handleDeleteThread = async () => {
         if (!thread?.id) return;
@@ -1260,13 +1961,14 @@ export function ThreadView() {
         (threadMediaType && threadMediaType.includes('video')) || 
         (threadMediaUrl && (threadMediaUrl.endsWith('.mp4') || threadMediaUrl.endsWith('.webm') || threadMediaUrl.endsWith('.mov') || threadMediaUrl.endsWith('.m3u8')));
 
+    const shareUrl = window.location.href;
+    const decodedTitle = thread ? decodeHTML(thread.title) : '';
+    const whatsappLink = `https://api.whatsapp.com/send?text=${encodeURIComponent(decodedTitle + ' ' + shareUrl)}`;
+    const telegramLink = `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(decodedTitle)}`;
+    const twitterLink = `https://twitter.com/intent/tweet?text=${encodeURIComponent(decodedTitle)}&url=${encodeURIComponent(shareUrl)}`;
+    const facebookLink = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+
     if (isVideoThread) {
-        const shareUrl = window.location.href;
-        const decodedTitle = decodeHTML(thread.title);
-        const whatsappLink = `https://api.whatsapp.com/send?text=${encodeURIComponent(decodedTitle + ' ' + shareUrl)}`;
-        const telegramLink = `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(decodedTitle)}`;
-        const twitterLink = `https://twitter.com/intent/tweet?text=${encodeURIComponent(decodedTitle)}&url=${encodeURIComponent(shareUrl)}`;
-        const facebookLink = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
 
         return (
             <div className="reels-container">
@@ -1536,9 +2238,10 @@ export function ThreadView() {
                                         rel="noopener noreferrer"
                                         className="flex flex-col items-center gap-1.5 group cursor-pointer"
                                     >
-                                        <div className="w-10 h-10 rounded-full bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/20 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
-                                            <svg className="w-5.5 h-5.5 text-emerald-400" viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.863-9.855.001-2.63-1.02-5.101-2.871-6.955C16.6 1.94 14.135 1.058 11.517 1.058c-5.44 0-9.866 4.418-9.87 9.852 0 1.698.448 3.355 1.3 4.8l-.995 3.636 3.733-.98.062.037zm11.367-6.275c-.31-.156-1.834-.905-2.11-.1-.277.104-.537.905-.658 1.042-.122.137-.243.153-.553.002-.31-.154-1.31-.483-2.496-1.54-1.22-1.09-1.79-1.63-2.1-1.785-.309-.156-.33-.137-.442-.008-.112.129-.48.556-.607.727-.127.172-.254.19-.564.034-.31-.156-1.95-.718-2.63-1.325-.52-.465-.87-1.03-.97-1.2-.102-.173-.01-.267.076-.352.078-.077.172-.2.258-.3.086-.1.115-.172.172-.34.057-.172.029-.323-.014-.428-.043-.105-.39-.94-.534-1.285-.14-.34-.282-.293-.39-.293-.1-.002-.215-.002-.33-.002-.115 0-.301.043-.46.213-.158.172-.603.589-.603 1.436 0 .848.617 1.666.703 1.782.086.115 1.212 1.85 2.937 2.595.41.177.73.282.98.362.413.132.79.113 1.087.069.331-.05 1.016-.415 1.158-.816.142-.401.142-.746.1-.816-.042-.07-.156-.11-.466-.266z" />
+                                        <div className="w-10 h-10 rounded-full bg-[#25D366]/15 hover:bg-[#25D366]/25 border border-[#25D366]/20 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+                                            <svg className="w-5.5 h-5.5" viewBox="0 0 24 24">
+                                                <path d="M12.004 2C6.51 2 2.014 6.5 2.014 12c0 1.89.5 3.63 1.39 5.16L2 22l5.07-1.32c1.47.8 3.12 1.26 4.88 1.26 5.5 0 9.99-4.5 9.99-10S17.49 2 12.004 2z" fill="#25D366" />
+                                                <path d="M17.3 14.86c-.287-.144-1.702-.84-1.965-.935-.264-.096-.456-.144-.648.144-.192.288-.744.935-.912 1.127-.168.193-.336.216-.624.072-2.844-1.417-4.66-2.56-6.137-5.099-.136-.233-.036-.37.07-.487.165-.183.33-.298.485-.434.15-.132.227-.225.32-.397.094-.173.048-.337-.024-.481-.072-.144-.648-1.56-.888-2.136-.233-.56-.47-.482-.648-.49-.168-.008-.36-.01-.552-.01-.192 0-.504.072-.768.36-.264.288-1.008.984-1.008 2.4 0 1.416 1.032 2.784 1.176 2.976.144.192 2.032 3.102 4.921 4.348 2.889 1.246 2.889.83 3.4.78.513-.05 1.703-.696 1.943-1.368.24-.672.24-1.248.168-1.368-.072-.12-.264-.192-.552-.336z" fill="white" />
                                             </svg>
                                         </div>
                                         <span className="text-gray-700 dark:text-gray-300 text-[10px] font-medium">WhatsApp</span>
@@ -1619,21 +2322,29 @@ export function ThreadView() {
     return (
         <div className="max-w-3xl mx-auto px-4 md:px-6 pt-2 pb-12 md:pt-6 md:pb-20">
             {/* ==================== HEADER BAR ==================== */}
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center justify-between mb-5 px-1">
                 <button
                     onClick={() => navigate(-1)}
-                    className="inline-flex items-center justify-center w-9 h-9 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 rounded-full sm:rounded-lg bg-gray-100 dark:bg-white/[0.06] text-gray-600 dark:text-gray-400 hover:text-amber-600 dark:hover:text-gold hover:bg-amber-50 dark:hover:bg-gold/10 transition-all group"
+                    className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-100/70 dark:bg-white/[0.05] border border-gray-200/20 dark:border-white/5 text-gray-700 dark:text-gray-300 hover:text-amber-600 dark:hover:text-gold hover:bg-amber-50 dark:hover:bg-gold/10 transition-all shadow-sm group"
                 >
-                    <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-                    <span className="hidden sm:inline ml-1.5 text-sm font-medium">Back</span>
+                    <ArrowLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
                 </button>
-                <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-[0.12em] text-gray-400 dark:text-gray-500">The Curator Forum</span>
+                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500">The Curator Forum</span>
             </div>
 
             {/* ==================== THREAD CARD ==================== */}
-            <div className="bg-white dark:bg-[#111111] rounded-2xl border border-gray-200/60 dark:border-white/[0.06] shadow-sm overflow-hidden mb-6">
+            <div className="bg-white dark:bg-[#111111] rounded-[24px] border border-gray-200/60 dark:border-white/[0.06] shadow-sm overflow-hidden mb-6">
                 <div className="p-4 sm:p-6">
-                    {/* Author Header — compact row */}
+                    {/* Category Badge — top of card */}
+                    {thread.category?.name && (
+                        <div className="mb-3.5">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-[0.05em] bg-[#fef9f3] dark:bg-gold/10 text-[#c27a2b] dark:text-gold border border-[#f8e5d0] dark:border-gold/20">
+                                {thread.category.name}
+                            </span>
+                        </div>
+                    )}
+
+                    {/* Author Header — clean row with avatar, name, timestamp */}
                     <div className="flex items-center gap-3 mb-4">
                         <div 
                             className="cursor-pointer group flex-shrink-0"
@@ -1646,42 +2357,41 @@ export function ThreadView() {
                                 name={authorName}
                                 src={authorAvatar}
                                 size="md"
-                                className="w-10 h-10 ring-2 ring-amber-500/20 dark:ring-gold/20 group-hover:ring-amber-500/40 transition-all"
+                                className="w-10 h-10 ring-2 ring-gray-100 dark:ring-white/5 transition-all"
                             />
                         </div>
                         <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                                <span 
-                                    className="font-semibold text-sm text-gray-900 dark:text-white cursor-pointer hover:text-amber-600 dark:hover:text-gold transition-colors"
-                                    onClick={() => {
-                                        const authorId = thread.author_id || thread.authorId || thread.author?.id;
-                                        if (authorId) navigate(`/profile/${authorId}`);
-                                    }}
-                                >{authorName}</span>
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider bg-orange-500 text-white">
-                                    OP
-                                </span>
-                            </div>
-                            <span className="text-xs text-gray-400 dark:text-gray-500">
-                                {formatTimeAgo(thread.created_at || thread.createdAt)}
+                            <span 
+                                className="font-bold text-[15px] text-gray-900 dark:text-white cursor-pointer hover:text-amber-600 dark:hover:text-gold transition-colors block leading-tight"
+                                onClick={() => {
+                                    const authorId = thread.author_id || thread.authorId || thread.author?.id;
+                                    if (authorId) navigate(`/profile/${authorId}`);
+                                }}
+                            >{authorName}</span>
+                            <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium">
+                                Posted {formatTimeAgo(thread.created_at || thread.createdAt)}
                             </span>
                         </div>
                         <div className="flex items-center gap-1">
                             {isThreadOwner && (
                                 <button
                                     onClick={() => setIsEditingThread(true)}
-                                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-amber-600 dark:text-gold hover:bg-amber-50 dark:hover:bg-gold/10 transition-all"
+                                    className="p-2 rounded-lg text-gray-400 hover:text-amber-600 dark:hover:text-gold hover:bg-amber-50 dark:hover:bg-gold/10 transition-all"
+                                    title="Edit thread"
                                 >
-                                    ✏️
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                                    </svg>
                                 </button>
                             )}
                             {isThreadOwner && (
                                 <button
                                     onClick={handleDeleteThread}
                                     disabled={deleteThread.isPending}
-                                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
+                                    className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
+                                    title="Delete thread"
                                 >
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <Trash2 className="w-4 h-4" />
                                 </button>
                             )}
                         </div>
@@ -1693,93 +2403,96 @@ export function ThreadView() {
                     </h1>
 
                     {/* Content */}
-                    <p className="text-gray-600 dark:text-gray-300 text-sm sm:text-[15px] leading-relaxed whitespace-pre-wrap break-words mb-1">
+                    <div className="text-gray-700 dark:text-gray-300 text-sm sm:text-[15px] leading-relaxed whitespace-pre-wrap break-words mb-4">
                         {thread.content}
-                    </p>
+                    </div>
 
-                    {/* Media — Video Player or Image */}
-                    {threadMediaUrl && (
-                        <div className="mt-4 rounded-2xl overflow-hidden border border-gray-200/50 dark:border-white/[0.06] bg-black">
-                            {threadMediaType === 'video' ? (
-                                <video
-                                    src={threadMediaUrl}
-                                    controls
-                                    playsInline
-                                    preload="metadata"
-                                    poster={thread.video_thumbnail_url || thread.videoThumbnailUrl || undefined}
-                                    controlsList="nodownload"
-                                    className="w-full max-h-[65vh] object-contain"
-                                    style={{ aspectRatio: '16/9' }}
-                                />
-                            ) : (
-                                <img src={threadMediaUrl} alt="Thread Attachment" className="w-full max-h-[400px] object-cover" loading="lazy" />
-                            )}
-                        </div>
-                    )}
+                    {/* Media — High-Quality Image(s) or Video */}
+                    <ThreadMediaRenderer 
+                        mediaUrl={threadMediaUrl}
+                        mediaType={threadMediaType}
+                        threadTitle={thread.title}
+                        posterUrl={thread.video_thumbnail_url || thread.videoThumbnailUrl || undefined}
+                    />
                 </div>
 
-                {/* Bottom Action Bar */}
-                <div className="flex items-center gap-1 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-white/5">
+                {/* Bottom Action Bar — vote + discussion count */}
+                <div className="flex items-center gap-6 px-5 py-3 border-t border-gray-100 dark:border-white/5">
                     <button
                         onClick={handleToggleThreadLike}
                         disabled={likeThread.isPending || unlikeThread.isPending}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${localLikedThreads[thread.id]
-                            ? 'text-red-500 bg-red-50 dark:bg-red-500/10'
-                            : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'
+                        className={`flex items-center gap-1.5 py-1 text-[13px] font-medium transition-all ${localLikedThreads[thread.id]
+                            ? 'text-red-500 hover:text-red-600'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                         }`}
                     >
-                        <Heart className={`w-4 h-4 ${localLikedThreads[thread.id] ? 'fill-red-500' : ''}`} />
-                        {thread.likes || 0}
+                        <Heart className={`w-[18px] h-[18px] transition-transform duration-250 active:scale-120 ${localLikedThreads[thread.id] ? 'fill-red-500 stroke-red-500' : ''}`} />
+                        <span>{thread.likes || 0}</span>
                     </button>
                     <button
-                        onClick={() => setShowReplies(!showReplies)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${showReplies
-                            ? 'text-amber-600 dark:text-gold bg-amber-50 dark:bg-gold/10'
-                            : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'
+                        onClick={toggleComments}
+                        className={`flex items-center gap-1.5 py-1 text-[13px] font-medium transition-all ${isCommentsExpanded
+                            ? 'text-amber-600 dark:text-gold font-semibold'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                         }`}
                     >
-                        <MessageCircle className="w-4 h-4" />
-                        {replies.length}
+                        <MessageCircle className="w-[18px] h-[18px]" />
+                        <span>{replies.length} Discussion</span>
                     </button>
-                    <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-all ml-auto">
-                        <Share2 className="w-4 h-4" />
+                    <button 
+                        onClick={() => setShowShare(true)}
+                        className="flex items-center justify-center p-1 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all ml-auto"
+                        title="Share thread"
+                    >
+                        <Share2 className="w-[18px] h-[18px] transition-transform duration-200 active:scale-115" />
                     </button>
                 </div>
             </div>
 
-            {/* ==================== REPLIES SECTION — shown on comment click ==================== */}
-            {showReplies && (
-            <div className="bg-white dark:bg-[#111111] rounded-2xl border border-gray-200/60 dark:border-white/[0.06] shadow-sm overflow-hidden mb-8">
-                {/* Reply Composer */}
-                <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-white/5">
-                    <div className="flex gap-3">
-                        <Avatar name={currentUser?.displayName || 'Me'} src={currentUser?.avatar} size="md" className="w-9 h-9 flex-shrink-0" />
-                        <div className="flex-1">
-                            <textarea
-                                id="reply-textarea"
-                                value={replyContent}
-                                onChange={e => setReplyContent(e.target.value)}
-                                placeholder="Write a reply..."
-                                rows={2}
-                                className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:border-amber-500 dark:focus:border-gold focus:ring-1 focus:ring-amber-500/20 dark:focus:ring-gold/20 focus:outline-none resize-none text-sm transition-all"
-                            />
-                            <div className="mt-2.5 flex justify-end">
-                                <button
-                                    onClick={handleReply}
-                                    disabled={!replyContent.trim() || isReplying || createPost.isPending}
-                                    className="px-5 py-2 rounded-full text-xs font-bold bg-amber-500 dark:bg-gold text-charcoal hover:bg-amber-600 dark:hover:bg-amber-500 disabled:opacity-40 transition-all flex items-center gap-1.5 shadow-sm"
-                                >
-                                    {(isReplying || createPost.isPending) ? (
-                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                    ) : (
-                                        <Send className="w-3.5 h-3.5" />
-                                    )}
-                                    Reply
-                                </button>
+            {/* ==================== REPLIES SECTION — shown when isCommentsExpanded is true ==================== */}
+            {isCommentsExpanded && (
+                <div id="comments-section-header" className="bg-white dark:bg-[#111111] rounded-2xl border border-gray-200/60 dark:border-white/[0.06] shadow-sm overflow-hidden mb-8 animate-fadeIn">
+                    {/* Section Header */}
+                    <div className="px-4 sm:px-5 py-3.5 border-b border-gray-100 dark:border-white/5 flex items-center gap-2">
+                        <div className="w-5 h-5 rounded-full bg-amber-50 dark:bg-gold/10 flex items-center justify-center text-amber-500 dark:text-gold flex-shrink-0">
+                            <MessageCircle className="w-3.5 h-3.5" />
+                        </div>
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-white font-serif">
+                            Most relevant discussions
+                            <span className="text-gray-400 dark:text-gray-500 font-normal text-xs ml-1.5">({replies.length})</span>
+                        </h3>
+                    </div>
+
+                    {/* Reply Composer */}
+                    <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-white/5">
+                        <div className="flex gap-3">
+                            <Avatar name={currentUser?.displayName || 'Me'} src={currentUser?.avatar} size="md" className="w-9 h-9 flex-shrink-0" />
+                            <div className="flex-1">
+                                <textarea
+                                    id="reply-textarea"
+                                    value={replyContent}
+                                    onChange={e => setReplyContent(e.target.value)}
+                                    placeholder="What's your point of view?"
+                                    rows={2}
+                                    className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:border-amber-500 dark:focus:border-gold focus:ring-1 focus:ring-amber-500/20 dark:focus:ring-gold/20 focus:outline-none resize-none text-sm transition-all"
+                                />
+                                <div className="mt-2.5 flex justify-end">
+                                    <button
+                                        onClick={handleReply}
+                                        disabled={!replyContent.trim() || isReplying || createPost.isPending}
+                                        className="px-5 py-2 rounded-full text-xs font-bold bg-[#fee2bb] dark:bg-gold/20 text-[#b57a2b] dark:text-gold hover:bg-[#fddaa0] dark:hover:bg-gold/30 disabled:opacity-40 transition-all flex items-center gap-1.5 shadow-sm"
+                                    >
+                                        {(isReplying || createPost.isPending) ? (
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                            <Send className="w-3.5 h-3.5" />
+                                        )}
+                                        Reply
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
                 {/* Replies List */}
                 {postsLoading ? (
@@ -1811,7 +2524,7 @@ export function ThreadView() {
                                                 {expandedReplies[reply.id] ? (
                                                     <><ChevronUp className="w-3.5 h-3.5" /> Hide {currentChildren.length} {currentChildren.length === 1 ? 'reply' : 'replies'}</>
                                                 ) : (
-                                                    <><ChevronDown className="w-3.5 h-3.5" /> View {currentChildren.length} {currentChildren.length === 1 ? 'reply' : 'replies'}</>
+                                                    <><ChevronDown className="w-3.5 h-3.5" /> View {currentChildren.length} more {currentChildren.length === 1 ? 'reply' : 'replies'}</>
                                                 )}
                                             </button>
                                         </div>
@@ -1836,6 +2549,109 @@ export function ThreadView() {
                     thread={thread} 
                 />
             )}
+
+            {/* Overlaid Premium Share Drawer - Portalled to body */}
+            {showShare && createPortal(
+                <>
+                    <div className="reel-drawer-backdrop" style={{ zIndex: 99998 }} onClick={() => setShowShare(false)} />
+                    <div className="reel-drawer text-left bg-white dark:bg-[#121212] border-t border-gray-200 dark:border-white/10" style={{ zIndex: 99999 }}>
+                        <div className="reel-drawer-handle bg-gray-300 dark:bg-white/20" />
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-white/10">
+                            <h3 className="text-gray-900 dark:text-white font-bold text-sm font-serif">Share Thread</h3>
+                            <button 
+                                onClick={() => setShowShare(false)} 
+                                className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="px-4 py-4 space-y-4" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' }}>
+                            {/* Horizontal / Grid of Sharing Options */}
+                            <div className="grid grid-cols-4 gap-3 text-center">
+                                {/* WhatsApp */}
+                                <a 
+                                    href={whatsappLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex flex-col items-center gap-1.5 group cursor-pointer"
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-[#25D366]/15 hover:bg-[#25D366]/25 border border-[#25D366]/20 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+                                        <svg className="w-5.5 h-5.5" viewBox="0 0 24 24">
+                                            <path d="M12.004 2C6.51 2 2.014 6.5 2.014 12c0 1.89.5 3.63 1.39 5.16L2 22l5.07-1.32c1.47.8 3.12 1.26 4.88 1.26 5.5 0 9.99-4.5 9.99-10S17.49 2 12.004 2z" fill="#25D366" />
+                                            <path d="M17.3 14.86c-.287-.144-1.702-.84-1.965-.935-.264-.096-.456-.144-.648.144-.192.288-.744.935-.912 1.127-.168.193-.336.216-.624.072-2.844-1.417-4.66-2.56-6.137-5.099-.136-.233-.036-.37.07-.487.165-.183.33-.298.485-.434.15-.132.227-.225.32-.397.094-.173.048-.337-.024-.481-.072-.144-.648-1.56-.888-2.136-.233-.56-.47-.482-.648-.49-.168-.008-.36-.01-.552-.01-.192 0-.504.072-.768.36-.264.288-1.008.984-1.008 2.4 0 1.416 1.032 2.784 1.176 2.976.144.192 2.032 3.102 4.921 4.348 2.889 1.246 2.889.83 3.4.78.513-.05 1.703-.696 1.943-1.368.24-.672.24-1.248.168-1.368-.072-.12-.264-.192-.552-.336z" fill="white" />
+                                        </svg>
+                                    </div>
+                                    <span className="text-gray-700 dark:text-gray-300 text-[10px] font-medium">WhatsApp</span>
+                                </a>
+
+                                {/* Telegram */}
+                                <a 
+                                    href={telegramLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex flex-col items-center gap-1.5 group cursor-pointer"
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/20 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+                                        <svg className="w-5 h-5 text-sky-400" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.87 4.326-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.46c.538-.196 1.006.128.832.941z" />
+                                        </svg>
+                                    </div>
+                                    <span className="text-gray-700 dark:text-gray-300 text-[10px] font-medium">Telegram</span>
+                                </a>
+
+                                {/* Twitter / X */}
+                                <a 
+                                    href={twitterLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex flex-col items-center gap-1.5 group cursor-pointer"
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/15 border border-gray-200 dark:border-white/10 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+                                        <svg className="w-4 h-4 text-gray-900 dark:text-white" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                                        </svg>
+                                    </div>
+                                    <span className="text-gray-700 dark:text-gray-300 text-[10px] font-medium">Twitter / X</span>
+                                </a>
+
+                                {/* Facebook */}
+                                <a 
+                                    href={facebookLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex flex-col items-center gap-1.5 group cursor-pointer"
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/20 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+                                        <svg className="w-5 h-5 text-blue-400" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M22.675 0h-21.35c-.732 0-1.325.593-1.325 1.325v21.351c0 .731.593 1.324 1.325 1.324h11.495v-9.294h-3.128v-3.622h3.128v-2.671c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.099 2.795.143v3.24l-1.918.001c-1.504 0-1.795.715-1.795 1.763v2.313h3.587l-.467 3.622h-3.12v9.293h6.116c.73 0 1.323-.593 1.323-1.325v-21.35c0-.732-.593-1.325-1.325-1.325z" />
+                                        </svg>
+                                    </div>
+                                    <span className="text-gray-700 dark:text-gray-300 text-[10px] font-medium">Facebook</span>
+                                </a>
+                            </div>
+
+                            {/* Copy Link URL Copy Field */}
+                            <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-2 flex items-center justify-between gap-3">
+                                <div className="flex-1 overflow-hidden px-2">
+                                    <div className="text-[11px] text-gray-700 dark:text-gray-300 truncate select-all">{shareUrl}</div>
+                                </div>
+                                <button 
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(shareUrl);
+                                        setCopied(true);
+                                        toast.success('Copied!', 'Link copied to clipboard');
+                                        setTimeout(() => setCopied(false), 2000);
+                                    }}
+                                    className={copied ? "shrink-0 p-1.5 rounded-lg border flex items-center justify-center transition-all bg-emerald-600/20 border-emerald-500/30 text-emerald-400" : "shrink-0 p-1.5 rounded-lg border flex items-center justify-center transition-all bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/15 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white"}
+                                >
+                                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            , document.body)}
         </div>
     );
 }

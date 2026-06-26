@@ -116,3 +116,40 @@ Reordered the platform sidebar to conform to enterprise-grade dashboard architec
 
 ### Iconography Improvements
 * Swapped the generic single-image icon on the **Art Gallery** to `GalleryHorizontal` (Lucide-react), representing a curated wall structure and visually highlighting the gallery context.
+* Designed a custom SVG icon for the **Forum** feature representing three user silhouettes under a speech bubble with three dots (`...`), matching the requested layout design.
+* Replaced the **Messages** icon (envelope) with the `<MessageSquare>` icon previously used by the Forum feature.
+
+---
+
+## 5. Client-Side Image Compression & Aspect Ratio Controls
+
+To optimize network usage, eliminate memory exhaustion on smaller cloud instances (such as a $7/month Render tier), and guarantee fast client transfers, SeniQu employs a robust client-side image compression pipeline before uploading to the server or Cloudflare R2 CDN.
+
+### Granular Scale and Aspect Ratio Customization
+When users upload media to a Forum thread or Reply, they are presented with detailed compression presets:
+* **Aspect Ratio Selection**: Allows cropping to standardized dimensions:
+  * `Original`: Preserves native canvas bounding boxes.
+  * `1:1`: Square layout, typical for profile photos or artwork cards.
+  * `4:3` & `3:4`: Traditional photography bounds.
+  * `16:9` & `9:16`: Cinema/Reels widescreen formats.
+* **Resolution Quality Controls**: Options to select targeted scales (1080p, 720p, 480p, 4K, or Original).
+* **Iterative Downscaling Loop**: The client-side `compressImage` utility automatically calculates target pixel boundaries and resizes the image via `OffscreenCanvas`. If the resulting file exceeds `maxSizeBytes` (default 5MB), it iteratively lowers JPEG/WebP quality (down to `0.3`) until the asset fits within the budget.
+* **Metadata Scrubbing**: To protect privacy, canvas re-drawing automatically strips all original camera EXIF, GPS location tags, and sensitive capture timestamps.
+
+---
+
+## 6. Portaled Sharing System & Third-Party Link Access
+
+SeniQu provides a comprehensive in-app sharing system that bridges internal threads with external messaging networks.
+
+### React Portals & Absolute Positioning
+* To prevent CSS stacking contexts (such as `overflow-hidden` or high `z-index` mobile elements) from clipping the sharing sheet, the drawer backdrop is mounted directly into `document.body` via React Portal (`createPortal`).
+* Supports share drawers for reels, video threads, and standard text/image threads.
+
+### Verified Auth Restrictions
+* To prevent unauthorized scraping and protect community discussions, shareable links are restricted. If an unauthenticated guest user clicks a shared thread or reel link, the routing system automatically redirects them to the login flow before displaying the resource.
+
+### Brand-Compliant Visual Design
+* The sharing drawer features official third-party vector branding.
+* **WhatsApp Icon**: Updated to use the official two-part SVG logo (white handset enclosed inside a `#25D366` green bubble background) for maximum brand accuracy.
+* **Dynamic Sharing Layouts**: Seamless grid structures that transition gracefully between mobile sheets and desktop overlays.

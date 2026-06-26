@@ -1,13 +1,20 @@
 /**
- * Video Processing Service
+ * Video Processing Service — Memory-Efficient File-Based Pipeline
  * Handles video compression, thumbnail generation, and metadata extraction.
  *
  * Architecture:
+ * - ALL processing operates on file PATHS, never full in-memory buffers
  * - Uses FFmpeg for transcoding (H.264/AAC → MP4 container)
  * - CRF-based encoding for optimal quality-to-size ratio
  * - Mobile-first: targets 720p with 1080p cap
  * - Generates WebP thumbnail from best frame
  * - Extracts full video metadata for database indexing
+ *
+ * Memory Strategy:
+ * - Never hold more than ~10MB in memory at once
+ * - Temp files on disk for all intermediate stages
+ * - Explicit cleanup in finally blocks
+ * - Buffer usage only for tiny outputs (thumbnails)
  *
  * Compression Strategy:
  * - CRF 23 (visually lossless for mobile screens)
@@ -45,6 +52,37 @@ export interface VideoMetadata {
     aspectRatio: string
 }
 
+export interface ProcessedVideoResult {
+    /** Path to the compressed video file on disk */
+    videoPath: string
+    /** Video MIME type */
+    contentType: string
+    /** File extension */
+    extension: string
+    /** Final file size in bytes */
+    size: number
+    /** Video metadata */
+    metadata: VideoMetadata
+}
+
+export interface VideoThumbnailResult {
+    /** Path to the thumbnail file on disk */
+    thumbnailPath: string
+    /** Thumbnail image buffer (WebP) — small enough to hold in memory */
+    buffer: Buffer
+    /** Thumbnail MIME type */
+    contentType: string
+    /** File extension */
+    extension: string
+    /** Thumbnail size in bytes */
+    size: number
+    /** Thumbnail width */
+    width: number
+    /** Thumbnail height */
+    height: number
+}
+
+// === Legacy buffer-based interfaces (kept for backward compat) ===
 export interface ProcessedVideo {
     /** Compressed video buffer */
     buffer: Buffer
@@ -109,71 +147,82 @@ export class VideoProcessingService {
     }
 
     /**
-     * Extract video metadata using ffprobe
+     * Extract video metadata using ffprobe — FILE-PATH based (no buffer needed)
+     */
+    async getMetadataFromFile(filePath: string): Promise<VideoMetadata> {
+        const fileSize = fs.statSync(filePath).size
+
+        return new Promise<VideoMetadata>((resolve, reject) => {
+            ffmpeg.ffprobe(filePath, (err, data) => {
+                if (err) {
+                    reject(new BadRequestException(`Invalid video file: ${err.message}`))
+                    return
+                }
+
+                const videoStream = data.streams.find(s => s.codec_type === "video")
+                const audioStream = data.streams.find(s => s.codec_type === "audio")
+
+                if (!videoStream) {
+                    reject(new BadRequestException("No video stream found in file"))
+                    return
+                }
+
+                const width = videoStream.width || 0
+                const height = videoStream.height || 0
+                const duration = parseFloat(String(data.format.duration || "0"))
+                const bitrate = Math.round(parseInt(String(data.format.bit_rate || "0")) / 1000)
+                const fpsStr = videoStream.r_frame_rate || "30/1"
+                const fpsParts = fpsStr.split("/")
+                const fps = fpsParts.length === 2
+                    ? Math.round(parseInt(fpsParts[0]) / parseInt(fpsParts[1]))
+                    : parseInt(fpsStr)
+
+                // Calculate aspect ratio
+                const gcd = this.gcd(width, height)
+                const aspectRatio = gcd > 0 ? `${width / gcd}:${height / gcd}` : "unknown"
+
+                resolve({
+                    duration,
+                    width,
+                    height,
+                    videoCodec: videoStream.codec_name || "unknown",
+                    audioCodec: audioStream?.codec_name || null,
+                    bitrate,
+                    fps: isNaN(fps) ? 30 : fps,
+                    fileSize,
+                    aspectRatio,
+                })
+            })
+        })
+    }
+
+    /**
+     * Legacy: Extract video metadata from a buffer (creates temp file internally)
+     * @deprecated Use getMetadataFromFile() instead to avoid memory pressure
      */
     async getMetadata(buffer: Buffer): Promise<VideoMetadata> {
         const tmpFile = this.createTempFile(buffer, ".tmp")
 
         try {
-            return await new Promise<VideoMetadata>((resolve, reject) => {
-                ffmpeg.ffprobe(tmpFile, (err, data) => {
-                    if (err) {
-                        reject(new BadRequestException(`Invalid video file: ${err.message}`))
-                        return
-                    }
-
-                    const videoStream = data.streams.find(s => s.codec_type === "video")
-                    const audioStream = data.streams.find(s => s.codec_type === "audio")
-
-                    if (!videoStream) {
-                        reject(new BadRequestException("No video stream found in file"))
-                        return
-                    }
-
-                    const width = videoStream.width || 0
-                    const height = videoStream.height || 0
-                    const duration = parseFloat(String(data.format.duration || "0"))
-                    const bitrate = Math.round(parseInt(String(data.format.bit_rate || "0")) / 1000)
-                    const fpsStr = videoStream.r_frame_rate || "30/1"
-                    const fpsParts = fpsStr.split("/")
-                    const fps = fpsParts.length === 2
-                        ? Math.round(parseInt(fpsParts[0]) / parseInt(fpsParts[1]))
-                        : parseInt(fpsStr)
-
-                    // Calculate aspect ratio
-                    const gcd = this.gcd(width, height)
-                    const aspectRatio = gcd > 0 ? `${width / gcd}:${height / gcd}` : "unknown"
-
-                    resolve({
-                        duration,
-                        width,
-                        height,
-                        videoCodec: videoStream.codec_name || "unknown",
-                        audioCodec: audioStream?.codec_name || null,
-                        bitrate,
-                        fps: isNaN(fps) ? 30 : fps,
-                        fileSize: buffer.length,
-                        aspectRatio,
-                    })
-                })
-            })
+            return await this.getMetadataFromFile(tmpFile)
         } finally {
             this.cleanupTempFile(tmpFile)
         }
     }
 
     /**
-     * Compress a video with FFmpeg
+     * Compress a video with FFmpeg — FILE-PATH based (memory efficient)
      * Uses H.264 + AAC encoding with CRF-based quality targeting.
      * Mobile-optimized: caps at 1080p, fast decode profile, faststart.
+     *
+     * Returns the OUTPUT FILE PATH — caller is responsible for cleanup.
      */
-    async compressVideo(buffer: Buffer, mimetype: string): Promise<ProcessedVideo> {
-        const inputFile = this.createTempFile(buffer, this.getExtForMime(mimetype))
+    async compressVideoFile(inputFile: string, mimetype: string): Promise<ProcessedVideoResult> {
         const outputFile = path.join(os.tmpdir(), `seniqu-vc-${uuidv4()}.mp4`)
 
         try {
-            // Get source metadata first
-            const metadata = await this.getMetadata(buffer)
+            // Get source metadata from file path (no buffer)
+            const metadata = await this.getMetadataFromFile(inputFile)
 
             // Validate duration
             if (metadata.duration > MAX_DURATION_SECONDS) {
@@ -190,28 +239,32 @@ export class VideoProcessingService {
                 MAX_HEIGHT,
             )
 
+            const inputSize = fs.statSync(inputFile).size
+
             // Determine if we need to re-encode
             const isAlreadyOptimal =
                 metadata.videoCodec === "h264" &&
                 metadata.width <= MAX_WIDTH &&
                 metadata.height <= MAX_HEIGHT &&
                 metadata.bitrate <= 3000 && // Already low bitrate
-                buffer.length <= 20 * 1024 * 1024 // Under 20MB
+                inputSize <= 20 * 1024 * 1024 // Under 20MB
 
             if (isAlreadyOptimal) {
-                this.logger.log(`🎬 Video already optimal (${metadata.videoCodec}, ${metadata.width}x${metadata.height}, ${this.formatSize(buffer.length)}). Skipping re-encode.`)
+                this.logger.log(`🎬 Video already optimal (${metadata.videoCodec}, ${metadata.width}x${metadata.height}, ${this.formatSize(inputSize)}). Copying without re-encode.`)
+                // Copy the file instead of re-encoding
+                fs.copyFileSync(inputFile, outputFile)
                 return {
-                    buffer,
+                    videoPath: outputFile,
                     contentType: "video/mp4",
                     extension: ".mp4",
-                    size: buffer.length,
+                    size: inputSize,
                     metadata,
                 }
             }
 
             this.logger.log(
                 `🎬 Compressing video: ${metadata.width}x${metadata.height} → ${targetWidth}x${targetHeight} ` +
-                `(${metadata.videoCodec} → h264, CRF ${CRF_QUALITY}, ${this.formatSize(buffer.length)})`
+                `(${metadata.videoCodec} → h264, CRF ${CRF_QUALITY}, ${this.formatSize(inputSize)})`
             )
 
             // Build scale filter — only apply if dimensions need to change
@@ -262,40 +315,64 @@ export class VideoProcessingService {
                     .save(outputFile)
             })
 
-            const compressedBuffer = fs.readFileSync(outputFile)
-            const compressionRatio = ((1 - compressedBuffer.length / buffer.length) * 100).toFixed(1)
+            const compressedSize = fs.statSync(outputFile).size
+            const compressionRatio = ((1 - compressedSize / inputSize) * 100).toFixed(1)
 
             this.logger.log(
-                `✅ Video compressed: ${this.formatSize(buffer.length)} → ${this.formatSize(compressedBuffer.length)} ` +
+                `✅ Video compressed: ${this.formatSize(inputSize)} → ${this.formatSize(compressedSize)} ` +
                 `(${compressionRatio}% reduction)`
             )
 
             // Get metadata of compressed video
-            const compressedMetadata = await this.getMetadata(compressedBuffer)
+            const compressedMetadata = await this.getMetadataFromFile(outputFile)
 
             return {
-                buffer: compressedBuffer,
+                videoPath: outputFile,
                 contentType: "video/mp4",
                 extension: ".mp4",
-                size: compressedBuffer.length,
+                size: compressedSize,
                 metadata: compressedMetadata,
             }
-        } finally {
-            this.cleanupTempFile(inputFile)
+        } catch (err) {
+            // Clean up output file on error
             this.cleanupTempFile(outputFile)
+            throw err
         }
     }
 
     /**
-     * Generate a thumbnail from a video
-     * Picks a frame at ~20% of the video duration for a visually interesting thumbnail.
+     * Legacy: Compress a video from a buffer
+     * @deprecated Use compressVideoFile() instead for memory efficiency
      */
-    async generateThumbnail(buffer: Buffer, mimetype: string): Promise<VideoThumbnail> {
+    async compressVideo(buffer: Buffer, mimetype: string): Promise<ProcessedVideo> {
         const inputFile = this.createTempFile(buffer, this.getExtForMime(mimetype))
+
+        try {
+            const result = await this.compressVideoFile(inputFile, mimetype)
+            const compressedBuffer = fs.readFileSync(result.videoPath)
+
+            return {
+                buffer: compressedBuffer,
+                contentType: result.contentType,
+                extension: result.extension,
+                size: result.size,
+                metadata: result.metadata,
+            }
+        } finally {
+            this.cleanupTempFile(inputFile)
+        }
+    }
+
+    /**
+     * Generate a thumbnail from a video FILE PATH (memory efficient)
+     * Picks a frame at ~20% of the video duration for a visually interesting thumbnail.
+     * Returns the thumbnail as a buffer (typically < 50KB, safe for memory).
+     */
+    async generateThumbnailFromFile(inputFile: string): Promise<VideoThumbnailResult> {
         const thumbnailFile = path.join(os.tmpdir(), `seniqu-vt-${uuidv4()}.webp`)
 
         try {
-            const metadata = await this.getMetadata(buffer)
+            const metadata = await this.getMetadataFromFile(inputFile)
             // Pick a frame at 20% of duration (usually more interesting than first frame)
             const seekTime = Math.min(metadata.duration * 0.2, 10)
 
@@ -323,6 +400,7 @@ export class VideoProcessingService {
             )
 
             return {
+                thumbnailPath: thumbnailFile,
                 buffer: thumbnailBuffer,
                 contentType: "image/webp",
                 extension: ".webp",
@@ -330,12 +408,117 @@ export class VideoProcessingService {
                 width: THUMBNAIL_WIDTH,
                 height: THUMBNAIL_HEIGHT,
             }
-        } finally {
-            this.cleanupTempFile(inputFile)
+        } catch (err) {
             this.cleanupTempFile(thumbnailFile)
+            throw err
         }
     }
 
+    /**
+     * Generate a thumbnail from a video
+     * @deprecated Use generateThumbnailFromFile() instead
+     */
+    async generateThumbnail(buffer: Buffer, mimetype: string): Promise<VideoThumbnail> {
+        const inputFile = this.createTempFile(buffer, this.getExtForMime(mimetype))
+
+        try {
+            const result = await this.generateThumbnailFromFile(inputFile)
+            this.cleanupTempFile(result.thumbnailPath)
+
+            return {
+                buffer: result.buffer,
+                contentType: result.contentType,
+                extension: result.extension,
+                size: result.size,
+                width: result.width,
+                height: result.height,
+            }
+        } finally {
+            this.cleanupTempFile(inputFile)
+        }
+    }
+
+    /**
+     * Full video processing pipeline — FILE-PATH based (memory efficient)
+     * Compresses video + generates thumbnail without loading full video into memory.
+     *
+     * IMPORTANT: Caller is responsible for cleaning up returned file paths.
+     */
+    async processVideoFromFile(inputFile: string, mimetype: string): Promise<{
+        video: ProcessedVideoResult
+        thumbnail: VideoThumbnailResult
+    }> {
+        const inputSize = fs.statSync(inputFile).size
+        this.logger.log(`🎬 Starting file-based video processing pipeline (${this.formatSize(inputSize)})...`)
+
+        try {
+            // Check if ffmpeg/ffprobe is available
+            await new Promise<void>((resolve, reject) => {
+                ffmpeg.getAvailableCodecs((err) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
+            });
+
+            // Run compression (file path → file path, NO buffer in memory)
+            const video = await this.compressVideoFile(inputFile, mimetype)
+
+            // Generate thumbnail from COMPRESSED video (already on disk)
+            const thumbnail = await this.generateThumbnailFromFile(video.videoPath)
+
+            this.logger.log(
+                `✅ Video pipeline complete: Video ${this.formatSize(video.size)}, Thumbnail ${this.formatSize(thumbnail.size)}`
+            )
+
+            return { video, thumbnail }
+        } catch (ffmpegErr: any) {
+            this.logger.warn(`⚠️ FFmpeg/ffprobe is not available or failed. Falling back to direct video upload without compression. Error: ${ffmpegErr.message}`);
+
+            // Base64 transparent WebP 1x1 image as fallback thumbnail
+            const transparentWebpBase64 = "UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==";
+            const fallbackThumbnailBuffer = Buffer.from(transparentWebpBase64, 'base64');
+            const fallbackThumbnailPath = path.join(os.tmpdir(), `seniqu-vt-fallback-${uuidv4()}.webp`)
+            fs.writeFileSync(fallbackThumbnailPath, fallbackThumbnailBuffer)
+
+            // Copy input as "output" since we can't compress
+            const outputPath = path.join(os.tmpdir(), `seniqu-vc-passthrough-${uuidv4()}${this.getExtForMime(mimetype)}`)
+            fs.copyFileSync(inputFile, outputPath)
+
+            return {
+                video: {
+                    videoPath: outputPath,
+                    contentType: mimetype,
+                    extension: this.getExtForMime(mimetype),
+                    size: inputSize,
+                    metadata: {
+                        duration: 0,
+                        width: 1080,
+                        height: 1920,
+                        videoCodec: "unknown",
+                        audioCodec: "unknown",
+                        bitrate: 0,
+                        fps: 30,
+                        fileSize: inputSize,
+                        aspectRatio: "9:16"
+                    }
+                },
+                thumbnail: {
+                    thumbnailPath: fallbackThumbnailPath,
+                    buffer: fallbackThumbnailBuffer,
+                    contentType: "image/webp",
+                    extension: ".webp",
+                    size: fallbackThumbnailBuffer.length,
+                    width: 480,
+                    height: 270
+                }
+            };
+        }
+    }
+
+    /**
+     * Legacy: Full pipeline from buffer
+     * @deprecated Use processVideoFromFile() for memory efficiency
+     */
     async processVideo(buffer: Buffer, mimetype: string): Promise<{
         video: ProcessedVideo
         thumbnail: VideoThumbnail
@@ -430,7 +613,7 @@ export class VideoProcessingService {
         return tmpFile
     }
 
-    private cleanupTempFile(filePath: string): void {
+    cleanupTempFile(filePath: string): void {
         try {
             if (fs.existsSync(filePath)) {
                 fs.unlinkSync(filePath)
@@ -444,7 +627,7 @@ export class VideoProcessingService {
         return b === 0 ? a : this.gcd(b, a % b)
     }
 
-    private getExtForMime(mime: string): string {
+    getExtForMime(mime: string): string {
         const map: Record<string, string> = {
             "video/mp4": ".mp4",
             "video/webm": ".webm",
@@ -456,7 +639,7 @@ export class VideoProcessingService {
         return map[mime] || ".mp4"
     }
 
-    private formatSize(bytes: number): string {
+    formatSize(bytes: number): string {
         if (bytes < 1024) return `${bytes} B`
         if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`

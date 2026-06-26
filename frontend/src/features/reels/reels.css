@@ -1193,3 +1193,130 @@
         visibility: hidden !important;
     }
 }
+
+/* ─── Create Reel FAB (Floating Action Button) ─── */
+.reels-fab {
+    position: fixed;
+    z-index: 55;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+    /* Desktop: top-right of content area */
+    top: 88px;
+    right: calc(50% - 240px + 14px);
+    /* Entrance animation */
+    animation: fabSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes fabSlideIn {
+    0% { opacity: 0; transform: scale(0.5) translateY(12px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Mobile: bottom-right, above the navbar */
+@media (max-width: 767px) {
+    .reels-fab {
+        top: auto;
+        right: 16px;
+        bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+/* Pulse ring — subtle attention indicator, plays once then stops */
+.reels-fab-pulse {
+    position: absolute;
+    inset: -4px;
+    border-radius: 50px;
+    border: 2px solid rgba(201, 168, 76, 0.5);
+    animation: fabPulseRing 2s ease-out 0.6s forwards;
+    opacity: 0;
+    pointer-events: none;
+}
+
+@keyframes fabPulseRing {
+    0% { transform: scale(0.9); opacity: 0.7; }
+    50% { transform: scale(1.15); opacity: 0.3; }
+    100% { transform: scale(1.3); opacity: 0; }
+}
+
+/* Inner button — glassmorphic pill with gold gradient */
+.reels-fab-inner {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px 10px 14px;
+    border-radius: 50px;
+    background: linear-gradient(135deg, #C9A84C 0%, #b8960b 100%);
+    color: #000;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.2px;
+    box-shadow:
+        0 4px 20px -2px rgba(201, 168, 76, 0.45),
+        0 1px 3px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Shimmer highlight on hover */
+.reels-fab-inner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 200%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.15) 40%,
+        rgba(255, 255, 255, 0.25) 50%,
+        rgba(255, 255, 255, 0.15) 60%,
+        transparent 100%
+    );
+    transition: left 0.6s ease;
+    pointer-events: none;
+}
+
+.reels-fab:hover .reels-fab-inner::before {
+    left: 100%;
+}
+
+.reels-fab:hover .reels-fab-inner {
+    transform: translateY(-2px);
+    box-shadow:
+        0 8px 28px -2px rgba(201, 168, 76, 0.55),
+        0 2px 6px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.reels-fab:active .reels-fab-inner {
+    transform: scale(0.93);
+    box-shadow:
+        0 2px 10px -1px rgba(201, 168, 76, 0.3),
+        0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.reels-fab-label {
+    line-height: 1;
+    white-space: nowrap;
+}
+
+/* On mobile — compact icon-only version to save space */
+@media (max-width: 767px) {
+    .reels-fab-inner {
+        padding: 12px;
+        border-radius: 50%;
+    }
+
+    .reels-fab-label {
+        display: none;
+    }
+}

@@ -128,23 +128,10 @@ export function ReelsPage() {
 
     return (
         <div className={`reels-container ${isAuthenticated ? 'reels-auth' : 'reels-guest'}`}>
-            {/* ═══ Header ═══ */}
+            {/* ═══ Header (Desktop only — hidden on mobile) ═══ */}
             <div className="reels-header">
                 <span className="reels-header-title">Reels</span>
                 <div className="reels-header-actions" style={{ display: 'flex', gap: '10px' }}>
-                    <button
-                        onClick={() => {
-                            if (!user) {
-                                toast.error('Login Required', 'Sign in to create a Reel');
-                                return;
-                            }
-                            setShowUpload(true);
-                        }}
-                        className="reels-header-btn"
-                        aria-label="Create reel"
-                    >
-                        <PlusCircle style={{ width: 20, height: 20 }} />
-                    </button>
                     <button
                         onClick={() => setShowSearch(true)}
                         className="reels-header-btn"
@@ -276,6 +263,22 @@ export function ReelsPage() {
 
             {/* ═══ Upload Modal ═══ */}
             {showUpload && <UploadReelModal onClose={() => setShowUpload(false)} />}
+
+            {/* ═══ Create Reel FAB — Portal for clean z-index ═══ */}
+            {isAuthenticated && !showUpload && !commentsReel && !shareReel && createPortal(
+                <button
+                    className="reels-fab"
+                    onClick={() => setShowUpload(true)}
+                    aria-label="Create new reel"
+                >
+                    <span className="reels-fab-pulse" />
+                    <span className="reels-fab-inner">
+                        <PlusCircle style={{ width: 22, height: 22 }} />
+                        <span className="reels-fab-label">Create</span>
+                    </span>
+                </button>,
+                document.body
+            )}
 
             {/* ═══ Share Bottom Sheet ═══ */}
             {shareReel && createPortal(
