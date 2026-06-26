@@ -138,9 +138,12 @@ export async function uploadFile(
 4. **Anti-Throttling**: The storage controller is guarded with NestJS `@Throttle` decorators to throttle denial-of-service/spam attacks.
 5. **Anti-Chunking**: Streams are parsed by `@fastify/multipart` with strict size limits (15MB for images, 50MB for audio, 200MB for video) at the Node request wrapper layer, avoiding memory exhaustion exploits.
 6. **Path-Style S3 Routing**: Enforces `forcePathStyle: true` on the backend `S3Client` instance for Cloudflare R2 compatibility. This forces endpoints to format as `https://<account_id>.r2.cloudflarestorage.com/<bucket_name>/...` instead of dynamic subdomains, eliminating DNS wildcard resolution and SSL handshake failures in both local and restricted VPS environments.
-7. **Resource Conservation ($7/mo Render VPS Optimization)**: By uploading files directly from the browser to Cloudflare R2 CDN, the low-resource Render server is relieved of raw file transfer payload processing. It only processes light JSON queries, preventing Out-Of-Memory (OOM) shutdowns and CPU throttling on files up to 150MB+ (configured ceiling limit: 200MB).
+7. **Resource Conservation ($7/mo Render VPS Optimization & Compression Bypass)**: By uploading files directly from the browser to Cloudflare R2 CDN, the low-resource Render server is relieved of raw file transfer payload processing. For videos larger than **10MB** (up to the **200MB** limit), the server skips the heavy FFmpeg compression step to avoid CPU and RAM exhaustion (OOM) on the 512MB RAM server. Instead, it utilizes S3's `CopyObjectCommand` to copy/rename the object directly at the CDN edge.
 8. **MIME Validation Fallback**: Client-side validation checks the file extension as a fallback if the browser/OS leaves the `file.type` MIME field empty (common on QuickTime `.mov` files).
+9. **High-Fidelity Video Quality Preservation**: 
+   - Videos under **10MB** are compressed using an industry-standard H.264 codec configuration with a Constant Rate Factor (CRF) of `22` and audio bitrate of `128k`, achieving a visually lossless compression optimized for mobile device streaming.
+   - Videos over **10MB** bypass the compression pipeline completely, ensuring that long or high-resolution uploads are served in their absolute native quality without any compression artifacts or server performance degradation.
 
 ---
-*Document Version: 1.3.0*
+*Document Version: 1.4.0*
 *Last Updated: 2026-06-26*
