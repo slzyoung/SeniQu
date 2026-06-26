@@ -17,8 +17,8 @@
 
 /** Video validation constraints */
 export const VIDEO_CONSTRAINTS = {
-    /** Max file size (100MB for reels) */
-    maxFileSize: 100 * 1024 * 1024,
+    /** Max file size (200MB to support up to 150MB securely) */
+    maxFileSize: 200 * 1024 * 1024,
     /** Max duration in seconds (60 seconds for reels) */
     maxDuration: 60,
     /** Allowed MIME types */
@@ -51,11 +51,20 @@ export async function validateVideo(
     const maxFileSize = options?.maxFileSize ?? VIDEO_CONSTRAINTS.maxFileSize;
     const maxDuration = options?.maxDuration ?? VIDEO_CONSTRAINTS.maxDuration;
 
+    let fileType = file.type;
+    if (!fileType && file.name) {
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        if (ext === 'mp4') fileType = 'video/mp4';
+        else if (ext === 'webm') fileType = 'video/webm';
+        else if (ext === 'ogg') fileType = 'video/ogg';
+        else if (ext === 'mov' || ext === 'qt') fileType = 'video/quicktime';
+    }
+
     // Check file type
-    if (!VIDEO_CONSTRAINTS.allowedTypes.includes(file.type)) {
+    if (!VIDEO_CONSTRAINTS.allowedTypes.includes(fileType)) {
         return {
             valid: false,
-            error: `Unsupported format: ${file.type}. Use MP4, WebM, or OGG.`,
+            error: `Unsupported format: ${file.type || 'unknown'}. Use MP4, WebM, or OGG/MOV.`,
         };
     }
 

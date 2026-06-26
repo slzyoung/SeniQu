@@ -82,9 +82,9 @@ export interface UploadSession {
 }
 
 const ALLOWED_VIDEO_MIMES = ["video/mp4", "video/webm", "video/ogg", "video/quicktime"]
-const MAX_VIDEO_SIZE = 100 * 1024 * 1024 // 100MB
+const MAX_VIDEO_SIZE = 200 * 1024 * 1024 // 200MB
 const MAX_REEL_DURATION = 60 // seconds
-const MAX_FORUM_DURATION = 300 // 5 minutes
+const MAX_FORUM_DURATION = 60 // 1 minute
 const PRESIGNED_URL_EXPIRY = 3600 // 1 hour
 
 @Injectable()
@@ -127,6 +127,7 @@ export class VideoUploadService implements OnModuleInit {
             region: "auto",
             endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
             credentials: { accessKeyId, secretAccessKey },
+            forcePathStyle: true,
             requestChecksumCalculation: "WHEN_REQUIRED",
             responseChecksumValidation: "WHEN_REQUIRED",
         })

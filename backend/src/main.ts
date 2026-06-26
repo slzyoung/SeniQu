@@ -26,7 +26,7 @@ async function bootstrap() {
     const fastifyAdapter = new FastifyAdapter({
         logger: false,
         trustProxy: true,
-        bodyLimit: 105 * 1024 * 1024, // 105MB — large videos use presigned URL direct-to-CDN
+        bodyLimit: 200 * 1024 * 1024, // 200MB — support video uploads up to 150MB securely
     })
 
     const app = await NestFactory.create<NestFastifyApplication>(
@@ -78,7 +78,7 @@ async function bootstrap() {
     // Multipart support (file uploads — replaces Multer)
     await app.register(require("@fastify/multipart"), {
         limits: {
-            fileSize: 105 * 1024 * 1024, // 105MB — large videos use direct-to-CDN presigned URLs
+            fileSize: 200 * 1024 * 1024, // 200MB — support video uploads up to 150MB securely
         },
     })
 

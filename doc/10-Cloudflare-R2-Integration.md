@@ -136,8 +136,11 @@ export async function uploadFile(
 2. **Strict Validation Gates**: Spoofed files disguised as images are rejected immediately at the server optimization layer via Sharp parsing validations.
 3. **Production Safety (Anti-Bloat)**: Base64 fallback is strictly disabled in production environments (`NODE_ENV === 'production'`). Any S3 network or upload failure results in a `500 InternalServerErrorException` to prevent base64 blobs from bloating the Postgres DB.
 4. **Anti-Throttling**: The storage controller is guarded with NestJS `@Throttle` decorators to throttle denial-of-service/spam attacks.
-5. **Anti-Chunking**: Streams are parsed by `@fastify/multipart` with strict size limits (15MB for images, 50MB for audio, 150MB for video) at the Node request wrapper layer, avoiding memory exhaustion exploits.
+5. **Anti-Chunking**: Streams are parsed by `@fastify/multipart` with strict size limits (15MB for images, 50MB for audio, 200MB for video) at the Node request wrapper layer, avoiding memory exhaustion exploits.
+6. **Path-Style S3 Routing**: Enforces `forcePathStyle: true` on the backend `S3Client` instance for Cloudflare R2 compatibility. This forces endpoints to format as `https://<account_id>.r2.cloudflarestorage.com/<bucket_name>/...` instead of dynamic subdomains, eliminating DNS wildcard resolution and SSL handshake failures in both local and restricted VPS environments.
+7. **Resource Conservation ($7/mo Render VPS Optimization)**: By uploading files directly from the browser to Cloudflare R2 CDN, the low-resource Render server is relieved of raw file transfer payload processing. It only processes light JSON queries, preventing Out-Of-Memory (OOM) shutdowns and CPU throttling on files up to 150MB+ (configured ceiling limit: 200MB).
+8. **MIME Validation Fallback**: Client-side validation checks the file extension as a fallback if the browser/OS leaves the `file.type` MIME field empty (common on QuickTime `.mov` files).
 
 ---
-*Document Version: 1.2.0*
-*Last Updated: 2026-05-26*
+*Document Version: 1.3.0*
+*Last Updated: 2026-06-26*

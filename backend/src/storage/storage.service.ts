@@ -54,7 +54,7 @@ const ALLOWED_TYPES = [
 
 // Max file sizes
 const MAX_IMAGE_SIZE = 15 * 1024 * 1024  // 15 MB
-const MAX_VIDEO_SIZE = 150 * 1024 * 1024 // 150 MB
+const MAX_VIDEO_SIZE = 200 * 1024 * 1024 // 200 MB
 const MAX_AUDIO_SIZE = 50 * 1024 * 1024  // 50 MB
 const MAX_GENERAL_SIZE = 25 * 1024 * 1024 // 25 MB
 
@@ -93,6 +93,7 @@ export class StorageService implements OnModuleInit {
                 accessKeyId,
                 secretAccessKey,
             },
+            forcePathStyle: true,
             requestChecksumCalculation: "WHEN_REQUIRED",
             responseChecksumValidation: "WHEN_REQUIRED",
         })
@@ -372,7 +373,7 @@ export class StorageService implements OnModuleInit {
             )
         }
 
-        const MAX_VIDEO_UPLOAD = 150 * 1024 * 1024 // 150MB
+        const MAX_VIDEO_UPLOAD = 200 * 1024 * 1024 // 200MB
         if (file.size > MAX_VIDEO_UPLOAD) {
             throw new BadRequestException(
                 `Video too large (${this.formatSize(file.size)}). Maximum: ${this.formatSize(MAX_VIDEO_UPLOAD)}`

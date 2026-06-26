@@ -704,7 +704,7 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
             }
             const selectedFile = selectedFiles[0];
             const validation = await validateVideo(selectedFile, {
-                maxFileSize: 150 * 1024 * 1024, // 150MB
+                maxFileSize: 200 * 1024 * 1024, // 200MB (to support 150MB securely)
                 maxDuration: 60, // 1 minute
             });
             if (!validation.valid) {
@@ -1101,7 +1101,7 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                                         className="py-4 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl text-gray-400 dark:text-gray-500 hover:border-blue-400 dark:hover:border-blue-500/40 hover:text-blue-500 transition-all flex flex-col items-center justify-center gap-1.5 text-xs">
                                         <Film className="w-5 h-5" />
                                         <span className="font-semibold">Video</span>
-                                        <span className="text-[10px] opacity-60">Max 1 min · 150MB</span>
+                                        <span className="text-[10px] opacity-60">Max 1 min · 200MB</span>
                                     </button>
                                 </div>
                             )}

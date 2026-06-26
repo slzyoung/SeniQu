@@ -187,7 +187,7 @@ function CreateThreadModal({
     const [content, setContent] = useState('');
     const [categoryId, setCategoryId] = useState('');
     const [tags, setTags] = useState('');
-    
+
     // Multiple Files and Layouts states
     const [files, setFiles] = useState<File[]>([]);
     const [layout, setLayout] = useState<'separate' | 'grid' | 'carousel'>('grid');
@@ -236,7 +236,7 @@ function CreateThreadModal({
             }
             const selectedFile = selectedFiles[0];
             const validation = await validateVideo(selectedFile, {
-                maxFileSize: 150 * 1024 * 1024, // 150MB
+                maxFileSize: 200 * 1024 * 1024, // 200MB (to support 150MB securely)
                 maxDuration: 60, // 1 minute
             });
             if (!validation.valid) {
@@ -312,7 +312,7 @@ function CreateThreadModal({
 
     const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
         e?.preventDefault();
-        
+
         if (!title || !content || !categoryId) {
             toast.error('Required Fields', 'Please fill in title, content, and category.');
             return;
@@ -328,7 +328,7 @@ function CreateThreadModal({
                 const firstFile = files[0];
                 if (firstFile.type.startsWith('video/')) {
                     const taskId = 'forum-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
-                    
+
                     addUpload({
                         id: taskId,
                         type: 'forum',
@@ -352,7 +352,7 @@ function CreateThreadModal({
                         'Video forum Anda sedang diunggah di latar belakang. Thread akan otomatis dibuat setelah upload selesai.'
                     );
 
-                    setIsCreateModalOpen(false);
+                    onClose();
                     return;
                 } else {
                     // === IMAGE ===
@@ -365,16 +365,16 @@ function CreateThreadModal({
                     else if (selectedSize === '720p') maxWidth = 1280;
                     else if (selectedSize === '480p') maxWidth = 854;
                     else if (selectedSize === 'original') maxWidth = 4096;
-                    
+
                     const uploadedUrls: string[] = [];
                     for (let i = 0; i < files.length; i++) {
                         setUploadStatusText(`Compressing photo ${i + 1} of ${files.length}...`);
-                        const compressed = await compressImage(files[i], { 
-                            maxWidth: maxWidth, 
+                        const compressed = await compressImage(files[i], {
+                            maxWidth: maxWidth,
                             quality: 0.92,
                             aspectRatio: selectedAspect
                         });
-                        
+
                         setUploadStatusText(`Uploading photo ${i + 1} of ${files.length}...`);
                         const uploadResult = await uploadFile(compressed, 'general', (progress) => {
                             const baseProgress = (i / files.length) * 100;
@@ -392,7 +392,7 @@ function CreateThreadModal({
                             layout: layout,
                         });
                     }
-                    
+
                     setUploadPhase('done');
                 }
             }
@@ -447,8 +447,8 @@ function CreateThreadModal({
                         <h2 className="text-lg md:text-xl font-serif font-bold text-gray-900 dark:text-white">New Discussion</h2>
                         <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Share your thoughts</p>
                     </div>
-                    <button 
-                        onClick={onClose} 
+                    <button
+                        onClick={onClose}
                         className="p-2 rounded-full bg-gray-100 dark:bg-white/[0.06] text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all"
                     >
                         <X className="w-4 h-4" />
@@ -485,7 +485,7 @@ function CreateThreadModal({
                                 />
                             </div>
                         </div>
-                        
+
                         <div>
                             <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1.5 uppercase tracking-[0.1em]">Title *</label>
                             <input
@@ -498,7 +498,7 @@ function CreateThreadModal({
                                 minLength={5}
                             />
                         </div>
-                        
+
                         <div>
                             <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1.5 uppercase tracking-[0.1em]">Content *</label>
                             <textarea
@@ -511,7 +511,7 @@ function CreateThreadModal({
                                 minLength={10}
                             />
                         </div>
-                        
+
                         {/* Multiple Image / Video attach selector and preview */}
                         <div>
                             <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1.5 uppercase tracking-[0.1em]">Attach Media</label>
@@ -535,8 +535,8 @@ function CreateThreadModal({
                                             <div className="grid grid-cols-4 gap-2">
                                                 <AnimatePresence initial={false}>
                                                     {mediaPreviews.map((url, idx) => (
-                                                        <motion.div 
-                                                            key={url} 
+                                                        <motion.div
+                                                            key={url}
                                                             initial={{ opacity: 0, scale: 0.8 }}
                                                             animate={{ opacity: 1, scale: 1 }}
                                                             exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.15 } }}
@@ -544,8 +544,8 @@ function CreateThreadModal({
                                                             className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-white/10 bg-black/20 group"
                                                         >
                                                             <img src={url} alt={`Preview ${idx}`} className="w-full h-full object-cover" />
-                                                            <button 
-                                                                type="button" 
+                                                            <button
+                                                                type="button"
                                                                 onClick={() => handleRemoveFile(idx)}
                                                                 className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white hover:bg-red-600 transition-all shadow-md"
                                                             >
@@ -556,8 +556,8 @@ function CreateThreadModal({
                                                 </AnimatePresence>
                                                 {/* Add more slot */}
                                                 {mediaPreviews.length < 5 && (
-                                                    <button 
-                                                        type="button" 
+                                                    <button
+                                                        type="button"
                                                         onClick={() => fileInputRef.current?.click()}
                                                         className="aspect-square rounded-lg border-2 border-dashed border-gray-300 dark:border-white/10 flex flex-col items-center justify-center text-gray-400 hover:border-amber-500 hover:text-amber-500 transition-all text-[10px] font-semibold gap-1"
                                                     >
@@ -628,8 +628,8 @@ function CreateThreadModal({
                                     <div className="px-4 py-3 bg-gray-50 dark:bg-white/[0.02] border-t border-gray-100 dark:border-white/5 grid grid-cols-2 gap-3.5">
                                         <div>
                                             <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 uppercase tracking-wider">Aspect Ratio</label>
-                                            <select 
-                                                value={selectedAspect} 
+                                            <select
+                                                value={selectedAspect}
                                                 onChange={e => setSelectedAspect(e.target.value)}
                                                 className="w-full px-2.5 py-1.5 bg-white dark:bg-[#151515] border border-gray-200 dark:border-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:border-amber-500 dark:focus:border-gold transition-all"
                                             >
@@ -643,8 +643,8 @@ function CreateThreadModal({
                                         </div>
                                         <div>
                                             <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 uppercase tracking-wider">{isVideo ? 'Compression Profile' : 'Size Profile / Scale'}</label>
-                                            <select 
-                                                value={selectedSize} 
+                                            <select
+                                                value={selectedSize}
                                                 onChange={e => setSelectedSize(e.target.value)}
                                                 className="w-full px-2.5 py-1.5 bg-white dark:bg-[#151515] border border-gray-200 dark:border-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:border-amber-500 dark:focus:border-gold transition-all"
                                             >
@@ -672,7 +672,7 @@ function CreateThreadModal({
                                     {isVideo && (
                                         <div className="px-4 py-2.5 bg-gray-50/50 dark:bg-white/[0.01] border-t border-gray-100 dark:border-white/5">
                                             <label className="flex items-center gap-2 cursor-pointer select-none">
-                                                <input 
+                                                <input
                                                     type="checkbox"
                                                     checked={muteVideoSound}
                                                     onChange={e => setMuteVideoSound(e.target.checked)}
@@ -697,7 +697,7 @@ function CreateThreadModal({
                                         className="py-4 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl text-gray-400 dark:text-gray-500 hover:border-blue-400 dark:hover:border-blue-500/40 hover:text-blue-500 transition-all flex flex-col items-center justify-center gap-1.5 text-xs">
                                         <Film className="w-5 h-5" />
                                         <span className="font-semibold">Video</span>
-                                        <span className="text-[10px] opacity-60">Max 1 min · 150MB</span>
+                                        <span className="text-[10px] opacity-60">Max 1 min · 200MB</span>
                                     </button>
                                 </div>
                             )}
@@ -707,31 +707,31 @@ function CreateThreadModal({
                                 <div className="mt-4 p-4 rounded-xl border border-amber-500/20 bg-amber-500/[0.02] dark:bg-white/[0.02]">
                                     <span className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2.5 uppercase tracking-wider">Display Options</span>
                                     <div className="grid grid-cols-3 gap-2">
-                                        <button 
+                                        <button
                                             type="button"
                                             onClick={() => setLayout('separate')}
-                                            className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center gap-1.5 ${layout === 'separate' 
-                                                ? 'bg-amber-500 dark:bg-gold text-charcoal border-transparent shadow-sm' 
+                                            className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center gap-1.5 ${layout === 'separate'
+                                                ? 'bg-amber-500 dark:bg-gold text-charcoal border-transparent shadow-sm'
                                                 : 'bg-white dark:bg-white/5 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10'}`}
                                         >
                                             <Layers className="w-4 h-4" />
                                             <span>Separates</span>
                                         </button>
-                                        <button 
+                                        <button
                                             type="button"
                                             onClick={() => setLayout('grid')}
-                                            className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center gap-1.5 ${layout === 'grid' 
-                                                ? 'bg-amber-500 dark:bg-gold text-charcoal border-transparent shadow-sm' 
+                                            className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center gap-1.5 ${layout === 'grid'
+                                                ? 'bg-amber-500 dark:bg-gold text-charcoal border-transparent shadow-sm'
                                                 : 'bg-white dark:bg-white/5 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10'}`}
                                         >
                                             <Grid className="w-4 h-4" />
                                             <span>Grid Collage</span>
                                         </button>
-                                        <button 
+                                        <button
                                             type="button"
                                             onClick={() => setLayout('carousel')}
-                                            className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center gap-1.5 ${layout === 'carousel' 
-                                                ? 'bg-amber-500 dark:bg-gold text-charcoal border-transparent shadow-sm' 
+                                            className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center gap-1.5 ${layout === 'carousel'
+                                                ? 'bg-amber-500 dark:bg-gold text-charcoal border-transparent shadow-sm'
                                                 : 'bg-white dark:bg-white/5 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10'}`}
                                         >
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -774,7 +774,7 @@ function CreateThreadModal({
                         {isUploading && (
                             <div className="mt-4 p-5 rounded-2xl bg-amber-500/5 dark:bg-[#1f1a10] border border-amber-500/20 flex flex-col space-y-4 relative overflow-hidden backdrop-blur-md">
                                 <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-amber-500/0 via-amber-500/5 to-amber-500/0 animate-pulse" />
-                                
+
                                 <div className="relative z-10 flex items-start gap-4">
                                     <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-500 flex-shrink-0 flex items-center justify-center shadow-inner">
                                         {uploadPhase === 'uploading' && (
@@ -793,8 +793,8 @@ function CreateThreadModal({
                                             <h4 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight">
                                                 {uploadStatusText || (
                                                     uploadPhase === 'uploading' ? (isVideo ? 'Uploading HD video...' : 'Uploading photo...') :
-                                                    uploadPhase === 'compressing' ? 'Optimizing video for mobile...' :
-                                                    uploadPhase === 'done' ? 'Upload Successful!' : ''
+                                                        uploadPhase === 'compressing' ? 'Optimizing video for mobile...' :
+                                                            uploadPhase === 'done' ? 'Upload Successful!' : ''
                                                 )}
                                             </h4>
                                             <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400">
@@ -812,9 +812,8 @@ function CreateThreadModal({
                                 <div className="relative z-10 w-full font-sans">
                                     <div className="h-2.5 bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden p-[1px] border border-gray-200/20 dark:border-white/5">
                                         <div
-                                            className={`h-full rounded-full transition-all duration-500 ease-out ${
-                                                uploadPhase === 'done' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'bg-gradient-to-r from-amber-500 via-[#C9A84C] to-[#E5C158] shadow-[0_0_8px_rgba(201,168,76,0.25)]'
-                                            }`}
+                                            className={`h-full rounded-full transition-all duration-500 ease-out ${uploadPhase === 'done' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'bg-gradient-to-r from-amber-500 via-[#C9A84C] to-[#E5C158] shadow-[0_0_8px_rgba(201,168,76,0.25)]'
+                                                }`}
                                             style={{ width: `${uploadProgress}%` }}
                                         />
                                     </div>
@@ -870,7 +869,7 @@ export function CommunityPage() {
     const fetchedCategories = extractArray(categoriesData);
     const threads = extractArray(threadsData);
     const trendingThreads = extractArray(trendingData);
-    
+
     // Robust fallback categories
     const defaultCategories = [
         { id: 'bc5c6d36-8aed-4fd3-9b6f-7d1c67d710f1', name: 'Museums & Galleries', icon: '🏛️' },
@@ -888,8 +887,8 @@ export function CommunityPage() {
     // Filter and compute featured/regular threads efficiently
     const { featuredThread, regularThreads } = useMemo<{ featuredThread: any | null, regularThreads: any[] }>(() => {
         // First filter all threads based on search
-        const filteredThreads = threads.filter((thread: any) => 
-            !debouncedSearch || 
+        const filteredThreads = threads.filter((thread: any) =>
+            !debouncedSearch ||
             (thread.title && thread.title.toLowerCase().includes(debouncedSearch.toLowerCase())) ||
             (thread.content && thread.content.toLowerCase().includes(debouncedSearch.toLowerCase()))
         );
@@ -971,11 +970,10 @@ export function CommunityPage() {
                         {sortTabs.map(tab => (
                             <button
                                 key={tab.id}
-                                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
-                                    sortBy === tab.id
+                                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${sortBy === tab.id
                                         ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm'
                                         : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                                }`}
+                                    }`}
                                 onClick={() => setSortBy(tab.id)}
                             >
                                 {tab.icon}
@@ -1150,3 +1148,4 @@ export function CommunityPage() {
 }
 
 export default CommunityPage;
+
