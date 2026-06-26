@@ -225,3 +225,22 @@ SeniQu connects users to their personal Spotify accounts dynamically to retrieve
 * **Spotify Premium Requirement**: Spotify's Web Playback SDK is strictly limited to **Spotify Premium** subscribers. Users with free accounts will get a 30-second audio preview via `preview_url` rather than a full, synced playback experience.
 * **Copyright Restrictions**: Under Spotify Developer Terms, Spotify audio streams cannot be combined/multiplexed directly into the MP4 file on the backend for raw download or sharing to platforms like WhatsApp. Audio remains hosted on Spotify, synced dynamically on-client in the browser.
 
+### 7.3. Hybrid Soundtrack Search & iTunes API Fallback
+To provide a bulletproof user experience for all creators—regardless of whether they have a Spotify Premium subscription or are authenticated with Spotify—SeniQu implements a **Hybrid Soundtrack Search** pipeline in the Upload Reel modal:
+
+1. **Automatic Fallback on Spotify API Restrictions**: 
+   * Due to Spotify's developer portal policies (where apps in Development Mode restrict Web API calls to Spotify Premium users added to the sandbox user whitelist), any call to `/v1/search` or `/v1/me` that returns a `403 Forbidden` or `401 Unauthorized` status is automatically caught by the search hook.
+   * The application immediately falls back to querying the **iTunes Music Search API** (`https://itunes.apple.com/search`).
+2. **Seamless Public Access**:
+   * If a user is not logged into Spotify, the search input searches the iTunes Music Library by default.
+   * This provides a 100% free search database requiring no user login, credentials, token generation, or API key configuration.
+3. **Property Alignment**:
+   * iTunes Search results are dynamically mapped on the client side to match our standard unified track interface:
+     * `id`: Prefixed as `itunes_${trackId}` to prevent collision with Spotify Track IDs.
+     * `title` / `artist`: Standardized string mappings.
+     * `artwork`: Automatically swapped from `100x100bb` to `400x400bb` resolutions for premium visuals in the modal player.
+     * `url`: Bound to high-quality 30-second AAC preview audio streams (`previewUrl`).
+4. **Content Security Policy Integration**:
+   * To prevent browser-level blocks during search requests, `https://itunes.apple.com` is whitelisted under the `connect-src` header in the production hosting config (`netlify.toml` and `_headers`).
+
+
