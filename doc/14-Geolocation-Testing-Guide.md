@@ -84,3 +84,7 @@ Untuk mempermudah pengembangan dan pengujian fitur peta di berbagai kota di Indo
 ### B. Location Unavailable / Timeout (Error Code 2 & 3)
 * **Gejala:** Pendeteksian lokasi terlalu lama atau gagal mendapatkan sinyal/data IP.
 * **Solusi:** Periksa koneksi internet Anda. Pastikan tidak ada VPN aktif yang merutekan traffic Anda ke luar negeri (karena VPN akan memindahkan lokasi Anda ke negara server VPN tersebut).
+
+---
+*Document Version: 1.2.0*
+*Last Updated: 2026-05-26*

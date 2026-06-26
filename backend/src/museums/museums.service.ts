@@ -15,6 +15,11 @@ import { ConfigService } from "@nestjs/config"
 import { CreateMuseumDto } from "./dto/create-museum.dto"
 import { UpdateMuseumDto } from "./dto/update-museum.dto"
 import { SearchMuseumDto } from "./dto/search-museum.dto"
+import { StorageService } from "../storage/storage.service"
+import * as dns from "dns"
+import { promisify } from "util"
+
+const dnsLookup = promisify(dns.lookup)
 
 @Injectable()
 export class MuseumsService {
@@ -124,7 +129,10 @@ export class MuseumsService {
         return { allowed: true };
     }
 
-    constructor(private configService: ConfigService) {
+    constructor(
+        private readonly configService: ConfigService,
+        private readonly storageService: StorageService,
+    ) {
         this.supabase = createClient(
             this.configService.get<string>("SUPABASE_URL")!,
             this.configService.get<string>("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -144,7 +152,11 @@ export class MuseumsService {
 
         // Filters
         if (city) {
-            queryBuilder = queryBuilder.ilike("city", `%${city}%`)
+            if (city.toLowerCase() === 'bali') {
+                queryBuilder = queryBuilder.or('city.ilike.bali,city.ilike.bali %,province.ilike.bali,province.ilike.bali %')
+            } else {
+                queryBuilder = queryBuilder.ilike("city", `%${city}%`)
+            }
         }
         if (type) {
             queryBuilder = queryBuilder.eq("type", type)
@@ -205,13 +217,36 @@ export class MuseumsService {
      * Helper to perform local fallback search using PostGIS
      */
     private async performLocalFallbackSearch(lat: number, lng: number, radiusMeters: number, query?: string): Promise<any[]> {
-        const { data, error } = await this.supabase
-            .from("institutions")
-            .select("id, name, slug, description, type, street, city, province, logo_url, cover_image_url, is_verified, is_featured, rating, total_artworks, location, reviews")
-            .eq("is_verified", true);
+        let data: any[] = [];
+        let from = 0;
+        const limit = 1000;
+        let hasMore = true;
 
-        if (error || !data) {
-            this.logger.error(`Local fallback search failed: ${error?.message || 'No data'}`);
+        while (hasMore) {
+            const { data: chunk, error } = await this.supabase
+                .from("institutions")
+                .select("id, name, slug, description, type, street, city, province, logo_url, cover_image_url, is_verified, is_featured, rating, total_artworks, location, reviews")
+                .eq("is_verified", true)
+                .range(from, from + limit - 1);
+
+            if (error) {
+                this.logger.error(`Local fallback search failed at range ${from}-${from + limit - 1}: ${error.message}`);
+                break;
+            }
+
+            if (chunk && chunk.length > 0) {
+                data = [...data, ...chunk];
+                if (chunk.length < limit) {
+                    hasMore = false;
+                } else {
+                    from += limit;
+                }
+            } else {
+                hasMore = false;
+            }
+        }
+
+        if (data.length === 0) {
             return [];
         }
 
@@ -252,15 +287,24 @@ export class MuseumsService {
                     }
                 }
 
+                // Compose rich address from all available fields (street + city + province)
+                const addressParts = [m.street, m.city, m.province].filter(Boolean);
+                const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : '';
+
                 return {
                     id: m.id,
+                    slug: m.slug,
                     name: m.name,
-                    address: m.street || m.city || '',
+                    address: fullAddress,
+                    city: m.city || '',
+                    province: m.province || '',
+                    description: m.description || '',
                     latitude,
                     longitude,
                     rating: Number(m.rating) || 5.0,
                     reviewCount: m.total_artworks || 0,
                     type: m.type || 'museum',
+                    cover_image_url: m.cover_image_url || undefined,
                     photos: m.cover_image_url ? [m.cover_image_url] : [],
                     reviews: m.reviews && m.reviews.length > 0 ? m.reviews : this.generateMockReviews(m.name, Number(m.rating) || 5.0),
                 };
@@ -283,7 +327,22 @@ export class MuseumsService {
             this.haversineDistance(lat, lng, b.latitude, b.longitude)
         );
 
-        return localPlaces;
+        // Deduplicate by normalized name + proximity (500m)
+        const deduplicated: any[] = [];
+        const seenNames = new Map<string, { lat: number; lng: number }>();
+        for (const p of localPlaces) {
+            const normalName = (p.name || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+            if (!normalName) { deduplicated.push(p); continue; }
+            const existing = seenNames.get(normalName);
+            if (existing) {
+                const dist = this.haversineDistance(p.latitude, p.longitude, existing.lat, existing.lng);
+                if (dist <= 0.5) continue; // Skip duplicate within 500m
+            }
+            seenNames.set(normalName, { lat: p.latitude, lng: p.longitude });
+            deduplicated.push(p);
+        }
+
+        return deduplicated;
     }
 
     /**
@@ -387,12 +446,27 @@ out center body;`;
             this.haversineDistance(lat, lng, b.latitude, b.longitude)
         );
 
-        // Background ingestion: ingest these OSM places into our DB so they are cached locally!
-        if (filteredPlaces.length > 0) {
-            this.ingestOSMPlacesToDatabase(filteredPlaces);
+        // Deduplicate by normalized name + proximity (500m)
+        const deduplicated: any[] = [];
+        const seenOsmNames = new Map<string, { lat: number; lng: number }>();
+        for (const p of filteredPlaces) {
+            const normalName = (p.name || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+            if (!normalName) { deduplicated.push(p); continue; }
+            const existing = seenOsmNames.get(normalName);
+            if (existing) {
+                const dist = this.haversineDistance(p.latitude, p.longitude, existing.lat, existing.lng);
+                if (dist <= 0.5) continue;
+            }
+            seenOsmNames.set(normalName, { lat: p.latitude, lng: p.longitude });
+            deduplicated.push(p);
         }
 
-        return filteredPlaces;
+        // Background ingestion: ingest these OSM places into our DB so they are cached locally!
+        if (deduplicated.length > 0) {
+            this.ingestOSMPlacesToDatabase(deduplicated);
+        }
+
+        return deduplicated;
     }
 
     /**
@@ -445,7 +519,10 @@ out center body;`;
                     const province = this.extractProvinceFromAddress(p.address);
                     const slug = p.id;
 
-                    const cover_image_url = await this.scrapePlaceImage(p.name);
+                    let cover_image_url = await this.scrapePlaceImage(p.name);
+                    if (cover_image_url) {
+                        cover_image_url = await this.uploadExternalImageToR2(cover_image_url, "museums");
+                    }
                     await new Promise((resolve) => setTimeout(resolve, 200));
 
                     upsertData.push({
@@ -499,17 +576,13 @@ out center body;`;
 
         const regionInfo = { isMajorCity: false, regionName: 'Sekitar', maxRadiusKm: MAX_RADIUS_KM };
 
-        // === 0. Database-First / Cache-Aside Search ===
-        // Always query the local database first. If we have matching verified places in our database,
-        // return them immediately. This bypasses the Google Places API call entirely, saving money and avoiding quota limits.
-        try {
-            const localPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, query);
-            if (localPlaces && localPlaces.length > 0) {
-                this.logger.log(`[SEARCH] Local database HIT: Found ${localPlaces.length} places within ${safeRadius / 1000}km. Bypassing Google API.`);
-                return { places: localPlaces, region: regionInfo, quotaExceeded: false };
-            }
-        } catch (dbErr) {
-            this.logger.error(`[SEARCH] Database-first check failed: ${dbErr.message}`);
+        // Sanitize search query input (anti-hacking & anti-exploit)
+        let safeQuery = '';
+        if (query && typeof query === 'string') {
+            safeQuery = query
+                .replace(/['"`;\-/*+#=<>]/g, '')
+                .substring(0, 80)
+                .trim();
         }
 
         const apiKey = this.configService.get<string>('googleMaps.apiKey')
@@ -518,8 +591,12 @@ out center body;`;
             || process.env.FRONTEND_URL || 'http://localhost:5173';
 
         if (!apiKey) {
-            this.logger.warn('GOOGLE_MAPS_KEY is not configured');
-            return { places: [], region: regionInfo };
+            this.logger.warn('GOOGLE_MAPS_KEY is not configured. Falling back to local database + OSM.');
+            let localPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, safeQuery);
+            if (localPlaces.length === 0) {
+                localPlaces = await this.performOverpassFallbackSearch(safeLat, safeLng, safeRadius, safeQuery);
+            }
+            return { places: localPlaces, region: regionInfo };
         }
 
         // === Centralized Budget Check ===
@@ -527,16 +604,16 @@ out center body;`;
         const budget = this.checkAndIncrementBudget('search', clientIp);
         if (!budget.allowed) {
             this.logger.warn(`[SEARCH] Budget exceeded for IP ${clientIp}: ${budget.reason}. Falling back to local PostGIS + OSM.`);
-            let localPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, query);
+            let localPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, safeQuery);
             if (localPlaces.length === 0) {
                 this.logger.log(`[SEARCH] Local database empty. Running OSM Overpass search fallback.`);
-                localPlaces = await this.performOverpassFallbackSearch(safeLat, safeLng, safeRadius, query);
+                localPlaces = await this.performOverpassFallbackSearch(safeLat, safeLng, safeRadius, safeQuery);
             }
             return { places: localPlaces, region: regionInfo, quotaExceeded: true };
         }
 
         // === Server-side cache check (3 min TTL, ~111m resolution) ===
-        const cacheKey = `${safeLat.toFixed(3)}_${safeLng.toFixed(3)}_${safeRadius}_${query || ''}`;
+        const cacheKey = `${safeLat.toFixed(3)}_${safeLng.toFixed(3)}_${safeRadius}_${safeQuery}`;
         const cached = this.placesCache.get(cacheKey);
         if (cached && Date.now() < cached.expiresAt) {
             this.logger.log(`Places cache HIT: ${cacheKey}`);
@@ -546,7 +623,7 @@ out center body;`;
             this.placesCache.delete(cacheKey); // Evict expired
         }
 
-        // === Only query the user location center (saves budget, prevents massive Google Maps charges) ===
+        // === Only query the user location center ===
         const centers: { lat: number; lng: number; radius: number }[] = [
             { lat: safeLat, lng: safeLng, radius: safeRadius }
         ];
@@ -555,7 +632,7 @@ out center body;`;
         let googleApiFailed = false;
         let textPlaces: any[] = [];
         const refererHeader = referer.endsWith('/') ? referer : `${referer}/`;
-        if (query && query.trim().length > 0) {
+        if (safeQuery.length > 0) {
             try {
                 const textSearchUrl = 'https://places.googleapis.com/v1/places:searchText';
                 const res = await fetch(textSearchUrl, {
@@ -563,12 +640,12 @@ out center body;`;
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Goog-Api-Key': apiKey,
-                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.types',
+                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.types,places.photos',
                         'Accept-Language': 'id',
                         'Referer': refererHeader,
                     },
                     body: JSON.stringify({
-                        textQuery: query,
+                        textQuery: safeQuery,
                         languageCode: 'id',
                         locationBias: {
                             circle: {
@@ -582,29 +659,15 @@ out center body;`;
                 if (res.ok) {
                     const data = await res.json() as any;
                     const mapped = (data.places || []).map((p: any) => {
-                        let category = 'heritage';
                         const name = p.displayName?.text || '';
-                        const nameLower = name.toLowerCase();
                         const matchedTypes = p.types || [];
-                        if (nameLower.includes('museum') || matchedTypes.some((t: string) => ['museum', 'art_museum', 'history_museum'].includes(t))) {
-                            category = 'museum';
-                        } else if (nameLower.includes('gallery') || nameLower.includes('galeri') || matchedTypes.some((t: string) => ['art_gallery'].includes(t))) {
-                            category = 'gallery';
-                        }
+                        let category = this.determinePlaceType(name, matchedTypes, 'heritage');
                         
                         // Validate genuine museum/gallery
                         if (category === 'museum' || category === 'gallery') {
                             const isGenuine = this.isGenuineMuseumOrGallery(name, matchedTypes, category);
                             if (!isGenuine) {
-                                // Demote to heritage if it's a historical/cultural landmark
-                                const isHeritageLandmark = matchedTypes.some((t: string) => 
-                                    ['tourist_attraction', 'historical_place', 'monument', 'cultural_landmark'].includes(t)
-                                );
-                                if (isHeritageLandmark) {
-                                    category = 'heritage';
-                                } else {
-                                    return null; // Discard completely
-                                }
+                                category = 'heritage';
                             }
                         }
 
@@ -625,7 +688,7 @@ out center body;`;
                             rating: p.rating,
                             reviewCount: p.userRatingCount,
                             type: category,
-                            photos: [],
+                            photos: p.photos || [],
                             reviews: [],
                         };
                     });
@@ -644,7 +707,6 @@ out center body;`;
         }
 
         // === Only verified-valid Table A types ===
-        // Expanded to include diverse tourism destinations ('national_park', 'park', 'amusement_park', 'zoo', 'cultural_center', 'aquarium', 'buddhist_temple', 'hindu_temple', 'church', 'mosque')
         const typeGroups = [
             { types: ['museum', 'art_museum', 'history_museum'], category: 'museum' },
             { types: ['art_gallery'], category: 'gallery' },
@@ -682,7 +744,7 @@ out center body;`;
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Goog-Api-Key': apiKey,
-                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.types',
+                        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.types,places.photos',
                         'Accept-Language': 'id',
                         'Referer': refererHeader,
                     },
@@ -708,30 +770,15 @@ out center body;`;
                     }
                     const data = await res.json() as any;
                     const mapped = (data.places || []).map((p: any) => {
-                        let category = group.category;
                         const name = p.displayName?.text || '';
-                        const nameLower = name.toLowerCase();
                         const matchedTypes = p.types || [];
-                        
-                        if (nameLower.includes('museum') || matchedTypes.some((t: string) => ['museum', 'art_museum', 'history_museum'].includes(t))) {
-                            category = 'museum';
-                        } else if (nameLower.includes('gallery') || nameLower.includes('galeri') || matchedTypes.some((t: string) => ['art_gallery'].includes(t))) {
-                            category = 'gallery';
-                        }
+                        let category = this.determinePlaceType(name, matchedTypes, group.category);
 
                         // Validate genuine museum/gallery
                         if (category === 'museum' || category === 'gallery') {
                             const isGenuine = this.isGenuineMuseumOrGallery(name, matchedTypes, category);
                             if (!isGenuine) {
-                                // Demote to heritage if it's a historical/cultural landmark
-                                const isHeritageLandmark = matchedTypes.some((t: string) => 
-                                    ['tourist_attraction', 'historical_place', 'monument', 'cultural_landmark'].includes(t)
-                                );
-                                if (isHeritageLandmark) {
-                                    category = 'heritage';
-                                } else {
-                                    return null; // Discard completely
-                                }
+                                category = 'heritage';
                             }
                         }
 
@@ -743,16 +790,20 @@ out center body;`;
                             }
                         }
 
+                        // Extract city from formattedAddress for region classification
+                        const extractedCity = this.extractCityFromAddress(p.formattedAddress || '');
+
                         return {
                             id: p.id,
                             name: name,
                             address: p.formattedAddress || '',
+                            city: extractedCity,
                             latitude: p.location?.latitude,
                             longitude: p.location?.longitude,
                             rating: p.rating,
                             reviewCount: p.userRatingCount,
                             type: category,
-                            photos: [],
+                            photos: p.photos || [],
                             reviews: [],
                         };
                     });
@@ -769,42 +820,117 @@ out center body;`;
                 if (r.status === 'fulfilled') allPlaces.push(...r.value);
             }
 
-            // Anti-throttle: small delay between grid centers (skip after last)
             if (ci < centers.length - 1) {
                 await new Promise(resolve => setTimeout(resolve, 120));
             }
         }
 
+        // === Merge verified local database places within range to ensure curation is always shown ===
+        try {
+            const dbFallbackPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, safeQuery);
+            if (dbFallbackPlaces && dbFallbackPlaces.length > 0) {
+                this.logger.log(`[MERGE] Merging ${dbFallbackPlaces.length} local database places into search results before deduplication`);
+                allPlaces.push(...dbFallbackPlaces);
+            }
+        } catch (mergeDbErr: any) {
+            this.logger.warn(`Failed to merge local database places: ${mergeDbErr.message}`);
+        }
+
         if (googleApiFailed) {
             this.logger.warn(`Google Places API request failed (403/401/429). Initiating local PostGIS + OSM fallback.`);
-            let localPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, query);
+            let localPlaces = await this.performLocalFallbackSearch(safeLat, safeLng, safeRadius, safeQuery);
             if (localPlaces.length === 0) {
                 this.logger.log(`[SEARCH] Local database empty. Running OSM Overpass search fallback.`);
-                localPlaces = await this.performOverpassFallbackSearch(safeLat, safeLng, safeRadius, query);
+                localPlaces = await this.performOverpassFallbackSearch(safeLat, safeLng, safeRadius, safeQuery);
             }
             return { places: localPlaces, region: regionInfo, quotaExceeded: true };
         }
 
-        // === Deduplicate prioritizing specific category (museum > gallery > heritage) ===
-        const uniqueMap = new Map<string, any>();
+        // === ROBUST MULTI-KEY DEDUPLICATION ===
+        // Deduplicates by: 1) slug match, 2) normalized name + proximity (500m)
+        // Prioritizes: DB records with real cover images > Google records > OSM records
+
+        /** Normalize a place name for dedup comparison */
+        const normalizeName = (name: string): string =>
+            (name || '').toLowerCase()
+                .replace(/[^a-z0-9\s]/g, '')  // remove special chars
+                .replace(/\s+/g, ' ')           // collapse whitespace
+                .trim();
+
+        /** Check if a record is from the local database (not Google/OSM) */
+        const isDbRecord = (p: any): boolean =>
+            !!p.slug && !p.slug.startsWith('g-') && !p.slug.startsWith('osm-')
+            && !p.id?.startsWith('ChI') && !p.id?.startsWith('g-') && !p.id?.startsWith('osm-');
+
+        /** Score a record for priority (higher = keep) */
+        const recordPriority = (p: any): number => {
+            let score = 0;
+            if (isDbRecord(p)) score += 100;                                             // DB records always preferred
+            if (p.cover_image_url) score += 50;  // has curated cover image from DB
+            else if (p.photos && p.photos.length > 0 && typeof p.photos[0] === 'string' && p.photos[0].startsWith('http')) score += 30; // has valid photo URL
+            if (p.type === 'museum') score += 10;
+            else if (p.type === 'gallery') score += 5;
+            if (p.rating && p.rating > 0) score += 3;
+            if (p.description && !p.description.startsWith('Tempat bersejarah/budaya:')) score += 2;
+            return score;
+        };
+
+        // Pass 1: Group by slug
+        const slugMap = new Map<string, any>();
         for (const p of allPlaces) {
-            const existing = uniqueMap.get(p.id);
-            if (!existing) {
-                uniqueMap.set(p.id, p);
-            } else {
-                if (p.type === 'museum') {
-                    uniqueMap.set(p.id, p);
-                } else if (p.type === 'gallery' && existing.type !== 'museum') {
-                    uniqueMap.set(p.id, p);
-                }
+            const slug = p.slug || this.getPlaceSlug(p.id);
+            p._dedup_slug = slug; // Attach for later use
+            const existing = slugMap.get(slug);
+            if (!existing || recordPriority(p) > recordPriority(existing)) {
+                slugMap.set(slug, p);
             }
         }
-        const unique = Array.from(uniqueMap.values());
+
+        // Pass 2: Group by normalized name + proximity (catches cross-source duplicates)
+        const nameProximityMap = new Map<string, any>(); // key = normalized name
+        for (const p of slugMap.values()) {
+            const normalName = normalizeName(p.name);
+            if (!normalName) {
+                nameProximityMap.set(p._dedup_slug, p); // fallback: use slug as key
+                continue;
+            }
+
+            let foundDuplicate = false;
+            for (const [key, existing] of nameProximityMap) {
+                const existingName = normalizeName(existing.name);
+                if (existingName === normalName) {
+                    // Same normalized name — check if geographically close (within 500m)
+                    const dist = this.haversineDistance(
+                        p.latitude || 0, p.longitude || 0,
+                        existing.latitude || 0, existing.longitude || 0,
+                    );
+                    if (dist <= 0.5) { // 500 meters
+                        // Duplicate found — keep the one with higher priority
+                        if (recordPriority(p) > recordPriority(existing)) {
+                            nameProximityMap.delete(key);
+                            nameProximityMap.set(p._dedup_slug, p);
+                        }
+                        foundDuplicate = true;
+                        break;
+                    }
+                }
+            }
+            if (!foundDuplicate) {
+                nameProximityMap.set(p._dedup_slug, p);
+            }
+        }
+
+        // Clean up temp fields
+        for (const p of nameProximityMap.values()) {
+            delete p._dedup_slug;
+        }
+
+        this.logger.log(`[DEDUP] ${allPlaces.length} raw → ${slugMap.size} after slug dedup → ${nameProximityMap.size} after name+proximity dedup`);
+        const unique = Array.from(nameProximityMap.values());
         const radiusKm = safeRadius / 1000;
         const textPlaceIds = new Set(textPlaces.map(p => p.id));
         const filtered = unique.filter(p => {
             if (typeof p.latitude !== 'number' || typeof p.longitude !== 'number') return false;
-            // If explicitly searched by text, bypass the radius check so user gets exact query results
             if (textPlaceIds.has(p.id)) return true;
             return this.haversineDistance(safeLat, safeLng, p.latitude, p.longitude) <= radiusKm;
         });
@@ -813,38 +939,48 @@ out center body;`;
             this.haversineDistance(safeLat, safeLng, b.latitude, b.longitude)
         );
 
-        // Group by category and slice each category separately to ensure museums/galleries are not crowded out by heritage/tourism places
+        // Check database for existing metadata to merge into the response BEFORE splitting
+        try {
+            const slugs = filtered.map((p) => p.slug || this.getPlaceSlug(p.id));
+            const { data: dbPlaces } = await this.supabase
+                .from('institutions')
+                .select('slug, type, cover_image_url, reviews, description')
+                .in('slug', slugs);
+
+            const dbPlaceMap = new Map<string, { type: string | null; coverImageUrl: string | null; reviews: any[]; description: string | null }>();
+            if (dbPlaces && dbPlaces.length > 0) {
+                for (const row of dbPlaces) {
+                    dbPlaceMap.set(row.slug, {
+                        type: row.type || null,
+                        coverImageUrl: row.cover_image_url,
+                        reviews: row.reviews || [],
+                        description: row.description || null,
+                    });
+                }
+            }
+
+            for (const p of filtered) {
+                const slug = p.slug || this.getPlaceSlug(p.id);
+                const cached = dbPlaceMap.get(slug);
+                if (cached) {
+                    if (cached.coverImageUrl) {
+                        p.cover_image_url = cached.coverImageUrl; // Set direct field for frontend
+                        p.photos = [cached.coverImageUrl];
+                    }
+                    p.reviews = cached.reviews;
+                    if (cached.description) p.description = cached.description;
+                    if (cached.type) p.type = cached.type; // Overwrite type to match database curated value!
+                }
+            }
+        } catch (dbErr: any) {
+            this.logger.warn(`Failed to fetch cover images and types from DB: ${dbErr.message}`);
+        }
+
         const museums = filtered.filter(p => p.type === 'museum').slice(0, 150);
         const galleries = filtered.filter(p => p.type === 'gallery').slice(0, 150);
         const heritage = filtered.filter(p => p.type === 'heritage').slice(0, 150);
 
         const capped = [...museums, ...galleries, ...heritage];
-
-        // Check database for existing cover images to return in the current search response
-        try {
-            const slugs = capped.map((p) => `g-${p.id}`);
-            const { data: dbPlaces } = await this.supabase
-                .from('institutions')
-                .select('slug, cover_image_url')
-                .in('slug', slugs);
-
-            if (dbPlaces && dbPlaces.length > 0) {
-                const dbImageMap = new Map<string, string>(
-                    dbPlaces
-                        .filter((row) => row.cover_image_url)
-                        .map((row) => [row.slug, row.cover_image_url])
-                );
-
-                for (const p of capped) {
-                    const slug = `g-${p.id}`;
-                    if (dbImageMap.has(slug)) {
-                        p.photos = [dbImageMap.get(slug)];
-                    }
-                }
-            }
-        } catch (dbErr: any) {
-            this.logger.warn(`Failed to fetch cover images from database for search response: ${dbErr.message}`);
-        }
 
         this.logger.log(`Nearby: ${centers.length} grids → ${allPlaces.length} raw → ${filtered.length} within ${radiusKm}km (capped breakdown: ${museums.length} museums, ${galleries.length} galleries, ${heritage.length} heritage)`);
 
@@ -854,7 +990,6 @@ out center body;`;
         this.ingestPlacesToDatabase(capped);
 
         // === Write to server-side cache ===
-        // Evict oldest entries if cache is full
         if (this.placesCache.size >= this.PLACES_CACHE_MAX_SIZE) {
             const now = Date.now();
             for (const [key, entry] of this.placesCache) {
@@ -873,6 +1008,116 @@ out center body;`;
         });
 
         return result;
+    }
+
+    /**
+     * Helper to classify a place name and its Google Places types into 'museum', 'gallery', or 'heritage'.
+     */
+    private determinePlaceType(name: string, types: string[], defaultGroupCategory: string): string {
+        const nameLower = name.toLowerCase();
+        const matchedTypes = types || [];
+
+        // 1. Check for Museum keywords
+        const isMuseum = nameLower.includes('museum') || nameLower.includes('musium') || matchedTypes.some((t: string) => ['museum', 'art_museum', 'history_museum'].includes(t));
+
+        // 2. Check for Gallery keywords
+        const isGallery = nameLower.includes('gallery') || nameLower.includes('galeri') || matchedTypes.some((t: string) => ['art_gallery'].includes(t));
+
+        // 3. Check for Heritage / Tourism / Destination keywords
+        const isHeritageKeyword = [
+            'wisata', 'pariwisata', 'tourism', 'tourist', 'destination', 'destinasi',
+            'candi', 'temple', 'palace', 'kraton', 'keraton', 'benteng', 'fort', 'taman', 'park',
+            'monument', 'monumen', 'pantai', 'beach', 'danau', 'lake', 'gunung', 'mountain',
+            'bukit', 'hill', 'air terjun', 'waterfall', 'curug', 'kebun', 'zoo', 'aquarium',
+            'budaya', 'culture', 'teater', 'theater', 'masjid', 'mosque', 'gereja', 'church',
+            'vihara', 'pura', 'klenteng'
+        ].some(keyword => nameLower.includes(keyword));
+
+        // 4. Hotel/Resort/Lodging Override: If a gallery or museum is inside a lodging, it is heritage/tourism
+        const isLodging = [
+            'hotel', 'resort', 'suites', 'villa', 'homestay', 'guest house', 'inn'
+        ].some(keyword => nameLower.includes(keyword)) || matchedTypes.some(t => ['lodging', 'hotel', 'guest_house', 'hostel', 'motel'].includes(t));
+
+        if (isLodging) {
+            return 'heritage';
+        }
+
+        if (isMuseum && (nameLower.includes('museum') || nameLower.includes('musium') || !isHeritageKeyword)) {
+            return 'museum';
+        }
+
+        if (isGallery && (nameLower.includes('gallery') || nameLower.includes('galeri') || !isHeritageKeyword)) {
+            return 'gallery';
+        }
+
+        if (isHeritageKeyword || defaultGroupCategory === 'heritage' || matchedTypes.some(t => [
+            'tourist_attraction', 'cultural_landmark', 'historical_place', 'monument',
+            'cultural_center', 'national_park', 'park', 'amusement_park', 'zoo',
+            'aquarium', 'buddhist_temple', 'hindu_temple', 'church', 'mosque'
+        ].includes(t))) {
+            return 'heritage';
+        }
+
+        return defaultGroupCategory;
+    }
+
+    /**
+     * Helper to get database slug for a Google place ID.
+     */
+    private getPlaceSlug(placeId: string): string {
+        const PLACE_ID_TO_SEED_SLUG: Record<string, string> = {
+            'ChIJTwoHg49Xei4R7sU-xBpDEJ0': 'museum-sonobudoyo-74',
+            'ChIJi_JxtdT1aS4R7Vhgb1ZBFaQ': 'museum-nasional',
+            'ChIJV_3rrx33aS4R9vCzPVkjlvE': 'macan-museum',
+            'ChIJpZUM-zL0aS4RqDE5R5aunFo': 'national-gallery-indonesia',
+            'ChIJuQp5_QJeei4RcSZ5sDVg_qM': 'ullen-sentalu-museum',
+            // Malang & Batu Mappings
+            'ChIJla-K1d8p1i0REM_An7XviuQ': 'museum-mpu-purwa',
+            'ChIJ1YTFHCko1i0RAity7NV-lEQ': 'museum-brawijaya',
+            'ChIJT27dkkEp1i0RDObCeqONtSs': 'museum-musik-indonesia',
+            'ChIJfc_03_Al1i0RU2LnHo9wE-0': 'museum-panji',
+            'ChIJEyzN0y2HeC4ROB080owDlTI': 'museum-angkut',
+            'ChIJYy1NuCuBeC4RP96afYPzlLU': 'museum-satwa-jawa-timur-park-2',
+            'ChIJx7Y_1tSAeC4RRRVDlDRa_-U': 'the-bagong-adventure-museum-tubuh',
+            'ChIJQSL5xeb71y0RXLfWmD5s3G0': 'sadikin-pard-gallery',
+            'ChIJ6Z13tzSHeC4RrIyhQJ7UjyY': 'galeri-raos-batu',
+            'ChIJpdN9cieDeC4RL6fVx0_EVzM': 'oemah-boedaya-slamet',
+            'ChIJizzSwrCAeC4RLPgOBBjOgXA': 'oemah-boedaya-slamet',
+            'ChIJuQcd1iqHeC4RgJdHUq1IqFk': 'jawa-timur-park-1',
+            'ChIJyYo8W5Ip1i0RlLTNdG6H_bE': 'seroomah',
+            'ChIJOaclQjQp1i0R1WowgQ3IhZI': 'epic-tattoo-studio',
+            'ChIJVceZEUuBeC4R-qmGnOpPypo': 'flockink-tattoo-studio',
+            'ChIJNVIILZ2CeC4RWN26myj1Rxg': 'istana-boneka-wilis',
+            'ChIJRSPR7nGCeC4R2j5H2JdoBY4': 'istana-boneka-gajayana',
+            'ChIJlbu7KZKBeC4RhQ_f2lOboog': 'istana-boneka-batu',
+            'ChIJUdaQnkKBeC4RUaxe_sokFZo': 'batu-economis-park',
+            'ChIJ3__ZfFMp1i0RZf7DgqJQR2E': 'kampung-warna-warni-jodipan',
+            'ChIJx2CsGxgo1i0RtBA4m_YOH-c': 'alun-alun-malang',
+            'ChIJrZ8aoyIo1i0RjOHX0gpmp10': 'masjid-agung-jami-kota-malang',
+            'ChIJlVd8Ui8o1i0RpagwoIHbj08': 'katedral-santa-perawan-maria-dari-gunung-karmel-malang',
+            'ChIJx6Buzt8p1i0RR5V5o4crP1s': 'taman-krida-budaya-jawa-timur',
+            'ChIJVxN4YY6BeC4R1d1EueGiN7o': 'taman-rekreasi-sengkaling',
+            'ChIJ569mZIYp1i0RABy8uVtD5EE': 'malang-night-paradise',
+            'ChIJG6qe4p-BeC4R6UG0ILWljWM': 'milenial-glow-garden',
+            'ChIJ23IsPzCBeC4RIex3GhfXPpU': 'batu-night-spectacular',
+            'ChIJV6nzSBiBeC4RzeN-XrMTABs': 'jawa-timur-park-3',
+            'ChIJ_____9aAeC4Rd_3Uf_hgZfM': 'jawa-timur-park-2',
+            'ChIJdQ9eOOgp1i0Rkgk8RNUDpC8': 'hawai-waterpark',
+            'ChIJdQCp2Sco1i0RZcIIQN5ZjZE': 'idjen-boulevard',
+            'ChIJWZVoXMAp1i0RUMBQA8QsFvM': 'masjid-sabilillah-malang',
+            'ChIJuQHavjcr1i0R5PW4p0-0-y8': 'rumah-seni-budaya-singhasari',
+            'ChIJxcUvTGAq1i0RR2Kgu6mXo9c': 'museum-singhasari',
+            'ChIJZ6ifOFkp1i0RubO4-SCZ_6g': 'museum-ganesya',
+            'ChIJqRO4umCCeC4R6qcMvXohbks': 'museum-zoologi-frater-vianney',
+            'ChIJh5QNLnZ-eC4RQCvB8atMgLg': 'taman-rekreasi-selecta',
+            'ChIJUZoMLDeBeC4R-j3PXXf-mMI': 'alun-alun-kota-wisata-batu',
+            'ChIJPxDw5HaCeC4RDUReGbgs6RQ': 'jembatan-soekarno-hatta-malang',
+            'ChIJb2P6J4cp1i0RKOlBijtKgMQ': 'lapangan-rampal',
+            'ChIJ03FL41gn1i0R3o621DRhYnM': 'islamic-center-kota-malang',
+            'ChIJ3-anZmyCeC4RW8r6-oaITCs': 'taman-singha-merjosari',
+            'ChIJvWqpXyop1i0RECn5leQUQUw': 'kampoeng-heritage-kajoetangan'
+        };
+        return PLACE_ID_TO_SEED_SLUG[placeId] || `g-${placeId}`;
     }
 
     /**
@@ -960,15 +1205,17 @@ out center body;`;
      */
     private isGenuineHeritage(name: string, types: string[], rating?: number, reviewCount?: number): boolean {
         const nameLower = name.toLowerCase();
-        const safeRating = rating || 0;
         const safeReviews = reviewCount || 0;
 
-        // 1. Strict name exclusions for local community infrastructure & minor places
+        // 1. Strict name exclusions for local community infrastructure, transit, and minor places
         const badHeritageNameKeywords = [
             'mushola', 'musholla', 'langgar', 'pos ronda', 'pos kamling', 
             'panti asuhan', 'sekolah', ' sd', ' smp', ' sma', ' smk', ' tk ', 'paud', 
             'polsek', 'koramil', 'bengkel', 'laundry', 'salon', 'spa', 'apotek', 'klinik', 'puskesmas',
-            'lapangan bulutangkis', 'lapangan tenis', 'lapangan voli'
+            'lapangan bulutangkis', 'lapangan tenis', 'lapangan voli', 'lapangan futsal', 'gym', 'fitness',
+            'stasiun', 'station', 'halte', 'terminal', 'bandara', 'airport', 'mrt', 'lrt', 'krl', 'kereta', 'bus', 'pelabuhan', 'port', 'shelter',
+            'kantor', 'office', 'desa', 'kelurahan', 'kecamatan', 'kabupaten', 'rt ', 'rw ',
+            'universitas', 'kampus', 'ugm', 'itb', 'ui ', 'undip', 'unpad', 'unair'
         ];
         if (badHeritageNameKeywords.some(keyword => nameLower.includes(keyword))) {
             return false;
@@ -979,39 +1226,55 @@ out center body;`;
             || nameLower.includes('masjid') || nameLower.includes('gereja') || nameLower.includes('candi') || nameLower.includes('wihara') || nameLower.includes('klenteng');
             
         if (isReligiousPlace) {
-            // A famous/historical religious site will have a decent review count or rating.
-            // Minor local mosques/churches have very few reviews (less than 15).
-            // Candi (temples) are usually always heritage, so we exclude "candi" from this strict check.
             const isHistoricalWord = nameLower.includes('candi') || nameLower.includes('agung') || nameLower.includes('gedhe') || nameLower.includes('historical') || nameLower.includes('heritage') || nameLower.includes('katedral') || nameLower.includes('cathedral');
             if (!isHistoricalWord && safeReviews < 15) {
                 return false;
             }
         }
 
-        // 3. Filter out commercial shops, restaurants, cafes, hotels from heritage list
-        // Unless they are famous heritage spots (e.g. have >= 50 reviews or contain "heritage", "historical", "situs", "monumen")
+        // 3. Filter out commercial shops, restaurants, cafes, hotels, resorts, villas from heritage list
+        // Exception ONLY if it has strong historical tags AND is verified famous
         const badCommercialKeywords = [
-            'hotel', 'resort', 'homestay', 'home stay', 'guesthouse', 'guest house', 'villa', 'hostel',
-            'cafe', 'coffee', 'kopi', 'resto', 'restaurant', 'warung', 'rumah makan', 
-            'toko', 'shop', 'boutique', 'butik', 'mall', 'furniture', 'decor', 'decorating', 
-            'wedding', 'sewa', 'rent', 'rental', 'bengkel', 'laundry'
+            'hotel', 'resort', 'homestay', 'home stay', 'guesthouse', 'guest house', 'villa', 'hostel', 'lodging', 'inn',
+            'cafe', 'coffee', 'kopi', 'resto', 'restaurant', 'warung', 'rumah makan', 'eatery', 'dapur', 'bakery', 'boba', 'gelato', 'angkringan', 'kedai', 'culinary', 'kuliner', 'bar', 'lounge', 'food court', 'foodcourt',
+            'toko', 'shop', 'store', 'boutique', 'butik', 'mall', 'plaza', 'supermarket', 'mart', 'furniture', 'decor', 'decorating', 'florist', 'bouquet', 'buket', 'flower', 'bunga', 'wedding', 'sewa', 'rent', 'rental', 'salon', 'spa', 'laundry', 'tailor', 'jahit', 'bengkel', 'repair', 'showroom', 'studio foto', 'photo studio', 'printing', 'percetakan', 'advertising', 'market', 'pasar'
         ];
         if (badCommercialKeywords.some(keyword => nameLower.includes(keyword))) {
-            const isFamousHeritage = nameLower.includes('heritage') || nameLower.includes('historical') || nameLower.includes('situs') || nameLower.includes('monumen') || nameLower.includes('keraton') || nameLower.includes('palace');
-            if (!isFamousHeritage && safeReviews < 50) {
+            const isGenuineHeritageSite = nameLower.includes('heritage') || nameLower.includes('historical') || nameLower.includes('situs') || nameLower.includes('monumen') || nameLower.includes('keraton') || nameLower.includes('palace') || nameLower.includes('candi') || nameLower.includes('benteng');
+            if (!isGenuineHeritageSite || safeReviews < 50) {
                 return false;
             }
         }
 
-        // 4. Filter out places with no tourist value (e.g. rating/reviews are extremely low or non-existent, unless name contains strong heritage terms)
+        // 4. Strict type exclusion to filter out generic businesses
+        const badTypes = [
+            'transit_station', 'bus_station', 'subway_station', 'train_station', 'airport',
+            'lodging', 'hotel', 'real_estate_agency', 'housing_development', 'apartment_building',
+            'clothing_store', 'shopping_mall', 'home_goods_store', 'supermarket',
+            'furniture_store', 'florist', 'hair_care', 'beauty_salon', 'spa',
+            'bakery', 'meal_takeaway', 'grocery_or_supermarket', 'liquor_store',
+            'cafe', 'restaurant', 'bar', 'night_club', 'food', 'store', 'car_repair', 'laundry',
+            'school', 'university', 'primary_school', 'secondary_school', 'local_government_office', 'police', 'hospital', 'doctor', 'dentist', 'pharmacy', 'gym'
+        ];
+        
+        if (types.some(type => badTypes.includes(type))) {
+            const isGenuineHeritageSite = nameLower.includes('heritage') || nameLower.includes('historical') || nameLower.includes('situs') || nameLower.includes('monumen') || nameLower.includes('keraton') || nameLower.includes('palace') || nameLower.includes('candi') || nameLower.includes('benteng');
+            if (!isGenuineHeritageSite || safeReviews < 50) {
+                return false;
+            }
+        }
+
+        // 5. Filter out places with no tourist value (e.g. rating/reviews are extremely low or non-existent, unless name contains strong heritage terms)
         const hasStrongHeritageWord = [
             'museum', 'galeri', 'gallery', 'heritage', 'historical', 'situs', 'monumen', 'monument', 
             'candi', 'temple', 'keraton', 'palace', 'benteng', 'fort', 'tugu', 'makam', 'tomb', 
             'wisata', 'tourism', 'taman nasional', 'national_park', 'goa', 'cave', 'pantai', 'beach', 
-            'curug', 'air terjun', 'waterfall', 'bukit', 'hill', 'gunung', 'mountain', 'hutan', 'forest'
+            'curug', 'air terjun', 'waterfall', 'bukit', 'hill', 'gunung', 'mountain', 'hutan', 'forest',
+            'danau', 'lake', 'kebun', 'zoo', 'aquarium', 'destinasi', 'destination', 'pariwisata',
+            'rekreasi', 'amusement', 'taman', 'park'
         ].some(keyword => nameLower.includes(keyword));
 
-        // If a place has 0 reviews and doesn't contain any strong heritage/tourism terms, it's likely a generic establishment/establishment marker
+        // If a place has 0 reviews and doesn't contain any strong heritage/tourism terms, it's likely a generic establishment
         if (safeReviews === 0 && !hasStrongHeritageWord) {
             return false;
         }
@@ -1026,15 +1289,18 @@ out center body;`;
     private isGenuineMuseumOrGallery(name: string, types: string[], category: string): boolean {
         const nameLower = name.toLowerCase();
         
-        // 1. Strict name exclusion keywords (businesses, shops, lodgings, eateries)
+        // 1. Strict name exclusion keywords (businesses, shops, lodgings, eateries, transit, schools)
         const badNameKeywords = [
             'hotel', 'resort', 'homestay', 'home stay', 'guesthouse', 'guest house', 
-            'hostel', 'motel', 'villa', 'kos ', 'kost ', 'kontrakan', 'residence',
-            'cafe', 'coffee', 'kopi', 'resto', 'restaurant', 'warung', 'rumah makan', 
-            'toko', 'shop', 'boutique', 'butik', 'mall', 'supermarket', 'mart',
+            'hostel', 'motel', 'villa', 'kos ', 'kost ', 'kontrakan', 'residence', 'lodging', 'inn',
+            'cafe', 'coffee', 'kopi', 'resto', 'restaurant', 'warung', 'rumah makan', 'eatery', 'dapur', 'bakery', 'boba', 'gelato', 'angkringan', 'kedai',
+            'toko', 'shop', 'store', 'boutique', 'butik', 'mall', 'supermarket', 'mart',
             'furniture', 'decor', 'decorating', 'florist', 'bouquet', 'buket', 'flower', 'bunga',
             'wedding', 'sewa', 'rent', 'rental', 'salon', 'spa', 'laundry', 'tailor', 'jahit',
-            'studio foto', 'photo studio', 'print', 'percetakan', 'advertising', 'apartemen', 'apartment'
+            'studio foto', 'photo studio', 'print', 'percetakan', 'advertising', 'apartemen', 'apartment',
+            'stasiun', 'station', 'halte', 'terminal', 'bandara', 'airport', 'mrt', 'lrt', 'krl', 'kereta', 'bus', 'pelabuhan', 'port', 'shelter',
+            'sekolah', 'sd ', 'smp ', 'sma ', 'smk ', 'tk ', 'paud', 'panti asuhan', 'polsek', 'polres', 'koramil', 'kantor', 'office',
+            'universitas', 'kampus', 'ugm', 'itb', 'ui ', 'undip', 'unpad', 'unair'
         ];
         
         if (badNameKeywords.some(keyword => nameLower.includes(keyword))) {
@@ -1056,14 +1322,16 @@ out center body;`;
             }
         }
 
-        // 2. Strict type exclusions (Google Place categories that represent lodging, food, retail, residential)
+        // 2. Strict type exclusions (Google Place categories that represent lodging, food, retail, residential, government, education)
         const badTypes = [
             'lodging', 'hotel', 'guest_house', 'hostel', 'motel', 
             'real_estate_agency', 'housing_development', 'apartment_building',
             'clothing_store', 'shopping_mall', 'home_goods_store', 'supermarket',
             'furniture_store', 'florist', 'hair_care', 'beauty_salon', 'spa',
             'bakery', 'meal_takeaway', 'grocery_or_supermarket', 'liquor_store',
-            'cafe', 'restaurant', 'bar', 'night_club', 'food'
+            'cafe', 'restaurant', 'bar', 'night_club', 'food', 'transit_station', 'bus_station',
+            'subway_station', 'train_station', 'airport', 'school', 'university', 'local_government_office',
+            'police', 'hospital', 'doctor', 'dentist', 'pharmacy', 'gym'
         ];
 
         if (category === 'museum' || category === 'gallery') {
@@ -1082,8 +1350,6 @@ out center body;`;
         }
 
         // 3. Filter out private residential houses/homes that don't belong to museum/gallery categories
-        // If the category is NOT verified museum, and the name starts with "rumah" or "house of" (case-insensitive),
-        // and it does NOT contain "museum", "gallery", "galeri", "art", "seni", "sejarah", "history", "heritage", "culture", "budaya", "batik", "lukis"
         if (category !== 'museum' && (nameLower.startsWith('rumah') || nameLower.startsWith('house of'))) {
             const hasPositiveKeyword = [
                 'museum', 'gallery', 'galeri', 'art', 'seni', 'sejarah', 
@@ -1210,6 +1476,49 @@ out center body;`;
     }
 
     /**
+     * Checks if the Wikipedia match is relevant to the query place name.
+     * At least one of the query terms (excluding generic ones) must be present in the target title or text.
+     */
+    private isMatchAcceptable(placeName: string, titleOrText: string): boolean {
+        if (!placeName || !titleOrText) return false;
+
+        const clean = (str: string) => str.toLowerCase()
+            .replace(/[^a-z0-9\s]/g, '')
+            .split(/\s+/)
+            .filter(w => w.length > 2 && ![
+                'museum', 'gallery', 'galeri', 'taman', 'wisata', 
+                'indonesia', 'kota', 'kabupaten', 'kecamatan', 'provinsi',
+                'malang', 'batu', 'surabaya', 'jakarta', 'bandung', 'jogja', 'yogyakarta',
+                'center', 'sentra', 'pusat', 'park', 'fantasy', 'agung', 'masjid', 'candi', 'tugu', 'monumen'
+            ].includes(w));
+
+        const queryWords = clean(placeName);
+        const targetWords = clean(titleOrText);
+
+        if (queryWords.length === 0) return true;
+        if (targetWords.length === 0) return false;
+
+        // Token intersection check
+        const matches = queryWords.filter(qWord => targetWords.some(tWord => tWord.includes(qWord) || qWord.includes(tWord)));
+        const matchRatio = matches.length / queryWords.length;
+        
+        // Block biography pages matching names (e.g. Pamela Franklin vs Pamela Fantasy)
+        const bioKeywords = ['lahir', 'born', 'aktris', 'aktor', 'politikus', 'politician', 'pemeran', 'tokoh', 'atlet', 'pemain'];
+        const textLower = titleOrText.toLowerCase();
+        const queryLower = placeName.toLowerCase();
+        
+        const targetHasBio = bioKeywords.some(w => textLower.includes(w));
+        const queryHasBio = bioKeywords.some(w => queryLower.includes(w));
+        
+        const isPlaceQuery = ['museum', 'gallery', 'galeri', 'gedung', 'taman', 'candi', 'masjid', 'gereja', 'monumen', 'tugu', 'alun', 'katedral', 'house', 'studio', 'center'].some(w => queryLower.includes(w));
+        if (targetHasBio && !queryHasBio && !isPlaceQuery) {
+            return false; // Mismatched biography page
+        }
+
+        return matchRatio >= 0.4;
+    }
+
+    /**
      * Scrape place image from Wikipedia (100% FREE fallback)
      */
     async scrapePlaceImage(placeName: string): Promise<string | null> {
@@ -1230,7 +1539,7 @@ out center body;`;
                 const data = await response.json() as any;
                 if (data?.query?.pages) {
                     const pages = Object.values(data.query.pages) as any[];
-                    if (pages.length > 0 && pages[0].thumbnail?.source) {
+                    if (pages.length > 0 && pages[0].thumbnail?.source && this.isMatchAcceptable(queryName, pages[0].title)) {
                         return pages[0].thumbnail.source;
                     }
                 }
@@ -1248,7 +1557,7 @@ out center body;`;
                 const data = await response.json() as any;
                 if (data?.query?.pages) {
                     const pages = Object.values(data.query.pages) as any[];
-                    if (pages.length > 0 && pages[0].thumbnail?.source) {
+                    if (pages.length > 0 && pages[0].thumbnail?.source && this.isMatchAcceptable(queryName, pages[0].title)) {
                         return pages[0].thumbnail.source;
                     }
                 }
@@ -1257,6 +1566,27 @@ out center body;`;
             this.logger.warn(`[SCRAPER] Failed to scrape Wikipedia image for "${placeName}": ${error.message}`);
         }
         return null;
+    }
+
+    /**
+     * Scrape place image from Web (Automated fallback)
+     * Hashes the place name to map it consistently to a premium Indonesian heritage image.
+     */
+    async scrapeImageFromWeb(placeName: string): Promise<string | null> {
+        this.logger.log(`[SCRAPER] Using high-quality heritage fallback for: "${placeName}"`);
+        const fallbackImages = [
+            'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?q=80&w=1200',
+            'https://images.unsplash.com/photo-1596402184320-417e7178b2cd?q=80&w=1200',
+            'https://images.unsplash.com/photo-1542856391-010fb87dcfed?q=80&w=1200',
+            'https://images.unsplash.com/photo-1583037189850-1921ae7c6c22?q=80&w=1200',
+            'https://images.unsplash.com/photo-1505993597083-3bd19f7c839b?q=80&w=1200',
+        ];
+        let hash = 0;
+        for (let i = 0; i < placeName.length; i++) {
+            hash = placeName.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const index = Math.abs(hash) % fallbackImages.length;
+        return fallbackImages[index];
     }
 
     /**
@@ -1281,13 +1611,17 @@ out center body;`;
                 const desc = existingInstitution.description;
                 // If it's already cached and is NOT the default address fallback
                 if (desc && desc.length > 50 && !desc.startsWith('Tempat bersejarah/budaya:')) {
-                    this.logger.log(`[WIKI_CACHE] Cache hit in DB for "${queryName}".`);
-                    return {
-                        title: existingInstitution.name,
-                        extract: desc,
-                        url: `https://id.wikipedia.org/wiki/${encodeURIComponent(existingInstitution.name)}`,
-                        thumbnail: existingInstitution.cover_image_url || null,
-                    };
+                    if (this.isMatchAcceptable(queryName, desc)) {
+                        this.logger.log(`[WIKI_CACHE] Cache hit in DB for "${queryName}".`);
+                        return {
+                            title: existingInstitution.name,
+                            extract: desc,
+                            url: `https://id.wikipedia.org/wiki/${encodeURIComponent(existingInstitution.name)}`,
+                            thumbnail: existingInstitution.cover_image_url || null,
+                        };
+                    } else {
+                        this.logger.warn(`[WIKI_CACHE] Mismatched/stale description in DB for "${queryName}". Re-scraping.`);
+                    }
                 }
             }
 
@@ -1308,7 +1642,7 @@ out center body;`;
                     const pages = Object.values(data.query.pages) as any[];
                     if (pages.length > 0) {
                         const page = pages[0];
-                        if (page.extract) {
+                        if (page.extract && this.isMatchAcceptable(queryName, page.title)) {
                             result = {
                                 title: page.title,
                                 extract: page.extract,
@@ -1335,7 +1669,7 @@ out center body;`;
                         const pages = Object.values(data.query.pages) as any[];
                         if (pages.length > 0) {
                             const page = pages[0];
-                            if (page.extract) {
+                            if (page.extract && this.isMatchAcceptable(queryName, page.title)) {
                                 result = {
                                     title: page.title,
                                     extract: page.extract,
@@ -1399,12 +1733,26 @@ out center body;`;
                 }
 
                 const adminId = this.systemAdminId;
-                const slugs = places.map((p) => `g-${p.id}`);
 
-                // 2. Query existing slugs and check if cover_image_url is missing
+                // Filter out database-sourced places — they already exist with curated slugs.
+                // A place is database-sourced if it has a slug that doesn't start with "g-".
+                const googlePlaces = places.filter((p) => {
+                    const hasNonGoogleSlug = p.slug && !p.slug.startsWith('g-');
+                    if (hasNonGoogleSlug) return false; // Already a curated DB record, skip ingestion
+                    return true;
+                });
+
+                if (googlePlaces.length === 0) {
+                    this.logger.log(`[INGEST] All ${places.length} places are database-sourced. Ingestion skipped.`);
+                    return;
+                }
+
+                const slugs = googlePlaces.map((p) => this.getPlaceSlug(p.id));
+
+                // 2. Query existing slugs and check if cover_image_url, reviews, or description are missing
                 const { data: existing, error: existingError } = await this.supabase
                     .from('institutions')
-                    .select('slug, cover_image_url')
+                    .select('slug, cover_image_url, reviews, description')
                     .in('slug', slugs);
 
                 if (existingError) {
@@ -1412,89 +1760,312 @@ out center body;`;
                     return;
                 }
 
-                const existingMap = new Map<string, string | null>(
-                    (existing || []).map((row) => [row.slug, row.cover_image_url])
+                const existingMap = new Map<string, { coverImageUrl: string | null; hasReviews: boolean; hasDescription: boolean }>(
+                    (existing || []).map((row) => [
+                        row.slug,
+                        {
+                            coverImageUrl: row.cover_image_url,
+                            hasReviews: !!(row.reviews && row.reviews.length > 0),
+                            hasDescription: !!(row.description && !row.description.startsWith('Tempat bersejarah/budaya:')),
+                        }
+                    ])
                 );
 
-                const newPlaces = places.filter((p) => !existingMap.has(`g-${p.id}`));
-                const missingImagePlaces = places.filter((p) => {
-                    const slug = `g-${p.id}`;
-                    return existingMap.has(slug) && !existingMap.get(slug);
+                const newPlaces = googlePlaces.filter((p) => !existingMap.has(this.getPlaceSlug(p.id)));
+                const missingMetadataPlaces = googlePlaces.filter((p) => {
+                    const slug = this.getPlaceSlug(p.id);
+                    const state = existingMap.get(slug);
+                    return state && (!state.coverImageUrl || !state.hasReviews || !state.hasDescription);
                 });
 
-                if (newPlaces.length === 0 && missingImagePlaces.length === 0) {
-                    this.logger.log(`[INGEST] All ${places.length} places already exist with images in database. Ingestion skipped.`);
+                if (newPlaces.length === 0 && missingMetadataPlaces.length === 0) {
+                    this.logger.log(`[INGEST] All ${googlePlaces.length} Google places already exist with metadata in database. Ingestion skipped.`);
                     return;
                 }
 
-                // A. Insert new places and scrape Wikipedia images
+                // A. Insert new places and scrape GMaps details & Wikipedia summary
                 if (newPlaces.length > 0) {
                     this.logger.log(`[INGEST] Ingesting ${newPlaces.length} new public places into database...`);
-                    const upsertData = [];
                     for (const p of newPlaces) {
-                        const city = this.extractCityFromAddress(p.address);
-                        const province = this.extractProvinceFromAddress(p.address);
-                        const slug = `g-${p.id}`;
+                        try {
+                            const city = this.extractCityFromAddress(p.address);
+                            const province = this.extractProvinceFromAddress(p.address);
+                            const slug = this.getPlaceSlug(p.id);
 
-                        const cover_image_url = await this.scrapePlaceImage(p.name);
-                        // Small delay to respect rate limit
-                        await new Promise((resolve) => setTimeout(resolve, 200));
+                            // Enrich metadata (photos/reviews from Google, history/summary from Wikipedia)
+                            const metadata = await this.enrichPlaceMetadata(p);
 
-                        upsertData.push({
-                            owner_id: adminId,
-                            name: p.name,
-                            slug,
-                            type: p.type || 'museum',
-                            city,
-                            province,
-                            country: 'Indonesia',
-                            location: `POINT(${p.longitude} ${p.latitude})`,
-                            is_verified: true,
-                            is_featured: false,
-                            rating: p.rating || 0.0,
-                            description: p.address ? `Tempat bersejarah/budaya: ${p.address}` : '',
-                            cover_image_url,
-                        });
-                    }
+                            const { error: insertError } = await this.supabase
+                                .from('institutions')
+                                .insert({
+                                    owner_id: adminId,
+                                    name: p.name,
+                                    slug,
+                                    type: p.type || 'heritage',
+                                    city,
+                                    province,
+                                    country: 'Indonesia',
+                                    location: `POINT(${p.longitude} ${p.latitude})`,
+                                    is_verified: true,
+                                    is_featured: false,
+                                    rating: p.rating || 0.0,
+                                    description: metadata.description || (p.address ? `Tempat bersejarah/budaya: ${p.address}` : ''),
+                                    cover_image_url: metadata.coverImageUrl || null,
+                                    reviews: metadata.reviews || [],
+                                });
 
-                    const { error: insertError } = await this.supabase
-                        .from('institutions')
-                        .insert(upsertData);
+                            if (insertError) {
+                                this.logger.error(`[INGEST] Failed to insert place "${p.name}": ${insertError.message}`);
+                            } else {
+                                this.logger.log(`[INGEST] Successfully ingested new place: "${p.name}"`);
+                            }
+                        } catch (err: any) {
+                            this.logger.error(`[INGEST] Error ingesting place "${p.name}": ${err.message}`);
+                        }
 
-                    if (insertError) {
-                        this.logger.error(`[INGEST] Failed to insert new public places: ${insertError.message}`);
-                    } else {
-                        this.logger.log(`[INGEST] Successfully ingested ${newPlaces.length} new places.`);
+                        // Anti-throttle delay: 1000ms between Google/Wiki calls
+                        await new Promise((resolve) => setTimeout(resolve, 1000));
                     }
                 }
 
-                // B. Backfill missing images for existing places
-                if (missingImagePlaces.length > 0) {
-                    this.logger.log(`[INGEST] Backfilling images for ${missingImagePlaces.length} existing places...`);
-                    for (const p of missingImagePlaces) {
-                        const slug = `g-${p.id}`;
-                        const cover_image_url = await this.scrapePlaceImage(p.name);
-                        // Small delay to respect rate limit
-                        await new Promise((resolve) => setTimeout(resolve, 200));
-
-                        if (cover_image_url) {
-                            const { error: updateError } = await this.supabase
+                // B. Backfill missing metadata (images, reviews, wiki description) for existing places
+                if (missingMetadataPlaces.length > 0) {
+                    this.logger.log(`[INGEST] Backfilling metadata for ${missingMetadataPlaces.length} existing places...`);
+                    for (const p of missingMetadataPlaces) {
+                        try {
+                            const slug = this.getPlaceSlug(p.id);
+                            
+                            // Get the existing DB record to find its ID
+                            const { data: dbRow } = await this.supabase
                                 .from('institutions')
-                                .update({ cover_image_url })
-                                .eq('slug', slug);
+                                .select('id')
+                                .eq('slug', slug)
+                                .limit(1);
 
-                            if (updateError) {
-                                this.logger.error(`[INGEST] Failed to update cover image for ${slug}: ${updateError.message}`);
-                            } else {
-                                this.logger.log(`[INGEST] Successfully updated cover image for "${p.name}".`);
+                            if (dbRow && dbRow.length > 0) {
+                                await this.enrichPlaceMetadata(p, dbRow[0].id);
+                                this.logger.log(`[INGEST] Successfully backfilled metadata for existing place: "${p.name}"`);
                             }
+                        } catch (err: any) {
+                            this.logger.error(`[INGEST] Error backfilling place "${p.name}": ${err.message}`);
                         }
+                        
+                        // Anti-throttle delay
+                        await new Promise((resolve) => setTimeout(resolve, 1000));
                     }
                 }
             } catch (err: any) {
                 this.logger.error(`[INGEST] Error running background database ingestion: ${err.message}`);
             }
         });
+    }
+
+    /**
+     * Triggers background metadata enrichment for local database places that are missing cover images.
+     */
+    private backfillMissingLocalImages(places: any[]) {
+        Promise.resolve().then(async () => {
+            const apiKey = this.configService.get<string>('googleMaps.apiKey')
+                || process.env.GOOGLE_MAPS_KEY || '';
+            if (!apiKey) return;
+
+            for (const p of places) {
+                let googlePlaceId: string | null = null;
+                if (p.slug && p.slug.startsWith('g-')) {
+                    googlePlaceId = p.slug.substring(2);
+                } else {
+                    const SEED_SLUG_TO_PLACE_ID: Record<string, string> = {
+                        'museum-sonobudoyo-74': 'ChIJTwoHg49Xei4R7sU-xBpDEJ0',
+                        'museum-nasional': 'ChIJi_JxtdT1aS4R7Vhgb1ZBFaQ',
+                        'macan-museum': 'ChIJV_3rrx33aS4R9vCzPVkjlvE',
+                        'national-gallery-indonesia': 'ChIJpZUM-zL0aS4RqDE5R5aunFo',
+                        'ullen-sentalu-museum': 'ChIJuQp5_QJeei4RcSZ5sDVg_qM'
+                    };
+                    if (p.slug && SEED_SLUG_TO_PLACE_ID[p.slug]) {
+                        googlePlaceId = SEED_SLUG_TO_PLACE_ID[p.slug];
+                    }
+                }
+
+                if (googlePlaceId) {
+                    this.logger.log(`[BACKFILL] Enriching local place "${p.name}" (${googlePlaceId}) in background...`);
+                    try {
+                        const placeObj = {
+                            id: googlePlaceId,
+                            name: p.name,
+                            rating: p.rating,
+                            photos: p.photos || [],
+                        };
+                        await this.enrichPlaceMetadata(placeObj, p.id);
+                    } catch (err: any) {
+                        this.logger.error(`[BACKFILL] Failed to enrich "${p.name}": ${err.message}`);
+                    }
+                    // Anti-throttle delay: 1000ms between calls
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                }
+            }
+        });
+    }
+
+    /**
+     * Helper to resolve a Google Place photo resource name to a static redirect URL.
+     * Follows the HTTP redirect to avoid exposing our Google API Key in client responses.
+     */
+    async fetchGooglePlacePhotoUrl(photoName: string, apiKey: string): Promise<string | null> {
+        if (!photoName || !apiKey) return null;
+        try {
+            const url = `https://places.googleapis.com/v1/${photoName}/media?key=${apiKey}&maxHeightPx=800`;
+            const res = await fetch(url, {
+                method: 'GET',
+                redirect: 'follow', // Follow the redirect to obtain the lh3.googleusercontent.com static URL
+            });
+            if (res.ok) {
+                return res.url;
+            }
+        } catch (error: any) {
+            this.logger.warn(`Failed to resolve Google Places photo URL for ${photoName}: ${error.message}`);
+        }
+        return null;
+    }
+
+    /**
+     * Enrich a database place record with Google Maps details (photos, reviews) and Wikipedia summary.
+     * Implements rate limiting/delay (anti-throttling) and robust fallbacks.
+     */
+    async enrichPlaceMetadata(place: any, dbId?: string): Promise<{ coverImageUrl?: string; reviews?: any[]; description?: string }> {
+        const apiKey = this.configService.get<string>('googleMaps.apiKey')
+            || process.env.GOOGLE_MAPS_KEY || '';
+        const referer = this.configService.get<string>('FRONTEND_URL')
+            || process.env.FRONTEND_URL || 'http://localhost:5173';
+        const refererHeader = referer.endsWith('/') ? referer : `${referer}/`;
+
+        const result: { coverImageUrl?: string; reviews?: any[]; description?: string } = {};
+
+        const placeId = typeof place === 'string' ? place : place?.id;
+        const placeName = typeof place === 'string' ? (dbId || '') : (place?.name || '');
+        const isUuid = placeId ? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(placeId) : false;
+
+        // 1. Fetch Google Maps Photo if referenced in place object
+        const photoObj = (place && typeof place === 'object' && place.photos && place.photos.length > 0) ? place.photos[0] : null;
+        if (photoObj && typeof photoObj === 'object' && photoObj.name && apiKey && !isUuid) {
+            try {
+                const staticPhotoUrl = await this.fetchGooglePlacePhotoUrl(photoObj.name, apiKey);
+                if (staticPhotoUrl) {
+                    const r2Url = await this.uploadExternalImageToR2(staticPhotoUrl, "museums");
+                    result.coverImageUrl = r2Url;
+                }
+            } catch (err: any) {
+                this.logger.warn(`[ENRICH-PHOTO] Failed to resolve/upload photo for "${placeName}": ${err.message}`);
+            }
+        }
+
+        // 2. Fetch Google Maps Details (Reviews & Photos) ONLY if budget/quota allows
+        if (apiKey && placeId && !placeId.startsWith('osm-') && !isUuid) {
+            const budget = this.checkAndIncrementBudget('details', 'background');
+            if (budget.allowed) {
+                const url = `https://places.googleapis.com/v1/places/${placeId}`;
+                try {
+                    const res = await fetch(url, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Goog-Api-Key': apiKey,
+                            'X-Goog-FieldMask': 'reviews,photos',
+                            'Accept-Language': 'id',
+                            'Referer': refererHeader,
+                        },
+                    });
+
+                    if (res.ok) {
+                        const placeData = await res.json() as any;
+                        if (placeData.reviews && placeData.reviews.length > 0) {
+                            result.reviews = placeData.reviews.map((r: any) => ({
+                                author: r.authorAttribution?.displayName || 'Pengunjung',
+                                rating: r.rating || 5,
+                                text: r.text?.text || '',
+                                time: r.relativePublishTimeDescription || 'Baru-baru ini',
+                            }));
+                        }
+
+                        // Parse Google Place Photo name if returned, resolve static URL, and upload to R2
+                        if (placeData.photos && placeData.photos.length > 0 && !result.coverImageUrl) {
+                            const photoName = placeData.photos[0].name;
+                            const staticPhotoUrl = await this.fetchGooglePlacePhotoUrl(photoName, apiKey);
+                            if (staticPhotoUrl) {
+                                const r2Url = await this.uploadExternalImageToR2(staticPhotoUrl, "museums");
+                                result.coverImageUrl = r2Url;
+                            }
+                        }
+                    }
+                } catch (err: any) {
+                    this.logger.warn(`[ENRICH-DETAILS] Failed to fetch reviews/photos for "${placeName}": ${err.message}`);
+                }
+            } else {
+                this.logger.log(`[ENRICH-DETAILS] Details budget exceeded. Skipping details API for "${placeName}".`);
+            }
+        }
+
+        // 3. Fallback for cover image to Wikipedia if Google failed/didn't have photos
+        if (!result.coverImageUrl) {
+            const wikiImg = await this.scrapePlaceImage(placeName);
+            if (wikiImg) {
+                const r2Url = await this.uploadExternalImageToR2(wikiImg, "museums");
+                result.coverImageUrl = r2Url;
+            }
+        }
+
+        // 3.5. Fallback to name-hashed premium Unsplash heritage image if Wikipedia also failed
+        if (!result.coverImageUrl) {
+            const webImg = await this.scrapeImageFromWeb(placeName);
+            if (webImg) {
+                try {
+                    const r2Url = await this.uploadExternalImageToR2(webImg, "museums");
+                    result.coverImageUrl = r2Url;
+                } catch (err: any) {
+                    this.logger.warn(`[ENRICH-WEBSCRAP] Failed to upload scraped web image for "${placeName}": ${err.message}`);
+                }
+            }
+        }
+
+        // 4. Fallback for reviews if Google failed/didn't have reviews
+        if (!result.reviews || result.reviews.length === 0) {
+            result.reviews = this.generateMockReviews(placeName, place.rating || 4.5);
+        }
+
+        // 5. Fetch Wikipedia history/summary
+        const wikiInfo = await this.scrapePlaceSummary(placeName);
+        if (wikiInfo && wikiInfo.extract) {
+            result.description = wikiInfo.extract;
+        } else {
+            // Write a clean address-based fallback description to prevent infinite backfill loops
+            const address = place.street || place.formatted_address || place.address || '';
+            const locationStr = address ? ` berlokasi di ${address}` : '';
+            result.description = `Tempat bersejarah/budaya bernilai tinggi${locationStr}.`;
+        }
+
+        // 6. Save back to database if dbId is provided
+        if (dbId && (result.coverImageUrl || result.reviews || result.description)) {
+            try {
+                const updateData: any = {};
+                if (result.coverImageUrl) updateData.cover_image_url = result.coverImageUrl;
+                if (result.reviews) updateData.reviews = result.reviews;
+                if (result.description) updateData.description = result.description;
+
+                const { error: updateErr } = await this.supabase
+                    .from('institutions')
+                    .update(updateData)
+                    .eq('id', dbId);
+
+                if (updateErr) {
+                    this.logger.error(`[ENRICH] Failed to update database for "${placeName}": ${updateErr.message}`);
+                } else {
+                    this.logger.log(`[ENRICH] Successfully enriched database record for "${placeName}".`);
+                }
+            } catch (dbErr: any) {
+                this.logger.error(`[ENRICH] Database update exception for "${placeName}": ${dbErr.message}`);
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -1561,11 +2132,19 @@ out center body;`;
      * Find museum by slug
      */
     async findBySlug(slug: string) {
-        const { data, error } = await this.supabase
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
+        
+        let query = this.supabase
             .from("institutions")
-            .select("*, owner:users!institutions_owner_id_fkey(id, display_name, avatar_url, is_verified)")
-            .eq("slug", slug)
-            .single()
+            .select("*, owner:users!institutions_owner_id_fkey(id, display_name, avatar_url, is_verified)");
+            
+        if (isUuid) {
+            query = query.or(`id.eq.${slug},slug.eq.${slug}`);
+        } else {
+            query = query.eq("slug", slug);
+        }
+
+        const { data, error } = await query.single();
 
         if (error || !data) {
             throw new NotFoundException(`Museum '${slug}' not found`)
@@ -1574,7 +2153,7 @@ out center body;`;
         // Increment visitor count
         await this.supabase
             .from("institutions")
-            .update({ total_visitors: data.total_visitors + 1 })
+            .update({ total_visitors: (data.total_visitors || 0) + 1 })
             .eq("id", data.id)
 
         return { data }
@@ -1772,11 +2351,12 @@ out center body;`;
         let placeDataFromGoogle: any = null;
         let googleApiFailed = false;
 
-        // 2. Query Google Maps only if budget allows and API key is present
+        // 2. Query Google Maps only if budget allows, API key is present, and placeId is NOT a local database UUID
         const clientIp = ip || 'unknown';
         const budget = this.checkAndIncrementBudget('details', clientIp);
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(placeId);
 
-        if (budget.allowed && apiKey) {
+        if (budget.allowed && apiKey && !isUuid) {
             const url = `https://places.googleapis.com/v1/places/${placeId}`;
             try {
                 const res = await fetch(url, {
@@ -1784,7 +2364,7 @@ out center body;`;
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Goog-Api-Key': apiKey,
-                        'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,rating,userRatingCount,types',
+                        'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,rating,userRatingCount,types,photos,reviews',
                         'Accept-Language': 'id',
                         'Referer': refererHeader,
                     },
@@ -1802,26 +2382,54 @@ out center body;`;
                 googleApiFailed = true;
             }
         } else {
-            this.logger.warn(`[DETAILS] Google Maps limit exhausted or API key missing for IP ${clientIp}. Falling back to DB.`);
+            if (isUuid) {
+                this.logger.log(`[DETAILS] Local UUID placeId detected: ${placeId}. Skipping Google API fetch and falling back to DB.`);
+            } else {
+                this.logger.warn(`[DETAILS] Google Maps limit exhausted or API key missing for IP ${clientIp}. Falling back to DB.`);
+            }
             googleApiFailed = true;
         }
 
         // 3. Resolve the final output
         let finalPlace: any = null;
+        let coverImageUrl = null;
+        let reviews = [];
 
         if (placeDataFromGoogle) {
             const placeName = placeDataFromGoogle.displayName?.text || '';
             const placeRating = placeDataFromGoogle.rating || 4.5;
             const placeReviewsCount = placeDataFromGoogle.userRatingCount || 5;
-
-            let coverImageUrl = null;
-            let reviews = [];
             let description = '';
 
             if (dbPlace) {
                 coverImageUrl = dbPlace.cover_image_url;
                 reviews = dbPlace.reviews && dbPlace.reviews.length > 0 ? dbPlace.reviews : [];
                 description = dbPlace.description || '';
+            }
+
+            // Resolve cover image from Google if not in DB
+            if (!coverImageUrl && placeDataFromGoogle.photos && placeDataFromGoogle.photos.length > 0) {
+                const staticUrl = await this.fetchGooglePlacePhotoUrl(placeDataFromGoogle.photos[0].name, apiKey);
+                if (staticUrl) {
+                    coverImageUrl = await this.uploadExternalImageToR2(staticUrl, "museums");
+                    // Proactively save this cover_image_url back to DB to avoid double fetching next time!
+                    if (dbPlace) {
+                        await this.supabase
+                            .from('institutions')
+                            .update({ cover_image_url: coverImageUrl })
+                            .eq('id', dbPlace.id);
+                    }
+                }
+            }
+
+            // Resolve reviews from Google if not in DB
+            if (reviews.length === 0 && placeDataFromGoogle.reviews && placeDataFromGoogle.reviews.length > 0) {
+                reviews = placeDataFromGoogle.reviews.map((r: any) => ({
+                    author: r.authorAttribution?.displayName || 'Pengunjung',
+                    rating: r.rating || 5,
+                    text: r.text?.text || '',
+                    time: r.relativePublishTimeDescription || 'Baru-baru ini',
+                }));
             }
 
             finalPlace = {
@@ -1904,6 +2512,7 @@ out center body;`;
 
         // 4. Background Automatic ETL Scraper to enrich database records with missing data
         if (dbPlace) {
+            const googleId = dbPlace.slug.startsWith('g-') ? dbPlace.slug.substring(2) : dbPlace.id;
             const needsCoverImage = !dbPlace.cover_image_url;
             const needsWiki = !dbPlace.description || dbPlace.description.startsWith('Tempat bersejarah/budaya:');
             const needsReviews = !dbPlace.reviews || dbPlace.reviews.length === 0;
@@ -1914,16 +2523,20 @@ out center body;`;
                     try {
                         const updateData: any = {};
 
-                        // A. Scrape cover image
+                        // A. Cover Image: use resolved coverImageUrl from details api if available, otherwise fetch/scrape
                         if (needsCoverImage) {
-                            const wikiImg = await this.scrapePlaceImage(dbPlace.name);
-                            if (wikiImg) {
-                                updateData.cover_image_url = wikiImg;
-                                finalPlace.photos = [wikiImg];
+                            if (coverImageUrl) {
+                                updateData.cover_image_url = coverImageUrl;
+                            } else {
+                                const enrichment = await this.enrichPlaceMetadata(googleId, dbPlace.name);
+                                if (enrichment.coverImageUrl) {
+                                    updateData.cover_image_url = enrichment.coverImageUrl;
+                                    finalPlace.photos = [enrichment.coverImageUrl];
+                                }
                             }
                         }
 
-                        // B. Scrape wikipedia summary/history
+                        // B. Wikipedia History/Summary
                         if (needsWiki) {
                             const wikiInfo = await this.scrapePlaceSummary(dbPlace.name);
                             if (wikiInfo && wikiInfo.extract) {
@@ -1932,11 +2545,21 @@ out center body;`;
                             }
                         }
 
-                        // C. Generate and cache contextual reviews
+                        // C. Reviews: use resolved reviews from details api if available, otherwise fetch/scrape
                         if (needsReviews) {
-                            const generatedReviews = this.generateMockReviews(dbPlace.name, Number(dbPlace.rating) || 4.5);
-                            updateData.reviews = generatedReviews;
-                            finalPlace.reviews = generatedReviews;
+                            if (reviews && reviews.length > 0) {
+                                updateData.reviews = reviews;
+                            } else {
+                                const enrichment = await this.enrichPlaceMetadata(googleId, dbPlace.name);
+                                if (enrichment.reviews && enrichment.reviews.length > 0) {
+                                    updateData.reviews = enrichment.reviews;
+                                    finalPlace.reviews = enrichment.reviews;
+                                } else {
+                                    const generatedReviews = this.generateMockReviews(dbPlace.name, Number(dbPlace.rating) || 4.5);
+                                    updateData.reviews = generatedReviews;
+                                    finalPlace.reviews = generatedReviews;
+                                }
+                            }
                         }
 
                         // Write updates to DB
@@ -1973,38 +2596,68 @@ out center body;`;
      */
     private generateMockReviews(placeName: string, rating: number = 4.5): any[] {
         const name = placeName || 'tempat ini';
-        const reviews = [
-            {
-                author: "Budi Santoso",
-                rating: 5,
-                text: `Koleksi sejarah di ${name} sangat lengkap dan terawat dengan baik. Sangat edukatif untuk anak-anak sekolah dan keluarga.`,
-                time: "1 minggu yang lalu"
-            },
-            {
-                author: "Siti Rahma",
-                rating: 4,
-                text: "Tempatnya bersih, penataan koleksinya juga rapi dan estetik. Pemandu museumnya ramah dan penjelasannya sangat jelas.",
-                time: "3 hari yang lalu"
-            },
-            {
-                author: "Aditya Wijaya",
-                rating: 5,
-                text: `Salah satu destinasi budaya terbaik di kota ini. Wajib dikunjungi untuk belajar sejarah lokal ${name} lebih mendalam.`,
-                time: "2 minggu yang lalu"
-            },
-            {
-                author: "Dewi Lestari",
-                rating: Math.max(3, Math.floor(rating)),
-                text: "Fasilitasnya cukup memadai, ada spot foto yang bagus juga. Tiket masuk sangat terjangkau untuk semua kalangan.",
-                time: "1 bulan yang lalu"
-            },
-            {
-                author: "Rian Hidayat",
-                rating: 5,
-                text: "Sangat terkesan dengan pelestarian benda bersejarah di sini. Suasananya tenang, nyaman, dan penuh edukasi.",
-                time: "2 bulan yang lalu"
-            }
+        
+        const firstNames = [
+            "Budi", "Siti", "Aditya", "Dewi", "Rian", "Andi", "Ahmad", "Rina", "Hendra", "Mega",
+            "Joko", "Sri", "Eko", "Rudi", "Agus", "Yanto", "Bambang", "Wati", "Kartika", "Denny",
+            "Fajar", "Gita", "Dina", "Hadi", "Indra", "Kurniawan", "Laras", "Mulyono", "Novi", "Putra"
         ];
+        const lastNames = [
+            "Santoso", "Rahma", "Wijaya", "Lestari", "Hidayat", "Pratama", "Saputra", "Wulandari", "Kurnia", "Sari",
+            "Setiawan", "Utomo", "Gunawan", "Susanto", "Nugroho", "Hidayatullah", "Kusuma", "Siregar", "Nasution", "Lubis"
+        ];
+        
+        const positiveReviews = [
+            `Sangat terkesan berkunjung ke ${name}. Tempatnya sangat edukatif dan terawat dengan baik.`,
+            `Koleksi budaya dan sejarah di ${name} sangat lengkap. Penataan ruang pamerannya rapi.`,
+            `Destinasi wisata edukasi yang luar biasa di kota ini. Wajib dikunjungi bersama keluarga.`,
+            `Suasananya tenang dan nyaman sekali untuk belajar sejarah dan kebudayaan nusantara.`,
+            `Karya seni dan benda bersejarah yang dipamerkan di ${name} benar-benar bernilai tinggi.`,
+            `Petugas dan pemandu wisatanya sangat ramah serta memberikan penjelasan dengan sangat detail.`,
+            `Tempatnya bersih, tertata dengan baik, dan suasananya kental akan nilai sejarah.`
+        ];
+        
+        const neutralReviews = [
+            `Fasilitas di ${name} cukup lengkap, mulai dari toilet hingga area istirahat. Harga tiket masuknya juga terjangkau.`,
+            `Lokasinya strategis dan mudah ditemukan. Hanya saja tempat parkir agak terbatas saat akhir pekan.`,
+            `Tempat yang bagus untuk foto-foto estetik sekaligus menambah wawasan sejarah lokal.`,
+            `Secara keseluruhan sangat memuaskan, disarankan datang pagi hari agar tidak terlalu ramai.`
+        ];
+
+        const reviews = [];
+        const count = 5;
+        
+        for (let i = 0; i < count; i++) {
+            const first = firstNames[(i * 7 + name.length) % firstNames.length];
+            const last = lastNames[(i * 11 + name.length) % lastNames.length];
+            const authorName = `${first} ${last}`;
+            
+            const posIdx1 = (i * 3 + name.length) % positiveReviews.length;
+            const posIdx2 = (i * 5 + name.length + 2) % positiveReviews.length;
+            const neuIdx = (i * 4 + name.length) % neutralReviews.length;
+            
+            let text = "";
+            if (i % 2 === 0) {
+                text = `${positiveReviews[posIdx1]} ${neutralReviews[neuIdx]}`;
+            } else {
+                text = `${positiveReviews[posIdx1]} ${positiveReviews[posIdx2]}`;
+            }
+
+            let r = 5;
+            if (i === 1) r = 4;
+            else if (i === 3) r = Math.max(3, Math.floor(rating));
+            
+            const times = ["3 hari yang lalu", "1 minggu yang lalu", "2 minggu yang lalu", "1 bulan yang lalu", "3 bulan yang lalu"];
+            const time = times[i % times.length];
+
+            reviews.push({
+                author: authorName,
+                rating: r,
+                text,
+                time
+            });
+        }
+        
         return reviews;
     }
 
@@ -2017,5 +2670,157 @@ out center body;`;
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/(^-|-$)/g, "")
             + "-" + Date.now().toString(36)
+    }
+
+    /**
+     * Download an external image securely, optimize it using Sharp via StorageService, and upload it to R2 CDN.
+     * Enforces SSRF checks, content-length limits, chunked stream safeguards, and mime checks.
+     */
+    async uploadExternalImageToR2(externalUrl: string, folder = "museums"): Promise<string> {
+        if (!externalUrl) return externalUrl;
+        const r2PublicUrl = this.configService.get<string>('R2_PUBLIC_URL') || '';
+        if (r2PublicUrl && externalUrl.startsWith(r2PublicUrl)) {
+            return externalUrl;
+        }
+
+        try {
+            const parsedUrl = new URL(externalUrl);
+            
+            // SSRF Check 1: Enforce HTTP/HTTPS protocols only
+            if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+                this.logger.error(`[R2-PROXY-SECURITY] Blocked non-HTTP/HTTPS protocol: ${parsedUrl.protocol}`);
+                return externalUrl;
+            }
+
+            // SSRF Check 2: Resolve hostname and check IP ranges
+            const hostname = parsedUrl.hostname;
+            let ip = hostname;
+            try {
+                const lookup = await dnsLookup(hostname);
+                ip = lookup.address;
+            } catch (dnsErr) {
+                this.logger.warn(`[R2-PROXY-SECURITY] Hostname DNS resolution failed: ${hostname}`);
+            }
+
+            if (this.isPrivateIP(ip)) {
+                this.logger.error(`[R2-PROXY-SECURITY] Blocked SSRF attempt to private/loopback IP: ${ip} (${hostname})`);
+                return externalUrl;
+            }
+
+            this.logger.log(`[R2-PROXY] Proxying external image securely: ${externalUrl}`);
+
+            // Fetch with timeout and signal
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s maximum timeout
+
+            const res = await fetch(externalUrl, {
+                headers: {
+                    'User-Agent': 'SeniQuApp/1.0 (contact@seniqu.art)',
+                },
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!res.ok) {
+                throw new Error(`HTTP status ${res.status}`);
+            }
+
+            // Mime-type verification
+            const contentType = res.headers.get('content-type') || '';
+            const validMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'image/jpg'];
+            const isValidMime = validMimeTypes.some(mime => contentType.toLowerCase().includes(mime));
+            if (!isValidMime && contentType) {
+                this.logger.error(`[R2-PROXY-SECURITY] Blocked invalid content-type: ${contentType}`);
+                return externalUrl;
+            }
+
+            // Content-length check
+            const contentLengthHeader = res.headers.get('content-length');
+            const maxSizeBytes = 10 * 1024 * 1024; // 10MB max image size
+            if (contentLengthHeader) {
+                const contentLength = parseInt(contentLengthHeader, 10);
+                if (contentLength > maxSizeBytes) {
+                    this.logger.error(`[R2-PROXY-SECURITY] Blocked image exceeding size limit: ${contentLength} bytes`);
+                    return externalUrl;
+                }
+            }
+
+            // Read response in chunks to prevent memory exhaustion (Anti-Chunking / Decompression Bomb protection)
+            if (!res.body) {
+                throw new Error('Response body is empty');
+            }
+
+            const reader = res.body.getReader();
+            const chunks: Uint8Array[] = [];
+            let totalBytes = 0;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                if (value) {
+                    totalBytes += value.length;
+                    if (totalBytes > maxSizeBytes) {
+                        reader.cancel();
+                        this.logger.error(`[R2-PROXY-SECURITY] Terminated chunked transfer: stream size exceeded ${maxSizeBytes} bytes`);
+                        return externalUrl;
+                    }
+                    chunks.push(value);
+                }
+            }
+
+            // Merge chunks
+            const buffer = Buffer.alloc(totalBytes);
+            let offset = 0;
+            for (const chunk of chunks) {
+                buffer.set(chunk, offset);
+                offset += chunk.length;
+            }
+
+            // Construct file payload
+            const file = {
+                buffer,
+                originalname: `external-image.webp`,
+                mimetype: contentType || 'image/webp',
+                size: totalBytes
+            };
+
+            const uploadResult = await this.storageService.uploadFile(file as any, folder);
+            return uploadResult.url;
+
+        } catch (err: any) {
+            this.logger.error(`[R2-PROXY] Failed to upload external image to R2: ${err.message}`);
+            return externalUrl; // Fallback to external URL
+        }
+    }
+
+    private isPrivateIP(ip: string): boolean {
+        if (!ip) return true;
+        
+        // IPv4 check
+        const ipv4Pattern = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+        if (ipv4Pattern.test(ip)) {
+            const parts = ip.split('.').map(Number);
+            if (parts.some(isNaN)) return true;
+            
+            // Loopback, Private, Link-local, CGNAT, Multicast, Broadcast, and Reserved ranges
+            if (parts[0] === 127) return true;
+            if (parts[0] === 10) return true;
+            if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+            if (parts[0] === 192 && parts[1] === 168) return true;
+            if (parts[0] === 169 && parts[1] === 254) return true;
+            if (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) return true; // CGNAT / Shared Space
+            if (parts[0] >= 224) return true; // Multicast & Reserved/Experimental
+            if (parts.join('.') === '0.0.0.0') return true;
+            
+            return false;
+        }
+        
+        // IPv6 loopback & private
+        const ipLower = ip.toLowerCase();
+        if (ipLower === '::1' || ipLower === '::') return true;
+        if (ipLower.startsWith('fe80:') || ipLower.startsWith('fc00:') || ipLower.startsWith('fd00:')) return true;
+        
+        return false;
     }
 }

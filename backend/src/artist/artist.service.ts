@@ -55,6 +55,10 @@ export interface ArtworkWithStats {
     likes: number
     createdAt: string
     isArt: boolean
+    price?: number
+    isForSale?: boolean
+    artworkType?: string
+    poaCertificate?: any
 }
 
 @Injectable()
@@ -228,11 +232,21 @@ export class ArtistService {
         dimensions?: string
         imageUrl: string
         status?: string
+        price?: number
+        isForSale?: boolean
+        artworkType?: string
+        poaCertificate?: any
     }) {
         const client = this.db.getAdminClient()
 
         // Generate slug from title
         const slug = this.generateSlug(dto.title)
+
+        const imagesJson = {
+            artwork_type: dto.artworkType || 'physical',
+            poa_certificate: dto.poaCertificate || null,
+            additional_images: []
+        }
 
         // Map DTO fields to actual schema columns from 001_initial_schema.sql
         const { data, error } = await client
@@ -242,12 +256,18 @@ export class ArtistService {
                 slug,
                 description: dto.description,
                 artist_id: artistId,
+                category: dto.category || null,                  // schema: category VARCHAR(100)
                 genres: dto.category ? [dto.category] : [],       // schema: genres TEXT[]
                 medium: dto.medium || null,                        // schema: medium VARCHAR(100)
                 style: dto.region || null,                         // map region to style
                 period: dto.era || null,                           // map era to period
+                dimensions: dto.dimensions || null,                // schema: dimensions VARCHAR(100)
                 primary_image_url: dto.imageUrl,                   // schema: primary_image_url TEXT NOT NULL
+                price: dto.price !== undefined ? dto.price : null,
+                is_for_sale: dto.isForSale !== undefined ? dto.isForSale : false,
+                currency: "SOL",
                 status: dto.status ? dto.status.toLowerCase() : "draft",
+                images: JSON.stringify(imagesJson),
             })
             .select()
             .single()
@@ -278,11 +298,17 @@ export class ArtistService {
         const updateData: Record<string, any> = {}
         if (dto.title !== undefined) updateData.title = dto.title
         if (dto.description !== undefined) updateData.description = dto.description
-        if (dto.category !== undefined) updateData.genres = [dto.category]
+        if (dto.category !== undefined) {
+            updateData.category = dto.category
+            updateData.genres = [dto.category]
+        }
         if (dto.medium !== undefined) updateData.medium = dto.medium
         if (dto.region !== undefined) updateData.style = dto.region
         if (dto.era !== undefined) updateData.period = dto.era
         if (dto.imageUrl !== undefined) updateData.primary_image_url = dto.imageUrl
+        if (dto.dimensions !== undefined) updateData.dimensions = dto.dimensions
+        if (dto.price !== undefined) updateData.price = dto.price
+        if (dto.isForSale !== undefined) updateData.is_for_sale = dto.isForSale
         if (dto.status !== undefined) updateData.status = dto.status.toLowerCase()
         updateData.updated_at = new Date().toISOString()
 
@@ -455,18 +481,34 @@ export class ArtistService {
     // ============================================
 
     private mapArtworkToDto(data: any): ArtworkWithStats {
+        let artworkType = 'physical';
+        let poaCertificate = null;
+        if (data.images) {
+            try {
+                const imgData = typeof data.images === 'string' ? JSON.parse(data.images) : data.images;
+                if (imgData && typeof imgData === 'object' && !Array.isArray(imgData)) {
+                    artworkType = imgData.artwork_type || artworkType;
+                    poaCertificate = imgData.poa_certificate || poaCertificate;
+                }
+            } catch (e) {}
+        }
+
         return {
             id: data.id,
             title: data.title,
             description: data.description,
             imageUrl: data.primary_image_url,     // schema: primary_image_url
             thumbnailUrl: data.primary_image_url, // no separate thumbnail in schema
-            category: data.genres?.[0] || "",      // schema: genres TEXT[]
+            category: data.genres?.[0] || data.category || "",      // schema: genres TEXT[]
             status: data.status,
             views: data.views || 0,                // schema: views INTEGER
             likes: data.likes || 0,                // schema: likes INTEGER
             createdAt: data.created_at,
             isArt: data.is_art || false,           // schema: is_art BOOLEAN
+            price: data.price,
+            isForSale: data.is_for_sale,
+            artworkType,
+            poaCertificate
         }
     }
 

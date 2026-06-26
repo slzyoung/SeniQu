@@ -16,6 +16,8 @@ With the R2 CDN integration and the new End-to-End Image Processing Pipeline:
 3. **Storage Upload**: The highly optimized binary is uploaded to Cloudflare R2 securely.
 4. **Storage Endpoint**: Returns the generated CDN URL (Public R2 URL).
 5. **Database**: Saves only the lightweight URL string. The optimized WebP images are then served directly from the CDN edge.
+6. **Google Maps & External Photo Proxying**: When resolving place photos from Google Places API or fetching fallback images from Wikipedia, the backend downloads the external image buffer, optimizes it to WebP via Sharp, uploads it to R2 CDN, and stores our `cdn.seniqu.art` URL in the database. This prevents exposing API keys, eliminates cross-site linkage, and guarantees fast page loads.
+7. **Static City Assets Migration**: Static city cover images and Unsplash fallbacks are migrated to `assets/static/cities/[city-id].webp` on R2 CDN, allowing the frontend (`ExploreCities` and `UserDashboard`) to retrieve pre-optimized edge-cached assets.
 
 ---
 
@@ -63,9 +65,27 @@ An independent module handles S3 communications.
 ### 3.1. `StorageService` (`storage.service.ts`)
 The `StorageService` provides standard AWS-S3 compatible directives (`PutObjectCommand`, `DeleteObjectCommand`, `HeadObjectCommand`).
 - **Initialization**: Bootstraps the `S3Client` mapping the generic region `"auto"` to Cloudflare's regional domains.
-- **Categorization**: Accommodates optional bucket folders string: `folder=avatars`, `artworks`, `videos`.
-- **Validation Gates**: Prevents non-image/non-video files (or executables) from bypassing to object storage.
-- **Image Processing Hook**: It injects the `ImageProcessingService` automatically for incoming image streams before pushing to R2. If R2 fails, it gracefully falls back to Base64 database encoding.
+- **Tenant-Level Isolation Partitioning**: To support a multi-admin system on a massive scale (Museums, Galleries, Heritages across different cities), R2 folder paths can be dynamically partitioned using `scopeId` and `city` parameters:
+  `[base-folder]/[city]/[scope-id]/[filename].webp`
+  - Example: `museums/images/jakarta/museum-nasional-uuid/filename.webp`
+  - This prevents high flat-directory density, makes bucket indexing extremely fast, allows simple folder-level access control delegation, and enables clean purging of tenant data.
+- **Categorization**: Accommodates structured folders mapping logical categories to organized paths:
+  - `avatars`/`profile-images` $\rightarrow$ `users/profile-images`
+  - `artworks` $\rightarrow$ `artworks/images`
+  - `thumbnails` $\rightarrow$ `artworks/thumbnails`
+  - `ar-markers` $\rightarrow$ `artworks/ar-markers`
+  - `audio-guides` $\rightarrow$ `artworks/audio-guides`
+  - `video-previews` $\rightarrow$ `artworks/video-previews`
+  - `museums` $\rightarrow$ `museums/images`
+  - `ai-outputs` $\rightarrow$ `ai/processed`
+  - `static` $\rightarrow$ `assets/static`
+- **Automated Multi-variant Generation**: When uploading artwork images, the service automatically generates and uploads:
+  - Original optimized WebP in `artworks/images/`
+  - Medium cards WebP in `artworks/mediums/`
+  - Small grid thumbnails WebP in `artworks/thumbnails/`
+  
+  All keys and CDN URLs are resolved and returned in the single upload response payload.
+- **External Image Proxying**: `uploadExternalImageToR2(externalUrl, folder)` allows background services (such as `MuseumsService`) to programmatically download external images (e.g. Google Places photos or Wikipedia fallbacks), run them through the Sharp optimization pipeline, and store them inside R2 CDN, returning a CDN URL.
 
 ### 3.2. `ImageProcessingService` (`image-processing.service.ts`)
 A dedicated service utilizing `sharp` for enterprise-grade media manipulation.
@@ -75,16 +95,16 @@ A dedicated service utilizing `sharp` for enterprise-grade media manipulation.
   - `artworks`: high-fidelity scaling (max 2048x2048) at 85% quality to preserve artistic details.
   - `general`: standard scaling (max 1600x1600) at 80% quality.
 - **Privacy Enforcement**: Strips all EXIF metadata (GPS coordinates, device models) to protect user anonymity.
-- **Graceful Skipping**: Safely ignores PDFs, SVGs, and GIFs (to preserve animations).
+- **Strict Verification (Anti-Exploit)**: Sharp strictly verifies image signatures. If an upload fails parsing (due to file spoofing or corruption), it throws a `BadRequestException` immediately to block malicious files instead of saving them.
 
 ### 3.3. `StorageController` (`storage.controller.ts`)
-Creates two crucial guarded endpoints:
+Creates two guarded endpoints:
 
 1. **`POST /api/v1/storage/upload`**
-    - `multipart/form-data` containing `file` and `folder`.
+    - `multipart/form-data` containing `file`, `folder`, and optional `scopeId` and `city` body fields.
     - Protected via `JwtAuthGuard`. Only verified token holders can initiate an upload.
 2. **`DELETE /api/v1/storage/:key`**
-    - Accepts a splat parameter key (e.g., `artworks/xyz-123.jpg`).
+    - Accepts a splat parameter key (e.g., `artworks/xyz-123.webp`).
     - Guarded with `JwtAuthGuard` and `PermissionsGuard` demanding the `Permission.ADMIN_DASHBOARD`. Standard users cannot arbitrarily purge data.
 
 ---
@@ -99,44 +119,31 @@ Located in `frontend/src/lib/api.ts`:
 export async function uploadFile(
     file: File,
     folder: 'artworks' | 'avatars' | 'videos' | 'collections' | 'general' = 'general',
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    scopeId?: string,
+    city?: string
 ): Promise<{ key: string; url: string; size: number; contentType: string }>
 ```
-- Attaches the CSRF and typical Authoritarian payloads.
+- Attaches credentials and JWT payloads.
+- Optionally appends `scopeId` and `city` to the `FormData` body to enforce tenant partitioning.
 - Fires an optional progress callback mapping Axios upload progress bits (useful for UI progress bars).
-
-### 4.2. Implementation Scopes
-
-#### **Upload Artwork (`UploadArtwork.tsx`)**
-- Allows Drag-and-Drop or direct file selection.
-- Intercepts file with client-side `compressImage(file, { maxWidth: 2048, quality: 0.88 })`.
-- Resolves file into the centralized `uploadFile(file, 'artworks')`.
-- Returns the URL injected natively to `imageUrl` in the standard Artwork DB schema mutation logic (`createArtwork.mutateAsync`).
-
-#### **Avatar Images (`userService.ts`)**
-- Intercepts file with client-side `compressImage(file, { maxWidth: 400, quality: 0.8 })`.
-- Calling `userService.uploadAvatar(file)` invokes the CDN flow `uploadFile(file, 'avatars')`.
-- Updates profile avatar with minimal request cost.
-
-#### **Community Forum (`CommunityPage.tsx`)**
-- Forum attachments are pre-compressed locally before hitting the `createThread` APIs. This prevents payload throttling during high-concurrency periods.
-
-#### **AI Image Generation/Detection (`aiService.ts`)**
-- Pre-requisite step for querying robust AI detection endpoints requires edge-storing the artifact safely.
-- Images uploaded through `aiService` funnel through the CDN root level (folder: `general`).
 
 ---
 
 ## 5. Security Posture & Safeguards
 
-1. **Anti-Malware Filtering**: The S3 Client forcibly limits Accept MIME types exclusively to standard safe graphics formats.
-2. **Path Traversal Constraints**: Utilizing deterministic Key logic (`{folder}/{uuid}.{ext}`). An attacker cannot manipulate destination keys using `../` directory traversal.
-3. **Global Edge Delivery**: Setting `CacheControl: "public, max-age=31536000, immutable"` inside the S3 PutObject param header forces the Cloudflare edge to persist CDN hits heavily, saving egress requests.
-4. **Access Control**: Users can independently read public assets via URL, but altering or provisioning files natively requires explicit JWT and internal Controller proxy. Direct client-to-R2 (Pre-Signed URLs) is disabled as default to allow NestJS telemetry.
+1. **Anti-Hacking (Filename Obfuscation)**: Discards user-submitted filenames completely. Replaces them with cryptographically secure UUIDv4 identifiers to prevent Directory Traversal (`../`) or file overwrite vulnerabilities.
+2. **Strict Validation Gates**: Spoofed files disguised as images are rejected immediately at the server optimization layer via Sharp parsing validations.
+3. **Production Safety (Anti-Bloat)**: Base64 fallback is strictly disabled in production environments (`NODE_ENV === 'production'`). Any S3 network or upload failure results in a `500 InternalServerErrorException` to prevent base64 blobs from bloating the Postgres DB.
+4. **Anti-Throttling**: The storage controller is guarded with NestJS `@Throttle` decorators to throttle denial-of-service/spam attacks.
+5. **Anti-Chunking**: Streams are parsed by `@fastify/multipart` with strict size limits (15MB for images, 50MB for audio, 200MB for video) at the Node request wrapper layer, avoiding memory exhaustion exploits.
+6. **Path-Style S3 Routing**: Enforces `forcePathStyle: true` on the backend `S3Client` instance for Cloudflare R2 compatibility. This forces endpoints to format as `https://<account_id>.r2.cloudflarestorage.com/<bucket_name>/...` instead of dynamic subdomains, eliminating DNS wildcard resolution and SSL handshake failures in both local and restricted VPS environments.
+7. **Resource Conservation ($7/mo Render VPS Optimization & Compression Bypass)**: By uploading files directly from the browser to Cloudflare R2 CDN, the low-resource Render server is relieved of raw file transfer payload processing. For videos larger than **10MB** (up to the **200MB** limit), the server skips the heavy FFmpeg compression step to avoid CPU and RAM exhaustion (OOM) on the 512MB RAM server. Instead, it utilizes S3's `CopyObjectCommand` to copy/rename the object directly at the CDN edge.
+8. **MIME Validation Fallback**: Client-side validation checks the file extension as a fallback if the browser/OS leaves the `file.type` MIME field empty (common on QuickTime `.mov` files).
+9. **High-Fidelity Video Quality Preservation**: 
+   - Videos under **10MB** are compressed using an industry-standard H.264 codec configuration with a Constant Rate Factor (CRF) of `22` and audio bitrate of `128k`, achieving a visually lossless compression optimized for mobile device streaming.
+   - Videos over **10MB** bypass the compression pipeline completely, ensuring that long or high-resolution uploads are served in their absolute native quality without any compression artifacts or server performance degradation.
 
 ---
-
-## 6. Next Steps & Recommended Scalability Measures
-
-* **Clean-up Cron-jobs**: Orphaned uploads (where the file succeeds CDN transmission but the DB hook fails) ought to be scrubbed via scheduled bucket reconciliations.
-* **Batch Operations**: Support `/storage/upload-batch` parameter architectures once multi-item galleries are standardized.
+*Document Version: 1.4.0*
+*Last Updated: 2026-06-26*

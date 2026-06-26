@@ -60,7 +60,7 @@ export const configuration = () => ({
         accountId: process.env.R2_ACCOUNT_ID,
         accessKeyId: process.env.R2_ACCESS_KEY_ID,
         secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-        bucketName: process.env.R2_BUCKET_NAME || "seniqu-assets",
+        bucketName: process.env.R2_BUCKET_NAME || "seniqu",
         publicUrl: process.env.R2_PUBLIC_URL,
     },
 
@@ -69,6 +69,7 @@ export const configuration = () => ({
         corsOrigins: process.env.CORS_ORIGINS?.split(",") || ["http://localhost:3000"],
         rateLimitTtl: parseInt(process.env.RATE_LIMIT_TTL || "60", 10),
         rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX || "100", 10),
+        turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || "",
     },
 
     // SMTP (Brevo)
@@ -85,6 +86,15 @@ export const configuration = () => ({
     googleMaps: {
         apiKey: process.env.GOOGLE_MAPS_KEY || '',                    // Backend-only: Places API, Geocoding API, Routes API
         clientApiKey: process.env.FRONTEND_GOOGLE_MAPS_KEY || '',     // Frontend-only: Maps JavaScript API (public, restricted)
+    },
+
+    // AI Generation
+    ai: {
+        hfAccessToken: process.env.HF_ACCESS_TOKEN || '',
+        geminiApiKey: process.env.GEMINI_API_KEY || '',
+        cfAccountId: process.env.R2_ACCOUNT_ID || '',
+        cfApiToken: process.env.CLOUDFLARE_API_TOKEN || '',
+        dailyLimit: parseInt(process.env.AI_DAILY_LIMIT || "5", 10),
     },
 })
 
@@ -132,8 +142,11 @@ export const validationSchema = Joi.object({
     R2_ACCOUNT_ID: Joi.string().optional(),
     R2_ACCESS_KEY_ID: Joi.string().optional(),
     R2_SECRET_ACCESS_KEY: Joi.string().optional(),
-    R2_BUCKET_NAME: Joi.string().default("seniqu-assets"),
+    R2_BUCKET_NAME: Joi.string().default("seniqu"),
     R2_PUBLIC_URL: Joi.string().optional(),
+
+    // Cloudflare Turnstile (Anti-Bot CAPTCHA)
+    TURNSTILE_SECRET_KEY: Joi.string().optional().allow(''),
 
     // SMTP
     SMTP_HOST: Joi.string().optional(),
@@ -145,6 +158,12 @@ export const validationSchema = Joi.object({
     // Google Maps
     GOOGLE_MAPS_KEY: Joi.string().optional().allow(''),
     FRONTEND_GOOGLE_MAPS_KEY: Joi.string().optional().allow(''),
+
+    // AI Generation
+    HF_ACCESS_TOKEN: Joi.string().optional().allow(''),
+    GEMINI_API_KEY: Joi.string().optional().allow(''),
+    CLOUDFLARE_API_TOKEN: Joi.string().optional().allow(''),
+    AI_DAILY_LIMIT: Joi.number().default(5),
 })
 
 export type AppConfiguration = ReturnType<typeof configuration>

@@ -1,0 +1,1322 @@
+/* ================================================================
+   SeniQu Reels — Premium Instagram-style Mobile-First UI
+   Full light + dark theme support via CSS variables
+   ================================================================ */
+
+/* ─── Container ─── */
+.reels-container {
+    position: relative;
+    width: 100%;
+    height: calc(100dvh - 64px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: #000;
+    margin: -16px -16px 0;
+    width: calc(100% + 32px);
+}
+
+@media (max-width: 767px) {
+    .reels-container.reels-guest {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: auto;
+        margin: 0;
+        width: 100%;
+        z-index: 40;
+    }
+
+    .reels-container.reels-auth {
+        position: fixed;
+        top: 64px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: auto;
+        margin: 0;
+        width: 100%;
+        z-index: 40;
+    }
+}
+
+@media (min-width: 768px) {
+    .reels-container {
+        max-width: 480px;
+        margin: -24px auto 0;
+        width: 100%;
+        border-radius: 24px;
+        overflow: hidden;
+        box-shadow:
+            0 0 0 1px rgba(255, 255, 255, 0.06),
+            0 24px 80px -12px rgba(0, 0, 0, 0.7);
+    }
+}
+
+/* ─── Header Overlay ─── */
+.reels-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 14px;
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.2) 60%, transparent 100%);
+    pointer-events: none;
+}
+
+@media (max-width: 767px) {
+    .reels-header {
+        display: none !important;
+    }
+}
+
+.reels-header > * {
+    pointer-events: auto;
+}
+
+.reels-header-btn {
+    position: absolute;
+    right: 14px;
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.reels-header-btn:hover {
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.reels-header-btn:active {
+    transform: scale(0.92);
+}
+
+.reels-header-title {
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 0.3px;
+    color: #fff;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+/* ─── Scroll Container (Snap) ─── */
+.reels-scroll {
+    flex: 1;
+    height: 100%;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.reels-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+/* ─── Individual Reel ─── */
+.reel-item {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+}
+
+.reel-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* ─── Gradient Overlays ─── */
+.reel-gradient-top {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 140px;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.5) 0%, transparent 100%);
+    pointer-events: none;
+    z-index: 5;
+}
+
+.reel-gradient-bottom {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 360px;
+    background: linear-gradient(0deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.3) 40%, transparent 100%);
+    pointer-events: none;
+    z-index: 5;
+}
+
+/* ─── Center Indicators (Play/Pause + Heart) ─── */
+.reel-center-indicator {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 20;
+    animation: reelFadeScale 0.5s ease-out forwards;
+}
+
+@keyframes reelFadeScale {
+    0% { opacity: 1; transform: scale(0.5); }
+    50% { opacity: 1; transform: scale(1.1); }
+    100% { opacity: 0; transform: scale(1.2); }
+}
+
+.reel-heart-pop {
+    animation: heartPop 0.9s ease-out forwards;
+    filter: drop-shadow(0 0 30px rgba(239, 68, 68, 0.7));
+}
+
+@keyframes heartPop {
+    0% { transform: scale(0); opacity: 0; }
+    12% { transform: scale(1.35); opacity: 1; }
+    28% { transform: scale(0.92); }
+    42% { transform: scale(1.08); }
+    100% { transform: scale(1); opacity: 0; }
+}
+
+/* ─── Progress Bar ─── */
+.reel-progress-track {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.12);
+    z-index: 45;
+}
+
+.reel-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #C9A84C, #e8c55a);
+    transition: width 0.15s linear;
+    border-radius: 0 2px 2px 0;
+    box-shadow: 0 0 8px rgba(201, 168, 76, 0.5);
+}
+
+/* ─── Bottom Info Panel ─── */
+.reel-bottom-info {
+    position: absolute;
+    bottom: 16px;
+    left: 14px;
+    right: 80px;
+    z-index: 15;
+}
+
+@media (max-width: 767px) {
+    .reel-bottom-info {
+        bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+/* User Row */
+.reel-user-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.reel-user-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    object-fit: cover;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.reel-user-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+}
+
+.reel-user-time {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.55);
+    line-height: 1;
+}
+
+.reel-badge-artist {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #C9A84C;
+    background: rgba(201, 168, 76, 0.15);
+    border: 1px solid rgba(201, 168, 76, 0.3);
+    padding: 2px 8px;
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+
+/* Follow Button */
+.reel-follow-btn {
+    padding: 5px 16px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.reel-follow-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.reel-follow-btn:active {
+    transform: scale(0.94);
+}
+
+.reel-following {
+    background: rgba(201, 168, 76, 0.2);
+    border-color: rgba(201, 168, 76, 0.4);
+    color: #C9A84C;
+}
+
+/* Options dot */
+.reel-options-btn {
+    padding: 4px;
+    color: rgba(255, 255, 255, 0.7);
+    transition: color 0.15s;
+    background: none;
+    border: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.reel-options-btn:hover {
+    color: #fff;
+}
+
+/* Caption */
+.reel-caption {
+    font-size: 13px;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.92);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-bottom: 6px;
+    word-break: break-word;
+}
+
+/* Hashtags */
+.reel-hashtags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 4px;
+}
+
+.reel-hashtag {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(201, 168, 76, 0.95);
+}
+
+/* Duration */
+.reel-duration {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.35);
+    margin-bottom: 6px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ─── Animated Music Track ─── */
+.reel-music-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px 5px 10px;
+    border-radius: 100px;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    max-width: 240px;
+    overflow: hidden;
+}
+
+.reel-music-icon {
+    width: 14px;
+    height: 14px;
+    color: rgba(255, 255, 255, 0.9);
+    flex-shrink: 0;
+    animation: musicSpin 4s linear infinite;
+}
+
+@keyframes musicSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.reel-music-track-wrap {
+    overflow: hidden;
+    white-space: nowrap;
+    position: relative;
+    flex: 1;
+    mask-image: linear-gradient(to right, transparent, black 8px, black calc(100% - 8px), transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 8px, black calc(100% - 8px), transparent);
+}
+
+.reel-music-track-text {
+    display: inline-block;
+    padding-left: 100%;
+    animation: marquee 14s linear infinite;
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+@keyframes marquee {
+    0% { transform: translate3d(0, 0, 0); }
+    100% { transform: translate3d(-100%, 0, 0); }
+}
+
+/* ─── Right Side — Glassmorphic Action Panel ─── */
+.reel-sidebar {
+    position: absolute;
+    right: 10px;
+    bottom: 80px;
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+@media (max-width: 767px) {
+    .reel-sidebar {
+        bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+/* Mute Button */
+.reel-mute-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.reel-mute-btn:hover {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.reel-mute-btn:active {
+    transform: scale(0.9);
+}
+
+/* Glassmorphic Action Card */
+.reel-actions-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 14px 6px;
+    border-radius: 28px;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.4);
+    width: 58px;
+}
+
+/* Action Button */
+.reel-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 0;
+    color: #fff;
+    transition: all 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+    background: none;
+    border: none;
+    width: 100%;
+}
+
+.reel-action-btn:active {
+    transform: scale(0.85);
+}
+
+/* Icon circle inside action */
+.reel-action-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.reel-action-btn:hover .reel-action-icon {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.reel-action-count {
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1;
+    text-align: center;
+}
+
+/* Liked State */
+.reel-action-btn.reel-liked .reel-action-icon {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+.reel-action-btn.reel-liked .reel-action-count {
+    color: #ef4444;
+}
+
+/* Saved State */
+.reel-action-btn.reel-saved .reel-action-icon {
+    background: rgba(201, 168, 76, 0.15);
+    border-color: rgba(201, 168, 76, 0.2);
+}
+
+.reel-action-btn.reel-saved .reel-action-count {
+    color: #C9A84C;
+}
+
+/* ─── Drawer (Comments / Options) ─── */
+.reel-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 55;
+    animation: fadeIn 0.2s ease;
+}
+
+.reel-drawer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 70dvh;
+    z-index: 56;
+    background: var(--bg-surface, #1a1a1a);
+    border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 20px 20px 0 0;
+    display: flex;
+    flex-direction: column;
+    animation: drawerSlideUp 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (min-width: 768px) {
+    .reel-drawer {
+        max-width: 480px;
+        margin: 0 auto;
+    }
+}
+
+.reel-drawer-handle {
+    width: 36px;
+    height: 4px;
+    background: var(--border-color, rgba(255, 255, 255, 0.2));
+    border-radius: 2px;
+    margin: 8px auto 0;
+}
+
+@keyframes drawerSlideUp {
+    from { transform: translateY(100%); opacity: 0.5; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* Comment Form */
+.reel-comment-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    background: var(--bg-surface, #1a1a1a);
+}
+
+.reel-comment-input {
+    flex: 1;
+    background: var(--bg-elevated, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 24px;
+    padding: 9px 16px;
+    font-size: 13px;
+    color: var(--text-primary, #fff);
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.reel-comment-input::placeholder {
+    color: var(--text-muted, #666);
+}
+
+.reel-comment-input:focus {
+    border-color: #C9A84C;
+}
+
+.reel-comment-send {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #C9A84C, #b8960b);
+    color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.reel-comment-send:disabled {
+    opacity: 0.35;
+}
+
+.reel-comment-send:hover:not(:disabled) {
+    transform: scale(1.08);
+    box-shadow: 0 4px 16px rgba(201, 168, 76, 0.35);
+}
+
+/* ─── Upload Modal ─── */
+.reel-upload-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    animation: fadeIn 0.2s ease;
+}
+
+@media (max-width: 639px) {
+    .reel-upload-overlay {
+        align-items: flex-start;
+        padding-top: 48px;
+    }
+}
+
+.reel-upload-modal {
+    width: 100%;
+    max-width: 420px;
+    max-height: 85dvh;
+    background: var(--bg-surface, #1a1a1a);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 24px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+    animation: drawerSlideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.reel-upload-form {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.reel-upload-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    margin-top: auto;
+}
+
+.reel-upload-preview {
+    position: relative;
+    aspect-ratio: 9/16;
+    max-height: 240px;
+    margin: 0 auto;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    background: #000;
+}
+
+.reel-upload-pill {
+    font-size: 10px;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 3px 10px;
+    border-radius: 12px;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+.reel-upload-dropzone {
+    width: 100%;
+    aspect-ratio: 9/16;
+    max-height: 180px;
+    border: 2px dashed var(--border-color, rgba(255, 255, 255, 0.12));
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s;
+    cursor: pointer;
+    background: none;
+}
+
+.reel-upload-dropzone:hover {
+    border-color: rgba(201, 168, 76, 0.4);
+    background: rgba(201, 168, 76, 0.03);
+}
+
+.reel-label {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted, #888);
+    margin-bottom: 6px;
+}
+
+.reel-textarea {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--bg-elevated, rgba(255, 255, 255, 0.05));
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 14px;
+    font-size: 13px;
+    color: var(--text-primary, #fff);
+    outline: none;
+    resize: none;
+    height: 76px;
+    transition: border-color 0.2s;
+}
+
+.reel-textarea:focus {
+    border-color: #C9A84C;
+}
+
+.reel-textarea::placeholder {
+    color: var(--text-muted, #666);
+}
+
+.reel-input {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--bg-elevated, rgba(255, 255, 255, 0.05));
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 14px;
+    font-size: 13px;
+    color: var(--text-primary, #fff);
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.reel-input:focus {
+    border-color: #C9A84C;
+}
+
+.reel-input::placeholder {
+    color: var(--text-muted, #666);
+}
+
+/* ─── Empty State ─── */
+.reels-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 40px;
+    text-align: center;
+    background: var(--bg-primary, #0d0d0d);
+}
+
+/* ─── Share Menu ─── */
+.reel-share-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 10000;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+}
+
+.reel-share-menu {
+    width: 100%;
+    max-width: 480px;
+    background: var(--bg-surface, #1a1a1a);
+    border-radius: 24px 24px 0 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+    animation: drawerSlideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.reel-share-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+}
+
+.reel-share-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 8px 4px;
+    border-radius: 16px;
+    transition: all 0.2s;
+    background: none;
+    border: none;
+    color: var(--text-primary, #fff);
+}
+
+.reel-share-item:hover {
+    background: var(--bg-elevated, rgba(255, 255, 255, 0.06));
+    transform: translateY(-2px);
+}
+
+.reel-share-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+}
+
+.reel-share-icon--x {
+    background: rgba(15, 23, 42, 0.08) ;
+    color: #0f1419 ;
+}
+
+.dark .reel-share-icon--x {
+    background: rgba(255, 255, 255, 0.12) ;
+    color: #ffffff ;
+}
+
+.reel-share-item:hover .reel-share-icon {
+    transform: scale(1.05);
+}
+
+.reel-share-label {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted, #aaa);
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* ─── Options Drawer Items ─── */
+.reel-option-item {
+    width: 100%;
+    text-align: left;
+    padding: 14px 18px;
+    font-size: 14px;
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: background 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.reel-option-item:active {
+    transform: scale(0.98);
+}
+
+.reel-option-danger {
+    color: #ef4444;
+    background: none;
+}
+
+.reel-option-danger:hover {
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.reel-option-normal {
+    color: var(--text-primary, #fff);
+    background: none;
+}
+
+.reel-option-normal:hover {
+    background: var(--bg-elevated, rgba(255, 255, 255, 0.05));
+}
+
+.reel-option-cancel {
+    color: var(--text-muted, #888);
+    background: none;
+    text-align: center;
+    justify-content: center;
+    font-weight: 600;
+    margin-top: 4px;
+    border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+    border-radius: 0;
+    padding-top: 16px;
+}
+
+.reel-option-cancel:hover {
+    background: var(--bg-elevated, rgba(255, 255, 255, 0.04));
+}
+
+/* ─── Animations ─── */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* ═══════════════════════════════════════════════
+   Search Overlay — Premium Reels Search
+   ═══════════════════════════════════════════════ */
+
+.reels-search-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 52;
+    animation: fadeIn 0.15s ease;
+}
+
+.reels-search-panel {
+    background: var(--bg-surface, rgba(20, 20, 20, 0.96));
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    padding: 12px 14px;
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+[data-theme="light"] .reels-search-panel,
+:root:not(.dark) .reels-search-panel {
+    background: rgba(255, 255, 255, 0.96);
+    border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+.reels-search-input-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg-elevated, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 14px;
+    padding: 10px 14px;
+    transition: border-color 0.2s;
+}
+
+.reels-search-input-row:focus-within {
+    border-color: #C9A84C;
+}
+
+[data-theme="light"] .reels-search-input-row,
+:root:not(.dark) .reels-search-input-row {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+.reels-search-input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text-primary, #fff);
+    font-size: 14px;
+    font-weight: 500;
+    min-width: 0;
+}
+
+.reels-search-input::placeholder {
+    color: var(--text-muted, rgba(255, 255, 255, 0.4));
+}
+
+[data-theme="light"] .reels-search-input,
+:root:not(.dark) .reels-search-input {
+    color: #1a1a1a;
+}
+
+[data-theme="light"] .reels-search-input::placeholder,
+:root:not(.dark) .reels-search-input::placeholder {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+.reels-search-clear-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted, #888);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s;
+}
+
+.reels-search-clear-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+[data-theme="light"] .reels-search-clear-btn,
+:root:not(.dark) .reels-search-clear-btn {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.reels-search-cancel-btn {
+    background: none;
+    border: none;
+    color: #C9A84C;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    padding: 0 4px;
+    flex-shrink: 0;
+    transition: opacity 0.15s;
+}
+
+.reels-search-cancel-btn:hover {
+    opacity: 0.8;
+}
+
+/* Category Filter Chips */
+.reels-search-filters {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+}
+
+.reels-search-filters-scroll {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    padding: 2px 0;
+}
+
+.reels-search-filters-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+.reels-filter-chip {
+    padding: 6px 14px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+    background: var(--bg-elevated, rgba(255, 255, 255, 0.06));
+    color: var(--text-muted, rgba(255, 255, 255, 0.6));
+    cursor: pointer;
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.reels-filter-chip:hover {
+    background: var(--bg-elevated, rgba(255, 255, 255, 0.1));
+    color: var(--text-primary, #fff);
+}
+
+.reels-filter-chip.active {
+    background: linear-gradient(135deg, #C9A84C, #b8960b);
+    color: #000;
+    border-color: transparent;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(201, 168, 76, 0.3);
+}
+
+[data-theme="light"] .reels-filter-chip,
+:root:not(.dark) .reels-filter-chip {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="light"] .reels-filter-chip:hover,
+:root:not(.dark) .reels-filter-chip:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #1a1a1a;
+}
+
+[data-theme="light"] .reels-filter-chip.active,
+:root:not(.dark) .reels-filter-chip.active {
+    background: linear-gradient(135deg, #C9A84C, #b8960b);
+    color: #000;
+    border-color: transparent;
+}
+
+/* Search Results Info */
+.reels-search-results-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-muted, rgba(255, 255, 255, 0.5));
+    padding: 2px 4px;
+}
+
+[data-theme="light"] .reels-search-results-info,
+:root:not(.dark) .reels-search-results-info {
+    color: rgba(0, 0, 0, 0.45);
+}
+
+.reels-search-results-info strong {
+    color: #C9A84C;
+}
+
+.reels-search-reset-btn {
+    background: none;
+    border: none;
+    color: #C9A84C;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: opacity 0.15s;
+}
+
+.reels-search-reset-btn:hover {
+    opacity: 0.7;
+}
+
+/* ─── Upload Progress Shimmer ─── */
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* ─── Hide global navbar when reels search overlay is open on mobile ─── */
+@media (max-width: 767px) {
+    body.reels-search-active nav.fixed {
+        opacity: 0 !important;
+        pointer-events: none !important;
+        visibility: hidden !important;
+    }
+}
+
+/* ─── Create Reel FAB (Floating Action Button) ─── */
+.reels-fab {
+    position: fixed;
+    z-index: 55;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+    /* Desktop: top-right of content area */
+    top: 88px;
+    right: calc(50% - 240px + 14px);
+    /* Entrance animation */
+    animation: fabSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes fabSlideIn {
+    0% { opacity: 0; transform: scale(0.5) translateY(12px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Mobile: bottom-right, above the navbar */
+@media (max-width: 767px) {
+    .reels-fab {
+        top: auto;
+        right: 16px;
+        bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+/* Pulse ring — subtle attention indicator, plays once then stops */
+.reels-fab-pulse {
+    position: absolute;
+    inset: -4px;
+    border-radius: 50px;
+    border: 2px solid rgba(201, 168, 76, 0.5);
+    animation: fabPulseRing 2s ease-out 0.6s forwards;
+    opacity: 0;
+    pointer-events: none;
+}
+
+@keyframes fabPulseRing {
+    0% { transform: scale(0.9); opacity: 0.7; }
+    50% { transform: scale(1.15); opacity: 0.3; }
+    100% { transform: scale(1.3); opacity: 0; }
+}
+
+/* Inner button — glassmorphic pill with gold gradient */
+.reels-fab-inner {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px 10px 14px;
+    border-radius: 50px;
+    background: linear-gradient(135deg, #C9A84C 0%, #b8960b 100%);
+    color: #000;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.2px;
+    box-shadow:
+        0 4px 20px -2px rgba(201, 168, 76, 0.45),
+        0 1px 3px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Shimmer highlight on hover */
+.reels-fab-inner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 200%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.15) 40%,
+        rgba(255, 255, 255, 0.25) 50%,
+        rgba(255, 255, 255, 0.15) 60%,
+        transparent 100%
+    );
+    transition: left 0.6s ease;
+    pointer-events: none;
+}
+
+.reels-fab:hover .reels-fab-inner::before {
+    left: 100%;
+}
+
+.reels-fab:hover .reels-fab-inner {
+    transform: translateY(-2px);
+    box-shadow:
+        0 8px 28px -2px rgba(201, 168, 76, 0.55),
+        0 2px 6px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.reels-fab:active .reels-fab-inner {
+    transform: scale(0.93);
+    box-shadow:
+        0 2px 10px -1px rgba(201, 168, 76, 0.3),
+        0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.reels-fab-label {
+    line-height: 1;
+    white-space: nowrap;
+}
+
+/* On mobile — compact icon-only version to save space */
+@media (max-width: 767px) {
+    .reels-fab-inner {
+        padding: 12px;
+        border-radius: 50%;
+    }
+
+    .reels-fab-label {
+        display: none;
+    }
+}

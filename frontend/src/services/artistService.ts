@@ -67,6 +67,10 @@ export interface CreateArtworkDto {
     dimensions?: string;
     imageUrl: string;
     status?: string;
+    price?: number;
+    isForSale?: boolean;
+    artworkType?: 'physical' | 'digital';
+    poaCertificate?: any;
 }
 
 export interface ArtistProfile {

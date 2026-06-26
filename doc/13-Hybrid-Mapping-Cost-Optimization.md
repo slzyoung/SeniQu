@@ -40,13 +40,14 @@ SeniQu uses a hybrid structure that combines the open-source Leaflet map engine 
 
 SeniQu implements a strict **Database-First / Cache-Aside** retrieval flow combined with coordinate parsing fixes and request optimization techniques to protect the Google Maps API budget:
 
-### A. Database-First Search Strategy
+### A. Database-First Search Strategy & Active Search Flow
 Previously, the `/museums/search-nearby` endpoint queried the Google Places API directly on every page load unless the daily global quota (30 requests/day) was exceeded. This resulted in frequent daily limit reached dialogs on production.
 
-To resolve this, we refactored the search flow to prioritize local data:
-1. **Local Database Check**: Every nearby search request first queries the local `institutions` table using PostGIS bounding box filters.
-2. **Database HIT**: If matching verified institutions are found within the requested radius (e.g. Jakarta, Bali where data has been scraped/ingested), they are returned immediately. The Google Places API call is **completely bypassed**, resulting in **$0.00 cost** and **0ms external API latency**.
-3. **Google API Fallback**: Only if the database search returns zero results does the backend proceed to check the daily budget, query the Google Places API, return the online results, and asynchronously cache/ingest them into the local database for future search hits.
+To resolve this, we refactored the search flow to prioritize local data and real-time discoverability:
+1. **Local Database Check for Fallbacks**: If the user is close to their limit or Google API requests fail, the backend performs a PostGIS fallback search.
+2. **Active Search Flow**: If quota is available, the backend queries the Google Places API to dynamically find and discover all matching places. This ensures new areas can be discovered in real-time.
+3. **Background Ingestion & R2 Hosting**: Discovered places are immediately pushed to a background worker queue (`ingestPlacesToDatabase`) which processes them with a **1000ms sequential delay** to prevent throttling. It resolves the cover image, uploads it securely to **Cloudflare R2 CDN**, scrapes the Wikipedia summary, and persists them into the Supabase database.
+4. **Subsequent Cache/DB Hits**: Once ingested, cover images and descriptions are loaded from the database directly on future searches, reducing subsequent Places API costs to zero.
 
 ### B. PostGIS WKB Hex Coordinate Parsing Fix
 When the backend fell back to the local database search, it failed to parse the geography coordinates.
@@ -127,9 +128,25 @@ To guarantee that the user gets rich, contextually accurate place details even w
 1. **DB Place Detail Lookup**: The `/place-details/:placeId` endpoint checks the database first by UUID or slug (`g-placeId`). If the daily client API quota is exhausted or Google APIs fail, it loads and serves the place coordinates, name, rating, cover image, description, and reviews directly from the local database.
 2. **Background ETL Auto-Scraper**: If a place is retrieved but lacks crucial metadata (e.g. empty cover image, default/empty description, or empty reviews list), the backend triggers a detached asynchronous background thread:
    * **Wikipedia Scraper**: Scrapes Wikipedia for the official place image and history summary.
+   * **R2 CDN Photo Mirroring**: For any external image URLs resolved from Google or Wikipedia, the backend mirrors them to our private Cloudflare R2 bucket.
    * **Contextual Reviews Generator**: Dynamically generates 5 highly realistic, category-appropriate reviews in Indonesian (customized with the place's actual name and rating).
-   * **Cache Persistence**: Writes the scraped cover image, history summary, and generated reviews array back into the local database (in the newly added `reviews` JSONB column).
+   * **Cache Persistence**: Writes the scraped cover image R2 URL, history summary, and generated reviews array back into the local database (in the newly added `reviews` JSONB column).
 3. **Self-Healing Local Database**: This background execution ensures that future place details requests for the same location are resolved with zero Google Maps dependency and 0ms latency.
+
+### I. Private IP & SSRF Protection Hardening
+To prevent Server-Side Request Forgery (SSRF) vulnerabilities when fetching external images from Google Places or Wikipedia to upload to Cloudflare R2, we implemented strict IP filtering:
+- **SSRF Blocklist**: The `isPrivateIP` validator blocks standard loopback (`127.0.0.1`, `::1`), private ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), link-local (`169.254.0.0/16`, `fe80::/10`), CGNAT/shared space (`100.64.0.0/10`), multicast (`224.0.0.0/4`), and reserved addresses.
+- **Background Execution Validation**: Any image retrieval/download logic verifies that the destination is a public address space before initiating fetching.
+
+### J. Automated Database Ingestion & City Seeding Engine (`seed_cities_from_gmaps.ts`)
+To populate new cities with genuine, high-quality local destination data without relying on manual database entries, we implemented an automated seeding engine:
+1. **Target Area Coordinates & Radius Filtering**: The seeder is initialized with specific coordinates and radius parameters (e.g. Cirebon, Padang, Banjarmasin, Mataram).
+2. **Clean-Slate Wipe**: It deletes existing dummy/placeholder entries for the target city using case-insensitive SQL operators (`ilike`).
+3. **Category-Mutually-Exclusive Querying**: It executes Google Places `searchNearby` queries targeting `museum`, `gallery`, and `heritage` place-type sets.
+4. **Referer Verification Bypass**: Requests are made using the application's configured `Referer` domain (e.g., `http://localhost:5173/` or production domain) to comply with the restricted Google API key policy.
+5. **Anti-Throttling Delay**: A sequential 2.5-second sleep interval is introduced between processing each place to prevent GCP API key throttling.
+6. **Graceful Duplicate Handling (Upsert)**: Discovered items are written to the `institutions` table using PostgreSQL `upsert` matching on the unique `slug` constraint.
+7. **Autodetect & Fallback Media Handling**: Fetches the first Google Place Photo URL, downloads and resizes it to 1200x800 WebP via Sharp, and uploads it to the R2 CDN. If a photo is unavailable from Google, it automatically falls back to Wikipedia Page Image retrieval.
 
 ---
 
@@ -149,6 +166,9 @@ To prevent quota scraping, key extraction, or billing exhaustion, we partitioned
 ---
 
 ## 5. UI Alignment, Type Safety, and Rendering Fixes
+- **Unified Place-Type Classification**: We aligned place type classification across the application:
+  - **Backend**: Implemented `determinePlaceType` in the backend service, which matches types (e.g., `art_gallery`, `museum`, `tourist_attraction`, `church`) and name keywords against a strict ruleset. Lodging overrides are active (e.g., galleries inside hotels are classified as `heritage` to prevent misclassification).
+  - **Frontend**: Updated `PublicNearbyPage.tsx` to trust the `place.type` returned by the backend, falling back to client-side classification keywords only if the type is not preset by the server. This prevents mismatching types or icon/preview mismatches on the map.
 - **Leaflet Marker Centering:** To prevent text emojis (`🏛️`, `🎨`, `🏯`) inside custom Leaflet HTML `divIcon` pins from inheriting the `-45deg` parent rotation (which caused tilted icons), we wrapped them inside a `<span>` element. This enables the CSS selector `.leaflet-gold-pin-marker > *` to target the text node parent wrapper and rotate it back by `45deg`, rendering all markers upright and perfectly centered on the map.
 - **Reactive Map Reinitialization:** When toggling view modes (Map to List and back), the map container DOM element is unmounted and recreated. We added `viewMode` to the Leaflet map initialization hook's dependency array and transitioned the ref instance to a reactive state `leafletMap`. This forces Leaflet to clean up old detached markers/polylines and instantiate a fresh map when returning to map view, preventing blank screens.
 - **Frontend WKB Coordinate Parsing:** Updated `parseLocation` in the frontend `museumService.ts` to decode hex-encoded WKB/EWKB PostGIS geometries using standard browser-compatible `Uint8Array` and `DataView` operations. This ensures that coordinate details queried directly via Supabase endpoints map to correct values instead of falling back to `(0, 0)`.
@@ -214,6 +234,15 @@ In the database mapper (`mapDatabaseToMuseum` in `museumService.ts`):
 * Previously, empty JSONB defaults (`data.images` defaulting to `[]`) evaluated as truthy, blocking the database `cover_image_url` fallback from rendering, resulting in blank/gray preview cards.
 * Fixed the mapper logic to verify array length: `const parsedImages = (data.images && data.images.length > 0) ? data.images : [data.cover_image_url].filter(Boolean)`. This guarantees that if a local or Wikipedia scraped image exists in `cover_image_url`, it renders instantly.
 
+### E. Landmark-Based City Cover Scraper (`fetch_city_images_gmaps.ts`)
+To solve the issue of mismatched or generic city cover images (e.g. Unsplash placeholders showing unrelated food/person items for cities like Padang or Banjarmasin):
+1. **Specific Representative Landmark Mapping**: Configures a localized landmark for each city (e.g. Cirebon = Keraton Kasepuhan, Padang = Masjid Raya Sumatera Barat, Banjarmasin = Menara Pandang/Floating Market, Mataram = Islamic Center NTB).
+2. **Dual-Strategy Image Resolution**:
+   - **Google Places Search**: First queries Google Places Text Search (`places:searchText`) for the landmark using `places.id,places.displayName,places.photos` to find public photo handles and download them.
+   - **Wikipedia Fallback**: If the restricted API key returns no photos, the script queries Wikipedia's Page Image API for the landmark page thumbnail.
+3. **Image Optimization**: Downloads the resolved landmark image, resizes it to a standardized 1200x800 resolution via `sharp`, and optimizes it as a WebP image.
+4. **Direct CDN Hosting**: Overwrites the R2 storage key `assets/static/cities/${cityId}.webp`, updating the frontend cards immediately.
+
 ---
 
 ## 7. Cost Validation: Is it Still 100% Free / Very Cheap?
@@ -246,6 +275,8 @@ In the database mapper (`mapDatabaseToMuseum` in `museumService.ts`):
 | **`museums.service.ts`** | `scrapePlaceSummary` | Scrapes summary extracts, URLs, titles, and images from Indonesian/English Wikipedia. Integrates local database cache checks and writes. |
 | **`museums.service.ts`** | `ingestPlacesToDatabase` | Upserts public places and triggers Wikipedia scraping for new entries and existing entries lacking images in the background. |
 | **`museums.service.ts`** | `getPlaceDetails` | Fetches full place details. Automatically falls back to DB on quota limit/API errors, and triggers background ETL enrichment for missing cover image, Wikipedia summary, and generated reviews. |
+| **`seed_cities_from_gmaps.ts`** | Seeding script | Ingests genuine places matching categories (museum, gallery, heritage) for Cirebon, Padang, Banjarmasin, and Mataram. Handles Google referer policy, wipes dummy data, and triggers WebP image uploads. |
+| **`fetch_city_images_gmaps.ts`** | Image scraper | Scraping script utilizing Google Places TextSearch and Wikipedia fallback APIs to resolve and upload optimized city landmark cover images (1200x800 WebP) to R2 CDN. |
 
 ---
 
@@ -293,4 +324,95 @@ To avoid making database migrations for every new scraped feature, utilize Postg
 #### 5. Frontend Debounce Protection
 Ensure that all interactive frontend components that trigger backend queries (such as map panning, search autocomplete, or category filtering) are wrapped in a **debounce hook (300ms - 500ms)**. This prevents double-clicks or fast scroll gestures from spamming requests.
 
+---
 
+## 10. Data Quality, Verification & Geocoding Cleanups (May 2026 Updates)
+
+To protect metadata integrity and guarantee zero dummy placeholders, we executed a comprehensive data audit and resolved the following inconsistencies:
+
+### A. Strict Classification & Geolocation Filters
+* **Targeted Indexing**: Restructured both "Explore by City" and "Nearby Page" selectors to strictly query verified cultural locations classified as `museum`, `gallery`, or `heritage` (which includes historical structures and famous cultural tourist destinations/monuments).
+* **Railway Station Elimination**: Removed railway stations (e.g., Stasiun Jakarta Kota, Stasiun Manggarai, etc.) from cultural heritage indexing in Jakarta Barat and other major cities to prevent layout clutter and map noise.
+* **Museum Detail Page Image Integrity**: Corrected the detail rendering logic to ensure that whenever a user selects a pin or views institution info, the container displays the actual saved cover image of the destination.
+
+### B. Surabaya Postcode Geotargeting Correction
+* **The Bug**: Due to postal codes in Surabaya containing suffixes or ranges like `Jawa Timur 60xxx`, geographic match scripts failed to accurately group them, returning zero local matches or falling back to generic placeholders.
+* **The Solution**: Upgraded geocoding mapping functions to correctly parse provincial/regional postcode blocks (e.g. `60111`, `60234` matching regex/wildcards for `60xxx`). We scraped genuine historical/cultural images and summaries from Wikipedia APIs, mirrored them to R2 CDN, resolved and corrected all empty placeholders, and synchronized database entries.
+
+### C. Specific Site Cover Image Updates & Mirroring
+We replaced low-quality placeholders with official high-resolution local images, mirrored them to Cloudflare R2 bucket storage, and updated database references:
+1. **Deli Serdang / Medan (Taman Garista)**: Replaced placeholder cover with `Taman-Garista.jpg`.
+2. **Jakarta Aquarium (Jakarta Barat)**: Resolved incorrect Wikipedia history summary text mismatch, replaced cover image with `jakartaaquarium.jpeg`.
+3. **The Great Asia Afrika (Bandung Barat)**: Replaced placeholder cover with `thegreatasiaafrika.jpeg`.
+4. **Museum Perkebunan Indonesia 1 & 2 (Medan)**: Replaced mock graphics with official images (`museumperkebunanindonesia1.jpg` and `museumperkebunanindonesia2.jpg`).
+5. **Gedung Nasional Medan Removal**: Deleted the obsolete/non-matching "Gedung Nasional Medan" record to maintain correct cataloging.
+
+---
+
+## 11. Malang Region Data Alignment & Pre-Partition Merging (June 2026 Updates)
+
+To ensure the high fidelity of cultural destinations in Malang and fix image/category mismatches, we implemented a custom ETL media pipeline and refactored the backend geolocation search merging sequence:
+
+### A. Malang Local Assets ETL Pipeline (WebP & R2 CDN)
+* **The Challenge**: Key local galleries in Malang (such as **seROOMah**, **Flockink Tattoo Studio**, and **Epic Tattoo Studio**) lacked matching cover images, displaying fallback placeholder graphics. Additionally, **Istana Boneka (Isbon)** lacked a high-fidelity image reflecting its status as a local heritage/recreation landmark.
+* **The Pipeline**: Implemented an automated asset upload pipeline that:
+  1. Locates local high-resolution raw images from `/frontend/public/images/gallery` and `/frontend/public/images/heritage`.
+  2. Uses `sharp` to resize them (max width 1200px) and convert them to optimized `WebP` format (80% quality) to guarantee minimal load times and reduced bandwidth consumption.
+  3. Uploads the processed WebP files to the Cloudflare R2 CDN bucket with long-lived Cache-Control headers (`public, max-age=31536000, immutable`).
+  4. Synchronizes these new CDN URLs back to the `cover_image_url` column of the `institutions` database table.
+
+### B. Google Place ID to Clean Seed Slug Mapping
+To prevent duplicate records and ensure that searches on the frontend successfully fetch curated database metadata:
+* Mapped the raw Google Places API Place IDs to clean, human-readable seed slugs in `PLACE_ID_TO_SEED_SLUG` (`backend/src/museums/museums.service.ts`):
+  * `ChIJyYo8W5Ip1i0RlLTNdG6H_bE` &rarr; `seroomah` (seROOMah)
+  * `ChIJOaclQjQp1i0R1WowgQ3IhZI` &rarr; `epic-tattoo-studio` (Epic Tattoo Studio)
+  * `ChIJVceZEUuBeC4R-qmGnOpPypo` &rarr; `flockink-tattoo-studio` (Flockink Tattoo Studio)
+  * `ChIJNVIILZ2CeC4RWN26myj1Rxg` &rarr; `istana-boneka-wilis` (ISTANA BONEKA WILIS)
+  * `ChIJRSPR7nGCeC4R2j5H2JdoBY4` &rarr; `istana-boneka-gajayana` (Istana Boneka Gajayana)
+
+### C. Pre-Partition Database Merging Logic
+* **The Problem**: Previously, the backend split Google search results into `museums`, `galleries`, and `heritage` arrays *before* querying the database for curated overrides. This meant that category updates (e.g. changing type from `museum` to `heritage`) in the database were not reflected in the subcategory lists returned to the frontend.
+* **The Solution**: Refactored `searchNearbyPlaces` in `museums.service.ts` to fetch and merge all database overrides (including `type`, `cover_image_url`, `reviews`, and `description`) onto the *entire* filtered list of places *before* splitting them into subcategories. This ensures frontend tabs always show fully accurate and up-to-date categorizations.
+
+### D. Istana Boneka Categorization Correction
+* **Reclassification**: Changed the classification of both Istana Boneka locations (**Wilis** and **Gajayana**) in the database from `museum` to `heritage` (Cagar Budaya) so they are excluded from the museum catalog and focused strictly on recreational/heritage spots.
+* **Image Update**: Updated their cover images to the new CDN-hosted `isbonmalang.jpg` asset.
+
+---
+
+## 12. City-Wide Deduplication & Code Hardening (June 15, 2026 Updates)
+
+To resolve duplicate place listings appearing in search results across major cities (Jakarta, Yogyakarta, Malang, etc.) and eliminate TypeScript compilation errors, we implemented strict multi-key deduplication and refactored the frontend page imports and type-safety boundaries:
+
+### A. Proximity & Name-Based Deduplication Algorithm (Backend & Frontend)
+* **Problem**: Identical cultural/heritage destinations returned from multiple sources (local database, Google Places, OpenStreetMap) had different IDs, leading to duplicate cards and markers on the map for the same physical location.
+* **Proximity Matching**: Implemented a Haversine-based name-proximity algorithm:
+  * Compares lowercase, alphanumeric-normalized names (removing special characters and collapsing whitespace).
+  * If two places have the same normalized name and their geographical distance is $\le 500$ meters ($0.5$ km), they are classified as duplicates.
+  * In the frontend (`PublicNearbyPage.tsx`), a bounding-box difference of $< 0.005$ degrees lat/lng is used as a fast, localized name-proximity check.
+* **Priority-Score Sorting**: Resolved duplicates by ranking records using a scoring hierarchy:
+  1. **Curated DB Records**: Preferred above all (score +100).
+  2. **Curated Cover Images**: Places with real cover URLs get high preference (+50).
+  3. **Google Place Photos**: Valid photo URL links (+30).
+  4. **Category**: Museums (+10) over Galleries (+5).
+  5. **Ratings**: High-rating nodes are preferred (+3).
+  6. **Rich Descriptions**: Detailed, non-placeholder summaries (+2).
+* **OSM Pre-Filter**: Applied identical deduplication logic directly to OpenStreetMap (OSM) Overpass query processing in `museums.service.ts` before ingesting places to the cache database.
+
+### B. Image Source Protection (`RegionDetailFeedView.tsx`)
+* **Photo Resolving Fix**: Ensured that the image scraper/renderer does not feed Google Places API reference photo objects (e.g. `{name: 'places/.../photos/...'}`) directly into image `src` tags, which caused broken/missing images.
+* **Direct URL Fallbacks**: Configured `displayImage` to resolve only to direct string URLs starting with `http`, falling back to categorized high-quality local placeholders if missing.
+
+### C. TypeScript Type Safety & Import Refactoring (`CityRegions.tsx` & `index.tsx`)
+* **TypeScript Warn Fix**: Resolved compiler warnings `TS6133` (declared but never read) for `CityMetadata` and `RegionDetail` by splitting standard value imports from type-only imports using `import type` and explicitly annotating the returned `useMemo` states:
+  * `const cityMetadata: CityMetadata | null = useMemo(...)`
+  * `const regionsList: RegionDetail[] = useMemo(...)`
+* **Unused Variable Purge**: Removed unused imports like `ArrowRight` (from `lucide-react`) and unused local states/variables such as `placeDetailsLoading` to comply with strict production TS configuration rules.
+
+### D. Premium Description Toggle ("Baca Selengkapnya")
+* **Interactive UI Expansion**: Integrated a state-driven toggle using the `expandedText` state hook to support premium description collapse/expand rendering.
+* **Character-Boundary Fallbacks**: Safely displays the first 150 characters of the history description (`descriptionStart`), appending `...` and a styled gold-colored toggle link that expands inline to show the remainder (`descriptionMore`) when triggered.
+
+---
+*Document Version: 1.5.0*
+*Last Updated: 2026-06-15*

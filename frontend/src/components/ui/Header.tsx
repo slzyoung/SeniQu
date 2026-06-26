@@ -22,6 +22,7 @@ import {
     Copy,
     CheckCircle,
     History as HistoryIcon,
+    X,
 } from 'lucide-react';
 
 import { useUIStore } from '../../stores/useUIStore';
@@ -235,7 +236,10 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
                         {/* Notifications */}
                         <div className="relative">
                             <button
-                                onClick={() => setShowNotifications(!showNotifications)}
+                                onClick={() => {
+                                    setShowUserMenu(false);
+                                    setShowNotifications(!showNotifications);
+                                }}
                                 className="relative p-2.5 rounded-xl text-theme-muted hover:text-theme-text hover:bg-theme-elevated transition-colors"
                             >
                                 <Bell className="w-5 h-5" />
@@ -247,63 +251,114 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
                                 )}
                             </button>
 
-                            {showNotifications && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    className={`
-                                        fixed inset-x-4 top-[70px] z-50 
-                                        md:absolute md:inset-auto md:right-0 md:top-full md:mt-2 md:w-80 
-                                        bg-theme-surface border border-theme-border rounded-xl shadow-2xl overflow-hidden
-                                    `}
-                                >
-                                    <div className="p-4 border-b border-theme-border flex justify-between items-center">
-                                        <h3 className="font-semibold text-theme-text">Notifications</h3>
-                                        {unreadCount > 0 && (
-                                            <button
-                                                onClick={() => markAllAsRead()}
-                                                className="text-xs text-gold hover:underline"
-                                            >
-                                                Mark all read
-                                            </button>
-                                        )}
-                                    </div>
-                                    <div className="max-h-[60vh] md:max-h-80 overflow-y-auto">
-                                        {notifications.length === 0 ? (
-                                            <div className="p-8 text-center text-theme-muted text-sm">
-                                                No notifications yet
-                                            </div>
-                                        ) : (
-                                            notifications.map((n) => (
-                                                <div
-                                                    key={n.id}
-                                                    onClick={() => !n.isRead && markAsRead(n.id)}
-                                                    className={`
-                                                        p-4 border-b border-theme-border last:border-b-0 
-                                                        hover:bg-theme-elevated transition-colors cursor-pointer
-                                                        ${!n.isRead ? 'bg-theme-elevated/50 border-l-2 border-l-gold' : ''}
-                                                    `}
-                                                >
-                                                    <p className={`text-sm ${!n.isRead ? 'text-theme-text font-medium' : 'text-theme-muted'}`}>
-                                                        {n.title}
-                                                    </p>
-                                                    {n.message && (
-                                                        <p className="text-xs text-theme-muted mt-1 line-clamp-2">{n.message}</p>
+                            <AnimatePresence>
+                                {showNotifications && (
+                                    <>
+                                        {/* Mobile backdrop — higher opacity to fully obscure content */}
+                                        <motion.div
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            transition={{ duration: 0.15 }}
+                                            onClick={() => setShowNotifications(false)}
+                                            className="md:hidden fixed inset-0 z-[55] bg-neutral-950/60 backdrop-blur-md"
+                                            style={{ touchAction: 'none', WebkitTapHighlightColor: 'transparent' }}
+                                        />
+
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                            exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                                            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                                            className={`
+                                                z-[60]
+                                                fixed right-3 top-[64px] w-[280px] max-w-[calc(100vw-24px)]
+                                                md:absolute md:inset-auto md:right-0 md:top-full md:mt-2 md:w-[320px]
+                                                bg-white dark:bg-[#1c1c1c] 
+                                                border border-black/8 dark:border-white/10
+                                                rounded-2xl
+                                                shadow-[0_12px_40px_-8px_rgba(0,0,0,0.3)] dark:shadow-[0_12px_40px_-8px_rgba(0,0,0,0.7)]
+                                                overflow-hidden
+                                            `}
+                                        >
+                                            {/* Header */}
+                                            <div className="px-3.5 py-3 border-b border-black/5 dark:border-white/8 flex justify-between items-center">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Bell className="w-3.5 h-3.5 text-gold" />
+                                                    <h3 className="font-bold text-[14px] text-theme-text">Notifications</h3>
+                                                    {unreadCount > 0 && (
+                                                        <span className="ml-0.5 px-1.5 py-0.5 text-[9px] font-bold bg-red-500 text-white rounded-full min-w-[16px] text-center leading-none">
+                                                            {unreadCount}
+                                                        </span>
                                                     )}
-                                                    <p className="text-[10px] text-theme-subtle mt-2">
-                                                        {new Date(n.createdAt).toLocaleDateString()} • {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                    </p>
                                                 </div>
-                                            ))
-                                        )}
-                                    </div>
-                                    <div className="p-3 border-t border-theme-border">
-                                        <button className="w-full text-center text-sm text-gold hover:underline">
-                                            View all notifications
-                                        </button>
-                                    </div>
-                                </motion.div>
-                            )}
+                                                <div className="flex items-center gap-1">
+                                                    {unreadCount > 0 && (
+                                                        <button
+                                                            onClick={() => markAllAsRead()}
+                                                            className="text-[10px] font-semibold text-gold hover:text-gold/80 transition-colors px-1.5 py-0.5 rounded-md hover:bg-gold/5"
+                                                        >
+                                                            Read all
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={() => setShowNotifications(false)}
+                                                        className="md:hidden p-1 rounded-md text-theme-muted hover:text-theme-text hover:bg-theme-elevated transition-colors"
+                                                    >
+                                                        <X className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Content */}
+                                            <div className="max-h-[45vh] md:max-h-72 overflow-y-auto overscroll-contain">
+                                                {notifications.length === 0 ? (
+                                                    <div className="py-8 px-4 text-center">
+                                                        <Bell className="w-8 h-8 mx-auto mb-2.5 text-theme-muted/20" />
+                                                        <p className="text-[13px] font-medium text-theme-muted">No notifications yet</p>
+                                                        <p className="text-[11px] text-theme-subtle mt-0.5">We'll notify you about updates</p>
+                                                    </div>
+                                                ) : (
+                                                    notifications.map((n) => (
+                                                        <div
+                                                            key={n.id}
+                                                            onClick={() => !n.isRead && markAsRead(n.id)}
+                                                            className={`
+                                                                px-3.5 py-3 border-b border-black/3 dark:border-white/5 last:border-b-0
+                                                                hover:bg-theme-elevated/50 active:bg-theme-elevated transition-colors cursor-pointer
+                                                                ${!n.isRead ? 'bg-gold/[0.03] border-l-[3px] border-l-gold pl-[11px]' : ''}
+                                                            `}
+                                                        >
+                                                            <p className={`text-[12px] leading-snug ${!n.isRead ? 'text-theme-text font-semibold' : 'text-theme-muted'}`}>
+                                                                {n.title}
+                                                            </p>
+                                                            {n.message && (
+                                                                <p className="text-[11px] text-theme-muted mt-0.5 line-clamp-2 leading-relaxed">{n.message}</p>
+                                                            )}
+                                                            <p className="text-[9px] text-theme-subtle mt-1.5 font-medium">
+                                                                {new Date(n.createdAt).toLocaleDateString()} • {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                            </p>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+
+                                            {/* Footer */}
+                                            <div className="px-3.5 py-2.5 border-t border-black/5 dark:border-white/8">
+                                                <button
+                                                    onClick={() => {
+                                                        setShowNotifications(false);
+                                                        navigate('/dashboard/notifications');
+                                                    }}
+                                                    className="w-full text-center text-[12px] font-semibold text-gold hover:text-gold/80 transition-colors py-0.5 rounded-md hover:bg-gold/5"
+                                                >
+                                                    View all notifications
+                                                </button>
+                                            </div>
+                                        </motion.div>
+                                    </>
+                                )}
+                            </AnimatePresence>
                         </div>
 
                         {/* User Menu */}

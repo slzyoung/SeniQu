@@ -22,7 +22,8 @@ export class SqlInjectionGuard implements CanActivate {
     // Common SQL injection patterns
     private readonly sqlPatterns = [
         /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER|CREATE|TRUNCATE)\b.*\b(FROM|INTO|TABLE|DATABASE)\b)/i,
-        /(--|\#|\/\*|\*\/)/,
+        /(\/\*|\*\/)/,
+        /(--\s|--$)/,
         /(\b(OR|AND)\b\s*\d+\s*=\s*\d+)/i,
         /('\s*(OR|AND)\s*')/i,
         /(;\s*(DROP|DELETE|UPDATE|INSERT))/i,

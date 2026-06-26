@@ -12,6 +12,7 @@ import { AppService } from "./app.service"
 import { DatabaseModule } from "./database/database.module"
 import { HealthModule } from "./health/health.module"
 import { AuditModule } from "./audit/audit.module"
+import { EmailModule } from "./email/email.module"
 
 // Feature Modules
 import { AuthModule } from "./auth/auth.module"
@@ -31,6 +32,9 @@ import { ArtistModule } from "./artist/artist.module"
 import { WalletModule } from "./wallet/wallet.module"
 import { StorageModule } from "./storage/storage.module"
 import { AiModule } from "./modules/ai/ai.module"
+import { PhotosModule } from "./photos/photos.module"
+import { MessagesModule } from "./messages/messages.module"
+import { ReelsModule } from "./reels/reels.module"
 
 @Module({
     imports: [
@@ -77,6 +81,7 @@ import { AiModule } from "./modules/ai/ai.module"
         DatabaseModule,
         HealthModule,
         AuditModule, // Global security audit logging
+        EmailModule,
 
         // ===========================================
         // FEATURE MODULES
@@ -102,6 +107,9 @@ import { AiModule } from "./modules/ai/ai.module"
         WalletModule,
         StorageModule,
         AiModule,
+        PhotosModule,
+        MessagesModule,
+        ReelsModule,
     ],
     controllers: [AppController, JwksController],
     providers: [

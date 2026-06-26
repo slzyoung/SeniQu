@@ -48,7 +48,85 @@
     margin: -16px;
     width: calc(100% + 32px);
   }
+
+  .ex-hero {
+    height: auto;
+    min-height: calc(100vh - 120px);
+    min-height: calc(100dvh - 120px);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 16px 16px 96px; /* Keep content scrollable above bottom navigation */
+    box-sizing: border-box;
+    overflow: visible;
+  }
+
+  .ex-collage {
+    height: 40vh;
+    min-height: 260px;
+    max-height: 380px;
+    margin-top: 8px;
+    margin-bottom: 20px;
+  }
+
+  .ex-hero-text {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0 4px;
+    margin-bottom: 24px;
+  }
+
+  .ex-hero-text h1 {
+    font-size: clamp(1.6rem, 7.5vw, 2.1rem);
+    line-height: 1.25;
+    font-weight: 700;
+  }
+
+  .ex-hero-sub {
+    font-size: 0.55em;
+    font-weight: 500;
+    margin-top: 6px;
+    opacity: 0.85;
+  }
+
+  .ex-hero-desc {
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--ex-text-secondary);
+    margin-top: 4px;
+    opacity: 0.9;
+  }
+
+  .ex-hero-bottom {
+    height: 72px;
+    margin-top: auto;
+    margin-bottom: 16px;
+    padding: 0 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+
+  /* Make sure the separate arrow container is displayed */
+  .ex-arrow-container {
+    display: inline-flex !important;
+  }
+
+  /* Keep the primary and secondary CTA buttons circular on mobile */
+  .ex-btn-circle {
+    width: 68px;
+    height: 68px;
+    border-radius: 50% !important; /* Circle shape */
+    font-size: 13.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
+
 
 /* ============================================================
    DARK MODE
@@ -217,13 +295,33 @@
   flex-shrink: 0;
 }
 
-.ex-arrow {
-  width: 80px;
-  height: auto;
-  stroke: var(--ex-text-muted);
-  fill: none;
-  stroke-width: 2;
-  opacity: 0.45;
+.ex-arrow-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ex-accent);
+  font-family: var(--ex-sans);
+  font-weight: 600;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.ex-arrow-label {
+  color: var(--ex-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+.ex-arrow-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ex-accent);
+  filter: drop-shadow(0 0 6px var(--ex-accent-glow));
 }
 
 /* ============================================================
@@ -251,6 +349,10 @@
   position: relative;
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
+}
+
+.ex-btn-arrow-icon {
+  display: none;
 }
 
 .ex-btn-circle::before {
@@ -808,7 +910,14 @@
 
 @media (max-width: 400px) {
   .ex-hero {
-    padding: 14px;
+    padding: 10px;
+    height: auto;
+    min-height: calc(100vh - 120px);
+    min-height: calc(100dvh - 120px);
+    padding-bottom: 72px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
   }
 
   .ex-collage {
@@ -826,9 +935,10 @@
   }
 
   .ex-btn-circle {
-    width: 62px;
-    height: 62px;
-    font-size: 13px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50% !important;
+    font-size: 12.5px;
   }
 
   .ex-grid-view {

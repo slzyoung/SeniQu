@@ -59,6 +59,7 @@ import { useAuthStore } from '../../../../stores/useAuthStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GoogleMap, useJsApiLoader, CircleF, InfoWindowF, PolylineF } from '@react-google-maps/api';
 import { museumService } from '../../../../services/museumService';
+import { classifyPlace, getRealPlaceCoverImage } from '../../data/citiesRegistry';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './PublicNearbyPage.css';
@@ -1711,6 +1712,14 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
             })
             .then((localMuseums) => {
                 const mapped = (localMuseums || []).map((m: any) => {
+                    const addressStr = m.address ? (typeof m.address === 'string' ? m.address : `${m.address.street || ''}, ${m.address.city || ''}`) : '';
+                    const category = classifyPlace({
+                        name: m.name,
+                        type: m.type || 'museum',
+                        address: addressStr
+                    });
+                    if (!category) return null;
+
                     const lat = m.coordinates?.lat ?? m.latitude ?? 0;
                     const lng = m.coordinates?.lng ?? m.longitude ?? 0;
                     const rating = m.rating || 4.5;
@@ -1722,8 +1731,8 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                         name: m.name || 'Heritage Destination',
                         city: m.city || m.address?.city || 'Nearby',
                         province: m.province || m.address?.province || '',
-                        address: m.address ? (typeof m.address === 'string' ? m.address : `${m.address.street || ''}, ${m.address.city || ''}`) : '',
-                        type: m.type || 'museum',
+                        address: addressStr,
+                        type: category,
                         rating,
                         reviewCount,
                         totalArtworks: m.artworksCount || 50,
@@ -1731,18 +1740,18 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                         waitTime,
                         isVerified: m.isVerified || false,
                         description: m.description || '',
-                        coverImageUrl: m.images?.[0] || null,
+                        coverImageUrl: getRealPlaceCoverImage(m.name || 'Heritage Destination', category, m.images?.[0] || null),
                         previewImages: m.images && m.images.length > 0 ? m.images : [],
                         reviews: m.reviews || [],
                         latitude: lat,
                         longitude: lng,
                     };
-                });
+                }).filter((p: any) => p !== null);
 
                 let filtered = mapped;
                 if (_query) {
                     const q = _query.toLowerCase();
-                    filtered = mapped.filter(item => 
+                    filtered = mapped.filter((item: any) => 
                         item.name.toLowerCase().includes(q) || 
                         item.address.toLowerCase().includes(q)
                     );
@@ -1770,84 +1779,21 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                     setDetectedRegion(regionInfo);
                 }
                 const mapped = (placesData || []).map((place: any) => {
+                    const category = classifyPlace({
+                        name: place.name,
+                        type: place.type,
+                        address: place.address || place.formattedAddress
+                    });
+                    if (!category) return null;
+
                     const rating = place.rating || 4.2;
                     const reviewCount = place.reviewCount || 12;
                     const waitTime = rating > 4.5 ? '~15 mins' : '~5 mins';
                     const crowdLevel = reviewCount > 300 ? 'Busy' : reviewCount > 100 ? 'Moderate traffic' : 'Not crowded';
-                    let type = place.type || 'heritage';
-                    if (place.name) {
-                        const nameLower = place.name.toLowerCase();
-                        
-                        // 1. Tourism, Destination & Heritage keyword check
-                        if (
-                            nameLower.includes('wisata') ||
-                            nameLower.includes('pariwisata') ||
-                            nameLower.includes('tourism') ||
-                            nameLower.includes('tourist') ||
-                            nameLower.includes('destination') ||
-                            nameLower.includes('destinasi') ||
-                            nameLower.includes('candi') ||
-                            nameLower.includes('temple') ||
-                            nameLower.includes('palace') ||
-                            nameLower.includes('kraton') ||
-                            nameLower.includes('benteng') ||
-                            nameLower.includes('fort') ||
-                            nameLower.includes('taman') ||
-                            nameLower.includes('park') ||
-                            nameLower.includes('monument') ||
-                            nameLower.includes('monumen') ||
-                            nameLower.includes('pantai') ||
-                            nameLower.includes('beach') ||
-                            nameLower.includes('danau') ||
-                            nameLower.includes('lake') ||
-                            nameLower.includes('gunung') ||
-                            nameLower.includes('mountain') ||
-                            nameLower.includes('bukit') ||
-                            nameLower.includes('hill') ||
-                            nameLower.includes('air terjun') ||
-                            nameLower.includes('waterfall') ||
-                            nameLower.includes('curug') ||
-                            nameLower.includes('kebun') ||
-                            nameLower.includes('zoo') ||
-                            nameLower.includes('aquarium') ||
-                            nameLower.includes('budaya') ||
-                            nameLower.includes('culture') ||
-                            nameLower.includes('teater') ||
-                            nameLower.includes('theater') ||
-                            nameLower.includes('masjid') ||
-                            nameLower.includes('mosque') ||
-                            nameLower.includes('gereja') ||
-                            nameLower.includes('church') ||
-                            nameLower.includes('vihara') ||
-                            nameLower.includes('pura') ||
-                            nameLower.includes('klenteng')
-                        ) {
-                            type = 'heritage';
-                        }
-                        
-                        // 2. Hotel filter override (galleries in hotels go to heritage)
-                        else if (type === 'gallery') {
-                            if (
-                                nameLower.includes('hotel') ||
-                                nameLower.includes('suites') ||
-                                nameLower.includes('resort') ||
-                                nameLower.includes('villa') ||
-                                nameLower.includes('homestay') ||
-                                nameLower.includes('guest house') ||
-                                nameLower.includes('inn')
-                            ) {
-                                type = 'heritage';
-                            }
-                        }
-                    }
 
                     const validPhotos = (place.photos || []).filter((p: any) => typeof p === 'string' && p.trim() !== '');
-                    const fallbackPhoto = type === 'gallery'
-                        ? '/images/gallery/galerinasionalindonesia.jpg'
-                        : type === 'museum'
-                            ? '/images/museum/museumnasionalindonesia.png'
-                            : '/images/museum/Museumullensentalu.jpg';
-                    const previewImages = validPhotos.length > 0 ? validPhotos : [fallbackPhoto];
+                    const resolvedCover = getRealPlaceCoverImage(place.name || 'Heritage Destination', category, validPhotos.length > 0 ? validPhotos[0] : null);
+                    const previewImages = validPhotos.length > 0 ? [resolvedCover, ...validPhotos.slice(1)] : [resolvedCover];
 
                     return {
                         id: place.id || Math.random().toString(),
@@ -1855,7 +1801,7 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                         city: place.address?.split(',')[1]?.trim() || 'Nearby',
                         province: place.address?.split(',')[2]?.trim() || '',
                         address: place.address || '',
-                        type,
+                        type: category,
                         rating,
                         reviewCount,
                         totalArtworks: reviewCount ? Math.round(reviewCount / 3) : 50,
@@ -1863,19 +1809,39 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
                         waitTime,
                         isVerified: true,
                         description: place.address || 'Registered tourism destination.',
-                        coverImageUrl: validPhotos.length > 0 ? validPhotos[0] : null,
+                        coverImageUrl: resolvedCover,
                         previewImages,
                         reviews: place.reviews || [],
                         latitude: place.latitude,
                         longitude: place.longitude,
                     };
-                });
+                }).filter((p: any) => p !== null);
 
-                // Deduplicate by place id
-                const seen = new Set<string>();
+                // Deduplicate by place id AND normalized name + proximity
+                const seenIds = new Set();
+                const seenNames: Record<string, { lat: number; lng: number }> = {};
                 const unique = mapped.filter((p: any) => {
-                    if (seen.has(p.id)) return false;
-                    seen.add(p.id);
+                    // ID-based dedup
+                    if (seenIds.has(p.id)) return false;
+                    seenIds.add(p.id);
+
+                    // Name + proximity dedup
+                    const normalName = (p.name || '').toLowerCase()
+                        .replace(/[^a-z0-9\s]/g, '')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                    if (normalName) {
+                        const existing = seenNames[normalName];
+                        if (existing) {
+                            const latDiff = Math.abs((p.latitude || 0) - existing.lat);
+                            const lngDiff = Math.abs((p.longitude || 0) - existing.lng);
+                            if (latDiff < 0.005 && lngDiff < 0.005) {
+                                return false; // Duplicate by name + proximity
+                            }
+                        }
+                        seenNames[normalName] = { lat: p.latitude || 0, lng: p.longitude || 0 };
+                    }
+
                     return true;
                 });
 

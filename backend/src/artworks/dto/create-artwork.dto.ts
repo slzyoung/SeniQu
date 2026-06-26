@@ -36,4 +36,21 @@ export class CreateArtworkDto {
     @ApiProperty()
     @IsUrl()
     imageUrl: string
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    price?: number
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    isForSale?: boolean
+
+    @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    artworkType?: string
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    poaCertificate?: any
 }

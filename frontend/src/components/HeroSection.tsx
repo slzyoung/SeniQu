@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, Compass, Sparkles } from 'lucide-react';
+import { ArrowRight, Compass } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuthModalStore } from '../stores/useAuthModalStore';
 import './LandingPage.css';
@@ -8,27 +8,27 @@ import './LandingPage.css';
 const heroSlides = [
   {
     id: 'bromo',
-    image: 'https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?w=1800&q=85',
+    image: 'https://cdn.seniqu.art/assets/static/hero/bromo.webp',
     alt: 'Mount Bromo — East Java',
   },
   {
     id: 'borobudur',
-    image: 'https://images.unsplash.com/photo-1596402184320-417e7178b2cd?w=1800&q=85',
+    image: 'https://cdn.seniqu.art/assets/static/hero/borobudur.webp',
     alt: 'Borobudur Temple — Central Java',
   },
   {
     id: 'bali',
-    image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=1800&q=85',
+    image: 'https://cdn.seniqu.art/assets/static/hero/bali.webp',
     alt: 'Ulun Danu Beratan — Bali',
   },
   {
     id: 'bandung',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Gedung_Sate_Oktober_2024_-_Rahmatdenas.jpg/1280px-Gedung_Sate_Oktober_2024_-_Rahmatdenas.jpg',
+    image: 'https://cdn.seniqu.art/assets/static/hero/bandung.webp',
     alt: 'Gedung Sate — Bandung',
   },
   {
     id: 'jakarta',
-    image: 'https://images.unsplash.com/photo-1555899434-94d1368aa7af?w=1800&q=85',
+    image: 'https://cdn.seniqu.art/assets/static/hero/jakarta.webp',
     alt: 'Jakarta Old Town',
   },
 ];
@@ -72,7 +72,7 @@ export function HeroSection() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.5 }}
         >
-          <Sparkles /> SeniQu Gallery
+          SeniQu Gallery
         </motion.span>
 
         <motion.h1

@@ -1,17 +1,20 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Grid, MapPin, Compass } from 'lucide-react';
+import { Home, Grid, MapPin, Compass, Play } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuthModalStore } from '../stores/useAuthModalStore';
+import { useAuthStore } from '../stores/useAuthStore';
 import { ROUTES } from '../lib/constants';
 
 export function MobileNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const { openAuthModal } = useAuthModalStore();
+  const { isAuthenticated } = useAuthStore();
 
   const getActiveTab = (pathname: string) => {
     if (pathname === '/') return 'Home';
     if (pathname.startsWith('/collections')) return 'Collections';
+    if (pathname.startsWith('/reels')) return 'Reels';
     if (pathname.startsWith('/gallery/nearby') || pathname.startsWith('/nearby')) return 'Nearby';
     if (pathname === '/gallery') return 'Explore';
     return 'Home'; // Default or handle other cases
@@ -27,6 +30,9 @@ export function MobileNav() {
       case 'Collections':
         navigate('/collections');
         break;
+      case 'Reels':
+        navigate(ROUTES.REELS);
+        break;
       case 'Nearby':
         navigate(ROUTES.NEARBY_PUBLIC);
         break;
@@ -38,7 +44,9 @@ export function MobileNav() {
 
   const navItems = [
     { icon: Home, label: 'Home' },
-    { icon: Grid, label: 'Collections' },
+    isAuthenticated 
+      ? { icon: Grid, label: 'Collections' }
+      : { icon: Play, label: 'Reels' },
     { icon: MapPin, label: 'Nearby' },
     { icon: Compass, label: 'Explore' }
   ];
@@ -59,12 +67,12 @@ export function MobileNav() {
                 key={item.label}
                 onClick={() => handleNavClick(item.label)}
                 whileTap={{ scale: 0.9 }}
-                className={`relative flex flex-col items-center justify-center min-w-[56px] h-[48px] space-y-0.5 z-10 ${isActive ? 'text-gold' : 'text-theme-muted'}`}>
+                className={`relative flex flex-col items-center justify-center min-w-[56px] h-[48px] space-y-0.5 z-10 ${isActive ? 'text-amber-600 dark:text-gold' : 'text-theme-muted'}`}>
 
                 {isActive && (
                   <motion.div
                     layoutId="mobileNavActive"
-                    className="absolute inset-0 bg-gold/10 rounded-xl -z-10"
+                    className="absolute inset-0 bg-amber-600/10 dark:bg-gold/10 rounded-xl -z-10"
                     transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }} />
                 )}
                 <item.icon className={`w-5 h-5 transition-all duration-300 ${isActive ? 'scale-110' : ''}`} />

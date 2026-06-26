@@ -32,7 +32,7 @@ export class EmailService {
      * Send email verification link after registration
      */
     async sendVerificationEmail(email: string, token: string): Promise<boolean> {
-        const frontendUrl = this.configService.get<string>("frontendUrl") || "https://seniquapp.netlify.app"
+        const frontendUrl = this.configService.get<string>("frontendUrl") || "https://seniqu.art"
         const verifyUrl = `${frontendUrl}/auth/verify-email?token=${token}`
 
         const html = `
@@ -130,7 +130,7 @@ export class EmailService {
      * Send Welcome Email to newly provisioned Admin/Artist
      */
     async sendWelcomeAdminEmail(email: string, plainPassword: string, roleName: string, institutionName: string | null): Promise<boolean> {
-        const frontendUrl = this.configService.get<string>("frontendUrl") || "https://seniquapp.netlify.app"
+        const frontendUrl = this.configService.get<string>("frontendUrl") || "https://seniqu.art"
         const loginUrl = `${frontendUrl}/auth/login`
 
         const roleText = institutionName 
@@ -183,7 +183,7 @@ export class EmailService {
     /**
      * Core send method with fallback to console logging
      */
-    private async sendMail(to: string, subject: string, html: string): Promise<boolean> {
+    public async sendMail(to: string, subject: string, html: string): Promise<boolean> {
         const from = this.configService.get<string>("smtp.from") || "SeniQu <noreply@seniqu.com>"
 
         if (!this.transporter) {

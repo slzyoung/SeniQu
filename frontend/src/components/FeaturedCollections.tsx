@@ -171,6 +171,7 @@ const CollectionCard = React.forwardRef<HTMLDivElement, CollectionCardProps>(({
                   onToggleFavorite(data.id);
                 }}
                 className={`w-8 h-8 rounded-full backdrop-blur-md flex items-center justify-center border transition-all ${isFavorite ? 'bg-red-500/20 text-red-500 border-red-500/40 shadow-[0_0_10px_rgba(239,68,68,0.3)]' : 'bg-black/40 text-white border-white/20 hover:bg-black/60'}`}
+                aria-label={isFavorite ? `Remove ${data.title} from favorites` : `Add ${data.title} to favorites`}
               >
                 <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
               </motion.button>
@@ -201,7 +202,10 @@ const CollectionCard = React.forwardRef<HTMLDivElement, CollectionCardProps>(({
                     <span>Verified Masterpiece</span>
                   </div>
                 </div>
-                <button className="flex-shrink-0 w-8 h-8 rounded-full bg-gold text-black flex items-center justify-center hover:bg-white hover:text-black hover:scale-110 transition-all shadow-md">
+                <button 
+                  className="flex-shrink-0 w-8 h-8 rounded-full bg-gold text-black flex items-center justify-center hover:bg-white hover:text-black hover:scale-110 transition-all shadow-md"
+                  aria-label={`View details of ${data.title}`}
+                >
                   <ArrowUpRight className="w-4 h-4" />
                 </button>
               </div>

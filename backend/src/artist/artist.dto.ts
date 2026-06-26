@@ -12,6 +12,8 @@ import {
     MinLength,
     IsEnum,
     ValidateNested,
+    IsNumber,
+    IsBoolean,
 } from "class-validator"
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
 import { Transform, Type } from "class-transformer"
@@ -73,6 +75,7 @@ export class CreateArtworkDto {
     @IsOptional()
     @IsString()
     @MaxLength(100)
+    @Transform(({ value }) => typeof value === "string" ? value.trim() : value)
     dimensions?: string
 
     @ApiProperty({ description: "Image URL or Base64 string" })
@@ -80,10 +83,29 @@ export class CreateArtworkDto {
     @IsNotEmpty()
     imageUrl: string
 
+    @ApiPropertyOptional({ description: "Price of the artwork (in SOL)" })
+    @IsOptional()
+    @IsNumber()
+    price?: number
+
+    @ApiPropertyOptional({ description: "Is the artwork listed for sale" })
+    @IsOptional()
+    @IsBoolean()
+    isForSale?: boolean
+
     @ApiPropertyOptional({ description: "Status" })
     @IsOptional()
     @IsString()
     status?: string
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    @IsString()
+    artworkType?: string
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    poaCertificate?: any
 }
 
 export class UpdateArtworkDto {
@@ -136,10 +158,29 @@ export class UpdateArtworkDto {
     @IsString()
     imageUrl?: string
 
+    @ApiPropertyOptional({ description: "Price of the artwork (in SOL)" })
+    @IsOptional()
+    @IsNumber()
+    price?: number
+
+    @ApiPropertyOptional({ description: "Is the artwork listed for sale" })
+    @IsOptional()
+    @IsBoolean()
+    isForSale?: boolean
+
     @ApiPropertyOptional({ description: "Status" })
     @IsOptional()
     @IsString()
     status?: string
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    @IsString()
+    artworkType?: string
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    poaCertificate?: any
 }
 
 // ============================================

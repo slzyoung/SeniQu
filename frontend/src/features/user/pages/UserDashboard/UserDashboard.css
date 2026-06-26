@@ -193,6 +193,98 @@
 }
 
 
+/* ── Hero City Tag (animated per slide) ── */
+
+.heritage-hero__city-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 0.3px;
+  width: fit-content;
+}
+
+.heritage-hero__city-tag svg {
+  color: var(--text-gold);
+  flex-shrink: 0;
+}
+
+.heritage-hero__city-divider {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 14px;
+  line-height: 1;
+}
+
+@media (min-width: 768px) {
+  .heritage-hero__city-tag {
+    font-size: 12px;
+    padding: 8px 18px;
+    gap: 8px;
+    margin-top: 20px;
+  }
+}
+
+/* ── Hero Carousel Dot Indicators ── */
+
+.heritage-hero__dots {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  gap: 5px;
+  z-index: 10;
+}
+
+@media (min-width: 768px) {
+  .heritage-hero__dots {
+    bottom: 24px;
+    right: 32px;
+    gap: 6px;
+  }
+}
+
+.heritage-hero__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.heritage-hero__dot:hover {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.heritage-hero__dot--active {
+  background: var(--text-gold);
+  width: 20px;
+  border-radius: 10px;
+  box-shadow: 0 0 8px rgba(201, 168, 76, 0.5);
+}
+
+@media (min-width: 768px) {
+  .heritage-hero__dot {
+    width: 7px;
+    height: 7px;
+  }
+  .heritage-hero__dot--active {
+    width: 24px;
+  }
+}
+
+
 /* ================================================
    § 3. SEARCH BAR
    ================================================ */
@@ -636,13 +728,18 @@
 }
 
 .heritage-gallery-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
-  border-color: rgba(201, 168, 76, 0.15);
+  transform: translateY(-6px);
+  box-shadow: 
+    0 12px 28px rgba(0, 0, 0, 0.1),
+    0 0 16px rgba(201, 168, 76, 0.12);
+  border-color: rgba(201, 168, 76, 0.4);
 }
 
 .dark .heritage-gallery-card:hover {
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: 
+    0 12px 32px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(201, 168, 76, 0.2);
+  border-color: rgba(201, 168, 76, 0.5);
 }
 
 .heritage-gallery-card__img-wrap {

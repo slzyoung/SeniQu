@@ -1,0 +1,25 @@
+# SeniQu — Indonesian Cultural Heritage Platform
+
+SeniQu is the leading digital platform for Indonesian cultural heritage, bridging museums, art galleries, and historical sites with AI technology, immersive galleries, and secure Web3 integrations.
+
+## Core Navigation
+
+Use these primary entrypoints to explore the platform:
+- [Homepage](https://seniqu.art/) - Main landing page showcasing current initiatives, featured masterpieces, and project goals.
+- [Public Art Gallery](https://seniqu.art/gallery) - Browse historical and contemporary Indonesian artwork collections.
+- [Curated Collections](https://seniqu.art/collections) - Deep-dive into thematic historical collections and cultural archives.
+- [Marketplace](https://seniqu.art/marketplace) - Acquire digital art and support local Indonesian artists directly.
+- [Community Forums](https://seniqu.art/community) - Connect with heritage enthusiasts, historians, and art collectors.
+- [Nearby Museums Map](https://seniqu.art/nearby) - Find and explore Indonesian museums and cultural landmarks near your current location.
+
+## AI & Interactive Features
+
+- [AI Genre Identifier](https://seniqu.art/ai/genre) - Upload an artwork image and identify its cultural context and style genre.
+- [AI Art Curation](https://seniqu.art/ai/curation) - Create and customize personalized virtual galleries using artificial intelligence.
+
+## Technical & Legal Documentation
+
+- [Robots Configuration](https://seniqu.art/robots.txt) - Rules for automated web crawlers and indexers.
+- [Sitemap](https://seniqu.art/sitemap.xml) - Complete XML structure of indexable routes.
+- [Terms of Service](https://seniqu.art/terms) - Platform rules, user agreements, and transaction policies.
+- [Privacy Policy](https://seniqu.art/privacy) - Information on user data protection, cookies, and safety standards.

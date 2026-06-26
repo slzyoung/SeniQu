@@ -11,7 +11,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { X, MapPin, Calendar, ChevronLeft, Sparkles } from 'lucide-react';
+import { X, MapPin, Calendar, ChevronLeft, ArrowRight } from 'lucide-react';
 import './MyArtsPage.css';
 
 // ============================================================
@@ -19,13 +19,13 @@ import './MyArtsPage.css';
 // ============================================================
 
 const ART_IMAGES = {
-    hero1: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/800px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg',
-    hero2: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/VanGogh-starry_night_ballance1.jpg/1280px-VanGogh-starry_night_ballance1.jpg',
-    hero3: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/1280px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg',
-    art1: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg/1280px-Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg',
-    art2: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/800px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg',
-    art3: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/VanGogh-starry_night_ballance1.jpg/1280px-VanGogh-starry_night_ballance1.jpg',
-    art4: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Johannes_Vermeer_-_Het_meisje_met_de_parel.jpg/800px-Johannes_Vermeer_-_Het_meisje_met_de_parel.jpg',
+    hero1: 'https://cdn.seniqu.art/assets/static/demo/monalisa.webp',
+    hero2: 'https://cdn.seniqu.art/assets/static/demo/starrynight.webp',
+    hero3: 'https://cdn.seniqu.art/assets/static/demo/starrynight_detail.webp',
+    art1: 'https://cdn.seniqu.art/assets/static/demo/venus.webp',
+    art2: 'https://cdn.seniqu.art/assets/static/demo/monalisa.webp',
+    art3: 'https://cdn.seniqu.art/assets/static/demo/starrynight.webp',
+    art4: 'https://cdn.seniqu.art/assets/static/demo/pearlearring.webp',
 };
 
 const MOCK_ARTWORKS = [
@@ -236,7 +236,6 @@ export default function MyArtsPage() {
                             animate="visible"
                         >
                             <motion.p className="ex-hero-eyebrow" variants={fadeSlideUp}>
-                                <Sparkles size={14} />
                                 SeniQu Art Experience
                             </motion.p>
 
@@ -263,22 +262,25 @@ export default function MyArtsPage() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.7 }}
                         >
-                            <svg
-                                className="ex-arrow"
-                                viewBox="0 0 100 60"
-                                xmlns="http://www.w3.org/2000/svg"
+                            <motion.div
+                                className="ex-arrow-container"
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 0.85, scale: 1 }}
+                                transition={{ delay: 1, duration: 0.5 }}
                             >
-                                <path
-                                    d="M10,15 Q25,50 55,45 T90,25"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                />
-                                <path
-                                    d="M80,15 L90,25 L78,32"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                />
-                            </svg>
+                                <span className="ex-arrow-label">Explore</span>
+                                <motion.div
+                                    className="ex-arrow-icon-wrap"
+                                    animate={{ x: [0, 8, 0] }}
+                                    transition={{
+                                        duration: 1.6,
+                                        repeat: Infinity,
+                                        ease: 'easeInOut',
+                                    }}
+                                >
+                                    <ArrowRight size={24} strokeWidth={2.5} />
+                                </motion.div>
+                            </motion.div>
 
                             <motion.button
                                 className="ex-btn-circle"
@@ -323,7 +325,6 @@ export default function MyArtsPage() {
                             animate="visible"
                         >
                             <motion.p className="ex-section-eyebrow" variants={fadeSlideUp}>
-                                <Sparkles size={13} />
                                 Your Collection
                             </motion.p>
                             <motion.h2 variants={fadeSlideUp}>

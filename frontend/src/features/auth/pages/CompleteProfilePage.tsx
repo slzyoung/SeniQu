@@ -192,11 +192,12 @@ export default function CompleteProfilePage() {
                 }, 500);
             }
         } catch (error: any) {
-            const message = error?.message || 'Failed to update profile. Please try again.';
+            const message = error?.response?.data?.message || error?.message || 'Failed to update profile. Please try again.';
             console.error('[CompleteProfile] Submit error:', error);
 
-            if (message.toLowerCase().includes('username') && message.toLowerCase().includes('taken')) {
-                setErrors({ username: 'This username is already taken' });
+            const lowerMsg = (typeof message === 'string' ? message : '').toLowerCase();
+            if (lowerMsg.includes('username') && (lowerMsg.includes('taken') || lowerMsg.includes('already') || lowerMsg.includes('unique constraint'))) {
+                setErrors({ username: 'This username is already taken. Please choose a different one.' });
             } else {
                 setErrors({ general: message });
                 toast.error('Update Failed', message);

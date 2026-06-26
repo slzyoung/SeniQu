@@ -40,6 +40,8 @@ coverage
 .env.development
 .env.production
 *.env
+.env.render
+*.env.render
 
 # NestJS
 nest-cli.json

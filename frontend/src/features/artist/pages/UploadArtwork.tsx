@@ -59,6 +59,7 @@ export function UploadArtwork() {
         tags: [] as string[],
         isArt: false,
         price: '',
+        artworkType: 'physical' as 'physical' | 'digital'
     });
 
     const handleDrop = useCallback((e: React.DragEvent) => {
@@ -113,6 +114,14 @@ export function UploadArtwork() {
             // Upload file to R2 CDN first
             const uploadResult = await uploadFile(compressedFile, 'artworks');
 
+            const simulatedPoa = {
+                tokenId: `PoA-SOL-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+                verifiableHash: Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
+                mintedAt: new Date().toISOString(),
+                creatorWallet: 'SolPrivy' + Math.random().toString(36).substring(2, 8),
+                status: 'Verified'
+            };
+
             const artworkData = {
                 title: sanitizeString(formData.title),
                 description: sanitizeString(formData.description),
@@ -120,7 +129,11 @@ export function UploadArtwork() {
                 medium: formData.medium,
                 dimensions: formData.dimensions,
                 imageUrl: uploadResult.url,  // CDN URL from R2
-                status: saveAsDraft ? 'DRAFT' : 'PUBLISHED',
+                status: saveAsDraft ? 'draft' : 'published',
+                price: formData.price ? parseFloat(formData.price) : 0,
+                isForSale: formData.isArt,
+                artworkType: formData.artworkType,
+                poaCertificate: simulatedPoa
             };
 
             await createArtwork.mutateAsync(artworkData);
@@ -397,15 +410,27 @@ export function UploadArtwork() {
                                         <motion.div
                                             initial={{ height: 0, opacity: 0 }}
                                             animate={{ height: 'auto', opacity: 1 }}
-                                            className="mt-4 pt-4 border-t border-theme-border"
+                                            className="mt-4 pt-4 border-t border-theme-border space-y-4"
                                         >
-                                            <Input
-                                                label="Price (ETH)"
-                                                value={formData.price}
-                                                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                                                placeholder="0.1"
-                                                type="number"
-                                            />
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <Input
+                                                    label="Price (SOL)"
+                                                    value={formData.price}
+                                                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                                                    placeholder="0.5"
+                                                    type="number"
+                                                />
+                                                <Select
+                                                    label="Artwork Type"
+                                                    options={[
+                                                        { value: 'physical', label: 'Physical (Includes shipping + Digital Proof of Art)' },
+                                                        { value: 'digital', label: 'Digital (Instant download + Cryptographic Proof of Art)' }
+                                                    ]}
+                                                    value={formData.artworkType}
+                                                    onChange={(v) => setFormData({ ...formData, artworkType: v as 'physical' | 'digital' })}
+                                                    placeholder="Select type"
+                                                />
+                                            </div>
                                         </motion.div>
                                     )}
                                 </div>

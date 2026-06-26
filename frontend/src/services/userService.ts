@@ -40,6 +40,7 @@ export const updateProfileSchema = z.object({
     displayName: z.string().min(2).max(50).optional().transform(val => val ? sanitizeInput(val) : val),
     bio: z.string().max(500).optional().transform(val => val ? sanitizeInput(val) : val),
     avatarUrl: z.string().optional().or(z.literal('')),
+    profileVideoUrl: z.string().optional().or(z.literal('')),
     socialLinks: z.object({
         twitter: z.string().optional().or(z.literal('')),
         instagram: z.string().optional().or(z.literal('')),
@@ -104,6 +105,9 @@ class UserService {
             ...user,
             username: user.username || '',
             displayName: user.displayName || user.display_name || '',
+            avatarChangeCount: user.avatarChangeCount || user.avatar_change_count || 0,
+            profileVideoUrl: user.profileVideoUrl || user.profile_video_url || '',
+            profileVideoChangeCount: user.profileVideoChangeCount || user.profile_video_change_count || 0,
             role: role as any,
             wallets: (user.wallets || []).map((w: any) => ({
                 chainType: w.chainType || w.chain_type,
@@ -151,21 +155,24 @@ class UserService {
      * Get user statistics (views, bookmarks, collections, etc.)
      */
     async getStats(): Promise<UserStats> {
-        return apiGet<UserStats>('/users/me/stats');
+        const res = await apiGet<any>('/users/me/stats');
+        return res.data;
     }
 
     /**
      * Get user's recent activity
      */
     async getRecentActivity(limit = 10): Promise<RecentActivity[]> {
-        return apiGet<RecentActivity[]>('/users/me/activity', { params: { limit } });
+        const res = await apiGet<any>('/users/me/activity', { params: { limit } });
+        return res.data;
     }
 
     /**
      * Get user bookmarks (saved artworks)
      */
     async getBookmarks(page = 1, limit = 20): Promise<{ data: Artwork[]; total: number }> {
-        return apiGet('/users/me/bookmarks', { params: { page, limit } });
+        const res = await apiGet<any>('/users/me/bookmarks', { params: { page, limit } });
+        return res.data;
     }
 
     /**
@@ -186,7 +193,8 @@ class UserService {
      * Get user collections
      */
     async getCollections(page = 1, limit = 20): Promise<{ data: Collection[]; total: number }> {
-        return apiGet('/users/me/collections', { params: { page, limit } });
+        const res = await apiGet<any>('/users/me/collections', { params: { page, limit } });
+        return res.data;
     }
 
     /**
@@ -198,7 +206,8 @@ class UserService {
             description: data.description ? sanitizeInput(data.description) : undefined,
             isPublic: data.isPublic ?? true,
         };
-        return apiPost<Collection>('/users/me/collections', sanitizedData);
+        const res = await apiPost<any>('/users/me/collections', sanitizedData);
+        return res.data;
     }
 
     /**
@@ -212,7 +221,8 @@ class UserService {
      * Get user's owned artworks
      */
     async getOwnedArtworks(page = 1, limit = 20): Promise<{ data: any[]; total: number }> {
-        return apiGet('/users/me/artworks', { params: { page, limit } });
+        const res = await apiGet<any>('/users/me/artworks', { params: { page, limit } });
+        return res.data;
     }
 
     /**
@@ -227,6 +237,40 @@ class UserService {
         });
         const result = await uploadFile(compressedFile, 'avatars');
         return { url: result.url };
+    }
+
+    /**
+     * Upload profile video
+     */
+    async uploadProfileVideo(file: File): Promise<{ url: string }> {
+        const result = await uploadFile(file, 'videos');
+        return { url: result.url };
+    }
+
+    // ============================================
+    // PUBLIC PROFILE + FOLLOW SYSTEM
+    // ============================================
+
+    /**
+     * Get public profile of any user with follow stats
+     */
+    async getPublicProfile(userId: string): Promise<any> {
+        const res = await apiGet<any>(`/users/${userId}/public-profile`);
+        return res.data || res;
+    }
+
+    /**
+     * Follow a user
+     */
+    async followUser(userId: string): Promise<void> {
+        return apiPost(`/users/${userId}/follow`, {});
+    }
+
+    /**
+     * Unfollow a user
+     */
+    async unfollowUser(userId: string): Promise<void> {
+        return apiDelete(`/users/${userId}/follow`);
     }
 }
 

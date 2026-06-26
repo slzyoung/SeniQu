@@ -7,7 +7,6 @@ import { useState, useRef } from 'react';
 import { PageContainer } from '../../components/common/DashboardLayout';
 import { Card, CardContent, Button, Badge } from '../../components/ui';
 import {
-    Sparkles,
     Search,
     Upload,
     Image as ImageIcon,
@@ -126,7 +125,6 @@ export function GenreIdentifier() {
                                             </>
                                         ) : (
                                             <>
-                                                <Sparkles className="w-4 h-4 mr-2" />
                                                 Analyze
                                             </>
                                         )}
@@ -209,7 +207,7 @@ export function AICuration() {
             title="AI Curation"
             subtitle="Personalized art recommendations powered by AI"
             actions={
-                <Button variant="gold" leftIcon={<Sparkles className="w-4 h-4" />}>
+                <Button variant="gold">
                     Refresh
                 </Button>
             }
@@ -221,8 +219,7 @@ export function AICuration() {
             />
             {/* Personalized For You */}
             <div className="mb-8">
-                <h3 className="text-lg font-semibold text-theme-text mb-4 flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-gold" />
+                <h3 className="text-lg font-semibold text-theme-text mb-4">
                     Curated For You
                 </h3>
 
@@ -232,7 +229,7 @@ export function AICuration() {
                     </div>
                 ) : recommendations.length === 0 ? (
                     <Card variant="elevated" className="text-center py-16">
-                        <Sparkles className="w-16 h-16 text-theme-muted mx-auto mb-4" />
+                        <ImageIcon className="w-16 h-16 text-theme-muted mx-auto mb-4" />
                         <h3 className="text-xl font-semibold text-theme-text mb-2">No Recommendations Yet</h3>
                         <p className="text-theme-muted max-w-sm mx-auto">
                             Browse more artworks to get personalized recommendations.

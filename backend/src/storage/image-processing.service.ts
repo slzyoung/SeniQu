@@ -12,7 +12,7 @@
  * - Skips SVGs and videos (pass-through)
  */
 
-import { Injectable, Logger } from "@nestjs/common"
+import { Injectable, Logger, BadRequestException } from "@nestjs/common"
 import * as sharp from "sharp"
 
 export interface ProcessedImage {
@@ -142,18 +142,9 @@ export class ImageProcessingService {
                 width: result.info.width,
                 height: result.info.height,
             }
-        } catch (error) {
-            this.logger.warn(`Image processing failed, using original: ${error.message}`)
-            // Fallback: return original unprocessed
-            const metadata = await sharp(buffer).metadata().catch(() => ({ width: 0, height: 0 }))
-            return {
-                buffer,
-                contentType: mimetype,
-                extension: this.getExtForMime(mimetype),
-                size: buffer.length,
-                width: metadata.width || 0,
-                height: metadata.height || 0,
-            }
+        } catch (error: any) {
+            this.logger.error(`Image processing failed: ${error.message}`)
+            throw new BadRequestException(`Invalid or corrupt image file: ${error.message}`)
         }
     }
 

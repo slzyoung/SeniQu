@@ -74,6 +74,7 @@ export const ROUTES = {
     MARKETPLACE_ART: '/marketplace/art/:id',
     COMMUNITY: '/community',
     COMMUNITY_THREAD: '/community/thread/:id',
+    REELS: '/reels',
 
     // Auth Routes
     LOGIN: '/auth/login',
@@ -84,7 +85,7 @@ export const ROUTES = {
     USER_DASHBOARD: '/dashboard',
     USER_PROFILE: '/dashboard/profile',
     USER_BOOKMARKS: '/dashboard/bookmarks',
-    USER_COLLECTIONS: '/dashboard/collections',
+    USER_COLLECTIONS: '/dashboard/photography',
     USER_SETTINGS: '/dashboard/settings',
     // New User Dashboard Routes
     USER_GALLERY: '/dashboard/gallery',
@@ -96,6 +97,7 @@ export const ROUTES = {
     USER_MY_ARTS: '/dashboard/my-arts',
     USER_WALLET: '/dashboard/wallet',
     USER_COMMUNITY: '/dashboard/community',
+    USER_MESSAGES: '/dashboard/messages',
 
     // Artist/Institution Routes
     ARTIST_DASHBOARD: '/artist',
@@ -131,6 +133,7 @@ export const ROUTES = {
     AI_GENRE: '/ai/genre',
     AI_CURATION: '/ai/curation',
     AI_CREATE: '/ai/create',
+    USER_PUBLIC_PROFILE: '/profile/:userId',
 } as const;
 
 // API Endpoints

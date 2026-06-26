@@ -8,13 +8,15 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Mail, Lock, ArrowLeft, Loader2, Eye, EyeOff, AlertCircle, CheckCircle, Wallet, ShieldCheck, KeyRound, MailCheck } from 'lucide-react';
+import Turnstile from 'react-turnstile';
+const TurnstileComponent = Turnstile as any;
 import { authService, loginSchema, registerSchema, AuthError, OtpRequiredResponse } from '../services/authService';
 import { useAppKit, useAppKitAccount, useAppKitProvider } from '../lib/reownConfig';
 
 import { useAuthStore } from '../stores/useAuthStore';
 import { useToast } from '../stores/useNotificationStore';
 import { z } from 'zod';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getDashboardRoute } from '../lib/utils';
 import { useManualWallet, isWalletInstalled } from '../hooks/useManualWallet';
 import { needsProfileCompletion } from '../lib/authHelpers';
@@ -89,7 +91,7 @@ function WalletConnectionStatus({ state, walletName }: { state: WalletConnection
         return { label: 'Preparing signature request...', color: 'text-blue-400', icon: <Loader2 className="w-4 h-4 animate-spin" /> };
       case 'awaiting-signature':
         return {
-          label: 'Verify domain is seniquapp.netlify.app',
+          label: 'Verify domain is seniqu.art',
           color: 'text-yellow-400',
           icon: <ShieldCheck className="w-4 h-4" />
         };
@@ -129,6 +131,7 @@ function WalletConnectionStatus({ state, walletName }: { state: WalletConnection
 
 export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
   const { login: storeLogin } = useAuthStore();
   const manualWallet = useManualWallet();
@@ -157,6 +160,11 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
+  
+  // Anti-bot states
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [website, setWebsite] = useState('');
+  const turnstileRef = React.useRef<any>(null);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -208,6 +216,13 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     setForgotResendCooldown(0);
     setPasswordFocused(false);
     setForgotPasswordFocused(false);
+    setTurnstileToken(null);
+    setWebsite('');
+    try {
+      turnstileRef.current?.reset();
+    } catch (e) {
+      console.warn('Failed to reset turnstile:', e);
+    }
 
     // If we are partly authenticated in Privy but not Backend, Force Logout from Privy
     // This ensures next time user opens modal, they start fresh
@@ -237,37 +252,37 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
   }, [onClose, resetState, manualWallet]);
 
   // Reset form when switching views
-  // Reset form when switching views
   const switchView = useCallback((newView: AuthView) => {
     setErrors({});
     setView(newView);
+    setTurnstileToken(null);
+    setWebsite('');
+    try {
+      turnstileRef.current?.reset();
+    } catch (e) {
+      // ignore
+    }
   }, []);
+
+  // Helper to determine redirect path based on role and location state
+  const getRedirectPath = useCallback((userObj: any) => {
+    const defaultRedirect = needsProfileCompletion(userObj)
+      ? '/complete-profile'
+      : getDashboardRoute(userObj);
+    
+    const from = (location.state as { from?: Location })?.from?.pathname || defaultRedirect;
+    return from;
+  }, [location.state]);
 
   // Helper: Handle successful login result
   const onLoginSuccess = useCallback((result: any) => {
-    if (result.isNewUser) {
-      // New user — switch to profile completion page
-      storeLogin(result.user, result.accessToken, result.refreshToken);
+    storeLogin(result.user, result.accessToken, result.refreshToken);
+    const targetPath = getRedirectPath(result.user);
+    setTimeout(() => {
       handleClose();
-      navigate('/complete-profile');
-    } else {
-      // Existing user — check if profile is complete
-      const needsCompletion = needsProfileCompletion(result.user);
-
-      if (needsCompletion) {
-        // Incomplete profile -> redirect
-        storeLogin(result.user, result.accessToken, result.refreshToken);
-        handleClose();
-        navigate('/complete-profile');
-      } else {
-        // Fully complete — success & close
-        setTimeout(() => {
-          handleClose();
-          // manualWallet.reset(); // Already called in handleClose
-        }, 800);
-      }
-    }
-  }, [storeLogin, handleClose, navigate]);
+      navigate(targetPath, { replace: true });
+    }, 800);
+  }, [storeLogin, handleClose, navigate, getRedirectPath]);
 
   // Handle Google login
   const handleGoogleLogin = useCallback(async () => {
@@ -480,12 +495,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
             toast.success('Welcome!', 'Connected via WalletConnect');
             handleClose();
 
-            // Redirect to profile completion or dashboard
-            const redirectPath = needsCompletion
-              ? '/complete-profile'
-              : getDashboardRoute(response.user);
-
-            navigate(redirectPath);
+            const targetPath = getRedirectPath(response.user);
+            navigate(targetPath, { replace: true });
           }
         } catch (error) {
           console.error('Privy backend auth failed:', error);
@@ -533,11 +544,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
       const authResponse = response;
       storeLogin(authResponse.user, authResponse.accessToken, authResponse.refreshToken);
       toast.success('Welcome back!', 'You have successfully signed in.');
-
-      const { needsProfileCompletion } = await import('../lib/authHelpers');
-      const needsCompletion = needsProfileCompletion(authResponse.user);
-      const redirectPath = needsCompletion ? '/complete-profile' : getDashboardRoute(authResponse.user);
-      navigate(redirectPath);
+      const targetPath = getRedirectPath(authResponse.user);
+      navigate(targetPath, { replace: true });
       handleClose();
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -563,12 +571,21 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     setIsLoading(true);
     setErrors({});
 
+    // Client-side Turnstile check
+    if (!turnstileToken) {
+      setErrors({ general: 'Please complete the security check.' });
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const validatedData = registerSchema.parse({
         email,
         password,
         displayName: displayName || undefined,
         username: username || undefined,
+        turnstileToken: turnstileToken || undefined,
+        website: website || undefined,
       });
 
       const response = await authService.register(validatedData);
@@ -584,10 +601,18 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
       const authResponse = response;
       storeLogin(authResponse.user, authResponse.accessToken, authResponse.refreshToken);
       toast.success('Welcome to SeniQu!', 'Your account has been created successfully.');
-      const redirectPath = getDashboardRoute(authResponse.user);
-      navigate(redirectPath);
+      const targetPath = getRedirectPath(authResponse.user);
+      navigate(targetPath, { replace: true });
       handleClose();
     } catch (error) {
+      // Reset Turnstile on registration failure so a new challenge can be completed
+      try {
+        turnstileRef.current?.reset();
+        setTurnstileToken(null);
+      } catch (e) {
+        // ignore
+      }
+
       if (error instanceof z.ZodError) {
         const fieldErrors: Record<string, string> = {};
         error.errors.forEach((err) => {
@@ -603,7 +628,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
     } finally {
       setIsLoading(false);
     }
-  }, [email, password, displayName, username, storeLogin, toast, handleClose, navigate]);
+  }, [email, password, displayName, username, turnstileToken, website, storeLogin, toast, handleClose, navigate]);
 
   // Handle OTP verification
   const handleVerifyOtp = useCallback(async (otpCode: string) => {
@@ -616,11 +641,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
       storeLogin(response.user, response.accessToken, response.refreshToken);
       toast.success('Welcome back!', 'Authentication successful.');
-
-      const { needsProfileCompletion } = await import('../lib/authHelpers');
-      const needsCompletion = needsProfileCompletion(response.user);
-      const redirectPath = needsCompletion ? '/complete-profile' : getDashboardRoute(response.user);
-      navigate(redirectPath);
+      const targetPath = getRedirectPath(response.user);
+      navigate(targetPath, { replace: true });
       handleClose();
     } catch (error) {
       const authError = error as AuthError;
@@ -859,7 +881,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
           <button
             onClick={handleGoogleLogin}
             disabled={isLoading || isWalletBusy}
-            className="group w-full flex items-center justify-center gap-3 bg-theme-text text-theme-bg py-3.5 rounded-xl font-medium hover:opacity-90 transition-all shadow-lg hover:shadow-gold/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="group w-full flex items-center justify-center gap-3 bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 py-3.5 rounded-xl font-medium hover:bg-black dark:hover:bg-neutral-100 transition-all shadow-md hover:shadow-xl hover:shadow-black/5 dark:hover:shadow-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
@@ -873,32 +895,32 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
           {/* Divider */}
           <div className="flex items-center gap-3 py-2">
-            <div className="h-px flex-1 bg-theme-border opacity-60"></div>
+            <div className="h-px flex-1 bg-neutral-200 dark:bg-neutral-800"></div>
             <span className="text-[11px] uppercase tracking-widest font-bold text-theme-muted">
               OR
             </span>
-            <div className="h-px flex-1 bg-theme-border opacity-60"></div>
+            <div className="h-px flex-1 bg-neutral-200 dark:bg-neutral-800"></div>
           </div>
 
           {/* Email Login */}
           <button
             onClick={() => switchView('email-login')}
             disabled={isLoading || isWalletBusy}
-            className="w-full flex items-center justify-center gap-3 bg-black/[0.03] dark:bg-white/[0.03] border border-theme-border text-theme-text py-3 rounded-xl font-semibold hover:bg-black/[0.06] dark:hover:bg-white/[0.06] transition-all disabled:opacity-50 text-sm"
+            className="w-full flex items-center justify-center gap-3 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-neutral-800 dark:text-neutral-200 py-3 rounded-xl font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-900/80 hover:border-gold/50 dark:hover:border-gold/50 transition-all disabled:opacity-50 text-sm"
           >
-            <Mail className="w-5 h-5 text-theme-muted" />
+            <Mail className="w-5 h-5 text-neutral-500" />
             <span>Sign in with Email</span>
           </button>
 
           {/* Wallet Options - Vertical Stack for Premium Feel */}
           <div className="pt-2 space-y-3">
             <div className="flex items-center gap-2 mb-4">
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-theme-border to-transparent" />
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-neutral-200 dark:via-neutral-800 to-transparent" />
               <div className="flex items-center gap-1.5 text-amber-600 dark:text-gold/80">
                 <Wallet className="w-3.5 h-3.5" />
                 <span className="text-xs font-semibold tracking-wider uppercase">Connect Wallet</span>
               </div>
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-theme-border to-transparent" />
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-neutral-200 dark:via-neutral-800 to-transparent" />
             </div>
 
             {/* Inline Connection Status */}
@@ -929,14 +951,14 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                     disabled={isLoading || (isWalletBusy && !isActive)}
                     className={`group relative flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all duration-300 w-full h-[88px]
                         ${isActive
-                        ? 'bg-gold/10 border-gold shadow-[0_0_15px_rgba(255,215,0,0.1)]'
-                        : 'bg-black/[0.02] dark:bg-white/[0.02] border-theme-border hover:border-gold/50 hover:bg-black/[0.05] dark:hover:bg-white/[0.05]'
+                        ? 'bg-amber-500/[0.08] dark:bg-gold/10 border-amber-500 dark:border-gold shadow-[0_0_12px_rgba(201,168,76,0.15)]'
+                        : 'bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800/80 hover:border-gold/50 dark:hover:border-gold/50 hover:bg-neutral-50 dark:hover:bg-neutral-900/80 hover:shadow-sm'
                       }
                         ${isWalletBusy && !isActive ? 'opacity-30 blur-[1px]' : ''}
                       `}
                   >
                     {/* Wallet Icon */}
-                    <div className={`w-8 h-8 rounded-lg bg-theme-bg bg-opacity-50 border border-theme-border flex items-center justify-center transition-transform duration-300 ${!isWalletBusy ? 'group-hover:scale-110' : ''}`}>
+                    <div className={`w-8 h-8 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-100 dark:border-neutral-800/50 flex items-center justify-center transition-transform duration-300 ${!isWalletBusy ? 'group-hover:scale-110' : ''}`}>
                       <img
                         src={wallet.logo}
                         alt={wallet.name}
@@ -1010,7 +1032,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               required
-              className={`w-full pl-11 pr-4 py-3 bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] focus:bg-theme-bg border ${errors.email ? 'border-red-500' : 'border-theme-border'
+              className={`w-full pl-11 pr-4 py-3 bg-white dark:bg-neutral-900/60 hover:bg-neutral-50 dark:hover:bg-neutral-900/90 focus:bg-white dark:focus:bg-neutral-950 border ${errors.email ? 'border-red-500' : 'border-neutral-200 dark:border-neutral-800/80'
                 } rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200`}
             />
           </div>
@@ -1026,7 +1048,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
             <button
               type="button"
               onClick={() => switchView('forgot-password')}
-              className="text-xs text-gold hover:underline font-semibold"
+              className="text-xs text-amber-700 hover:text-amber-800 dark:text-gold dark:hover:text-gold-light hover:underline font-semibold"
             >
               Forgot password?
             </button>
@@ -1039,7 +1061,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
-              className={`w-full pl-11 pr-11 py-3 bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] focus:bg-theme-bg border ${errors.password ? 'border-red-500' : 'border-theme-border'
+              className={`w-full pl-11 pr-11 py-3 bg-white dark:bg-neutral-900/60 hover:bg-neutral-50 dark:hover:bg-neutral-900/90 focus:bg-white dark:focus:bg-neutral-950 border ${errors.password ? 'border-red-500' : 'border-neutral-200 dark:border-neutral-800/80'
                 } rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200`}
             />
             <button
@@ -1077,7 +1099,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
           <button
             type="button"
             onClick={() => switchView('email-register')}
-            className="text-gold hover:underline font-semibold"
+            className="text-amber-700 hover:text-amber-800 dark:text-gold dark:hover:text-gold-light hover:underline font-semibold"
           >
             Sign up
           </button>
@@ -1129,7 +1151,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
             required
             minLength={2}
             maxLength={50}
-            className={`w-full px-4 py-3 bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] focus:bg-theme-bg border ${errors.displayName ? 'border-red-500' : 'border-theme-border'
+            className={`w-full px-4 py-3 bg-white dark:bg-neutral-900/60 hover:bg-neutral-50 dark:hover:bg-neutral-900/90 focus:bg-white dark:focus:bg-neutral-950 border ${errors.displayName ? 'border-red-500' : 'border-neutral-200 dark:border-neutral-800/80'
               } rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200`}
           />
           {errors.displayName && (
@@ -1155,7 +1177,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
               required
               minLength={3}
               maxLength={20}
-              className={`w-full pl-8 pr-4 py-3 bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] focus:bg-theme-bg border ${errors.username ? 'border-red-500' : 'border-theme-border'
+              className={`w-full pl-8 pr-4 py-3 bg-white dark:bg-neutral-900/60 hover:bg-neutral-50 dark:hover:bg-neutral-900/90 focus:bg-white dark:focus:bg-neutral-950 border ${errors.username ? 'border-red-500' : 'border-neutral-200 dark:border-neutral-800/80'
                 } rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200`}
             />
           </div>
@@ -1175,7 +1197,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               required
-              className={`w-full pl-11 pr-4 py-3 bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] focus:bg-theme-bg border ${errors.email ? 'border-red-500' : 'border-theme-border'
+              className={`w-full pl-11 pr-4 py-3 bg-white dark:bg-neutral-900/60 hover:bg-neutral-50 dark:hover:bg-neutral-900/90 focus:bg-white dark:focus:bg-neutral-950 border ${errors.email ? 'border-red-500' : 'border-neutral-200 dark:border-neutral-800/80'
                 } rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200`}
             />
           </div>
@@ -1197,7 +1219,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
               onBlur={() => setPasswordFocused(false)}
               placeholder="••••••••"
               required
-              className={`w-full pl-11 pr-11 py-3 bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] focus:bg-theme-bg border ${errors.password ? 'border-red-500' : 'border-theme-border'
+              className={`w-full pl-11 pr-11 py-3 bg-white dark:bg-neutral-900/60 hover:bg-neutral-50 dark:hover:bg-neutral-900/90 focus:bg-white dark:focus:bg-neutral-950 border ${errors.password ? 'border-red-500' : 'border-neutral-200 dark:border-neutral-800/80'
                 } rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200`}
             />
             <button
@@ -1216,29 +1238,57 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
 
         {/* Password Requirements - Focus Triggered Grid for Mobile Neatness */}
         {passwordFocused && (
-          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px] sm:text-xs text-theme-muted bg-black/[0.03] dark:bg-white/[0.03] p-3 rounded-xl border border-theme-border animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px] sm:text-xs text-theme-muted bg-neutral-50 dark:bg-neutral-900/80 p-3 rounded-xl border border-neutral-200 dark:border-neutral-800/80 animate-in fade-in slide-in-from-top-1 duration-200">
             <div className={`flex items-center gap-1.5 ${password.length >= 8 ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${password.length >= 8 ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+              <div className={`w-1.5 h-1.5 rounded-full ${password.length >= 8 ? 'bg-emerald-500 dark:bg-green-400' : 'bg-neutral-300 dark:bg-neutral-700'}`} />
               <span>Min. 8 characters</span>
             </div>
             <div className={`flex items-center gap-1.5 ${/[A-Z]/.test(password) ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${/[A-Z]/.test(password) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+              <div className={`w-1.5 h-1.5 rounded-full ${/[A-Z]/.test(password) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-neutral-300 dark:bg-neutral-700'}`} />
               <span>Uppercase letter</span>
             </div>
             <div className={`flex items-center gap-1.5 ${/[a-z]/.test(password) ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${/[a-z]/.test(password) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+              <div className={`w-1.5 h-1.5 rounded-full ${/[a-z]/.test(password) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-neutral-300 dark:bg-neutral-700'}`} />
               <span>Lowercase letter</span>
             </div>
             <div className={`flex items-center gap-1.5 ${/[0-9]/.test(password) ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${/[0-9]/.test(password) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+              <div className={`w-1.5 h-1.5 rounded-full ${/[0-9]/.test(password) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-neutral-300 dark:bg-neutral-700'}`} />
               <span>One number</span>
             </div>
             <div className={`flex items-center gap-1.5 ${/[^A-Za-z0-9]/.test(password) ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${/[^A-Za-z0-9]/.test(password) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+              <div className={`w-1.5 h-1.5 rounded-full ${/[^A-Za-z0-9]/.test(password) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-neutral-300 dark:bg-neutral-700'}`} />
               <span>Special char</span>
             </div>
           </div>
         )}
+
+        {/* Honeypot field (anti-bot trap) */}
+        <div className="absolute opacity-0 pointer-events-none w-0 h-0 overflow-hidden" aria-hidden="true">
+          <label htmlFor="website">Website</label>
+          <input
+            id="website"
+            type="text"
+            name="website"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+            tabIndex={-1}
+            autoComplete="off"
+          />
+        </div>
+
+        {/* Cloudflare Turnstile widget */}
+        <div className="flex justify-center my-3.5">
+          <TurnstileComponent
+            ref={turnstileRef}
+            sitekey={import.meta.env.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'}
+            onVerify={(token: string) => setTurnstileToken(token)}
+            onError={() => {
+              setTurnstileToken(null);
+              setErrors({ general: 'Security challenge failed to load. Please try again.' });
+            }}
+            onExpire={() => setTurnstileToken(null)}
+          />
+        </div>
 
         {/* Submit Button */}
         <button
@@ -1262,7 +1312,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
           <button
             type="button"
             onClick={() => switchView('email-login')}
-            className="text-gold hover:underline font-semibold"
+            className="text-amber-700 hover:text-amber-800 dark:text-gold dark:hover:text-gold-light hover:underline font-semibold"
           >
             Sign in
           </button>
@@ -1312,7 +1362,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
               onChange={(e) => setForgotEmail(e.target.value)}
               placeholder="you@example.com"
               required
-              className="w-full pl-11 pr-4 py-3 bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] focus:bg-theme-bg border border-theme-border rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200"
+              className="w-full pl-11 pr-4 py-3 bg-white dark:bg-neutral-900/60 hover:bg-neutral-50 dark:hover:bg-neutral-900/90 focus:bg-white dark:focus:bg-neutral-950 border border-neutral-200 dark:border-neutral-800/80 rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200"
             />
           </div>
         </div>
@@ -1381,7 +1431,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
               onBlur={() => setForgotPasswordFocused(false)}
               placeholder="••••••••"
               required
-              className="w-full pl-11 pr-11 py-3 bg-black/[0.03] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] focus:bg-theme-bg border border-theme-border rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200"
+              className="w-full pl-11 pr-11 py-3 bg-white dark:bg-neutral-900/60 hover:bg-neutral-50 dark:hover:bg-neutral-900/90 focus:bg-white dark:focus:bg-neutral-950 border border-neutral-200 dark:border-neutral-800/80 rounded-xl text-base sm:text-sm text-theme-text placeholder-theme-muted/65 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all duration-200"
             />
             <button
               type="button"
@@ -1392,25 +1442,25 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
             </button>
           </div>
           {forgotPasswordFocused && (
-            <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px] sm:text-xs text-theme-muted bg-black/[0.03] dark:bg-white/[0.03] p-3 rounded-xl border border-theme-border mt-2.5 animate-in fade-in duration-200">
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px] sm:text-xs text-theme-muted bg-neutral-50 dark:bg-neutral-900/80 p-3 rounded-xl border border-neutral-200 dark:border-neutral-800/80 mt-2.5 animate-in fade-in duration-200">
               <div className={`flex items-center gap-1.5 ${forgotNewPassword.length >= 8 ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
-                <div className={`w-1.5 h-1.5 rounded-full ${forgotNewPassword.length >= 8 ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+                <div className={`w-1.5 h-1.5 rounded-full ${forgotNewPassword.length >= 8 ? 'bg-emerald-500 dark:bg-green-400' : 'bg-neutral-300 dark:bg-neutral-700'}`} />
                 <span>Min. 8 characters</span>
               </div>
               <div className={`flex items-center gap-1.5 ${/[A-Z]/.test(forgotNewPassword) ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
-                <div className={`w-1.5 h-1.5 rounded-full ${/[A-Z]/.test(forgotNewPassword) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+                <div className={`w-1.5 h-1.5 rounded-full ${/[A-Z]/.test(forgotNewPassword) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-neutral-300 dark:bg-neutral-700'}`} />
                 <span>Uppercase letter</span>
               </div>
               <div className={`flex items-center gap-1.5 ${/[a-z]/.test(forgotNewPassword) ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
-                <div className={`w-1.5 h-1.5 rounded-full ${/[a-z]/.test(forgotNewPassword) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+                <div className={`w-1.5 h-1.5 rounded-full ${/[a-z]/.test(forgotNewPassword) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-neutral-300 dark:bg-neutral-700'}`} />
                 <span>Lowercase letter</span>
               </div>
               <div className={`flex items-center gap-1.5 ${/[0-9]/.test(forgotNewPassword) ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
-                <div className={`w-1.5 h-1.5 rounded-full ${/[0-9]/.test(forgotNewPassword) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+                <div className={`w-1.5 h-1.5 rounded-full ${/[0-9]/.test(forgotNewPassword) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-neutral-300 dark:bg-neutral-700'}`} />
                 <span>One number</span>
               </div>
               <div className={`flex items-center gap-1.5 ${/[^A-Za-z0-9]/.test(forgotNewPassword) ? 'text-emerald-600 dark:text-green-400 font-semibold' : ''}`}>
-                <div className={`w-1.5 h-1.5 rounded-full ${/[^A-Za-z0-9]/.test(forgotNewPassword) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-theme-muted/50'}`} />
+                <div className={`w-1.5 h-1.5 rounded-full ${/[^A-Za-z0-9]/.test(forgotNewPassword) ? 'bg-emerald-500 dark:bg-green-400' : 'bg-neutral-300 dark:bg-neutral-700'}`} />
                 <span>Special char</span>
               </div>
             </div>
@@ -1433,8 +1483,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                 onKeyDown={(e) => handleForgotOtpKeyDown(index, e)}
                 autoFocus={index === 0}
                 disabled={isLoading}
-                className={`w-9 h-11 sm:w-10 sm:h-12 text-center text-lg sm:text-xl font-bold bg-black/[0.03] dark:bg-white/[0.03] border-2 ${
-                  digit ? 'border-gold text-amber-600 dark:text-gold' : 'border-theme-border'
+                className={`w-9 h-11 sm:w-10 sm:h-12 text-center text-lg sm:text-xl font-bold bg-white dark:bg-neutral-900 border-2 ${
+                  digit ? 'border-amber-500 text-amber-600 dark:border-gold dark:text-gold' : 'border-neutral-200 dark:border-neutral-800/80'
                 } rounded-xl text-theme-text focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-all`}
               />
             ))}
@@ -1783,7 +1833,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: 'spring', duration: 0.5 }}
-              className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-theme-glass backdrop-blur-2xl border border-theme-glass-border rounded-2xl shadow-2xl pointer-events-auto relative"
+              className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#FAF9F5] dark:bg-[#0D0D0D] border border-neutral-200 dark:border-neutral-800/80 rounded-2xl shadow-2xl pointer-events-auto relative"
             >
               {/* Decorative Top Line */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-gold to-transparent opacity-50" />
@@ -1791,7 +1841,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
               {/* Close Button */}
               <button
                 onClick={handleClose}
-                className="absolute top-4 right-4 p-2 text-theme-muted hover:text-theme-text hover:bg-theme-border rounded-full transition-colors z-10"
+                className="absolute top-4 right-4 p-2 text-neutral-400 hover:text-neutral-900 dark:text-neutral-500 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-full transition-colors z-10"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1855,8 +1905,8 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
                               onKeyDown={(e) => handleOtpKeyDown(index, e)}
                               autoFocus={index === 0}
                               disabled={isLoading}
-                              className={`w-9 h-11 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-bold bg-black/[0.03] dark:bg-white/[0.03] border-2 ${
-                                digit ? 'border-gold text-amber-600 dark:text-gold' : 'border-theme-border'
+                              className={`w-9 h-11 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-bold bg-white dark:bg-neutral-900 border-2 ${
+                                digit ? 'border-amber-500 text-amber-600 dark:border-gold dark:text-gold' : 'border-neutral-200 dark:border-neutral-800/80'
                               } rounded-xl text-theme-text focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-all`}
                             />
                           ))}
@@ -1930,7 +1980,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'main' }: AuthModalPr
               </AnimatePresence>
 
               {/* Footer */}
-              <div className="px-5 sm:px-8 py-4 bg-black/[0.03] dark:bg-white/[0.03] border-t border-theme-border text-center backdrop-blur-sm">
+              <div className="px-5 sm:px-8 py-4 bg-neutral-100/50 dark:bg-[#121212] border-t border-neutral-200 dark:border-neutral-800/80 text-center">
                 <p className="text-xs text-theme-muted leading-relaxed">
                   By continuing, you agree to our{' '}
                   <a href="/terms" className="font-semibold text-amber-700 dark:text-gold hover:underline">

@@ -9,6 +9,9 @@ export interface User {
     username?: string;
     displayName?: string;
     avatar?: string;
+    avatarChangeCount?: number;
+    profileVideoUrl?: string;
+    profileVideoChangeCount?: number;
     bio?: string;
     role: typeof ROLES[keyof typeof ROLES];
     // walletAddress removed
@@ -78,6 +81,8 @@ export interface Artwork {
     views: number;
     likes: number;
     isBookmarked?: boolean;
+    artworkType?: 'physical' | 'digital';
+    poaCertificate?: any;
 }
 
 export interface ArtworkImage {
@@ -124,6 +129,7 @@ export interface Address {
 // Museum & Gallery Types
 export interface Museum {
     id: string;
+    slug?: string;
     name: string;
     description: string;
     address: Address;
@@ -135,6 +141,9 @@ export interface Museum {
     contactInfo?: ContactInfo;
     isVerified: boolean;
     reviews?: any[];
+    type?: string;
+    total_ratings?: number;
+    cover_image_url?: string;
 }
 
 export interface Gallery {

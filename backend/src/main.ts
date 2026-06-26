@@ -1,3 +1,6 @@
+import * as dns from 'dns';
+dns.setDefaultResultOrder('ipv4first');
+
 import { NestFactory } from "@nestjs/core"
 import { ValidationPipe, Logger } from "@nestjs/common"
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger"
@@ -23,7 +26,7 @@ async function bootstrap() {
     const fastifyAdapter = new FastifyAdapter({
         logger: false,
         trustProxy: true,
-        bodyLimit: 50 * 1024 * 1024, // 50MB payload limit
+        bodyLimit: 200 * 1024 * 1024, // 200MB — support video uploads up to 150MB securely
     })
 
     const app = await NestFactory.create<NestFastifyApplication>(
@@ -75,7 +78,7 @@ async function bootstrap() {
     // Multipart support (file uploads — replaces Multer)
     await app.register(require("@fastify/multipart"), {
         limits: {
-            fileSize: 50 * 1024 * 1024, // 50MB
+            fileSize: 200 * 1024 * 1024, // 200MB — support video uploads up to 150MB securely
         },
     })
 
@@ -88,6 +91,8 @@ async function bootstrap() {
         "http://localhost:5173",
         "http://localhost:5174",
         "https://seniquapp.netlify.app",
+        "https://seniqu.art",
+        "https://www.seniqu.art",
         "https://rpc.ankr.com/solana",
         "https://api.seniqu.art",
         "https://solana-mainnet.rpc.extrnode.com/",

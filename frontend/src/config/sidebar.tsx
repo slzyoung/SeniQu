@@ -4,7 +4,6 @@ import {
     Bookmark,
     FolderHeart,
     Settings,
-    Image,
     MapPin,
     ScanLine,
     Brain,
@@ -32,7 +31,11 @@ import {
     Wand2,
     Ticket,
     Megaphone,
-    Images
+    Images,
+    Camera,
+    Mail,
+    Play,
+    GalleryHorizontal
 } from 'lucide-react';
 import { SidebarSection } from '../components/ui/Sidebar';
 import { ROUTES } from '../lib/constants';
@@ -55,8 +58,14 @@ export const userSidebarSections: SidebarSection[] = [
             {
                 id: 'gallery',
                 label: 'Art Gallery',
-                icon: <Image className="w-5 h-5" />,
+                icon: <GalleryHorizontal className="w-5 h-5" />,
                 path: ROUTES.USER_GALLERY,
+            },
+            {
+                id: 'collections',
+                label: 'Photography Hub',
+                icon: <Camera className="w-5 h-5" />,
+                path: ROUTES.USER_COLLECTIONS,
             },
             {
                 id: 'nearby',
@@ -67,14 +76,8 @@ export const userSidebarSections: SidebarSection[] = [
         ],
     },
     {
-        title: 'AI Tools',
+        title: 'AI Studio',
         items: [
-            {
-                id: 'genre-identifier',
-                label: 'Scan Art',
-                icon: <ScanLine className="w-5 h-5" />,
-                path: ROUTES.USER_GENRE_IDENTIFIER,
-            },
             {
                 id: 'ai-curation',
                 label: 'AI Curation',
@@ -87,10 +90,16 @@ export const userSidebarSections: SidebarSection[] = [
                 icon: <Wand2 className="w-5 h-5" />,
                 path: ROUTES.USER_AI_CREATE,
             },
+            {
+                id: 'genre-identifier',
+                label: 'Analyze',
+                icon: <ScanLine className="w-5 h-5" />,
+                path: ROUTES.USER_GENRE_IDENTIFIER,
+            },
         ],
     },
     {
-        title: 'Marketplace',
+        title: 'Commerce',
         items: [
             {
                 id: 'marketplace',
@@ -110,15 +119,40 @@ export const userSidebarSections: SidebarSection[] = [
         title: 'Community',
         items: [
             {
+                id: 'reels',
+                label: 'Reels',
+                icon: <Play className="w-5 h-5" />,
+                path: ROUTES.REELS,
+            },
+            {
                 id: 'community',
                 label: 'Forum',
-                icon: <MessageSquare className="w-5 h-5" />,
+                icon: (
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 9V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h1.5l2 2 2-2H16a2 2 0 0 0 2-2z" />
+                        <circle cx="9.5" cy="6.5" r="0.75" fill="currentColor" stroke="none" />
+                        <circle cx="12" cy="6.5" r="0.75" fill="currentColor" stroke="none" />
+                        <circle cx="14.5" cy="6.5" r="0.75" fill="currentColor" stroke="none" />
+                        <circle cx="7" cy="16" r="1.75" />
+                        <path d="M4 21.5a3 3 0 0 1 6 0" />
+                        <circle cx="17" cy="16" r="1.75" />
+                        <path d="M14 21.5a3 3 0 0 1 6 0" />
+                        <circle cx="12" cy="15" r="2" />
+                        <path d="M8.5 21.5a3.5 3.5 0 0 1 7 0" />
+                    </svg>
+                ),
                 path: ROUTES.USER_COMMUNITY,
+            },
+            {
+                id: 'messages',
+                label: 'Messages',
+                icon: <MessageSquare className="w-5 h-5" />,
+                path: ROUTES.USER_MESSAGES,
             },
         ],
     },
     {
-        title: 'Collections',
+        title: 'Library',
         items: [
             {
                 id: 'bookmarks',
@@ -127,22 +161,16 @@ export const userSidebarSections: SidebarSection[] = [
                 path: ROUTES.USER_BOOKMARKS,
             },
             {
-                id: 'collections',
-                label: 'My Collections',
-                icon: <FolderHeart className="w-5 h-5" />,
-                path: ROUTES.USER_COLLECTIONS,
-            },
-        ],
-    },
-    {
-        title: 'Account',
-        items: [
-            {
                 id: 'wallet',
                 label: 'Wallet',
                 icon: <CreditCard className="w-5 h-5" />,
                 path: ROUTES.USER_WALLET,
             },
+        ],
+    },
+    {
+        title: 'Settings',
+        items: [
             {
                 id: 'profile',
                 label: 'Profile',
@@ -513,7 +541,7 @@ export const publicSidebarSections: SidebarSection[] = [
             {
                 id: 'gallery',
                 label: 'Art Gallery',
-                icon: <Image className="w-5 h-5" />,
+                icon: <GalleryHorizontal className="w-5 h-5" />,
                 path: ROUTES.GALLERY,
             },
             {
@@ -525,24 +553,24 @@ export const publicSidebarSections: SidebarSection[] = [
         ],
     },
     {
-        title: 'AI Tools',
+        title: 'AI Studio',
         items: [
-            {
-                id: 'genre-identifier',
-                label: 'Scan Art',
-                icon: <ScanLine className="w-5 h-5" />,
-                path: ROUTES.AI_GENRE,
-            },
             {
                 id: 'ai-curation',
                 label: 'AI Curation',
                 icon: <Brain className="w-5 h-5" />,
                 path: ROUTES.AI_CURATION,
             },
+            {
+                id: 'genre-identifier',
+                label: 'Analyze',
+                icon: <ScanLine className="w-5 h-5" />,
+                path: ROUTES.AI_GENRE,
+            },
         ],
     },
     {
-        title: 'Marketplace',
+        title: 'Commerce',
         items: [
             {
                 id: 'marketplace',
@@ -556,9 +584,28 @@ export const publicSidebarSections: SidebarSection[] = [
         title: 'Community',
         items: [
             {
+                id: 'reels',
+                label: 'Reels',
+                icon: <Play className="w-5 h-5" />,
+                path: ROUTES.REELS,
+            },
+            {
                 id: 'community',
                 label: 'Forum',
-                icon: <MessageSquare className="w-5 h-5" />,
+                icon: (
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 9V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h1.5l2 2 2-2H16a2 2 0 0 0 2-2z" />
+                        <circle cx="9.5" cy="6.5" r="0.75" fill="currentColor" stroke="none" />
+                        <circle cx="12" cy="6.5" r="0.75" fill="currentColor" stroke="none" />
+                        <circle cx="14.5" cy="6.5" r="0.75" fill="currentColor" stroke="none" />
+                        <circle cx="7" cy="16" r="1.75" />
+                        <path d="M4 21.5a3 3 0 0 1 6 0" />
+                        <circle cx="17" cy="16" r="1.75" />
+                        <path d="M14 21.5a3 3 0 0 1 6 0" />
+                        <circle cx="12" cy="15" r="2" />
+                        <path d="M8.5 21.5a3.5 3.5 0 0 1 7 0" />
+                    </svg>
+                ),
                 path: ROUTES.COMMUNITY,
             },
         ],

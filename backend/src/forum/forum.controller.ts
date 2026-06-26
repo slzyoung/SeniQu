@@ -1,5 +1,5 @@
 /**
- * Forum Controller - Community threads and posts
+ * Forum Controller - Community threads, posts, and video content
  */
 
 import {
@@ -15,8 +15,10 @@ import {
     ParseUUIDPipe,
     HttpCode,
     HttpStatus,
+    Req,
+    BadRequestException,
 } from "@nestjs/common"
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from "@nestjs/swagger"
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiConsumes, ApiBody } from "@nestjs/swagger"
 import { Throttle, SkipThrottle } from "@nestjs/throttler"
 import { ForumService } from "./forum.service"
 import { CreateThreadDto } from "./dto/create-thread.dto"
@@ -28,11 +30,18 @@ import { RolesGuard } from "../auth/guards/roles.guard"
 import { Roles } from "../auth/decorators/roles.decorator"
 import { GetUser } from "../auth/decorators/get-user.decorator"
 import { Public } from "../auth/decorators/public.decorator"
+import { BypassSecurity } from "../common/decorators/bypass-security.decorator"
+import { StorageService } from "../storage/storage.service"
+import { VideoUploadService } from "../storage/video-upload.service"
 
 @ApiTags("Forum")
 @Controller("forum")
 export class ForumController {
-    constructor(private readonly forumService: ForumService) { }
+    constructor(
+        private readonly forumService: ForumService,
+        private readonly storageService: StorageService,
+        private readonly videoUploadService: VideoUploadService,
+    ) { }
 
     // ===========================================
     // CATEGORIES (Public)
@@ -68,6 +77,186 @@ export class ForumController {
     }
 
     // ===========================================
+    // VIDEO UPLOAD (must be before :idOrSlug catch-all)
+    // ===========================================
+
+    /**
+     * Direct-to-CDN: Initialize forum video upload
+     */
+    @Post("video/upload/init")
+    @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
+    @ApiBearerAuth("JWT-auth")
+    @Throttle({ default: { limit: 10, ttl: 60000 } })
+    @ApiOperation({ summary: "Initialize forum video upload — get presigned CDN URL" })
+    async initVideoUpload(
+        @Body() body: {
+            filename: string
+            mimeType: string
+            fileSize: number
+            threadId?: string
+            postId?: string
+            caption?: string
+            mute?: boolean
+        },
+        @GetUser("id") userId: string,
+    ) {
+        return this.videoUploadService.initUpload({
+            userId,
+            filename: body.filename,
+            mimeType: body.mimeType,
+            fileSize: body.fileSize,
+            context: "forum",
+            threadId: body.threadId,
+            postId: body.postId,
+            caption: body.caption,
+            audioMetadata: body.mute ? { mute: true, originalVolume: 0 } : undefined
+        })
+    }
+
+    /**
+     * Direct-to-CDN: Confirm forum video upload + start compression
+     */
+    @Post("video/upload/complete")
+    @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
+    @ApiBearerAuth("JWT-auth")
+    @ApiOperation({ summary: "Confirm forum video upload + start compression" })
+    async completeVideoUpload(
+        @Body() body: { sessionId: string },
+        @GetUser("id") userId: string,
+    ) {
+        const result = await this.videoUploadService.completeUpload(body.sessionId, userId)
+        const session = this.videoUploadService.getSession(body.sessionId)
+
+        if (session) {
+            const videoRecord = await this.forumService.saveVideoMetadata({
+                userId,
+                threadId: session.threadId,
+                postId: session.postId,
+                videoUrl: result.videoUrl,
+                videoKey: session.compressedKey,
+                thumbnailUrl: result.thumbnailUrl || null,
+                thumbnailKey: session.thumbnailKey || null,
+                caption: session.caption,
+                metadata: session.metadata || {},
+            })
+
+            return { ...result, videoId: videoRecord?.id }
+        }
+
+        return result
+    }
+
+    /**
+     * Direct-to-CDN: Poll forum video status
+     */
+    @Get("video/upload/status/:sessionId")
+    @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
+    @ApiBearerAuth("JWT-auth")
+    @SkipThrottle()
+    @ApiOperation({ summary: "Get forum video upload/compression progress" })
+    async getVideoUploadStatus(
+        @Param("sessionId") sessionId: string,
+        @GetUser("id") userId: string,
+    ) {
+        return this.videoUploadService.getUploadStatus(sessionId, userId)
+    }
+
+    /**
+     * Legacy: Multipart upload (streaming — works for all sizes)
+     */
+    @Post("video/upload")
+    @UseGuards(JwtAuthGuard)
+    @BypassSecurity()
+    @ApiBearerAuth("JWT-auth")
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
+    @ApiOperation({ summary: "Upload and compress a forum video (legacy multipart)" })
+    @ApiConsumes("multipart/form-data")
+    @ApiBody({
+        schema: {
+            type: "object",
+            properties: {
+                file: { type: "string", format: "binary", description: "Video file (MP4, WebM, MOV, OGG)" },
+                threadId: { type: "string", description: "Optional thread ID to attach video to" },
+                postId: { type: "string", description: "Optional post ID to attach video to" },
+                caption: { type: "string", description: "Optional video caption" },
+            },
+            required: ["file"],
+        },
+    })
+    async uploadVideo(
+        @Req() req: any,
+        @GetUser("id") userId: string,
+    ) {
+        // Parse multipart form data
+        const data = await req.file()
+        if (!data) {
+            throw new BadRequestException("No video file provided")
+        }
+
+        // Validate MIME type
+        const ALLOWED_VIDEO_MIMES = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime']
+        if (!ALLOWED_VIDEO_MIMES.includes(data.mimetype)) {
+            throw new BadRequestException(
+                `Video type ${data.mimetype} is not allowed. Accepted: ${ALLOWED_VIDEO_MIMES.join(", ")}`
+            )
+        }
+
+        // Helper to extract fields dynamically
+        const getFields = () => {
+            const fields = data.fields as Record<string, any>
+            const threadId = fields?.threadId?.value || undefined
+            const postId = fields?.postId?.value || undefined
+            const caption = fields?.caption?.value || undefined
+            const muteVal = fields?.mute?.value === 'true' || fields?.mute?.value === true
+            return { threadId, postId, caption, muteVal }
+        }
+
+        // Extract initial fields (available if sent before file in multipart form)
+        const initialFields = getFields()
+
+        // Upload & compress video through new streaming service using data.file stream
+        const result = await this.videoUploadService.streamUploadAndProcess(
+            data.file,
+            data.filename,
+            data.mimetype,
+            0, // fileSize checked after stream is written to temp file
+            userId,
+            "forum",
+            { 
+                caption: initialFields.caption,
+                audioMetadata: initialFields.muteVal ? { mute: true, originalVolume: 0 } : undefined
+            },
+        )
+
+        // Read fields again (fully populated now that the stream has been consumed)
+        const finalFields = getFields()
+        const threadId = finalFields.threadId || initialFields.threadId
+        const postId = finalFields.postId || initialFields.postId
+        const caption = finalFields.caption || initialFields.caption
+
+        // Save metadata to database
+        const videoRecord = await this.forumService.saveVideoMetadata({
+            userId,
+            threadId,
+            postId,
+            videoUrl: result.url,
+            videoKey: result.key,
+            thumbnailUrl: result.thumbnailUrl || null,
+            thumbnailKey: result.thumbnailKey || null,
+            caption,
+            metadata: result.metadata,
+        })
+
+        return {
+            ...result,
+            videoId: videoRecord?.id,
+        }
+    }
+
+    // ===========================================
     // THREADS
     // ===========================================
 
@@ -79,13 +268,15 @@ export class ForumController {
     @ApiQuery({ name: "page", required: false })
     @ApiQuery({ name: "limit", required: false })
     @ApiQuery({ name: "sortBy", required: false })
+    @ApiQuery({ name: "authorId", required: false })
     async getThreads(
         @Query("categoryId") categoryId?: string,
         @Query("page") page?: number,
         @Query("limit") limit?: number,
         @Query("sortBy") sortBy?: "latest" | "popular" | "views",
+        @Query("authorId") authorId?: string,
     ) {
-        return this.forumService.getThreads(categoryId, page, limit, sortBy)
+        return this.forumService.getThreads(categoryId, page, limit, sortBy, authorId)
     }
 
     @Public()

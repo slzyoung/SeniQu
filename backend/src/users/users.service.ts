@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException, Logger, Inject, forwardRef } from "@nestjs/common"
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger, Inject, forwardRef } from "@nestjs/common"
 import { DatabaseService } from "../database/database.service"
 import { CreateUserDto } from "./dto/create-user.dto"
 import { UpdateUserDto } from "./dto/update-user.dto"
 import { PrivyService } from "../auth/privy.service"
+import { EmailNotificationService } from "../email/email-notification.service"
+import { NotificationsService } from "../notifications/notifications.service"
 
 export interface User {
     id: string
@@ -12,6 +14,9 @@ export interface User {
     displayName?: string
     bio?: string
     avatar?: string
+    avatarChangeCount?: number
+    profileVideoUrl?: string
+    profileVideoChangeCount?: number
     userType: string
     adminRole?: string
     adminLevel?: number
@@ -35,7 +40,9 @@ export class UsersService {
     constructor(
         private readonly db: DatabaseService,
         @Inject(forwardRef(() => PrivyService))
-        private readonly privyService: PrivyService
+        private readonly privyService: PrivyService,
+        private readonly emailNotification: EmailNotificationService,
+        private readonly notificationsService: NotificationsService
     ) { }
 
     async create(dto: CreateUserDto): Promise<User> {
@@ -207,6 +214,32 @@ export class UsersService {
     async update(id: string, dto: UpdateUserDto): Promise<User> {
         const client = this.db.getAdminClient()
 
+        // Fetch current profile to validate and track changes
+        const currentUser = await this.findById(id)
+        if (!currentUser) {
+            throw new NotFoundException("User not found")
+        }
+
+        let nextAvatarChangeCount = currentUser.avatarChangeCount || 0
+        let isChangingAvatar = false
+        if (dto.avatarUrl !== undefined && dto.avatarUrl !== currentUser.avatar) {
+            if (nextAvatarChangeCount >= 3) {
+                throw new BadRequestException("You have reached the maximum limit of 3 profile picture changes.")
+            }
+            nextAvatarChangeCount++
+            isChangingAvatar = true
+        }
+
+        let nextProfileVideoChangeCount = currentUser.profileVideoChangeCount || 0
+        let isChangingProfileVideo = false
+        if (dto.profileVideoUrl !== undefined && dto.profileVideoUrl !== currentUser.profileVideoUrl) {
+            if (nextProfileVideoChangeCount >= 3) {
+                throw new BadRequestException("You have reached the maximum limit of 3 profile video changes.")
+            }
+            nextProfileVideoChangeCount++
+            isChangingProfileVideo = true
+        }
+
         const { data, error } = await client
             .from("users")
             .update({
@@ -215,6 +248,9 @@ export class UsersService {
                 ...(dto.userType && { role: this.mapUserTypeToRole(dto.userType) }),
                 ...(dto.bio !== undefined && { bio: dto.bio }),
                 ...(dto.avatarUrl !== undefined && { avatar_url: dto.avatarUrl }),
+                ...(isChangingAvatar && { avatar_change_count: nextAvatarChangeCount }),
+                ...(dto.profileVideoUrl !== undefined && { profile_video_url: dto.profileVideoUrl }),
+                ...(isChangingProfileVideo && { profile_video_change_count: nextProfileVideoChangeCount }),
                 ...(dto.notificationPrefs && { notification_prefs: dto.notificationPrefs }),
                 ...(dto.isTwoFactorEnabled !== undefined && { is_two_factor_enabled: dto.isTwoFactorEnabled }),
                 ...(dto.loginAlertsEnabled !== undefined && { login_alerts_enabled: dto.loginAlertsEnabled }),
@@ -225,6 +261,10 @@ export class UsersService {
             .single()
 
         if (error) {
+            // Detect duplicate username constraint violation
+            if (error.message?.includes('users_username_key') || error.code === '23505') {
+                throw new ConflictException('Username is already taken. Please choose a different one.')
+            }
             throw new Error(error.message)
         }
         
@@ -320,6 +360,9 @@ export class UsersService {
             displayName: data.display_name,
             bio: data.bio,
             avatar: data.avatar_url,
+            avatarChangeCount: data.avatar_change_count || 0,
+            profileVideoUrl: data.profile_video_url || null,
+            profileVideoChangeCount: data.profile_video_change_count || 0,
             userType: this.mapRoleToUserType(data.role),
             adminRole: data.admin_role_typed || data.admin_role,
             adminLevel: data.admin_level,
@@ -413,7 +456,7 @@ export class UsersService {
     // ============================================
 
     async getBookmarks(userId: string, page = 1, limit = 20): Promise<{ data: any[]; total: number }> {
-        const client = this.db.getClient()
+        const client = this.db.getAdminClient()
         const offset = (page - 1) * limit
 
         const { data, error, count } = await client
@@ -721,5 +764,140 @@ export class UsersService {
         }
 
         return data || []
+    }
+    // ============================================
+    // PUBLIC PROFILE + FOLLOW SYSTEM
+    // ============================================
+
+    async getPublicProfile(userId: string, viewerId?: string) {
+        const client = this.db.getAdminClient()
+
+        // Get user basic info
+        const { data: user, error } = await client
+            .from("users")
+            .select("id, display_name, username, bio, avatar_url, role, created_at")
+            .eq("id", userId)
+            .single()
+
+        if (error || !user) {
+            throw new NotFoundException("User not found")
+        }
+
+        // Get followers count
+        const { count: followersCount } = await client
+            .from("follows")
+            .select("*", { count: "exact", head: true })
+            .eq("following_id", userId)
+
+        // Get following count
+        const { count: followingCount } = await client
+            .from("follows")
+            .select("*", { count: "exact", head: true })
+            .eq("follower_id", userId)
+
+        // Get posts count (reels + forum)
+        const { count: reelsCount } = await client
+            .from("reels")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", userId)
+
+        const { count: forumCount } = await client
+            .from("forum_threads")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", userId)
+
+        // Check if viewer is following this user
+        let isFollowing = false
+        if (viewerId && viewerId !== userId) {
+            const { data: followRecord } = await client
+                .from("follows")
+                .select("id")
+                .eq("follower_id", viewerId)
+                .eq("following_id", userId)
+                .single()
+            isFollowing = !!followRecord
+        }
+
+        // Get social links
+        const { data: socialLinks } = await client
+            .from("user_social_links")
+            .select("platform, url")
+            .eq("user_id", userId)
+
+        const socials: Record<string, string> = {}
+        if (socialLinks) {
+            socialLinks.forEach((l: any) => { socials[l.platform] = l.url })
+        }
+
+        return {
+            id: user.id,
+            displayName: user.display_name,
+            username: user.username,
+            bio: user.bio,
+            avatar: user.avatar_url,
+            userType: this.mapRoleToUserType(user.role),
+            createdAt: user.created_at,
+            followersCount: followersCount || 0,
+            followingCount: followingCount || 0,
+            postsCount: (reelsCount || 0) + (forumCount || 0),
+            isFollowing,
+            isOwnProfile: viewerId === userId,
+            socialLinks: socials,
+        }
+    }
+
+    async followUser(followerId: string, followingId: string) {
+        if (followerId === followingId) {
+            throw new ConflictException("Cannot follow yourself")
+        }
+
+        const client = this.db.getAdminClient()
+
+        const { error } = await client
+            .from("follows")
+            .upsert(
+                { follower_id: followerId, following_id: followingId },
+                { onConflict: "follower_id, following_id" }
+            )
+
+        if (error) {
+            this.logger.error(`Follow error: ${error.message}`)
+            throw new Error(error.message)
+        }
+
+        // Trigger follow in-app notification (non-blocking)
+        (async () => {
+            const { data } = await client.from("users").select("display_name, username").eq("id", followerId).single()
+            if (data) {
+                const followerName = data.display_name || data.username || "Seseorang"
+                await this.notificationsService.notifyNewFollower(followingId, followerName)
+            }
+        })().catch((err: any) => {
+            this.logger.error(`Failed to send follow in-app notification: ${err.message}`)
+        })
+
+        // Trigger follow email notification (non-blocking)
+        this.emailNotification.sendFollowNotification(followerId, followingId).catch(err => {
+            this.logger.error(`Failed to send follow email notification: ${err.message}`)
+        })
+
+        return { success: true, action: "followed" }
+    }
+
+    async unfollowUser(followerId: string, followingId: string) {
+        const client = this.db.getAdminClient()
+
+        const { error } = await client
+            .from("follows")
+            .delete()
+            .eq("follower_id", followerId)
+            .eq("following_id", followingId)
+
+        if (error) {
+            this.logger.error(`Unfollow error: ${error.message}`)
+            throw new Error(error.message)
+        }
+
+        return { success: true, action: "unfollowed" }
     }
 }

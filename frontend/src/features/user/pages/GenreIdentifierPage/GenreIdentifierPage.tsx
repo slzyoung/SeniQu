@@ -1,20 +1,20 @@
 /**
- * Genre Identifier Page — AR-Style Auto-Scan
- * Camera-based real-time artwork detection with AI pattern analysis
+ * Genre Identifier Page — AR-Style Heritage Analyzer
+ * Camera-based real-time artwork detection with Gemini AI analysis
  * 
  * Desktop: Accessible via AI Tools sidebar
- * Mobile: Accessible via centered "Learn" bottom nav button
+ * Mobile: Accessible via centered "Analyze" bottom nav button
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Camera,
-    Sparkles,
     ArrowLeft,
     Settings,
     Share2,
     Volume2,
+    VolumeX,
     Loader2,
     CheckCircle,
     X,
@@ -23,12 +23,15 @@ import {
     Image as ImageIcon,
     Zap,
     Eye,
+    EyeOff,
     History,
     RefreshCw,
     ShieldAlert,
+    ScanLine,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useDetectionHistory } from '../../../../hooks/useAI';
+import { useHeritageScan, useScanHistory, useScanQuota } from '../../../../hooks/useAI';
+import { compressImage } from '../../../../lib/imageCompressor';
 import './GenreIdentifierPage.css';
 
 // ============================================================
@@ -36,54 +39,23 @@ import './GenreIdentifierPage.css';
 // ============================================================
 
 interface DetectionResult {
-    title: string;
+    id?: string;
+    name: string;
     origin: string;
-    period: string;
+    century: string;
+    type: string;
     collection: string;
     patternMeaning: string;
+    description: string;
+    audioScript: string;
     genres: Array<{ name: string; confidence: number }>;
     style?: string;
     medium?: string;
-    mood?: string[];
-    overallConfidence: number;
+    tags?: string[];
+    confidence: number;
+    imageUrl?: string;
+    quota?: { used: number; limit: number; remaining: number };
 }
-
-// Mock detection results for demo (when AI service isn't available)
-const DEMO_DETECTIONS: DetectionResult[] = [
-    {
-        title: 'Batik Parang Rusak',
-        origin: 'Yogyakarta',
-        period: '18th Century',
-        collection: 'Royal Archives',
-        patternMeaning: 'The "Parang" motif symbolizes continuous improvement, like waves crashing against a cliff. Historically reserved for royalty, it embodies the spirit of never giving up.',
-        genres: [{ name: 'Traditional Textile', confidence: 0.94 }, { name: 'Indonesian Heritage', confidence: 0.88 }],
-        style: 'Javanese Royal',
-        medium: 'Wax-resist dyeing on cotton',
-        overallConfidence: 0.94,
-    },
-    {
-        title: 'Wayang Kulit Shadow',
-        origin: 'Central Java',
-        period: '15th Century',
-        collection: 'National Museum',
-        patternMeaning: 'Shadow puppet artistry depicting Mahabharata epic. The intricate leather carving represents the eternal battle between good and evil in Javanese cosmology.',
-        genres: [{ name: 'Shadow Puppet Art', confidence: 0.91 }, { name: 'Performing Arts', confidence: 0.85 }],
-        style: 'Classical Javanese',
-        medium: 'Buffalo hide leather',
-        overallConfidence: 0.91,
-    },
-    {
-        title: 'Songket Palembang',
-        origin: 'South Sumatra',
-        period: '17th Century',
-        collection: 'Textile Heritage',
-        patternMeaning: 'Gold-threaded weaving symbolizing prosperity and nobility. Each motif tells stories of Sriwijaya kingdom\'s maritime glory.',
-        genres: [{ name: 'Woven Textile', confidence: 0.89 }, { name: 'Royal Craft', confidence: 0.82 }],
-        style: 'Sumatran Royal',
-        medium: 'Gold thread on silk',
-        overallConfidence: 0.89,
-    },
-];
 
 // ============================================================
 // SUB-COMPONENTS
@@ -113,65 +85,107 @@ function DetectionBadge({ detected }: { detected: boolean }) {
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.8 }}
                 >
-                    <Sparkles className="w-3 h-3" />
-                    Motif Detected
+                    Heritage Detected
                 </motion.div>
             )}
         </AnimatePresence>
     );
 }
 
-/** Audio Guide Card */
-function AudioGuideCard() {
+/** Audio Guide Card with TTS */
+function AudioGuideCard({ audioScript }: { audioScript?: string }) {
+    const [isPlaying, setIsPlaying] = useState(false);
+    const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+    const toggleAudio = () => {
+        if (!audioScript) return;
+        if (isPlaying) {
+            window.speechSynthesis.cancel();
+            setIsPlaying(false);
+        } else {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(audioScript.replace(/<[^>]*>/g, ''));
+            utterance.lang = 'id-ID';
+            utterance.onend = () => setIsPlaying(false);
+            utterance.onerror = () => setIsPlaying(false);
+            utteranceRef.current = utterance;
+            window.speechSynthesis.speak(utterance);
+            setIsPlaying(true);
+        }
+    };
+
+    useEffect(() => {
+        return () => { window.speechSynthesis.cancel(); };
+    }, []);
+
+    if (!audioScript) return null;
+
     return (
         <div className="gid-audio-card">
-            <button className="gid-audio-play">
-                <Volume2 className="w-5 h-5 text-white" />
+            <button className="gid-audio-play" onClick={toggleAudio}>
+                {isPlaying ? <VolumeX className="w-5 h-5 text-white" /> : <Volume2 className="w-5 h-5 text-white" />}
             </button>
             <div className="gid-audio-info">
                 <span className="gid-audio-label">AUDIO GUIDE</span>
-                <span className="gid-audio-title">Listen to the Legend</span>
+                <span className="gid-audio-title">{isPlaying ? 'Mendengarkan...' : 'Dengar Narasi Sejarah'}</span>
             </div>
-            <div className="gid-audio-wave">
-                {[...Array(5)].map((_, i) => (
-                    <div
-                        key={i}
-                        className="gid-audio-wave-bar"
-                        style={{ animationDelay: `${i * 0.1}s` }}
-                    />
-                ))}
-            </div>
+            {isPlaying && (
+                <div className="gid-audio-wave">
+                    {[...Array(5)].map((_, i) => (
+                        <div key={i} className="gid-audio-wave-bar" style={{ animationDelay: `${i * 0.1}s` }} />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
 
 /** Result Card — Pattern Meaning Section */
 function PatternMeaningCard({ result }: { result: DetectionResult }) {
+    const [isExpanded, setIsExpanded] = useState(false);
     return (
         <motion.div
-            className="gid-pattern-card"
+            className="gid-pattern-card cursor-pointer"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
+            onClick={() => setIsExpanded(!isExpanded)}
         >
-            <div className="gid-pattern-header">
-                <Sparkles className="w-4 h-4 text-purple-400" />
-                <span>AI PATTERN MEANING</span>
-            </div>
-            <div className="gid-pattern-body">
-                <div className="gid-pattern-thumb">
-                    <Zap className="w-6 h-6 text-purple-400" />
+            <div className="gid-pattern-header flex items-center justify-between w-full" style={{ marginBottom: isExpanded ? 16 : 0, transition: 'margin 0.2s' }}>
+                <div className="flex items-center gap-2">
+                    <ScanLine className="w-4 h-4 text-purple-400" />
+                    <span>AI PATTERN ANALYSIS</span>
                 </div>
-                <p className="gid-pattern-text">{result.patternMeaning}</p>
+                <div className="flex items-center justify-center p-1 rounded-full hover:bg-white/5 transition-colors">
+                    {isExpanded ? (
+                        <EyeOff className="w-4 h-4 text-purple-400" />
+                    ) : (
+                        <Eye className="w-4 h-4 text-purple-400 animate-pulse" />
+                    )}
+                </div>
             </div>
-            {/* Genres */}
-            <div className="gid-genre-tags">
-                {result.genres.map((g) => (
-                    <span key={g.name} className="gid-genre-tag">
-                        {g.name} — {(g.confidence * 100).toFixed(0)}%
-                    </span>
-                ))}
-            </div>
+            
+            <motion.div
+                initial={false}
+                animate={{ height: isExpanded ? 'auto' : 0, opacity: isExpanded ? 1 : 0 }}
+                transition={{ duration: 0.25, ease: 'easeInOut' }}
+                style={{ overflow: 'hidden' }}
+            >
+                <div className="gid-pattern-body">
+                    <div className="gid-pattern-thumb">
+                        <Zap className="w-6 h-6 text-purple-400" />
+                    </div>
+                    <p className="gid-pattern-text">{result.patternMeaning}</p>
+                </div>
+                {/* Genres */}
+                <div className="gid-genre-tags">
+                    {result.genres.map((g) => (
+                        <span key={g.name} className="gid-genre-tag">
+                            {g.name} — {(g.confidence * 100).toFixed(0)}%
+                        </span>
+                    ))}
+                </div>
+            </motion.div>
         </motion.div>
     );
 }
@@ -199,71 +213,60 @@ export function GenreIdentifierPage() {
     const [mode, setMode] = useState<'camera' | 'upload'>('camera');
     const [showHistory, setShowHistory] = useState(false);
     const [cameraError, setCameraError] = useState<string | null>(null);
+    const [scanError, setScanError] = useState<string | null>(null);
+    const [descExpanded, setDescExpanded] = useState(false);
 
-    // Hooks
-    const { data: historyData } = useDetectionHistory({ limit: 5 });
-    const history = historyData?.data || [];
+    // Hooks — real AI
+    const scanMutation = useHeritageScan();
+    const { data: quotaData } = useScanQuota();
+    const { data: historyData } = useScanHistory();
+    const history = historyData || [];
 
     // -------- Camera Functions --------
     const startCamera = useCallback(async () => {
         setCameraError(null);
 
-        // Check if we're on a secure context (HTTPS or localhost)
         if (!window.isSecureContext) {
-            setCameraError('Camera requires a secure connection (HTTPS). Please access this page via HTTPS.');
+            setCameraError('Kamera memerlukan koneksi aman (HTTPS). Silakan akses halaman ini melalui HTTPS.');
             return;
         }
 
-        // Check if getUserMedia is available
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            setCameraError('Camera API is not available on this device or browser. Please try uploading an image instead.');
+            setCameraError('API Kamera tidak tersedia di perangkat ini. Silakan upload gambar.');
             return;
         }
 
         try {
-            // Check permission status first (if supported)
             if (navigator.permissions) {
                 try {
                     const permStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
                     if (permStatus.state === 'denied') {
-                        setCameraError('Camera permission was denied. Please allow camera access in your browser settings and try again.');
+                        setCameraError('Izin kamera ditolak. Silakan izinkan akses kamera di pengaturan browser.');
                         return;
                     }
-                } catch {
-                    // permissions.query for camera may not be supported in all browsers — continue
-                }
+                } catch { /* permissions.query may not support camera */ }
             }
 
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode,
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                },
+                video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
                 audio: false,
             });
             streamRef.current = stream;
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
-                videoRef.current.onloadedmetadata = () => {
-                    setCameraReady(true);
-                };
+                videoRef.current.onloadedmetadata = () => setCameraReady(true);
             }
             setCameraActive(true);
             setCameraError(null);
         } catch (err: any) {
             console.error('Camera access error:', err);
-
-            // Provide specific, actionable error messages
             if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                setCameraError('Camera permission was denied. Please allow camera access in your browser settings and reload the page.');
+                setCameraError('Izin kamera ditolak. Silakan izinkan akses kamera.');
             } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-                setCameraError('No camera found on this device. Please try uploading an image instead.');
+                setCameraError('Tidak ada kamera ditemukan. Silakan upload gambar.');
             } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-                setCameraError('Camera is already in use by another app. Please close other apps using the camera and try again.');
+                setCameraError('Kamera sedang digunakan aplikasi lain.');
             } else if (err.name === 'OverconstrainedError') {
-                setCameraError('Camera does not support the requested settings. Trying with default settings...');
-                // Retry with minimal constraints
                 try {
                     const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                     streamRef.current = fallbackStream;
@@ -275,12 +278,10 @@ export function GenreIdentifierPage() {
                     setCameraError(null);
                     return;
                 } catch {
-                    setCameraError('Unable to access camera. Please try uploading an image instead.');
+                    setCameraError('Tidak dapat mengakses kamera. Silakan upload gambar.');
                 }
-            } else if (err.name === 'SecurityError') {
-                setCameraError('Camera access blocked by security policy. This may be a server configuration issue. Please try uploading an image.');
             } else {
-                setCameraError(`Unable to access camera: ${err.message || 'Unknown error'}. Please try uploading an image.`);
+                setCameraError(`Tidak dapat mengakses kamera: ${err.message || 'Error tidak dikenal'}`);
             }
         }
     }, [facingMode]);
@@ -302,63 +303,134 @@ export function GenreIdentifierPage() {
         if (mode === 'camera' && !result) {
             startCamera();
         }
-        return () => {
-            stopCamera();
-        };
+        return () => { stopCamera(); };
     }, [mode, facingMode]);
 
-    // -------- Auto-Scan Simulation --------
-    // In production, this would use TensorFlow.js or a real-time API
-    useEffect(() => {
-        if (!cameraActive || !cameraReady || result) return;
+    // -------- Capture from camera and send to Gemini --------
+    const captureAndAnalyze = useCallback(() => {
+        if (!videoRef.current || !canvasRef.current || !cameraReady) return;
 
-        // Simulate auto-detection after 2.5 seconds
-        const scanTimer = setTimeout(() => {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.drawImage(video, 0, 0);
+
+        canvas.toBlob((blob) => {
+            if (!blob) return;
+            const file = new File([blob], 'camera_capture.jpg', { type: 'image/jpeg' });
             setIsScanning(true);
-        }, 1000);
+            setDetected(true);
+            setScanError(null);
+
+            scanMutation.mutate({ file }, {
+                onSuccess: (data: any) => {
+                    setResult({
+                        id: data.id,
+                        name: data.name || 'Unknown',
+                        origin: data.origin || 'Unknown',
+                        century: data.century || 'Unknown',
+                        type: data.type || 'Unknown',
+                        collection: data.collection || 'SeniQu Archive',
+                        patternMeaning: data.patternMeaning || '',
+                        description: data.description || '',
+                        audioScript: data.audioScript || '',
+                        genres: data.genres || [],
+                        style: data.style,
+                        medium: data.medium,
+                        tags: data.tags || [],
+                        confidence: (data.confidence || 80) / 100,
+                        imageUrl: data.imageUrl,
+                        quota: data.quota,
+                    });
+                    setIsScanning(false);
+                    setShowResult(true);
+                    stopCamera();
+                },
+                onError: (error: any) => {
+                    setIsScanning(false);
+                    setDetected(false);
+                    setScanError(error?.response?.data?.message || error.message || 'Gagal menganalisis gambar.');
+                },
+            });
+        }, 'image/jpeg', 0.85);
+    }, [cameraReady, scanMutation, stopCamera]);
+
+    // Auto-capture from camera after 3 seconds of being ready
+    useEffect(() => {
+        if (!cameraActive || !cameraReady || result || scanMutation.isPending) return;
 
         const detectTimer = setTimeout(() => {
             setDetected(true);
-        }, 2500);
+        }, 2000);
 
-        const resultTimer = setTimeout(() => {
-            const randomResult = DEMO_DETECTIONS[Math.floor(Math.random() * DEMO_DETECTIONS.length)];
-            setResult(randomResult);
-            setIsScanning(false);
-            setShowResult(true);
-        }, 4000);
+        const captureTimer = setTimeout(() => {
+            captureAndAnalyze();
+        }, 3500);
 
         return () => {
-            clearTimeout(scanTimer);
             clearTimeout(detectTimer);
-            clearTimeout(resultTimer);
+            clearTimeout(captureTimer);
         };
-    }, [cameraActive, cameraReady, result]);
+    }, [cameraActive, cameraReady, result, scanMutation.isPending, captureAndAnalyze]);
 
-    // -------- Upload handler --------
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            setPreviewUrl(URL.createObjectURL(file));
+    // -------- Upload handler — send file to Gemini --------
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const originalFile = e.target.files?.[0];
+        if (originalFile) {
+            setPreviewUrl(URL.createObjectURL(originalFile));
             setIsScanning(true);
+            setDetected(true);
+            setScanError(null);
 
-            // Simulate analysis
-            setTimeout(() => {
-                setDetected(true);
-            }, 1500);
+            let file = originalFile;
+            try {
+                // Pre-compress the image to reduce transfer times and prevent payload size errors on mobile
+                file = await compressImage(originalFile, {
+                    maxWidth: 1600,
+                    maxHeight: 1600,
+                    quality: 0.8,
+                    outputType: 'image/jpeg',
+                });
+                setPreviewUrl(URL.createObjectURL(file));
+            } catch (err) {
+                console.warn('Gagal melakukan kompresi gambar, menggunakan file asli:', err);
+            }
 
-            setTimeout(() => {
-                const randomResult = DEMO_DETECTIONS[Math.floor(Math.random() * DEMO_DETECTIONS.length)];
-                setResult(randomResult);
-                setIsScanning(false);
-                setShowResult(true);
-            }, 3000);
-
-            // Real API call (kept for when backend is ready)
-            // detectGenre.mutate({ file, onProgress: () => {} }, {
-            //     onSuccess: (data) => { setResult(data); setShowResult(true); }
-            // });
+            scanMutation.mutate({ file }, {
+                onSuccess: (data: any) => {
+                    setResult({
+                        id: data.id,
+                        name: data.name || 'Unknown',
+                        origin: data.origin || 'Unknown',
+                        century: data.century || 'Unknown',
+                        type: data.type || 'Unknown',
+                        collection: data.collection || 'SeniQu Archive',
+                        patternMeaning: data.patternMeaning || '',
+                        description: data.description || '',
+                        audioScript: data.audioScript || '',
+                        genres: data.genres || [],
+                        style: data.style,
+                        medium: data.medium,
+                        tags: data.tags || [],
+                        confidence: (data.confidence || 80) / 100,
+                        imageUrl: data.imageUrl,
+                        quota: data.quota,
+                    });
+                    setIsScanning(false);
+                    setShowResult(true);
+                },
+                onError: (error: any) => {
+                    setIsScanning(false);
+                    setDetected(false);
+                    setScanError(error?.response?.data?.message || error.message || 'Gagal menganalisis gambar.');
+                },
+            });
         }
+        // Reset file input value to allow selecting the same file again
+        e.target.value = '';
     };
 
     // -------- Reset --------
@@ -368,6 +440,8 @@ export function GenreIdentifierPage() {
         setShowResult(false);
         setIsScanning(false);
         setPreviewUrl(null);
+        setScanError(null);
+        setDescExpanded(false);
         if (mode === 'camera') {
             startCamera();
         }
@@ -383,7 +457,7 @@ export function GenreIdentifierPage() {
                         <ArrowLeft className="w-5 h-5" />
                     </button>
                     <div className="gid-header-center">
-                        <h2 className="gid-header-title">AR Mode</h2>
+                        <h2 className="gid-header-title">Heritage Analyzer</h2>
                         {cameraActive && (
                             <motion.span
                                 className="gid-live-badge"
@@ -400,17 +474,21 @@ export function GenreIdentifierPage() {
                     </button>
                 </div>
 
+                {/* Quota indicator */}
+                {quotaData && (
+                    <div className="gid-quota-bar" style={{ padding: '4px 16px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
+                        <span>Kuota: {quotaData.remaining}/{quotaData.limit}</span>
+                        <div style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.1)', borderRadius: 2 }}>
+                            <div style={{ width: `${(quotaData.remaining / quotaData.limit) * 100}%`, height: '100%', background: quotaData.remaining > 0 ? '#c9a84c' : '#ef4444', borderRadius: 2, transition: 'width 0.3s' }} />
+                        </div>
+                    </div>
+                )}
+
                 {/* Camera / Upload Preview */}
                 <div className="gid-viewfinder">
                     {mode === 'camera' ? (
                         <>
-                            <video
-                                ref={videoRef}
-                                autoPlay
-                                playsInline
-                                muted
-                                className="gid-video"
-                            />
+                            <video ref={videoRef} autoPlay playsInline muted className="gid-video" />
                             {!cameraActive && (
                                 <div className="gid-camera-placeholder">
                                     {cameraError ? (
@@ -418,41 +496,29 @@ export function GenreIdentifierPage() {
                                             <ShieldAlert className="w-12 h-12 text-amber-400/60" />
                                             <p className="text-amber-300/90 text-sm mt-3 text-center px-4 max-w-xs leading-relaxed">{cameraError}</p>
                                             <div className="flex gap-2 mt-4">
-                                                <button
-                                                    className="gid-control-btn flex items-center gap-1.5 px-4 py-2 text-xs font-medium"
-                                                    onClick={() => { setCameraError(null); startCamera(); }}
-                                                >
-                                                    <RefreshCw className="w-3.5 h-3.5" />
-                                                    Retry
+                                                <button className="gid-control-btn flex items-center gap-1.5 px-4 py-2 text-xs font-medium" onClick={() => { setCameraError(null); startCamera(); }}>
+                                                    <RefreshCw className="w-3.5 h-3.5" /> Retry
                                                 </button>
-                                                <button
-                                                    className="gid-control-btn flex items-center gap-1.5 px-4 py-2 text-xs font-medium"
-                                                    onClick={() => { setMode('upload'); stopCamera(); }}
-                                                >
-                                                    <Upload className="w-3.5 h-3.5" />
-                                                    Upload Instead
+                                                <button className="gid-control-btn flex items-center gap-1.5 px-4 py-2 text-xs font-medium" onClick={() => { setMode('upload'); stopCamera(); }}>
+                                                    <Upload className="w-3.5 h-3.5" /> Upload
                                                 </button>
                                             </div>
                                         </>
                                     ) : (
                                         <>
                                             <Camera className="w-12 h-12 text-white/30" />
-                                            <p className="text-white/50 text-sm mt-3">Starting camera...</p>
+                                            <p className="text-white/50 text-sm mt-3">Memulai kamera...</p>
                                         </>
                                     )}
                                 </div>
                             )}
                         </>
                     ) : previewUrl ? (
-                        <img
-                            src={previewUrl}
-                            alt="Uploaded artwork"
-                            className="gid-preview-img"
-                        />
+                        <img src={previewUrl} alt="Uploaded artwork" className="gid-preview-img" />
                     ) : (
                         <div className="gid-camera-placeholder" onClick={() => fileInputRef.current?.click()}>
                             <Upload className="w-12 h-12 text-white/30" />
-                            <p className="text-white/50 text-sm mt-3">Tap to upload artwork image</p>
+                            <p className="text-white/50 text-sm mt-3">Ketuk untuk upload gambar</p>
                         </div>
                     )}
 
@@ -464,15 +530,24 @@ export function GenreIdentifierPage() {
 
                     {/* Scanning indicator */}
                     <AnimatePresence>
-                        {isScanning && (
+                        {(isScanning || scanMutation.isPending) && (
+                            <motion.div className="gid-scanning-indicator" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                <span>Menganalisis dengan Gemini AI...</span>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Scan error */}
+                    <AnimatePresence>
+                        {scanError && (
                             <motion.div
                                 className="gid-scanning-indicator"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
+                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                style={{ background: 'rgba(239,68,68,0.85)' }}
                             >
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                                <span>Analyzing...</span>
+                                <ShieldAlert className="w-5 h-5" />
+                                <span>{scanError}</span>
                             </motion.div>
                         )}
                     </AnimatePresence>
@@ -480,10 +555,7 @@ export function GenreIdentifierPage() {
                     {/* Camera controls */}
                     {mode === 'camera' && !result && (
                         <div className="gid-camera-controls">
-                            <button
-                                className="gid-control-btn"
-                                onClick={() => { setMode('upload'); stopCamera(); }}
-                            >
+                            <button className="gid-control-btn" onClick={() => { setMode('upload'); stopCamera(); }}>
                                 <ImageIcon className="w-5 h-5" />
                             </button>
                             <button className="gid-control-btn" onClick={switchCamera}>
@@ -494,14 +566,7 @@ export function GenreIdentifierPage() {
                 </div>
 
                 {/* Hidden file input */}
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    onChange={handleFileSelect}
-                />
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
                 <canvas ref={canvasRef} className="hidden" />
             </div>
 
@@ -517,9 +582,9 @@ export function GenreIdentifierPage() {
                         {/* Title row */}
                         <div className="gid-result-header">
                             <div>
-                                <h2 className="gid-result-title">{result.title}</h2>
+                                <h2 className="gid-result-title">{result.name}</h2>
                                 <p className="gid-result-origin">
-                                    {result.origin}, {result.period} • {result.collection}
+                                    {result.origin}, {result.century} • {result.collection}
                                 </p>
                             </div>
                             <button className="gid-share-btn">
@@ -531,27 +596,73 @@ export function GenreIdentifierPage() {
                         <div className="gid-confidence-row">
                             <div className="gid-confidence-badge">
                                 <CheckCircle className="w-4 h-4" />
-                                <span>{(result.overallConfidence * 100).toFixed(0)}% confidence</span>
+                                <span>{(result.confidence * 100).toFixed(0)}% confidence</span>
                             </div>
                             {result.style && (
                                 <span className="gid-style-badge">{result.style}</span>
                             )}
                         </div>
 
-                        {/* Audio Guide */}
-                        <AudioGuideCard />
+                        {/* Audio Guide with TTS */}
+                        <AudioGuideCard audioScript={result.audioScript} />
+
+                        {/* Description */}
+                        {result.description && (
+                            <motion.div
+                                className="gid-pattern-card cursor-pointer"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.2 }}
+                                onClick={() => setDescExpanded(!descExpanded)}
+                            >
+                                <div className="gid-pattern-header flex items-center justify-between w-full" style={{ marginBottom: descExpanded ? 16 : 0, transition: 'margin 0.2s' }}>
+                                    <div className="flex items-center gap-2">
+                                        <Eye className="w-4 h-4 text-purple-400" />
+                                        <span>DESKRIPSI HERITAGE</span>
+                                    </div>
+                                    <div className="flex items-center justify-center p-1 rounded-full hover:bg-white/5 transition-colors">
+                                        {descExpanded ? (
+                                            <EyeOff className="w-4 h-4 text-purple-400" />
+                                        ) : (
+                                            <Eye className="w-4 h-4 text-purple-400 animate-pulse" />
+                                        )}
+                                    </div>
+                                </div>
+                                <motion.div
+                                    initial={false}
+                                    animate={{ height: descExpanded ? 'auto' : 0, opacity: descExpanded ? 1 : 0 }}
+                                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                                    style={{ overflow: 'hidden' }}
+                                >
+                                    <p className="gid-pattern-text" style={{ padding: '4px 0 12px 0', fontSize: 13.5, lineHeight: 1.7 }}>
+                                        {result.description}
+                                    </p>
+                                </motion.div>
+                            </motion.div>
+                        )}
 
                         {/* Pattern Meaning */}
                         <PatternMeaningCard result={result} />
+
+                        {/* Tags */}
+                        {result.tags && result.tags.length > 0 && (
+                            <div className="gid-genre-tags" style={{ paddingTop: 8 }}>
+                                {result.tags.map((tag) => (
+                                    <span key={tag} className="gid-genre-tag" style={{ background: 'rgba(124,107,212,0.15)', color: '#a78bfa' }}>
+                                        #{tag}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
 
                         {/* Actions */}
                         <div className="gid-actions">
                             <button className="gid-action-primary" onClick={handleReset}>
                                 <Camera className="w-4 h-4" />
-                                Scan Again
+                                Analisis Lagi
                             </button>
                             <button className="gid-action-secondary" onClick={handleReset}>
-                                New Detection
+                                Deteksi Baru
                             </button>
                         </div>
                     </motion.div>
@@ -562,27 +673,19 @@ export function GenreIdentifierPage() {
             {!cameraActive && !previewUrl && !result && mode === 'upload' && (
                 <div className="gid-empty-state">
                     <div className="gid-mode-toggle">
-                        <button
-                            className="gid-mode-btn"
-                            onClick={() => setMode('camera')}
-                        >
-                            <Camera className="w-4 h-4" />
-                            Camera
+                        <button className="gid-mode-btn" onClick={() => setMode('camera')}>
+                            <Camera className="w-4 h-4" /> Kamera
                         </button>
-                        <button
-                            className="gid-mode-btn gid-mode-btn--active"
-                            onClick={() => { setMode('upload'); fileInputRef.current?.click(); }}
-                        >
-                            <Upload className="w-4 h-4" />
-                            Upload
+                        <button className="gid-mode-btn gid-mode-btn--active" onClick={() => { setMode('upload'); fileInputRef.current?.click(); }}>
+                            <Upload className="w-4 h-4" /> Upload
                         </button>
                     </div>
 
                     <div className="gid-upload-area" onClick={() => fileInputRef.current?.click()}>
                         <Eye className="w-16 h-16 text-purple-400/30" />
-                        <h3 className="gid-upload-title">Point camera at artwork</h3>
+                        <h3 className="gid-upload-title">Arahkan kamera ke karya seni</h3>
                         <p className="gid-upload-subtitle">
-                            Or upload an image to identify genres, patterns, and cultural meaning
+                            Atau upload gambar untuk mengidentifikasi genre, pola, dan makna budaya dengan Gemini AI
                         </p>
                     </div>
                 </div>
@@ -598,7 +701,7 @@ export function GenreIdentifierPage() {
                         exit={{ opacity: 0, y: 100 }}
                     >
                         <div className="gid-history-header">
-                            <h3>Recent Detections</h3>
+                            <h3>Riwayat Analisis</h3>
                             <button onClick={() => setShowHistory(false)}>
                                 <X className="w-5 h-5" />
                             </button>
@@ -606,21 +709,21 @@ export function GenreIdentifierPage() {
                         {history.length === 0 ? (
                             <div className="gid-history-empty">
                                 <History className="w-8 h-8 opacity-30" />
-                                <p>No detections yet</p>
+                                <p>Belum ada analisis</p>
                             </div>
                         ) : (
                             <div className="gid-history-list">
                                 {history.map((item: any) => (
                                     <div key={item.id} className="gid-history-item">
                                         <div className="gid-history-thumb">
-                                            <img src={item.thumbnailUrl || item.imageUrl} alt="" />
+                                            <img src={item.image_url} alt="" />
                                         </div>
                                         <div className="gid-history-info">
                                             <p className="gid-history-name">
-                                                {item.result?.genres?.[0]?.name || 'Unknown'}
+                                                {item.heritage_name || 'Unknown'}
                                             </p>
                                             <p className="gid-history-date">
-                                                {new Date(item.createdAt).toLocaleDateString()}
+                                                {new Date(item.created_at).toLocaleDateString('id-ID')}
                                             </p>
                                         </div>
                                     </div>

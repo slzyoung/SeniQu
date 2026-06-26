@@ -112,6 +112,7 @@ export const CollectionCard = React.forwardRef<HTMLDivElement, CollectionCardPro
                                     onToggleFavorite(data.id);
                                 }}
                                 className={`w-9 h-9 md:w-8 md:h-8 rounded-full backdrop-blur-md flex items-center justify-center border border-white/10 transition-colors ${isFavorite ? 'bg-red-500/20 text-red-500 border-red-500/30' : 'bg-black/30 text-cream'}`}
+                                aria-label={isFavorite ? `Remove ${data.title} from favorites` : `Add ${data.title} to favorites`}
                             >
                                 <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
                             </motion.button>
@@ -142,7 +143,10 @@ export const CollectionCard = React.forwardRef<HTMLDivElement, CollectionCardPro
                                         <span>Verified</span>
                                     </div>
                                 </div>
-                                <button className="flex-shrink-0 w-9 h-9 md:w-8 md:h-8 rounded-full bg-gold/10 text-gold flex items-center justify-center hover:bg-gold/20 transition-colors">
+                                <button 
+                                    className="flex-shrink-0 w-9 h-9 md:w-8 md:h-8 rounded-full bg-gold/10 text-gold flex items-center justify-center hover:bg-gold/20 transition-colors"
+                                    aria-label={`View details of ${data.title}`}
+                                >
                                     <ArrowUpRight className="w-4 h-4" />
                                 </button>
                             </div>

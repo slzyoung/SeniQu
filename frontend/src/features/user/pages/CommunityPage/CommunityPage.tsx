@@ -17,20 +17,29 @@ import {
     Loader2,
     Pin,
     Image as ImageIcon,
-    Video,
     X,
-    Sparkles,
+    Film,
+    AlertTriangle,
+    Play,
+    Trash2,
+    Layers,
+    Grid,
 } from 'lucide-react';
 import { PageContainer } from '../../../../components/common/DashboardLayout';
 import { Button, Avatar } from '../../../../components/ui';
 import { useNavigate } from 'react-router-dom';
 import { useForumCategories, useForumThreads, useTrendingThreads, useCreateThread } from '../../../../hooks/useForum';
 import { useAuthStore } from '../../../../stores/useAuthStore';
-import { extractArray } from '../../../../lib/utils';
+import { extractArray, decodeHTML } from '../../../../lib/utils';
 import { uploadFile } from '../../../../lib/api';
 import { compressImage } from '../../../../lib/imageCompressor';
 import { useToast } from '../../../../stores/useNotificationStore';
 import { useDebounce } from '../../../../hooks/useDebounce';
+import { validateVideo, formatFileSize, formatDuration, generateVideoThumbnail } from '../../../../lib/videoCompressor';
+import { useUploadStore } from '../../../../stores/useUploadStore';
+import { forumService } from '../../../../services/forumService';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect } from 'react';
 import './CommunityPage.css';
 
 // ============================================
@@ -78,10 +87,9 @@ function FeaturedThreadCard({ thread, onClick }: { thread: any; onClick: () => v
             )}
             <div className="featured-overlay">
                 <div className="featured-badge">
-                    <Sparkles className="w-3 h-3" />
                     Featured Discussion
                 </div>
-                <h3 className="featured-title">{thread.title}</h3>
+                <h3 className="featured-title">{decodeHTML(thread.title)}</h3>
                 <div className="featured-meta">
                     <Avatar
                         name={authorName}
@@ -133,7 +141,7 @@ function ThreadCard({ thread, index }: { thread: any; index: number }) {
                     )}
                 </div>
 
-                <h3 className="thread-title">{thread.title}</h3>
+                <h3 className="thread-title">{decodeHTML(thread.title)}</h3>
 
                 {thread.content && (
                     <p className="thread-excerpt">{thread.content}</p>
@@ -179,16 +187,132 @@ function CreateThreadModal({
     const [content, setContent] = useState('');
     const [categoryId, setCategoryId] = useState('');
     const [tags, setTags] = useState('');
-    const [file, setFile] = useState<File | null>(null);
+
+    // Multiple Files and Layouts states
+    const [files, setFiles] = useState<File[]>([]);
+    const [layout, setLayout] = useState<'separate' | 'grid' | 'carousel'>('grid');
+    const [selectedAspect, setSelectedAspect] = useState<string>('original');
+    const [selectedSize, setSelectedSize] = useState<string>('1080p');
     const [isUploading, setIsUploading] = useState(false);
-    
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadPhase, setUploadPhase] = useState<'idle' | 'uploading' | 'compressing' | 'done'>('idle');
+    const [uploadStatusText, setUploadStatusText] = useState('');
+    const [mediaPreviews, setMediaPreviews] = useState<string[]>([]);
+    const [videoMeta, setVideoMeta] = useState<{ duration: number; width: number; height: number; size: number } | null>(null);
+    const [validationError, setValidationError] = useState<string | null>(null);
+    const [validationWarning, setValidationWarning] = useState<string | null>(null);
+    const [muteVideoSound, setMuteVideoSound] = useState(false);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const videoInputRef = useRef<HTMLInputElement>(null);
     const createThread = useCreateThread();
     const toast = useToast();
+    const addUpload = useUploadStore(state => state.addUpload);
+
+    const isVideo = files.length > 0 && files[0].type.startsWith('video/');
+
+    // Clean up object URLs to avoid memory leaks
+    useEffect(() => {
+        return () => {
+            mediaPreviews.forEach(url => {
+                if (url.startsWith('blob:')) {
+                    URL.revokeObjectURL(url);
+                }
+            });
+        };
+    }, [mediaPreviews]);
+
+    // Handle files selection with validation
+    const handleFilesSelect = async (selectedFiles: File[]) => {
+        setValidationError(null);
+        setValidationWarning(null);
+
+        const hasVideo = selectedFiles.some(f => f.type.startsWith('video/'));
+
+        if (hasVideo) {
+            if (selectedFiles.length > 1) {
+                setValidationError('Videos cannot be uploaded with other files.');
+                return;
+            }
+            const selectedFile = selectedFiles[0];
+            const validation = await validateVideo(selectedFile, {
+                maxFileSize: 200 * 1024 * 1024, // 200MB (to support 150MB securely)
+                maxDuration: 60, // 1 minute
+            });
+            if (!validation.valid) {
+                setValidationError(validation.error || 'Invalid video file');
+                return;
+            }
+            if (validation.warning) setValidationWarning(validation.warning);
+            if (validation.metadata) setVideoMeta(validation.metadata);
+
+            // Clean up previous previews
+            mediaPreviews.forEach(url => {
+                if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+            });
+            setMediaPreviews([]);
+
+            // Generate preview thumbnail
+            try {
+                const thumb = await generateVideoThumbnail(selectedFile);
+                setMediaPreviews([thumb]);
+            } catch {
+                setMediaPreviews([URL.createObjectURL(selectedFile)]);
+            }
+            setFiles([selectedFile]);
+        } else {
+            // Handle multiple images
+            // If current files contain a video, clear it
+            let currentImageFiles = files;
+            let currentPreviews = mediaPreviews;
+            if (files.some(f => f.type.startsWith('video/'))) {
+                mediaPreviews.forEach(url => {
+                    if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+                });
+                currentImageFiles = [];
+                currentPreviews = [];
+                setVideoMeta(null);
+            }
+
+            const combinedFiles = [...currentImageFiles, ...selectedFiles].slice(0, 5); // Limit to 5 images
+            if (currentImageFiles.length + selectedFiles.length > 5) {
+                setValidationWarning('Maximum 5 images allowed. Only the first 5 were added.');
+            }
+
+            const newPreviews = selectedFiles.map(f => URL.createObjectURL(f));
+            const combinedPreviews = [...currentPreviews, ...newPreviews].slice(0, 5);
+
+            setMediaPreviews(combinedPreviews);
+            setFiles(combinedFiles);
+        }
+
+        // Reset input element value to allow selecting same file again
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (videoInputRef.current) videoInputRef.current.value = '';
+    };
+
+    const handleRemoveFile = (index: number) => {
+        const fileToRemove = files[index];
+        const previewToRemove = mediaPreviews[index];
+
+        if (previewToRemove && previewToRemove.startsWith('blob:')) {
+            URL.revokeObjectURL(previewToRemove);
+        }
+
+        setFiles(prev => prev.filter((_, i) => i !== index));
+        setMediaPreviews(prev => prev.filter((_, i) => i !== index));
+
+        if (fileToRemove.type.startsWith('video/')) {
+            setVideoMeta(null);
+            setValidationWarning(null);
+            setValidationError(null);
+            setMuteVideoSound(false);
+        }
+    };
 
     const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
         e?.preventDefault();
-        
+
         if (!title || !content || !categoryId) {
             toast.error('Required Fields', 'Please fill in title, content, and category.');
             return;
@@ -196,17 +320,81 @@ function CreateThreadModal({
 
         try {
             setIsUploading(true);
-            let mediaUrl = undefined;
-            let mediaType = undefined;
+            setUploadProgress(0);
+            let mediaUrl: string | undefined = undefined;
+            let mediaType: string | undefined = undefined;
 
-            if (file) {
-                mediaType = file.type.startsWith('video/') ? 'video' : 'image';
-                // Compress image client-side before upload (faster transfer)
-                const fileToUpload = mediaType === 'image'
-                    ? await compressImage(file, { maxWidth: 1600, quality: 0.82 })
-                    : file;
-                const uploadResult = await uploadFile(fileToUpload, 'general');
-                mediaUrl = uploadResult.url;
+            if (files.length > 0) {
+                const firstFile = files[0];
+                if (firstFile.type.startsWith('video/')) {
+                    const taskId = 'forum-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+
+                    addUpload({
+                        id: taskId,
+                        type: 'forum',
+                        fileName: firstFile.name,
+                        fileSize: firstFile.size,
+                        file: firstFile,
+                        caption: title,
+                        forumOptions: {
+                            title,
+                            content,
+                            categoryId,
+                            selectedAspect,
+                            selectedSize,
+                            tags: [],
+                        },
+                        thumbnailUrl: mediaPreviews[0] || undefined,
+                    });
+
+                    toast.success(
+                        'Mengunggah di Latar Belakang',
+                        'Video forum Anda sedang diunggah di latar belakang. Thread akan otomatis dibuat setelah upload selesai.'
+                    );
+
+                    onClose();
+                    return;
+                } else {
+                    // === IMAGE ===
+                    mediaType = 'image';
+                    setUploadPhase('uploading');
+
+                    let maxWidth = 2048; // Default
+                    if (selectedSize === '4k') maxWidth = 3840;
+                    else if (selectedSize === '1080p') maxWidth = 1920;
+                    else if (selectedSize === '720p') maxWidth = 1280;
+                    else if (selectedSize === '480p') maxWidth = 854;
+                    else if (selectedSize === 'original') maxWidth = 4096;
+
+                    const uploadedUrls: string[] = [];
+                    for (let i = 0; i < files.length; i++) {
+                        setUploadStatusText(`Compressing photo ${i + 1} of ${files.length}...`);
+                        const compressed = await compressImage(files[i], {
+                            maxWidth: maxWidth,
+                            quality: 0.92,
+                            aspectRatio: selectedAspect
+                        });
+
+                        setUploadStatusText(`Uploading photo ${i + 1} of ${files.length}...`);
+                        const uploadResult = await uploadFile(compressed, 'general', (progress) => {
+                            const baseProgress = (i / files.length) * 100;
+                            const fileWeight = (progress / files.length);
+                            setUploadProgress(Math.round(baseProgress + fileWeight));
+                        });
+                        uploadedUrls.push(uploadResult.url);
+                    }
+
+                    if (uploadedUrls.length === 1) {
+                        mediaUrl = uploadedUrls[0];
+                    } else {
+                        mediaUrl = JSON.stringify({
+                            images: uploadedUrls,
+                            layout: layout,
+                        });
+                    }
+
+                    setUploadPhase('done');
+                }
             }
 
             createThread.mutate({
@@ -224,11 +412,16 @@ function CreateThreadModal({
                     setContent('');
                     setCategoryId('');
                     setTags('');
-                    setFile(null);
+                    setFiles([]);
+                    setMediaPreviews([]);
+                    setVideoMeta(null);
+                    setUploadPhase('idle');
                 }
             });
         } catch (error: any) {
+            console.error('Thread creation error:', error);
             toast.error('Upload Failed', error.message || 'Could not upload media.');
+            setUploadPhase('idle');
         } finally {
             setIsUploading(false);
         }
@@ -240,7 +433,7 @@ function CreateThreadModal({
         <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
             {/* Mobile: bottom sheet | Desktop: centered modal */}
             <div
-                className="w-full md:max-w-lg md:mx-4 bg-white dark:bg-[#151515] md:rounded-2xl rounded-t-2xl md:rounded-b-2xl border-t md:border border-gray-200/60 dark:border-white/[0.08] shadow-2xl overflow-hidden"
+                className="w-full md:max-w-2xl md:mx-4 bg-white dark:bg-[#151515] md:rounded-2xl rounded-t-2xl md:rounded-b-2xl border-t md:border border-gray-200/60 dark:border-white/[0.08] shadow-2xl overflow-hidden"
                 style={{ maxHeight: '92vh', animation: 'forum-fadeInUp 0.25s ease-out' }}
             >
                 {/* Handle bar — mobile only */}
@@ -254,8 +447,8 @@ function CreateThreadModal({
                         <h2 className="text-lg md:text-xl font-serif font-bold text-gray-900 dark:text-white">New Discussion</h2>
                         <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Share your thoughts</p>
                     </div>
-                    <button 
-                        onClick={onClose} 
+                    <button
+                        onClick={onClose}
                         className="p-2 rounded-full bg-gray-100 dark:bg-white/[0.06] text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all"
                     >
                         <X className="w-4 h-4" />
@@ -292,7 +485,7 @@ function CreateThreadModal({
                                 />
                             </div>
                         </div>
-                        
+
                         <div>
                             <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1.5 uppercase tracking-[0.1em]">Title *</label>
                             <input
@@ -305,7 +498,7 @@ function CreateThreadModal({
                                 minLength={5}
                             />
                         </div>
-                        
+
                         <div>
                             <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1.5 uppercase tracking-[0.1em]">Content *</label>
                             <textarea
@@ -318,42 +511,315 @@ function CreateThreadModal({
                                 minLength={10}
                             />
                         </div>
-                        
-                        {/* Media upload — compact */}
+
+                        {/* Multiple Image / Video attach selector and preview */}
                         <div>
-                            {file ? (
-                                <div className="flex items-center gap-2.5 bg-amber-50 dark:bg-amber-900/10 px-3 py-2.5 rounded-lg border border-amber-200/60 dark:border-amber-800/20">
-                                    {file.type.startsWith('video/') ? 
-                                        <Video className="text-blue-500 w-4 h-4 flex-shrink-0" /> : 
-                                        <ImageIcon className="text-pink-500 w-4 h-4 flex-shrink-0" />
-                                    }
-                                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate flex-1">{file.name}</span>
-                                    <button type="button" onClick={() => setFile(null)} className="text-red-400 hover:text-red-600 p-0.5">
-                                        <X className="w-3.5 h-3.5" />
-                                    </button>
+                            <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1.5 uppercase tracking-[0.1em]">Attach Media</label>
+
+                            {files.length > 0 ? (
+                                <div className="rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden bg-gray-50 dark:bg-white/[0.03]">
+                                    {/* Video Preview */}
+                                    {isVideo && mediaPreviews[0] && (
+                                        <div className="relative aspect-video bg-black">
+                                            <img src={mediaPreviews[0]} alt="Video preview" className="w-full h-full object-contain" />
+                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
+                                                    <Play className="w-5 h-5 text-white ml-0.5" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {/* Images Preview Grid */}
+                                    {!isVideo && mediaPreviews.length > 0 && (
+                                        <div className="p-3 bg-gray-100 dark:bg-white/5 border-b border-gray-200 dark:border-white/10">
+                                            <div className="grid grid-cols-4 gap-2">
+                                                <AnimatePresence initial={false}>
+                                                    {mediaPreviews.map((url, idx) => (
+                                                        <motion.div
+                                                            key={url}
+                                                            initial={{ opacity: 0, scale: 0.8 }}
+                                                            animate={{ opacity: 1, scale: 1 }}
+                                                            exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.15 } }}
+                                                            layout
+                                                            className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-white/10 bg-black/20 group"
+                                                        >
+                                                            <img src={url} alt={`Preview ${idx}`} className="w-full h-full object-cover" />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRemoveFile(idx)}
+                                                                className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white hover:bg-red-600 transition-all shadow-md"
+                                                            >
+                                                                <X className="w-3 h-3" />
+                                                            </button>
+                                                        </motion.div>
+                                                    ))}
+                                                </AnimatePresence>
+                                                {/* Add more slot */}
+                                                {mediaPreviews.length < 5 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => fileInputRef.current?.click()}
+                                                        className="aspect-square rounded-lg border-2 border-dashed border-gray-300 dark:border-white/10 flex flex-col items-center justify-center text-gray-400 hover:border-amber-500 hover:text-amber-500 transition-all text-[10px] font-semibold gap-1"
+                                                    >
+                                                        <Plus className="w-4 h-4" />
+                                                        <span>Add More</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* File Info Bar */}
+                                    <div className="flex items-center gap-3 px-3 py-2.5">
+                                        {isVideo ? <Film className="w-4 h-4 text-blue-500 flex-shrink-0" /> : <ImageIcon className="w-4 h-4 text-pink-500 flex-shrink-0" />}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                                                {isVideo ? files[0].name : `${files.length} Photo${files.length > 1 ? 's' : ''} Selected`}
+                                            </p>
+                                            <div className="flex items-center gap-2 text-[11px] text-gray-400">
+                                                <span>
+                                                    {isVideo ? formatFileSize(files[0].size) : formatFileSize(files.reduce((acc, f) => acc + f.size, 0))}
+                                                </span>
+                                                {isVideo && videoMeta && (
+                                                    <>
+                                                        <span>·</span>
+                                                        <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" />{formatDuration(videoMeta.duration)}</span>
+                                                        <span>·</span>
+                                                        <span>{videoMeta.width}×{videoMeta.height}</span>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {isVideo && (
+                                            <button type="button" onClick={() => handleRemoveFile(0)}
+                                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        {!isVideo && (
+                                            <button type="button" onClick={() => {
+                                                mediaPreviews.forEach(url => {
+                                                    if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+                                                });
+                                                setFiles([]);
+                                                setMediaPreviews([]);
+                                                setVideoMeta(null);
+                                                setValidationWarning(null);
+                                            }}
+                                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
+                                                title="Remove all photos"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Server compression notice for videos */}
+                                    {isVideo && (
+                                        <div className="px-3 pb-2.5">
+                                            <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg px-2.5 py-1.5">
+                                                <Film className="w-3 h-3" />
+                                                Auto-compressed on server · H.264 · Mobile optimized
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Scale & Aspect Controls */}
+                                    <div className="px-4 py-3 bg-gray-50 dark:bg-white/[0.02] border-t border-gray-100 dark:border-white/5 grid grid-cols-2 gap-3.5">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 uppercase tracking-wider">Aspect Ratio</label>
+                                            <select
+                                                value={selectedAspect}
+                                                onChange={e => setSelectedAspect(e.target.value)}
+                                                className="w-full px-2.5 py-1.5 bg-white dark:bg-[#151515] border border-gray-200 dark:border-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:border-amber-500 dark:focus:border-gold transition-all"
+                                            >
+                                                <option value="original">Original Aspect Ratio</option>
+                                                <option value="1:1">Square (1:1)</option>
+                                                <option value="4:3">Standard Landscape (4:3)</option>
+                                                <option value="3:4">Classic Portrait (3:4)</option>
+                                                <option value="16:9">Widescreen (16:9)</option>
+                                                <option value="9:16">Vertical Video (9:16)</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 uppercase tracking-wider">{isVideo ? 'Compression Profile' : 'Size Profile / Scale'}</label>
+                                            <select
+                                                value={selectedSize}
+                                                onChange={e => setSelectedSize(e.target.value)}
+                                                className="w-full px-2.5 py-1.5 bg-white dark:bg-[#151515] border border-gray-200 dark:border-white/10 rounded-lg text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:border-amber-500 dark:focus:border-gold transition-all"
+                                            >
+                                                {isVideo ? (
+                                                    <>
+                                                        <option value="default">Original Preset (Default)</option>
+                                                        <option value="1080p">High Quality (1080p)</option>
+                                                        <option value="720p">Standard HD (720p)</option>
+                                                        <option value="480p">Mobile Data Saver (480p)</option>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <option value="1080p">Full HD (1080p) - Recommended</option>
+                                                        <option value="720p">Standard HD (720p)</option>
+                                                        <option value="4k">Ultra HD (4K)</option>
+                                                        <option value="480p">Mobile Data Saver (480p)</option>
+                                                        <option value="original">Original (No Resize)</option>
+                                                    </>
+                                                )}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {/* Mute Audio Option for Videos */}
+                                    {isVideo && (
+                                        <div className="px-4 py-2.5 bg-gray-50/50 dark:bg-white/[0.01] border-t border-gray-100 dark:border-white/5">
+                                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={muteVideoSound}
+                                                    onChange={e => setMuteVideoSound(e.target.checked)}
+                                                    className="w-4.5 h-4.5 accent-amber-500 rounded border-gray-200 dark:border-white/10 focus:ring-amber-500 dark:focus:ring-gold bg-white dark:bg-[#151515]"
+                                                />
+                                                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                                                    Mute original sound from this video (silent video)
+                                                </span>
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
-                                <button
-                                    type="button"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="w-full py-3 border border-dashed border-gray-200 dark:border-white/[0.08] rounded-lg text-gray-400 dark:text-gray-500 hover:border-amber-400 dark:hover:border-gold/30 hover:text-amber-500 dark:hover:text-gold transition-all flex items-center justify-center gap-2 text-xs font-medium"
-                                >
-                                    <ImageIcon className="w-3.5 h-3.5" />
-                                    Attach Image or Video
-                                </button>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button type="button" onClick={() => fileInputRef.current?.click()}
+                                        className="py-4 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl text-gray-400 dark:text-gray-500 hover:border-pink-400 dark:hover:border-pink-500/40 hover:text-pink-500 transition-all flex flex-col items-center justify-center gap-1.5 text-xs">
+                                        <ImageIcon className="w-5 h-5" />
+                                        <span className="font-semibold">Image</span>
+                                        <span className="text-[10px] opacity-60">Max 5 Images</span>
+                                    </button>
+                                    <button type="button" onClick={() => videoInputRef.current?.click()}
+                                        className="py-4 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl text-gray-400 dark:text-gray-500 hover:border-blue-400 dark:hover:border-blue-500/40 hover:text-blue-500 transition-all flex flex-col items-center justify-center gap-1.5 text-xs">
+                                        <Film className="w-5 h-5" />
+                                        <span className="font-semibold">Video</span>
+                                        <span className="text-[10px] opacity-60">Max 1 min · 200MB</span>
+                                    </button>
+                                </div>
                             )}
-                            <input 
-                                type="file" 
-                                ref={fileInputRef} 
-                                accept="image/*,video/*" 
-                                className="hidden" 
-                                onChange={e => {
-                                    if (e.target.files && e.target.files.length > 0) {
-                                        setFile(e.target.files[0]);
-                                    }
-                                }}
-                            />
+
+                            {/* Multiple image layout choices */}
+                            {!isVideo && files.length > 1 && (
+                                <div className="mt-4 p-4 rounded-xl border border-amber-500/20 bg-amber-500/[0.02] dark:bg-white/[0.02]">
+                                    <span className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2.5 uppercase tracking-wider">Display Options</span>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setLayout('separate')}
+                                            className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center gap-1.5 ${layout === 'separate'
+                                                ? 'bg-amber-500 dark:bg-gold text-charcoal border-transparent shadow-sm'
+                                                : 'bg-white dark:bg-white/5 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10'}`}
+                                        >
+                                            <Layers className="w-4 h-4" />
+                                            <span>Separates</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setLayout('grid')}
+                                            className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center gap-1.5 ${layout === 'grid'
+                                                ? 'bg-amber-500 dark:bg-gold text-charcoal border-transparent shadow-sm'
+                                                : 'bg-white dark:bg-white/5 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10'}`}
+                                        >
+                                            <Grid className="w-4 h-4" />
+                                            <span>Grid Collage</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setLayout('carousel')}
+                                            className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center gap-1.5 ${layout === 'carousel'
+                                                ? 'bg-amber-500 dark:bg-gold text-charcoal border-transparent shadow-sm'
+                                                : 'bg-white dark:bg-white/5 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10'}`}
+                                        >
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                                            </svg>
+                                            <span>Carousel</span>
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-2.5 leading-relaxed">
+                                        {layout === 'separate' && 'Images will be stacked vertically in full size.'}
+                                        {layout === 'grid' && 'Images will be displayed in a premium collage grid.'}
+                                        {layout === 'carousel' && 'Images will be displayed in an interactive swipable slider.'}
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Hidden file inputs */}
+                            <input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden"
+                                onChange={e => { if (e.target.files?.length) handleFilesSelect(Array.from(e.target.files)); }} />
+                            <input type="file" ref={videoInputRef} accept="video/mp4,video/webm,video/ogg,video/quicktime" className="hidden"
+                                onChange={e => { if (e.target.files?.length) handleFilesSelect(Array.from(e.target.files)); }} />
+
+                            {/* Validation Error */}
+                            {validationError && (
+                                <div className="mt-2 flex items-center gap-2 text-xs text-red-500 bg-red-50 dark:bg-red-500/10 p-2.5 rounded-lg">
+                                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                                    {validationError}
+                                </div>
+                            )}
+                            {/* Validation Warning */}
+                            {validationWarning && !validationError && (
+                                <div className="mt-2 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 p-2.5 rounded-lg">
+                                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                                    {validationWarning}
+                                </div>
+                            )}
                         </div>
+
+                        {/* Premium Upload Progress Bar */}
+                        {isUploading && (
+                            <div className="mt-4 p-5 rounded-2xl bg-amber-500/5 dark:bg-[#1f1a10] border border-amber-500/20 flex flex-col space-y-4 relative overflow-hidden backdrop-blur-md">
+                                <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-amber-500/0 via-amber-500/5 to-amber-500/0 animate-pulse" />
+
+                                <div className="relative z-10 flex items-start gap-4">
+                                    <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-500 flex-shrink-0 flex items-center justify-center shadow-inner">
+                                        {uploadPhase === 'uploading' && (
+                                            isVideo ? <Film className="w-6 h-6 animate-pulse" /> : <ImageIcon className="w-6 h-6 animate-pulse" />
+                                        )}
+                                        {uploadPhase === 'compressing' && <Loader2 className="w-6 h-6 animate-spin" />}
+                                        {uploadPhase === 'done' && (
+                                            <svg className="w-6 h-6 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        )}
+                                    </div>
+
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <h4 className="text-sm font-bold text-gray-900 dark:text-white tracking-tight">
+                                                {uploadStatusText || (
+                                                    uploadPhase === 'uploading' ? (isVideo ? 'Uploading HD video...' : 'Uploading photo...') :
+                                                        uploadPhase === 'compressing' ? 'Optimizing video for mobile...' :
+                                                            uploadPhase === 'done' ? 'Upload Successful!' : ''
+                                                )}
+                                            </h4>
+                                            <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400">
+                                                {uploadProgress}%
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 leading-normal">
+                                            {uploadPhase === 'uploading' && `Transferring to Cloudflare R2 CDN`}
+                                            {uploadPhase === 'compressing' && 'Processing H.264 video profiles for mobile'}
+                                            {uploadPhase === 'done' && 'Publishing your discussion...'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="relative z-10 w-full font-sans">
+                                    <div className="h-2.5 bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden p-[1px] border border-gray-200/20 dark:border-white/5">
+                                        <div
+                                            className={`h-full rounded-full transition-all duration-500 ease-out ${uploadPhase === 'done' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'bg-gradient-to-r from-amber-500 via-[#C9A84C] to-[#E5C158] shadow-[0_0_8px_rgba(201,168,76,0.25)]'
+                                                }`}
+                                            style={{ width: `${uploadProgress}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </form>
                 </div>
 
@@ -403,7 +869,7 @@ export function CommunityPage() {
     const fetchedCategories = extractArray(categoriesData);
     const threads = extractArray(threadsData);
     const trendingThreads = extractArray(trendingData);
-    
+
     // Robust fallback categories
     const defaultCategories = [
         { id: 'bc5c6d36-8aed-4fd3-9b6f-7d1c67d710f1', name: 'Museums & Galleries', icon: '🏛️' },
@@ -421,8 +887,8 @@ export function CommunityPage() {
     // Filter and compute featured/regular threads efficiently
     const { featuredThread, regularThreads } = useMemo<{ featuredThread: any | null, regularThreads: any[] }>(() => {
         // First filter all threads based on search
-        const filteredThreads = threads.filter((thread: any) => 
-            !debouncedSearch || 
+        const filteredThreads = threads.filter((thread: any) =>
+            !debouncedSearch ||
             (thread.title && thread.title.toLowerCase().includes(debouncedSearch.toLowerCase())) ||
             (thread.content && thread.content.toLowerCase().includes(debouncedSearch.toLowerCase()))
         );
@@ -504,11 +970,10 @@ export function CommunityPage() {
                         {sortTabs.map(tab => (
                             <button
                                 key={tab.id}
-                                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
-                                    sortBy === tab.id
+                                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${sortBy === tab.id
                                         ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm'
                                         : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                                }`}
+                                    }`}
                                 onClick={() => setSortBy(tab.id)}
                             >
                                 {tab.icon}
@@ -624,7 +1089,7 @@ export function CommunityPage() {
                                     >
                                         <span className="trending-rank">{index + 1}</span>
                                         <div className="flex-1 min-w-0">
-                                            <p className="trending-title">{thread.title}</p>
+                                            <p className="trending-title">{decodeHTML(thread.title)}</p>
                                             <p className="trending-replies">{thread.replyCount || 0} replies</p>
                                         </div>
                                     </div>
@@ -683,3 +1148,4 @@ export function CommunityPage() {
 }
 
 export default CommunityPage;
+

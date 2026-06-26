@@ -3,18 +3,18 @@
  * Immersive cultural heritage explorer with city-based navigation
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search,
     SlidersHorizontal,
     ChevronRight,
+    ChevronLeft,
     MapPin,
     Landmark,
     Compass,
     ArrowRight,
-    Sparkles,
     Image as ImageIcon,
 } from 'lucide-react';
 import {
@@ -25,6 +25,7 @@ import { useArtworks } from '../../../../hooks/useArtworks';
 import { useMuseums } from '../../../../hooks/useMuseums';
 import { extractArray } from '../../../../lib/utils';
 import { ROUTES } from '../../../../lib/constants';
+import { CITY_WHITELIST, getRealPlaceCoverImage } from '../../../../features/gallery/data/citiesRegistry';
 import './UserDashboard.css';
 
 // ============================================================
@@ -40,52 +41,102 @@ interface CityData {
     featured?: boolean;
 }
 
-const HERITAGE_CITIES: CityData[] = [
+const CITIES_REGIONAL_KEYWORDS: Record<string, string[]> = {
+    jakarta: ['jawa', 'dki', 'capital', 'jabodetabek', 'java', 'pusat', 'selatan', 'barat', 'timur', 'utara'],
+    yogyakarta: ['jawa', 'diy', 'jogja', 'java', 'sleman', 'bantul', 'gunungkidul', 'kulon progo'],
+    bali: ['bali', 'denpasar', 'nusra', 'nusa tenggara', 'badung', 'ubud', 'gianyar'],
+    bandung: ['jawa', 'jabar', 'jawa barat', 'java', 'lembang'],
+    surabaya: ['jawa', 'jatim', 'jawa timur', 'java', 'madura'],
+    semarang: ['jawa', 'jateng', 'jawa tengah', 'java', 'ungaran', 'ambarawa', 'lawang sewu'],
+    medan: ['sumatera', 'sumatra', 'sumut', 'sumatera utara'],
+    makassar: ['sulawesi', 'sulsel', 'sulawesi selatan', 'ujung pandang'],
+    palembang: ['sumatera', 'sumatra', 'sumsel', 'sumatera selatan'],
+    solo: ['jawa', 'surakarta', 'jateng', 'jawa tengah', 'java'],
+    malang: ['jawa', 'jatim', 'jawa timur', 'java', 'batu'],
+    balikpapan: ['kalimantan', 'kaltim', 'kalimantan timur', 'borneo'],
+    samarinda: ['kalimantan', 'kaltim', 'kalimantan timur', 'borneo'],
+    manado: ['sulawesi', 'sulut', 'sulawesi utara', 'bunaken'],
+    pontianak: ['kalimantan', 'kalbar', 'kalimantan barat', 'borneo'],
+    aceh: ['sumatera', 'sumatra', 'nad', 'banda aceh'],
+    lampung: ['sumatera', 'sumatra', 'bandar lampung']
+};
+
+const HERITAGE_CITIES: CityData[] = Object.entries(CITY_WHITELIST).map(([id, meta]) => ({
+    id,
+    name: meta.name,
+    description: meta.description,
+    image: meta.image,
+    badge: id === 'jakarta' ? 'CAPITAL CITY' :
+           id === 'yogyakarta' ? 'HERITAGE HUB' :
+           id === 'bali' ? 'SPIRITUAL ISLE' :
+           id === 'bandung' ? 'ART DECO CITY' :
+           id === 'surabaya' ? 'HERO CITY' : undefined,
+    featured: id === 'jakarta',
+}));
+
+// ============================================================
+// HERO CAROUSEL — 7 Indonesian Heritage Cities
+// ============================================================
+
+interface HeroSlide {
+    id: string;
+    image: string;
+    alt: string;
+    city: string;
+    tagline: string;
+}
+
+const HERO_SLIDES: HeroSlide[] = [
     {
-        id: 'jakarta',
-        name: 'Jakarta',
-        description: 'Where colonial history meets modern arts. Explore the Old Town\'s colonial architecture and galleries.',
-        badge: 'CAPITAL CITY',
-        image: 'https://images.unsplash.com/photo-1555899434-94d1368aa7af?w=1200&q=80',
-        featured: true,
+        id: 'bromo',
+        image: 'https://cdn.seniqu.art/assets/static/hero/bromo.webp',
+        alt: 'Mount Bromo — East Java',
+        city: 'East Java',
+        tagline: 'Majestic volcanic landscapes',
     },
     {
-        id: 'yogyakarta',
-        name: 'Yogyakarta',
-        description: 'The heart of Javanese culture and their royal heritage.',
-        badge: 'HERITAGE HUB',
-        image: 'https://images.unsplash.com/photo-1596402184320-417e7178b2cd?w=1200&q=80',
+        id: 'borobudur',
+        image: 'https://cdn.seniqu.art/assets/static/hero/borobudur.webp',
+        alt: 'Borobudur Temple — Central Java',
+        city: 'Yogyakarta',
+        tagline: 'Ancient Buddhist temple wonder',
     },
     {
         id: 'bali',
-        name: 'Bali',
-        description: 'Island of arts, temples, and living traditions.',
-        badge: 'SPIRITUAL ISLE',
-        image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=1200&q=80',
+        image: 'https://cdn.seniqu.art/assets/static/hero/bali.webp',
+        alt: 'Ulun Danu Beratan — Bali',
+        city: 'Bali',
+        tagline: 'Island of Gods & culture',
     },
     {
         id: 'bandung',
-        name: 'Bandung',
-        description: 'Known for its Art Deco architecture and creative energy.',
-        badge: 'ART DECO CITY',
-        image: 'https://images.unsplash.com/photo-1580481072645-022f17cc738b?w=1200&q=80',
+        image: 'https://cdn.seniqu.art/assets/static/hero/bandung.webp',
+        alt: 'Gedung Sate — Bandung',
+        city: 'Bandung',
+        tagline: 'Art Deco heritage city',
+    },
+    {
+        id: 'jakarta',
+        image: 'https://cdn.seniqu.art/assets/static/hero/jakarta.webp',
+        alt: 'Jakarta Old Town',
+        city: 'Jakarta',
+        tagline: 'Capital of cultural heritage',
+    },
+    {
+        id: 'yogyakarta',
+        image: 'https://cdn.seniqu.art/assets/static/cities/yogyakarta.webp',
+        alt: 'Kraton Yogyakarta — Special Region',
+        city: 'Yogyakarta',
+        tagline: 'Living Javanese royal legacy',
     },
     {
         id: 'surabaya',
-        name: 'Surabaya',
-        description: 'The hero city with a rich maritime and trade heritage.',
-        badge: 'HERO CITY',
-        image: 'https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?w=1200&q=80',
-    },
-    {
-        id: 'semarang',
-        name: 'Semarang',
-        description: 'Explore Dutch colonial history and the vibrant Chinatown heritage.',
-        image: 'https://images.unsplash.com/photo-1545259741-2ea3ebf61fa3?w=1200&q=80',
+        image: 'https://cdn.seniqu.art/assets/static/cities/surabaya.webp',
+        alt: 'Tugu Pahlawan — Surabaya',
+        city: 'Surabaya',
+        tagline: 'Hero City of independence',
     },
 ];
-
-const HERO_IMAGE = 'https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?w=1800&q=85';
 
 // ============================================================
 // HELPER FUNCTIONS
@@ -105,7 +156,8 @@ function getMuseumImage(museum: any): string {
         || museum?.cover_image_url
         || (museum?.images && museum.images[0])
         || '';
-    if (raw) return ensureImageParams(raw);
+    const resolved = getRealPlaceCoverImage(museum?.name || '', museum?.type || 'museum', raw || undefined);
+    if (resolved) return ensureImageParams(resolved);
     return 'https://images.unsplash.com/photo-1583037189850-1921ae7c6c22?w=400&q=80';
 }
 
@@ -153,8 +205,8 @@ function CityCard({
     );
 }
 
-/** Curated Gallery Card */
-function GalleryCard({
+/** Curated Place Card */
+function PlaceCard({
     museum,
     index,
     onClick,
@@ -168,10 +220,16 @@ function GalleryCard({
 
     return (
         <motion.div
-            className="heritage-gallery-card heritage-fade-in"
+            className="heritage-gallery-card"
             onClick={onClick}
-            style={{ animationDelay: `${index * 0.08}s` }}
-            whileHover={{ y: -3 }}
+            initial={{ opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{
+                duration: 0.6,
+                delay: index * 0.05,
+                ease: [0.16, 1, 0.3, 1]
+            }}
+            whileHover={{ y: -6, scale: 1.02 }}
         >
             <div className="heritage-gallery-card__img-wrap">
                 <img
@@ -183,15 +241,15 @@ function GalleryCard({
             </div>
             <div className="heritage-gallery-card__info">
                 <span className="heritage-gallery-card__eyebrow">
-                    {museum?.type || 'Collection'}
+                    {museum?.type || 'Place'}
                 </span>
                 <h4 className="heritage-gallery-card__name">
-                    {museum?.name || 'Gallery'}
+                    {museum?.name || 'Curated Place'}
                 </h4>
                 <p className="heritage-gallery-card__desc">
                     {museum?.description
                         ? museum.description.substring(0, 80) + (museum.description.length > 80 ? '...' : '')
-                        : `A curated journey through the artistic heritage of ${city}.`}
+                        : `A curated journey through the cultural heritage of ${city}.`}
                 </p>
             </div>
         </motion.div>
@@ -206,6 +264,45 @@ export function UserDashboard() {
     const navigate = useNavigate();
     const { data: user } = useCurrentUser();
     const [searchQuery, setSearchQuery] = useState('');
+    const [page, setPage] = useState(0);
+    const [direction, setDirection] = useState(1); // 1 for next, -1 for prev
+
+    const PAGE_SIZE = 7;
+    const galleriesRef = useRef<HTMLDivElement>(null);
+    const [scrollProgress, setScrollProgress] = useState(0);
+    const [isPaused, setIsPaused] = useState(false);
+
+    // ── Hero Carousel State ──
+    const [heroIndex, setHeroIndex] = useState(0);
+    const [heroManualPause, setHeroManualPause] = useState(false);
+    const heroTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const advanceHero = useCallback(() => {
+        setHeroIndex((prev) => (prev + 1) % HERO_SLIDES.length);
+    }, []);
+
+    // Auto-advance hero carousel every 6 seconds
+    useEffect(() => {
+        if (heroManualPause) return;
+        heroTimerRef.current = setInterval(advanceHero, 6000);
+        return () => {
+            if (heroTimerRef.current) clearInterval(heroTimerRef.current);
+        };
+    }, [heroManualPause, advanceHero]);
+
+    // Preload next hero image for smoother transitions
+    useEffect(() => {
+        const nextIdx = (heroIndex + 1) % HERO_SLIDES.length;
+        const img = new Image();
+        img.src = HERO_SLIDES[nextIdx].image;
+    }, [heroIndex]);
+
+    const handleHeroDotClick = (idx: number) => {
+        setHeroIndex(idx);
+        // Reset auto-advance timer on manual interaction
+        if (heroTimerRef.current) clearInterval(heroTimerRef.current);
+        heroTimerRef.current = setInterval(advanceHero, 6000);
+    };
 
     // Fetch real data from API
     const { data: museumsData, isLoading: museumsLoading } = useMuseums({ limit: 8 });
@@ -219,18 +316,94 @@ export function UserDashboard() {
         return extractArray(raw);
     }, [museumsData]);
 
-    // Filter cities based on search
+    // Auto-scroll galleries effect
+    useEffect(() => {
+        if (isPaused || museums.length === 0) return;
+
+        const interval = setInterval(() => {
+            if (galleriesRef.current) {
+                const container = galleriesRef.current;
+                const maxScroll = container.scrollWidth - container.clientWidth;
+                if (maxScroll <= 0) return;
+
+                if (container.scrollLeft >= maxScroll - 10) {
+                    container.scrollTo({ left: 0, behavior: 'smooth' });
+                } else {
+                    scrollGalleries('right');
+                }
+            }
+        }, 4000);
+
+        return () => clearInterval(interval);
+    }, [museums, isPaused]);
+
+    const handleGalleriesScroll = () => {
+        if (galleriesRef.current) {
+            const container = galleriesRef.current;
+            const maxScroll = container.scrollWidth - container.clientWidth;
+            if (maxScroll > 0) {
+                setScrollProgress(container.scrollLeft / maxScroll);
+            }
+        }
+    };
+
+    const scrollGalleries = (dir: 'left' | 'right') => {
+        if (galleriesRef.current) {
+            const container = galleriesRef.current;
+            const scrollAmount = 340; // Card width + gap
+            const targetScroll = container.scrollLeft + (dir === 'left' ? -scrollAmount : scrollAmount);
+            container.scrollTo({
+                left: targetScroll,
+                behavior: 'smooth'
+            });
+        }
+    };
+
+    // Filter cities based on search (including regional keywords)
     const filteredCities = useMemo(() => {
         if (!searchQuery.trim()) return HERITAGE_CITIES;
         const q = searchQuery.toLowerCase();
-        return HERITAGE_CITIES.filter(
-            (c) =>
-                c.name.toLowerCase().includes(q) ||
-                c.description.toLowerCase().includes(q)
-        );
+        return HERITAGE_CITIES.filter((c) => {
+            const nameMatch = c.name.toLowerCase().includes(q);
+            const descMatch = c.description.toLowerCase().includes(q);
+            const kw = CITIES_REGIONAL_KEYWORDS[c.id] || [];
+            const keywordMatch = kw.some(k => k.toLowerCase().includes(q));
+            return nameMatch || descMatch || keywordMatch;
+        });
     }, [searchQuery]);
 
-    const totalDistricts = museums.length + HERITAGE_CITIES.length;
+    // Reset page to 0 when search query changes
+    useEffect(() => {
+        setPage(0);
+    }, [searchQuery]);
+
+    const pageCount = Math.ceil(filteredCities.length / PAGE_SIZE);
+
+    // Paginate displayed cities
+    const displayedCities = useMemo(() => {
+        if (searchQuery.trim()) {
+            return filteredCities; // Show all matches
+        }
+        const start = page * PAGE_SIZE;
+        return filteredCities.slice(start, start + PAGE_SIZE);
+    }, [filteredCities, searchQuery, page]);
+
+    const totalDistricts = museums.length + filteredCities.length;
+
+    const slideVariants = {
+        enter: (direction: number) => ({
+            x: direction > 0 ? 120 : -120,
+            opacity: 0
+        }),
+        center: {
+            x: 0,
+            opacity: 1
+        },
+        exit: (direction: number) => ({
+            x: direction < 0 ? 120 : -120,
+            opacity: 0
+        })
+    };
 
     return (
         <motion.div
@@ -239,15 +412,31 @@ export function UserDashboard() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4 }}
         >
-            {/* ====== HERO SECTION ====== */}
-            <div className="heritage-hero">
-                <img
-                    src={HERO_IMAGE}
-                    alt="National Heritage"
-                    className="heritage-hero__bg"
-                    loading="eager"
-                />
+            {/* ====== HERO SECTION — Animated City Carousel ====== */}
+            <div
+                className="heritage-hero"
+                onMouseEnter={() => setHeroManualPause(true)}
+                onMouseLeave={() => setHeroManualPause(false)}
+                onTouchStart={() => setHeroManualPause(true)}
+                onTouchEnd={() => { setTimeout(() => setHeroManualPause(false), 3000); }}
+            >
+                {/* Animated Background Image Carousel */}
+                <AnimatePresence mode="wait">
+                    <motion.img
+                        key={HERO_SLIDES[heroIndex].id}
+                        src={HERO_SLIDES[heroIndex].image}
+                        alt={HERO_SLIDES[heroIndex].alt}
+                        className="heritage-hero__bg"
+                        initial={{ opacity: 0, scale: 1.08 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 1.5, ease: 'easeOut' }}
+                        loading={heroIndex === 0 ? 'eager' : 'lazy'}
+                    />
+                </AnimatePresence>
+
                 <div className="heritage-hero__overlay" />
+
                 <div className="heritage-hero__content">
                     <motion.span
                         className="heritage-hero__label"
@@ -255,7 +444,7 @@ export function UserDashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.2, duration: 0.5 }}
                     >
-                        <Sparkles /> SeniQu Gallery
+                        SeniQu Gallery
                     </motion.span>
                     <motion.h1
                         className="heritage-hero__title"
@@ -273,6 +462,35 @@ export function UserDashboard() {
                     >
                         Discover the soul of Indonesia through its curated architectural and cultural districts.
                     </motion.p>
+
+                    {/* City name indicator — animated per slide */}
+                    <AnimatePresence mode="wait">
+                        <motion.span
+                            key={HERO_SLIDES[heroIndex].id + '-city'}
+                            className="heritage-hero__city-tag"
+                            initial={{ opacity: 0, x: 12 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -12 }}
+                            transition={{ duration: 0.4, ease: 'easeOut' }}
+                        >
+                            <MapPin style={{ width: 12, height: 12 }} />
+                            {HERO_SLIDES[heroIndex].city}
+                            <span className="heritage-hero__city-divider">·</span>
+                            {HERO_SLIDES[heroIndex].tagline}
+                        </motion.span>
+                    </AnimatePresence>
+                </div>
+
+                {/* Carousel Dot Indicators */}
+                <div className="heritage-hero__dots">
+                    {HERO_SLIDES.map((slide, idx) => (
+                        <button
+                            key={slide.id}
+                            className={`heritage-hero__dot ${idx === heroIndex ? 'heritage-hero__dot--active' : ''}`}
+                            onClick={() => handleHeroDotClick(idx)}
+                            aria-label={`Go to ${slide.city}`}
+                        />
+                    ))}
                 </div>
             </div>
 
@@ -316,43 +534,129 @@ export function UserDashboard() {
                     </button>
                 </div>
 
-                <div className="heritage-cities">
-                    {filteredCities.map((city, i) => (
-                        <CityCard
-                            key={city.id}
-                            city={city}
-                            index={i}
-                            onClick={() => navigate(`/gallery/city/${city.id}`)}
-                        />
-                    ))}
-                    {filteredCities.length === 0 && (
-                        <div className="heritage-empty" style={{ gridColumn: '1 / -1' }}>
-                            <MapPin className="heritage-empty__icon" />
-                            <p className="heritage-empty__text">
-                                No cities match &quot;{searchQuery}&quot;
-                            </p>
-                        </div>
-                    )}
+                <div style={{ position: 'relative', overflow: 'hidden', minHeight: '380px', width: '100%' }}>
+                    <AnimatePresence mode="wait" custom={direction}>
+                        <motion.div
+                            key={page}
+                            custom={direction}
+                            variants={slideVariants}
+                            initial="enter"
+                            animate="center"
+                            exit="exit"
+                            transition={{ duration: 0.35, ease: 'easeInOut' }}
+                            className="heritage-cities"
+                        >
+                            {displayedCities.map((city, i) => (
+                                <CityCard
+                                    key={city.id}
+                                    city={city}
+                                    index={i}
+                                    onClick={() => navigate(`/gallery/city/${city.id}`)}
+                                />
+                            ))}
+                            {displayedCities.length === 0 && (
+                                <div className="heritage-empty" style={{ gridColumn: '1 / -1' }}>
+                                    <MapPin className="heritage-empty__icon" />
+                                    <p className="heritage-empty__text">
+                                        No cities match &quot;{searchQuery}&quot;
+                                    </p>
+                                </div>
+                            )}
+                        </motion.div>
+                    </AnimatePresence>
                 </div>
+
+                {/* Elegant mobile-first Pagination controls for showing 7 cities at a time */}
+                {!searchQuery.trim() && pageCount > 1 && (
+                    <div className="flex items-center justify-between mt-8 w-full px-4 max-w-md mx-auto">
+                        {/* Previous Page */}
+                        <button
+                            onClick={() => {
+                                if (page > 0) {
+                                    setDirection(-1);
+                                    setPage(prev => prev - 1);
+                                }
+                            }}
+                            disabled={page === 0}
+                            className={`p-2.5 rounded-full border border-theme-border/60 text-theme-text/80 hover:text-gold hover:border-gold transition-all active:scale-95 cursor-pointer ${
+                                page === 0 ? 'opacity-30 pointer-events-none' : ''
+                            }`}
+                        >
+                            <ChevronLeft className="w-5 h-5" />
+                        </button>
+
+                        {/* Page Indicators */}
+                        <div className="flex gap-2">
+                            {Array.from({ length: pageCount }).map((_, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => {
+                                        setDirection(idx > page ? 1 : -1);
+                                        setPage(idx);
+                                    }}
+                                    className={`w-2.5 h-2.5 rounded-full transition-all duration-300 cursor-pointer ${
+                                        page === idx ? 'bg-gold w-6' : 'bg-theme-text/20 hover:bg-theme-text/40'
+                                    }`}
+                                />
+                            ))}
+                        </div>
+
+                        {/* Show More (Next Page) */}
+                        <button
+                            onClick={() => {
+                                if (page < pageCount - 1) {
+                                    setDirection(1);
+                                    setPage(prev => prev + 1);
+                                } else {
+                                    setDirection(-1);
+                                    setPage(0);
+                                }
+                            }}
+                            className="px-5 py-2.5 rounded-full border border-gold/40 text-xs font-semibold text-gold hover:border-gold active:scale-95 transition-all duration-300 flex items-center gap-1.5 cursor-pointer"
+                        >
+                            {page === pageCount - 1 ? 'Show First 7' : 'Show More (7)'}
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
             </div>
 
-            {/* ====== CURATED GALLERIES ====== */}
+            {/* ====== CURATED PLACES ====== */}
             <div className="heritage-section">
                 <div className="heritage-section__header">
                     <div>
                         <p className="heritage-section__eyebrow">Handpicked</p>
-                        <h2 className="heritage-section__title">Curated Galleries</h2>
+                        <h2 className="heritage-section__title">Curated Place</h2>
                     </div>
-                    <button
-                        className="heritage-section__see-all"
-                        onClick={() => navigate(ROUTES.USER_GALLERY)}
-                    >
-                        View All <ChevronRight style={{ width: 14, height: 14 }} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {/* Scroll buttons */}
+                        <button
+                            onClick={() => scrollGalleries('left')}
+                            onMouseEnter={() => setIsPaused(true)}
+                            onMouseLeave={() => setIsPaused(false)}
+                            className="p-2 rounded-full border border-theme-border/60 text-theme-text/80 hover:text-gold hover:border-gold transition-all active:scale-95 cursor-pointer hidden sm:flex items-center justify-center bg-theme-surface/40 backdrop-blur-sm"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => scrollGalleries('right')}
+                            onMouseEnter={() => setIsPaused(true)}
+                            onMouseLeave={() => setIsPaused(false)}
+                            className="p-2 rounded-full border border-theme-border/60 text-theme-text/80 hover:text-gold hover:border-gold transition-all active:scale-95 cursor-pointer hidden sm:flex items-center justify-center bg-theme-surface/40 backdrop-blur-sm"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                        <button
+                            className="heritage-section__see-all ml-2"
+                            onClick={() => navigate(ROUTES.USER_GALLERY)}
+                        >
+                            View All <ChevronRight style={{ width: 14, height: 14 }} />
+                        </button>
+                    </div>
                 </div>
 
                 {museumsLoading ? (
-                    <div className="heritage-galleries">
+                    <div className="heritage-galleries" ref={galleriesRef}>
                         {[1, 2, 3].map((n) => (
                             <div
                                 key={n}
@@ -366,31 +670,49 @@ export function UserDashboard() {
                         ))}
                     </div>
                 ) : museums.length > 0 ? (
-                    <div className="heritage-galleries">
-                        {museums.slice(0, 6).map((museum: any, i: number) => (
-                            <GalleryCard
-                                key={museum.id || i}
-                                museum={museum}
-                                index={i}
-                                onClick={() =>
-                                    navigate(
-                                        `/gallery/museum/${museum.slug || museum.id}`
-                                    )
-                                }
-                            />
-                        ))}
-                    </div>
+                    <>
+                        <div 
+                            className="heritage-galleries" 
+                            ref={galleriesRef}
+                            onScroll={handleGalleriesScroll}
+                            onMouseEnter={() => setIsPaused(true)}
+                            onMouseLeave={() => setIsPaused(false)}
+                            onTouchStart={() => setIsPaused(true)}
+                        >
+                            {museums.slice(0, 8).map((museum: any, i: number) => (
+                                <PlaceCard
+                                    key={museum.id || i}
+                                    museum={museum}
+                                    index={i}
+                                    onClick={() =>
+                                        navigate(
+                                            `/gallery/museum/${museum.slug || museum.id}`
+                                        )
+                                    }
+                                />
+                            ))}
+                        </div>
+                        {/* Scroll Progress Bar */}
+                        <div className="w-full flex justify-center mt-2">
+                            <div className="w-24 h-1 bg-theme-text/10 rounded-full overflow-hidden">
+                                <div 
+                                    className="h-full bg-gold transition-all duration-100 ease-out rounded-full"
+                                    style={{ width: `${Math.max(12, scrollProgress * 100)}%` }}
+                                />
+                            </div>
+                        </div>
+                    </>
                 ) : (
                     <div className="heritage-empty">
                         <Landmark className="heritage-empty__icon" />
                         <p className="heritage-empty__text">
-                            No galleries available yet — check back soon!
+                            No places available yet — check back soon!
                         </p>
                         <button
                             className="heritage-empty__action"
                             onClick={() => navigate(ROUTES.GALLERY)}
                         >
-                            Explore Public Gallery
+                            Explore Public Places
                         </button>
                     </div>
                 )}

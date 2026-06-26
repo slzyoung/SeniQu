@@ -11,9 +11,10 @@ import {
     HttpCode,
     HttpStatus,
     Logger,
+    BadRequestException,
 } from "@nestjs/common"
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from "@nestjs/swagger"
-import { SkipThrottle } from "@nestjs/throttler"
+import { SkipThrottle, Throttle } from "@nestjs/throttler"
 import { Response } from "express"
 import { ConfigService } from "@nestjs/config"
 import { AuthService } from "./auth.service"
@@ -28,6 +29,8 @@ import { GetUser } from "./decorators/get-user.decorator"
 import { Public } from "./decorators/public.decorator"
 import { BypassSecurity } from "../common/decorators/bypass-security.decorator"
 import { WalletLoginDto } from "./dto/wallet-login.dto"
+import { TurnstileGuard, UseTurnstile } from "../common/guards/turnstile.guard"
+import { isDisposableEmail, getBlockedDomain } from "../common/validators/disposable-email.validator"
 
 @ApiTags("Auth")
 @Controller("auth")
@@ -170,7 +173,7 @@ export class AuthController {
         @Req() req: any,
         @Res() res: any,
     ) {
-        const frontendUrl = this.configService.get<string>("frontendUrl") || "https://seniquapp.netlify.app"
+        const frontendUrl = this.configService.get<string>("frontendUrl") || "https://seniqu.art"
 
         // SAFETY NET: Outer try-catch guarantees a redirect is ALWAYS sent
         // This prevents the blank page issue where the backend hangs
@@ -355,13 +358,46 @@ export class AuthController {
 
     /**
      * Register new user (sends verification email)
+     * Protected by:
+     *   1. Cloudflare Turnstile CAPTCHA (anti-bot)
+     *   2. Honeypot field detection (anti-bot)
+     *   3. Disposable email domain blocking
+     *   4. Rate limiting (global ThrottlerGuard)
      */
     @Post("register")
     @Public()
     @BypassSecurity()
+    @UseGuards(TurnstileGuard)
+    @UseTurnstile()
+    @Throttle({
+        short: { limit: 1, ttl: 1000 },
+        long: { limit: 3, ttl: 60000 },
+    })
     @ApiOperation({ summary: "Register a new user" })
     @ApiResponse({ status: 201, description: "Verification email sent" })
     async register(@Body() dto: RegisterDto) {
+        // Anti-Bot Layer 1: Honeypot check
+        // A hidden field named "website" — real users never see or fill it.
+        // Bots that auto-fill all form fields will populate it.
+        if (dto.website) {
+            this.logger.warn(`Honeypot triggered from registration attempt: ${dto.email}`)
+            // Return a fake success to not reveal detection
+            return {
+                message: "Verification email sent. Please check your inbox.",
+                requiresVerification: true,
+                email: dto.email,
+            }
+        }
+
+        // Anti-Bot Layer 2: Block disposable/temporary email domains
+        const blockedDomain = getBlockedDomain(dto.email)
+        if (blockedDomain) {
+            this.logger.warn(`Blocked disposable email registration: ${dto.email} (domain: ${blockedDomain})`)
+            throw new BadRequestException(
+                "Registration with temporary or disposable email addresses is not allowed. Please use a permanent email address."
+            )
+        }
+
         return this.authService.register(dto)
     }
 
@@ -371,6 +407,10 @@ export class AuthController {
     @Post("login")
     @Public()
     @BypassSecurity()
+    @Throttle({
+        short: { limit: 2, ttl: 1000 },
+        long: { limit: 5, ttl: 60000 },
+    })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: "Login with email/password (sends OTP)" })
     @ApiResponse({ status: 200, description: "OTP sent to email" })
@@ -406,6 +446,10 @@ export class AuthController {
      */
     @Post("resend-otp")
     @Public()
+    @Throttle({
+        short: { limit: 1, ttl: 1000 },
+        long: { limit: 2, ttl: 60000 },
+    })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: "Resend OTP code" })
     async resendOtp(@Body() dto: ResendOtpDto) {
@@ -533,6 +577,10 @@ export class AuthController {
     @Post("forgot-password/request")
     @Public()
     @BypassSecurity()
+    @Throttle({
+        short: { limit: 1, ttl: 1000 },
+        long: { limit: 2, ttl: 60000 },
+    })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: "Request forgot password OTP" })
     async requestForgotPassword(
@@ -547,6 +595,10 @@ export class AuthController {
     @Post("forgot-password/verify")
     @Public()
     @BypassSecurity()
+    @Throttle({
+        short: { limit: 2, ttl: 1000 },
+        long: { limit: 5, ttl: 60000 },
+    })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: "Verify forgot password OTP and reset password" })
     async verifyForgotPassword(

@@ -30,15 +30,14 @@ interface LandingPageProps {
 
 export function LandingPage({ openAuthModal: shouldOpenModal }: LandingPageProps) {
     const { openAuthModal } = useAuthModalStore();
+    const location = useLocation();
 
-    // Open auth modal if redirected from /auth/login or /auth/register
+    // Open auth modal if redirected from /auth/login, /auth/register, or attempting to access a protected route
     useEffect(() => {
-        if (shouldOpenModal) {
+        if (shouldOpenModal || (location.state as { from?: any })?.from) {
             openAuthModal();
         }
-    }, [shouldOpenModal, openAuthModal]);
-
-    const location = useLocation();
+    }, [shouldOpenModal, location.state, openAuthModal]);
 
     // Handle hash fragment scrolling for SPA routing
     useEffect(() => {

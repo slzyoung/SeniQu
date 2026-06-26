@@ -15,17 +15,47 @@ import { CreateThreadDto } from "./dto/create-thread.dto"
 import { UpdateThreadDto } from "./dto/update-thread.dto"
 import { CreatePostDto } from "./dto/create-post.dto"
 import { UpdatePostDto } from "./dto/update-post.dto"
+import { EmailNotificationService } from "../email/email-notification.service"
+import { NotificationsService } from "../notifications/notifications.service"
 
 @Injectable()
 export class ForumService {
     private readonly logger = new Logger(ForumService.name)
     private readonly supabase: SupabaseClient
 
-    constructor(private configService: ConfigService) {
+    constructor(
+        private readonly configService: ConfigService,
+        private readonly emailNotification: EmailNotificationService,
+        private readonly notificationsService: NotificationsService
+    ) {
         this.supabase = createClient(
             this.configService.get<string>("SUPABASE_URL")!,
             this.configService.get<string>("SUPABASE_SERVICE_ROLE_KEY")!,
         )
+    }
+
+    /**
+     * Sanitize title/content — strips malformed HTML entity chains
+     * that cause the "&amp;amp;amp;" bug when data passes through
+     * multiple encode/decode layers (Supabase → TransformInterceptor → frontend).
+     */
+    private cleanText(text: string): string {
+        if (!text) return text
+        // Collapse malformed &ampamp... chains (without semicolons)
+        let cleaned = text.replace(/&(amp)+/gi, '&')
+        // Decode standard HTML entities iteratively
+        let prev = ''
+        for (let i = 0; i < 5 && cleaned !== prev; i++) {
+            prev = cleaned
+            cleaned = cleaned
+                .replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&quot;/g, '"')
+                .replace(/&#039;/g, "'")
+                .replace(/&#x27;/g, "'")
+        }
+        return cleaned
     }
 
     async getCategories() {
@@ -46,7 +76,7 @@ export class ForumService {
         return { data: mappedData }
     }
 
-    async getThreads(categoryId?: string, page = 1, limit = 20, sortBy: "latest" | "popular" | "views" = "latest") {
+    async getThreads(categoryId?: string, page = 1, limit = 20, sortBy: "latest" | "popular" | "views" = "latest", authorId?: string) {
         const offset = (page - 1) * limit
 
         let query = this.supabase
@@ -59,6 +89,10 @@ export class ForumService {
 
         if (categoryId) {
             query = query.eq("category_id", categoryId)
+        }
+
+        if (authorId) {
+            query = query.eq("author_id", authorId)
         }
 
         // Apply sorting based on frontend choice
@@ -76,8 +110,15 @@ export class ForumService {
 
         if (error) throw error
 
+        // Sanitize titles on read to fix existing corrupted &amp;amp; data
+        const cleanedData = (data || []).map((thread: any) => ({
+            ...thread,
+            title: this.cleanText(thread.title),
+            content: thread.content ? this.cleanText(thread.content) : thread.content,
+        }))
+
         return {
-            data,
+            data: cleanedData,
             meta: {
                 total: count,
                 page,
@@ -108,7 +149,7 @@ export class ForumService {
             .update({ views: data.views + 1 })
             .eq("id", data.id)
 
-        return { data }
+        return { data: { ...data, title: this.cleanText(data.title), content: data.content ? this.cleanText(data.content) : data.content } }
     }
 
     async getThreadById(id: string) {
@@ -132,19 +173,24 @@ export class ForumService {
             .update({ views: data.views + 1 })
             .eq("id", data.id)
 
-        return { data }
+        return { data: { ...data, title: this.cleanText(data.title), content: data.content ? this.cleanText(data.content) : data.content } }
     }
 
     async createThread(dto: CreateThreadDto, authorId: string) {
-        const slug = this.generateSlug(dto.title)
+        const cleanTitle = this.cleanText(dto.title)
+        const slug = this.generateSlug(cleanTitle)
+
+        const insertData = {
+            ...dto,
+            title: cleanTitle,
+            content: dto.content ? this.cleanText(dto.content) : dto.content,
+            author_id: authorId,
+            slug,
+        }
 
         const { data, error } = await this.supabase
             .from("forum_threads")
-            .insert({
-                ...dto,
-                author_id: authorId,
-                slug,
-            })
+            .insert(insertData)
             .select()
             .single()
 
@@ -176,8 +222,8 @@ export class ForumService {
         }
 
         const updates: any = { updated_at: new Date().toISOString() }
-        if (dto.title !== undefined) updates.title = dto.title
-        if (dto.content !== undefined) updates.content = dto.content
+        if (dto.title !== undefined) updates.title = this.cleanText(dto.title)
+        if (dto.content !== undefined) updates.content = this.cleanText(dto.content)
         if (dto.tags !== undefined) updates.tags = dto.tags
 
         const { data, error } = await this.supabase
@@ -266,7 +312,7 @@ export class ForumService {
         // Check if thread is locked
         const { data: thread } = await this.supabase
             .from("forum_threads")
-            .select("is_locked")
+            .select("is_locked, user_id, title")
             .eq("id", threadId)
             .single()
 
@@ -287,6 +333,40 @@ export class ForumService {
         if (error) {
             this.logger.error(`Failed to create post: ${error.message}`)
             throw error
+        }
+
+        if (thread && thread.user_id) {
+            // Trigger email notification (non-blocking)
+            this.emailNotification.sendCommentNotification(
+                authorId,
+                thread.user_id,
+                "thread",
+                threadId,
+                thread.title || "Thread Forum",
+                dto.content
+            ).catch(err => {
+                this.logger.error(`Failed to send forum comment email notification: ${err.message}`)
+            })
+
+            // Trigger in-app notification (non-blocking)
+            if (thread.user_id !== authorId) {
+                (async () => {
+                    const { data: commenter } = await this.supabase.from("users").select("display_name, username").eq("id", authorId).single()
+                    if (commenter) {
+                        const commenterName = commenter.display_name || commenter.username || "Seseorang"
+                        await this.notificationsService.create({
+                            userId: thread.user_id,
+                            type: "forum",
+                            title: "Komentar Utas Baru",
+                            message: `${commenterName} mengomentari utas Anda: "${thread.title || 'Utas Forum'}"`,
+                            referenceId: threadId,
+                            referenceType: "forum_thread"
+                        })
+                    }
+                })().catch((err: any) => {
+                    this.logger.error(`Failed to send forum in-app comment notification: ${err.message}`)
+                })
+            }
         }
 
         return { data }
@@ -403,6 +483,11 @@ export class ForumService {
                 if (data) {
                     await this.supabase.from(tableName).update({ likes: (data.likes || 0) + 1 }).eq('id', targetId)
                 }
+
+                // Trigger like email notification (non-blocking)
+                this.triggerForumLikeNotification(userId, targetId, type).catch(err => {
+                    this.logger.error(`Failed to send like notification: ${err.message}`)
+                })
             }
             return { success: true, liked: true }
         } else {
@@ -500,6 +585,176 @@ export class ForumService {
         }
 
         return { data: data || [] }
+    }
+
+    /**
+     * Save video metadata to forum_videos table and link to thread/post
+     */
+    async saveVideoMetadata(data: {
+        userId: string
+        threadId?: string
+        postId?: string
+        videoUrl: string
+        videoKey: string
+        thumbnailUrl: string | null
+        thumbnailKey: string | null
+        caption?: string
+        metadata: {
+            duration: number
+            width: number
+            height: number
+            videoCodec: string
+            audioCodec: string | null
+            bitrate: number
+            fps: number
+            aspectRatio: string
+            originalFileSize: number
+            compressedFileSize: number
+            compressionRatio: number
+            originalFilename: string
+        }
+    }) {
+        try {
+            // Insert video record
+            const { data: videoRecord, error: insertError } = await this.supabase
+                .from("forum_videos")
+                .insert({
+                    user_id: data.userId,
+                    thread_id: data.threadId || null,
+                    post_id: data.postId || null,
+                    video_url: data.videoUrl,
+                    video_key: data.videoKey,
+                    thumbnail_url: data.thumbnailUrl,
+                    thumbnail_key: data.thumbnailKey,
+                    duration: data.metadata.duration,
+                    width: data.metadata.width,
+                    height: data.metadata.height,
+                    file_size: data.metadata.compressedFileSize,
+                    original_file_size: data.metadata.originalFileSize,
+                    video_codec: data.metadata.videoCodec,
+                    audio_codec: data.metadata.audioCodec,
+                    bitrate: data.metadata.bitrate,
+                    fps: data.metadata.fps,
+                    aspect_ratio: data.metadata.aspectRatio,
+                    content_type: "video/mp4",
+                    original_filename: data.metadata.originalFilename,
+                    caption: data.caption || null,
+                    compression_ratio: data.metadata.compressionRatio,
+                    status: "ready",
+                })
+                .select()
+                .single()
+
+            if (insertError) {
+                this.logger.error(`Failed to save video metadata: ${insertError.message}`)
+                // Don't throw — video is already uploaded, metadata save is secondary
+                return null
+            }
+
+            // Update thread or post with video URL for inline display
+            if (data.threadId) {
+                await this.supabase
+                    .from("forum_threads")
+                    .update({
+                        video_url: data.videoUrl,
+                        video_thumbnail_url: data.thumbnailUrl,
+                        video_duration: data.metadata.duration,
+                        media_url: data.videoUrl,
+                        media_type: "video",
+                    })
+                    .eq("id", data.threadId)
+            }
+
+            if (data.postId) {
+                await this.supabase
+                    .from("forum_posts")
+                    .update({
+                        video_url: data.videoUrl,
+                        video_thumbnail_url: data.thumbnailUrl,
+                        video_duration: data.metadata.duration,
+                        media_url: data.videoUrl,
+                        media_type: "video",
+                    })
+                    .eq("id", data.postId)
+            }
+
+            this.logger.log(`✅ Video metadata saved: ${videoRecord.id}`)
+            return videoRecord
+        } catch (err: any) {
+            this.logger.error(`Video metadata save error: ${err.message}`)
+            return null
+        }
+    }
+
+    private async triggerForumLikeNotification(likerId: string, targetId: string, type: 'forum_thread' | 'forum_post') {
+        try {
+            const { data: liker } = await this.supabase
+                .from("users")
+                .select("display_name, username")
+                .eq("id", likerId)
+                .single()
+            const likerName = liker?.display_name || liker?.username || "Seseorang"
+
+            if (type === 'forum_thread') {
+                const { data: thread } = await this.supabase
+                    .from('forum_threads')
+                    .select('user_id, title')
+                    .eq('id', targetId)
+                    .single()
+                if (thread && thread.user_id) {
+                    if (thread.user_id !== likerId) {
+                        await this.notificationsService.create({
+                            userId: thread.user_id,
+                            type: "forum",
+                            title: "Sukai Utas Baru",
+                            message: `${likerName} menyukai utas Anda: "${thread.title || 'Utas Forum'}"`,
+                            referenceId: targetId,
+                            referenceType: "forum_thread"
+                        }).catch(err => {
+                            this.logger.error(`Failed to create like in-app notification: ${err.message}`)
+                        })
+                    }
+
+                    await this.emailNotification.sendLikeNotification(
+                        likerId,
+                        thread.user_id,
+                        'thread',
+                        targetId,
+                        thread.title || 'Utas Forum'
+                    )
+                }
+            } else {
+                const { data: post } = await this.supabase
+                    .from('forum_posts')
+                    .select('author_id, content, thread_id')
+                    .eq('id', targetId)
+                    .single()
+                if (post && post.author_id) {
+                    if (post.author_id !== likerId) {
+                        await this.notificationsService.create({
+                            userId: post.author_id,
+                            type: "forum",
+                            title: "Sukai Postingan Baru",
+                            message: `${likerName} menyukai postingan Anda di utas`,
+                            referenceId: post.thread_id || targetId,
+                            referenceType: "forum_post"
+                        }).catch(err => {
+                            this.logger.error(`Failed to create post like in-app notification: ${err.message}`)
+                        })
+                    }
+
+                    await this.emailNotification.sendLikeNotification(
+                        likerId,
+                        post.author_id,
+                        'post',
+                        post.thread_id || targetId,
+                        post.content || 'Postingan Forum'
+                    )
+                }
+            }
+        } catch (err: any) {
+            this.logger.error(`Error in triggerForumLikeNotification: ${err.message}`)
+        }
     }
 
     private generateSlug(title: string): string {
