@@ -269,12 +269,8 @@ export default function UploadReelModal({ onClose }: Props) {
         fetchSpotifyProfile(cleaned);
     };
 
-    // Spotify live search API call
+    // Spotify & Free iTunes Music Library search API call
     useEffect(() => {
-        if (!spotifyToken) {
-            setLiveSpotifyTracks([]);
-            return;
-        }
         if (!spotifySearch.trim()) {
             setLiveSpotifyTracks([]);
             return;
@@ -282,27 +278,58 @@ export default function UploadReelModal({ onClose }: Props) {
 
         const delayDebounceFn = setTimeout(async () => {
             setSearchingSpotify(true);
-            try {
-                const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(spotifySearch)}&type=track&limit=15`, {
-                    headers: { 'Authorization': `Bearer ${spotifyToken}` }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    const tracks = (data.tracks?.items || []).map((item: any) => ({
-                        id: item.id,
-                        title: item.name,
-                        artist: item.artists.map((a: any) => a.name).join(', '),
-                        artwork: item.album?.images?.[0]?.url || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&q=80',
-                        url: item.preview_url,
-                        duration: Math.round(item.duration_ms / 1000)
-                    }));
-                    setLiveSpotifyTracks(tracks);
-                } else if (res.status === 401) {
-                    handleSpotifyDisconnect();
+
+            // Helper to fetch from iTunes Music Library (Free, complete catalog, no token/login/premium required)
+            const fetchFromITunes = async () => {
+                try {
+                    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(spotifySearch)}&media=music&limit=15`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        const tracks = (data.results || []).map((item: any) => ({
+                            id: `itunes_${item.trackId}`,
+                            title: item.trackName,
+                            artist: item.artistName,
+                            artwork: item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '400x400bb') : 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&q=80',
+                            url: item.previewUrl,
+                            duration: Math.round(item.trackTimeMillis / 1000)
+                        }));
+                        setLiveSpotifyTracks(tracks);
+                    }
+                } catch (err) {
+                    console.error('Error searching iTunes:', err);
                 }
-            } catch (err) {
-                console.error('Error searching Spotify:', err);
-            } finally {
+            };
+
+            if (spotifyToken) {
+                try {
+                    const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(spotifySearch)}&type=track&limit=15`, {
+                        headers: { 'Authorization': `Bearer ${spotifyToken}` }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        const tracks = (data.tracks?.items || []).map((item: any) => ({
+                            id: item.id,
+                            title: item.name,
+                            artist: item.artists.map((a: any) => a.name).join(', '),
+                            artwork: item.album?.images?.[0]?.url || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&q=80',
+                            url: item.preview_url,
+                            duration: Math.round(item.duration_ms / 1000)
+                        }));
+                        setLiveSpotifyTracks(tracks);
+                    } else if (res.status === 403 || res.status === 401) {
+                        console.warn(`Spotify search returned status ${res.status}. Falling back to iTunes Free Music Library...`);
+                        await fetchFromITunes();
+                    } else {
+                        await fetchFromITunes();
+                    }
+                } catch (err) {
+                    console.error('Spotify search failed, falling back to iTunes:', err);
+                    await fetchFromITunes();
+                } finally {
+                    setSearchingSpotify(false);
+                }
+            } else {
+                await fetchFromITunes();
                 setSearchingSpotify(false);
             }
         }, 500);
@@ -468,7 +495,7 @@ export default function UploadReelModal({ onClose }: Props) {
         t.artist.toLowerCase().includes(spotifySearch.toLowerCase())
     );
 
-    const displayTracks = spotifyToken ? (spotifySearch.trim() ? liveSpotifyTracks : CURATED_TRACKS) : filteredTracks;
+    const displayTracks = spotifySearch.trim() ? liveSpotifyTracks : CURATED_TRACKS;
 
     return createPortal(
         <div className="reel-upload-overlay" onClick={e => { if (e.target === e.currentTarget && !uploading) onClose(); }}>
@@ -670,7 +697,7 @@ export default function UploadReelModal({ onClose }: Props) {
                                                     : 'bg-theme-border/10 text-theme-muted border-transparent hover:bg-theme-border/20'
                                             }`}
                                         >
-                                            Spotify Search
+                                            Search Soundtrack
                                         </button>
                                         <button
                                             type="button"
@@ -814,7 +841,7 @@ export default function UploadReelModal({ onClose }: Props) {
                                                     type="text"
                                                     value={spotifySearch}
                                                     onChange={e => setSpotifySearch(e.target.value)}
-                                                    placeholder={spotifyToken ? "Search Spotify track, artist, album..." : "Search curated heritage tracks..."}
+                                                    placeholder="Search songs, artists, or albums..."
                                                     className="w-full bg-theme-surface/50 border border-theme-border/20 rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:border-amber-500 text-theme-text"
                                                 />
                                             </div>
