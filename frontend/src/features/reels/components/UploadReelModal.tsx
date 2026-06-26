@@ -344,18 +344,40 @@ export default function UploadReelModal({ onClose }: Props) {
         const video = videoPreviewRef.current;
         if (!video) return;
 
+        let prevTime = video.currentTime;
+
         const handleTimeUpdate = () => {
             if (video.currentTime < trimStart) {
                 video.currentTime = trimStart;
             }
+            let looped = false;
             if (video.currentTime >= trimEnd) {
                 video.currentTime = trimStart;
+                looped = true;
+            }
+
+            // Natural loop detection
+            if (video.currentTime < prevTime && prevTime - video.currentTime > 1) {
+                looped = true;
+            }
+            prevTime = video.currentTime;
+
+            if (looped) {
+                const audio = audioPreviewRef.current;
+                if (audio && !audio.paused) {
+                    const offset = audioSource === 'spotify' ? spotifyOffset : (audioSource === 'internal' ? internalAudioOffset : 0);
+                    try {
+                        audio.currentTime = offset;
+                    } catch (e) {
+                        console.warn('Failed to loop preview audio:', e);
+                    }
+                }
             }
         };
 
         video.addEventListener('timeupdate', handleTimeUpdate);
         return () => video.removeEventListener('timeupdate', handleTimeUpdate);
-    }, [trimStart, trimEnd, step]);
+    }, [trimStart, trimEnd, step, audioSource, spotifyOffset, internalAudioOffset]);
 
     // Handle speed change
     useEffect(() => {

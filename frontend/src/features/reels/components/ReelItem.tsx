@@ -139,11 +139,12 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
         // Initialize or update source
         if (!audioTrackRef.current) {
             audioTrackRef.current = new Audio(audioMeta.url);
-            audioTrackRef.current.loop = true;
+            audioTrackRef.current.loop = false;
         } else if (audioTrackRef.current.src !== audioMeta.url) {
             audioTrackRef.current.pause();
             audioTrackRef.current.src = audioMeta.url;
             audioTrackRef.current.load();
+            audioTrackRef.current.loop = false;
         }
 
         const audio = audioTrackRef.current;
@@ -182,26 +183,63 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
         };
     }, [isActive, isPlaying, isMuted, audioMeta.url, audioMeta.offset, audioMeta.volume, trimStart]);
 
-    // Handle loop limits for trimmed video
+    // Handle loop limits for trimmed video and sync loops/seeks
     useEffect(() => {
         const video = videoRef.current;
         if (!video) return;
 
+        let prevTime = video.currentTime;
+
         const handleTimeUpdateLoop = () => {
+            // Trim bounds enforcement
             if (video.currentTime < trimStart) {
                 video.currentTime = trimStart;
             }
+            let looped = false;
             if (video.currentTime >= trimEnd) {
                 video.currentTime = trimStart;
+                looped = true;
+            }
+
+            // Natural loop detection (currentTime jumping backwards)
+            if (video.currentTime < prevTime && prevTime - video.currentTime > 1) {
+                looped = true;
+            }
+            prevTime = video.currentTime;
+
+            if (looped) {
                 if (audioTrackRef.current) {
-                    audioTrackRef.current.currentTime = audioMeta.offset || 0;
+                    try {
+                        audioTrackRef.current.currentTime = audioMeta.offset || 0;
+                        if (isPlaying && isActive) {
+                            audioTrackRef.current.play().catch(() => {});
+                        }
+                    } catch (e) {
+                        console.warn("Failed to reset audio on loop:", e);
+                    }
+                }
+            }
+        };
+
+        const handleSeeked = () => {
+            // Ensure audio is synced on manual seeks
+            if (audioTrackRef.current) {
+                const targetTime = (audioMeta.offset || 0) + video.currentTime - trimStart;
+                try {
+                    audioTrackRef.current.currentTime = targetTime;
+                } catch (e) {
+                    console.warn("Failed to sync audio on seeked:", e);
                 }
             }
         };
 
         video.addEventListener('timeupdate', handleTimeUpdateLoop);
-        return () => video.removeEventListener('timeupdate', handleTimeUpdateLoop);
-    }, [trimStart, trimEnd, audioMeta.offset]);
+        video.addEventListener('seeked', handleSeeked);
+        return () => {
+            video.removeEventListener('timeupdate', handleTimeUpdateLoop);
+            video.removeEventListener('seeked', handleSeeked);
+        };
+    }, [trimStart, trimEnd, audioMeta.offset, isPlaying, isActive]);
 
     // Cleanup audio track on unmount
     useEffect(() => {
