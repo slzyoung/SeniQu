@@ -571,7 +571,7 @@ export class VideoUploadService implements OnModuleInit {
             throw new BadRequestException(`Video type '${mimeType}' not allowed`)
         }
 
-        if (fileSize > MAX_VIDEO_SIZE) {
+        if (fileSize > 0 && fileSize > MAX_VIDEO_SIZE) {
             throw new BadRequestException(`Video too large. Maximum: ${this.formatSize(MAX_VIDEO_SIZE)}`)
         }
 
@@ -599,6 +599,12 @@ export class VideoUploadService implements OnModuleInit {
             }
 
             const actualSize = fs.statSync(tmpInputPath).size
+            if (actualSize > MAX_VIDEO_SIZE) {
+                throw new BadRequestException(
+                    `Video too large (${this.videoProcessor.formatSize(actualSize)}). Maximum: ${this.videoProcessor.formatSize(MAX_VIDEO_SIZE)}`
+                )
+            }
+
             this.logger.log(`🎬 Stream upload: ${filename} (${this.videoProcessor.formatSize(actualSize)})`)
 
             const audioMeta = options?.audioMetadata || {}

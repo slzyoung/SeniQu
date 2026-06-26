@@ -204,38 +204,38 @@ export class ForumController {
             )
         }
 
-        // Read the file buffer
-        const buffer = await data.toBuffer()
-
-        // Enforce max size for legacy backend-through uploads
-        // Files >10MB should use direct-to-CDN presigned URL flow instead
-        const MAX_LEGACY_SIZE = 50 * 1024 * 1024 // 50MB
-        if (buffer.length > MAX_LEGACY_SIZE) {
-            throw new BadRequestException(
-                `Video too large for legacy upload (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Maximum 50MB. Use direct-to-CDN upload for larger files.`
-            )
+        // Helper to extract fields dynamically
+        const getFields = () => {
+            const fields = data.fields as Record<string, any>
+            const threadId = fields?.threadId?.value || undefined
+            const postId = fields?.postId?.value || undefined
+            const caption = fields?.caption?.value || undefined
+            const muteVal = fields?.mute?.value === 'true' || fields?.mute?.value === true
+            return { threadId, postId, caption, muteVal }
         }
 
-        // Extract optional fields
-        const fields = data.fields as Record<string, any>
-        const threadId = fields?.threadId?.value || undefined
-        const postId = fields?.postId?.value || undefined
-        const caption = fields?.caption?.value || undefined
-        const muteVal = fields?.mute?.value === 'true' || fields?.mute?.value === true;
+        // Extract initial fields (available if sent before file in multipart form)
+        const initialFields = getFields()
 
-        // Upload & compress video through new streaming service
+        // Upload & compress video through new streaming service using data.file stream
         const result = await this.videoUploadService.streamUploadAndProcess(
-            buffer,
+            data.file,
             data.filename,
             data.mimetype,
-            buffer.length,
+            0, // fileSize checked after stream is written to temp file
             userId,
             "forum",
             { 
-                caption,
-                audioMetadata: muteVal ? { mute: true, originalVolume: 0 } : undefined
+                caption: initialFields.caption,
+                audioMetadata: initialFields.muteVal ? { mute: true, originalVolume: 0 } : undefined
             },
         )
+
+        // Read fields again (fully populated now that the stream has been consumed)
+        const finalFields = getFields()
+        const threadId = finalFields.threadId || initialFields.threadId
+        const postId = finalFields.postId || initialFields.postId
+        const caption = finalFields.caption || initialFields.caption
 
         // Save metadata to database
         const videoRecord = await this.forumService.saveVideoMetadata({

@@ -236,35 +236,45 @@ export class ReelsController {
             throw new BadRequestException(`Video type ${data.mimetype} not allowed`)
         }
 
-        const buffer = await data.toBuffer()
+        // Helper to extract fields dynamically
+        const getFields = () => {
+            const fields = data.fields as Record<string, any>
+            const caption = fields?.caption?.value || undefined
+            const hashtagsRaw = fields?.hashtags?.value || "[]"
+            let hashtags: string[] = []
+            try { hashtags = JSON.parse(hashtagsRaw) } catch { /* ignore */ }
 
-        // Enforce max size 50MB for legacy backend-through uploads
-        // Files >20MB should use presigned URL direct-to-CDN flow instead
-        const MAX_REEL_SIZE = 50 * 1024 * 1024
-        if (buffer.length > MAX_REEL_SIZE) {
-            throw new BadRequestException(`Video too large for legacy upload. Maximum 50MB. Use direct-to-CDN upload for larger files.`)
+            const audioMetadataRaw = fields?.audioMetadata?.value || "{}"
+            let audioMetadata: any = {}
+            try { audioMetadata = JSON.parse(audioMetadataRaw) } catch { /* ignore */ }
+            return { caption, hashtags, audioMetadata }
         }
 
-        const fields = data.fields as Record<string, any>
-        const caption = fields?.caption?.value || undefined
-        const hashtagsRaw = fields?.hashtags?.value || "[]"
-        let hashtags: string[] = []
-        try { hashtags = JSON.parse(hashtagsRaw) } catch { /* ignore */ }
+        // Extract initial fields (available if sent before file in multipart form)
+        const initialFields = getFields()
 
-        const audioMetadataRaw = fields?.audioMetadata?.value || "{}"
-        let audioMetadata: any = {}
-        try { audioMetadata = JSON.parse(audioMetadataRaw) } catch { /* ignore */ }
-
-        // Use the new streaming upload service
+        // Use the new streaming upload service directly with data.file stream
         const result = await this.videoUploadService.streamUploadAndProcess(
-            buffer,
+            data.file,
             data.filename,
             data.mimetype,
-            buffer.length,
+            0, // fileSize checked after stream is written to temp file
             userId,
             "reel",
-            { caption, hashtags, audioMetadata },
+            { 
+                caption: initialFields.caption, 
+                hashtags: initialFields.hashtags, 
+                audioMetadata: initialFields.audioMetadata 
+            },
         )
+
+        // Read fields again (fully populated now that the stream has been consumed)
+        const finalFields = getFields()
+        const caption = finalFields.caption || initialFields.caption
+        const hashtags = finalFields.hashtags.length > 0 ? finalFields.hashtags : initialFields.hashtags
+        const audioMetadata = (finalFields.audioMetadata && Object.keys(finalFields.audioMetadata).length > 2) 
+            ? finalFields.audioMetadata 
+            : initialFields.audioMetadata
 
         // Enforce max 60 seconds for Reels
         if (result.metadata.duration > 60) {

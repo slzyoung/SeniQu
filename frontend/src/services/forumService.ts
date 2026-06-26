@@ -417,11 +417,11 @@ export const forumService = {
         options?.onStatus?.('Uploading...');
 
         const formData = new FormData();
-        formData.append('file', file);
         if (options?.threadId) formData.append('threadId', options.threadId);
         if (options?.postId) formData.append('postId', options.postId);
         if (options?.caption) formData.append('caption', options.caption);
         if (options?.mute) formData.append('mute', String(options.mute));
+        formData.append('file', file);
 
         const response = await api.post('/forum/video/upload', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },

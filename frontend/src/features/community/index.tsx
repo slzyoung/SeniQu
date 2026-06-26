@@ -43,6 +43,7 @@ import { extractArray, decodeHTML } from '../../lib/utils';
 import { uploadFile } from '../../lib/api';
 import { compressImage } from '../../lib/imageCompressor';
 import { validateVideo, formatFileSize, formatDuration, generateVideoThumbnail } from '../../lib/videoCompressor';
+import { motion, AnimatePresence } from 'framer-motion';
 import { forumService } from '../../services/forumService';
 import {
     useForumCategories,
@@ -702,7 +703,7 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
             const selectedFile = selectedFiles[0];
             const validation = await validateVideo(selectedFile, {
                 maxFileSize: 150 * 1024 * 1024, // 150MB
-                maxDuration: 5 * 60, // 5 minutes
+                maxDuration: 60, // 1 minute
             });
             if (!validation.valid) {
                 setValidationError(validation.error || 'Invalid video file');
@@ -739,17 +740,21 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                 setVideoMeta(null);
             }
 
-            const combinedFiles = [...currentImageFiles, ...selectedFiles].slice(0, 8); // Limit to 8 images
-            if (currentImageFiles.length + selectedFiles.length > 8) {
-                setValidationWarning('Maximum 8 images allowed. Only the first 8 were added.');
+            const combinedFiles = [...currentImageFiles, ...selectedFiles].slice(0, 5); // Limit to 5 images
+            if (currentImageFiles.length + selectedFiles.length > 5) {
+                setValidationWarning('Maximum 5 images allowed. Only the first 5 were added.');
             }
 
             const newPreviews = selectedFiles.map(f => URL.createObjectURL(f));
-            const combinedPreviews = [...currentPreviews, ...newPreviews].slice(0, 8);
+            const combinedPreviews = [...currentPreviews, ...newPreviews].slice(0, 5);
 
             setMediaPreviews(combinedPreviews);
             setFiles(combinedFiles);
         }
+
+        // Reset input element value to allow selecting same file again
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (videoInputRef.current) videoInputRef.current.value = '';
     };
 
     const handleRemoveFile = (index: number) => {
@@ -931,20 +936,29 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                                     {!isVideo && mediaPreviews.length > 0 && (
                                         <div className="p-3 bg-gray-100 dark:bg-white/5 border-b border-gray-200 dark:border-white/10">
                                             <div className="grid grid-cols-4 gap-2">
-                                                {mediaPreviews.map((url, idx) => (
-                                                    <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-white/10 bg-black/20 group">
-                                                        <img src={url} alt={`Preview ${idx}`} className="w-full h-full object-cover" />
-                                                        <button 
-                                                            type="button" 
-                                                            onClick={() => handleRemoveFile(idx)}
-                                                            className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white hover:bg-red-600 transition-all shadow-md"
+                                                <AnimatePresence initial={false}>
+                                                    {mediaPreviews.map((url, idx) => (
+                                                        <motion.div 
+                                                            key={url} 
+                                                            initial={{ opacity: 0, scale: 0.8 }}
+                                                            animate={{ opacity: 1, scale: 1 }}
+                                                            exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.15 } }}
+                                                            layout
+                                                            className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-white/10 bg-black/20 group"
                                                         >
-                                                            <X className="w-3 h-3" />
-                                                        </button>
-                                                    </div>
-                                                ))}
+                                                            <img src={url} alt={`Preview ${idx}`} className="w-full h-full object-cover" />
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={() => handleRemoveFile(idx)}
+                                                                className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white hover:bg-red-600 transition-all shadow-md"
+                                                            >
+                                                                <X className="w-3 h-3" />
+                                                            </button>
+                                                        </motion.div>
+                                                    ))}
+                                                </AnimatePresence>
                                                 {/* Add more slot */}
-                                                {mediaPreviews.length < 8 && (
+                                                {mediaPreviews.length < 5 && (
                                                     <button 
                                                         type="button" 
                                                         onClick={() => fileInputRef.current?.click()}
@@ -1080,13 +1094,13 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                                         className="py-4 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl text-gray-400 dark:text-gray-500 hover:border-pink-400 dark:hover:border-pink-500/40 hover:text-pink-500 transition-all flex flex-col items-center justify-center gap-1.5 text-xs">
                                         <ImageIcon className="w-5 h-5" />
                                         <span className="font-semibold">Image</span>
-                                        <span className="text-[10px] opacity-60">Max 8 Images</span>
+                                        <span className="text-[10px] opacity-60">Max 5 Images</span>
                                     </button>
                                     <button type="button" onClick={() => videoInputRef.current?.click()}
                                         className="py-4 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl text-gray-400 dark:text-gray-500 hover:border-blue-400 dark:hover:border-blue-500/40 hover:text-blue-500 transition-all flex flex-col items-center justify-center gap-1.5 text-xs">
                                         <Film className="w-5 h-5" />
                                         <span className="font-semibold">Video</span>
-                                        <span className="text-[10px] opacity-60">Max 5 min · 150MB</span>
+                                        <span className="text-[10px] opacity-60">Max 1 min · 150MB</span>
                                     </button>
                                 </div>
                             )}
@@ -1253,6 +1267,7 @@ interface ThreadMediaRendererProps {
 export function ThreadMediaRenderer({ mediaUrl, mediaType, threadTitle, posterUrl }: ThreadMediaRendererProps) {
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
     const [carouselIndex, setCarouselIndex] = useState(0);
+    const [direction, setDirection] = useState(0); // 1 = next, -1 = prev
 
     if (!mediaUrl) return null;
 
@@ -1302,11 +1317,13 @@ export function ThreadMediaRenderer({ mediaUrl, mediaType, threadTitle, posterUr
 
     const handlePrevCarousel = (e: React.MouseEvent) => {
         e.stopPropagation();
+        setDirection(-1);
         setCarouselIndex(prev => (prev === 0 ? parsed.images.length - 1 : prev - 1));
     };
 
     const handleNextCarousel = (e: React.MouseEvent) => {
         e.stopPropagation();
+        setDirection(1);
         setCarouselIndex(prev => (prev === parsed.images.length - 1 ? 0 : prev + 1));
     };
 
@@ -1324,16 +1341,40 @@ export function ThreadMediaRenderer({ mediaUrl, mediaType, threadTitle, posterUr
         }
     };
 
+    const slideVariants = {
+        enter: (dir: number) => ({
+            x: dir > 0 ? 300 : -300,
+            opacity: 0,
+            scale: 0.98
+        }),
+        center: {
+            zIndex: 1,
+            x: 0,
+            opacity: 1,
+            scale: 1
+        },
+        exit: (dir: number) => ({
+            zIndex: 0,
+            x: dir < 0 ? 300 : -300,
+            opacity: 0,
+            scale: 0.98
+        })
+    };
+
     return (
         <div className="mt-4">
             {/* 1. SEPARATES LAYOUT (Vertical List) */}
             {parsed.layout === 'separate' && (
                 <div className="flex flex-col gap-4">
                     {parsed.images.map((url, idx) => (
-                        <div 
+                        <motion.div 
                             key={idx} 
                             onClick={() => setLightboxIndex(idx)}
-                            className="rounded-2xl overflow-hidden border border-gray-200/50 dark:border-white/[0.06] bg-gray-50 dark:bg-black cursor-zoom-in transition-all hover:opacity-95"
+                            initial={{ opacity: 0, y: 30 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true, margin: "-100px" }}
+                            transition={{ duration: 0.5, ease: "easeOut", delay: Math.min(idx * 0.05, 0.3) }}
+                            className="rounded-2xl overflow-hidden border border-gray-200/50 dark:border-white/[0.06] bg-gray-50 dark:bg-black cursor-zoom-in transition-all hover:shadow-lg dark:hover:shadow-white/5 hover:scale-[1.005] duration-300"
                         >
                             <img
                                 src={url}
@@ -1343,7 +1384,7 @@ export function ThreadMediaRenderer({ mediaUrl, mediaType, threadTitle, posterUr
                                 style={{ maxHeight: '75vh', imageRendering: 'auto' }}
                                 decoding="async"
                             />
-                        </div>
+                        </motion.div>
                     ))}
                 </div>
             )}
@@ -1352,65 +1393,117 @@ export function ThreadMediaRenderer({ mediaUrl, mediaType, threadTitle, posterUr
             {parsed.layout === 'grid' && (
                 <div className="rounded-2xl overflow-hidden border border-gray-200/50 dark:border-white/[0.06] bg-gray-50 dark:bg-black">
                     {parsed.images.length === 1 ? (
-                        <div onClick={() => setLightboxIndex(0)} className="cursor-zoom-in">
+                        <motion.div 
+                            onClick={() => setLightboxIndex(0)} 
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.4 }}
+                            className="cursor-zoom-in overflow-hidden"
+                        >
                             <img
                                 src={parsed.images[0]}
                                 alt={threadTitle}
-                                className="w-full object-contain"
+                                className="w-full object-contain hover:scale-[1.01] transition-transform duration-500"
                                 loading="lazy"
                                 style={{ maxHeight: '75vh', imageRendering: 'auto' }}
                                 decoding="async"
                             />
-                        </div>
+                        </motion.div>
                     ) : parsed.images.length === 2 ? (
                         <div className="grid grid-cols-2 gap-1 bg-gray-200 dark:bg-white/10">
                             {parsed.images.map((url, idx) => (
-                                <div key={idx} onClick={() => setLightboxIndex(idx)} className="aspect-[4/3] cursor-zoom-in overflow-hidden relative group">
-                                    <img src={url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                                </div>
+                                <motion.div 
+                                    key={idx} 
+                                    onClick={() => setLightboxIndex(idx)} 
+                                    initial={{ opacity: 0, y: 15 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.3, delay: idx * 0.05 }}
+                                    className="aspect-[4/3] cursor-zoom-in overflow-hidden relative group"
+                                >
+                                    <img src={url} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                                </motion.div>
                             ))}
                         </div>
                     ) : parsed.images.length === 3 ? (
                         <div className="grid grid-cols-3 gap-1 bg-gray-200 dark:bg-white/10">
-                            <div onClick={() => setLightboxIndex(0)} className="col-span-2 aspect-[4/3] cursor-zoom-in overflow-hidden relative group">
-                                <img src={parsed.images[0]} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                            </div>
+                            <motion.div 
+                                onClick={() => setLightboxIndex(0)} 
+                                initial={{ opacity: 0, y: 15 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.3 }}
+                                className="col-span-2 aspect-[4/3] cursor-zoom-in overflow-hidden relative group"
+                            >
+                                <img src={parsed.images[0]} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                            </motion.div>
                             <div className="grid grid-rows-2 gap-1">
                                 {parsed.images.slice(1).map((url, idx) => (
-                                    <div key={idx} onClick={() => setLightboxIndex(idx + 1)} className="h-full cursor-zoom-in overflow-hidden relative group">
-                                        <img src={url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                                    </div>
+                                    <motion.div 
+                                        key={idx} 
+                                        onClick={() => setLightboxIndex(idx + 1)} 
+                                        initial={{ opacity: 0, x: 15 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ duration: 0.3, delay: (idx + 1) * 0.05 }}
+                                        className="h-full cursor-zoom-in overflow-hidden relative group"
+                                    >
+                                        <img src={url} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                                    </motion.div>
                                 ))}
                             </div>
                         </div>
                     ) : parsed.images.length === 4 ? (
                         <div className="grid grid-cols-2 gap-1 bg-gray-200 dark:bg-white/10">
                             {parsed.images.map((url, idx) => (
-                                <div key={idx} onClick={() => setLightboxIndex(idx)} className="aspect-[4/3] cursor-zoom-in overflow-hidden relative group">
-                                    <img src={url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                                </div>
+                                <motion.div 
+                                    key={idx} 
+                                    onClick={() => setLightboxIndex(idx)} 
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ duration: 0.3, delay: idx * 0.05 }}
+                                    className="aspect-[4/3] cursor-zoom-in overflow-hidden relative group"
+                                >
+                                    <img src={url} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                                </motion.div>
                             ))}
                         </div>
                     ) : (
                         // 5 or more images
                         <div className="grid grid-cols-3 gap-1 bg-gray-200 dark:bg-white/10">
-                            <div onClick={() => setLightboxIndex(0)} className="col-span-2 aspect-[4/3] cursor-zoom-in overflow-hidden relative group">
-                                <img src={parsed.images[0]} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                            </div>
+                            <motion.div 
+                                onClick={() => setLightboxIndex(0)} 
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ duration: 0.3 }}
+                                className="col-span-2 aspect-[4/3] cursor-zoom-in overflow-hidden relative group"
+                            >
+                                <img src={parsed.images[0]} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                            </motion.div>
                             <div className="grid grid-rows-3 gap-1">
                                 {parsed.images.slice(1, 3).map((url, idx) => (
-                                    <div key={idx} onClick={() => setLightboxIndex(idx + 1)} className="h-full cursor-zoom-in overflow-hidden relative group">
-                                        <img src={url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                                    </div>
+                                    <motion.div 
+                                        key={idx} 
+                                        onClick={() => setLightboxIndex(idx + 1)} 
+                                        initial={{ opacity: 0, x: 10 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ duration: 0.3, delay: (idx + 1) * 0.05 }}
+                                        className="h-full cursor-zoom-in overflow-hidden relative group"
+                                    >
+                                        <img src={url} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                                    </motion.div>
                                 ))}
-                                <div onClick={() => setLightboxIndex(3)} className="h-full cursor-zoom-in overflow-hidden relative group bg-black/45">
-                                    <img src={parsed.images[3]} alt="" className="w-full h-full object-cover opacity-60 transition-transform duration-300 group-hover:scale-105" />
+                                <motion.div 
+                                    onClick={() => setLightboxIndex(3)} 
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ duration: 0.3, delay: 0.2 }}
+                                    className="h-full cursor-zoom-in overflow-hidden relative group bg-black/45"
+                                >
+                                    <img src={parsed.images[3]} alt="" className="w-full h-full object-cover opacity-60 transition-transform duration-500 group-hover:scale-105" />
                                     {parsed.images.length > 4 && (
                                         <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-[2px]">
                                             <span className="text-white text-lg font-bold">+{parsed.images.length - 4}</span>
                                         </div>
                                     )}
-                                </div>
+                                </motion.div>
                             </div>
                         </div>
                     )}
@@ -1421,12 +1514,37 @@ export function ThreadMediaRenderer({ mediaUrl, mediaType, threadTitle, posterUr
             {parsed.layout === 'carousel' && (
                 <div className="rounded-2xl overflow-hidden border border-gray-200/50 dark:border-white/[0.06] bg-gray-50 dark:bg-black relative aspect-[16/10] group">
                     {/* Images container */}
-                    <div className="w-full h-full relative cursor-zoom-in" onClick={() => setLightboxIndex(carouselIndex)}>
-                        <img 
-                            src={parsed.images[carouselIndex]} 
-                            alt={`${threadTitle} - Slide ${carouselIndex + 1}`} 
-                            className="w-full h-full object-contain"
-                        />
+                    <div className="w-full h-full relative cursor-zoom-in overflow-hidden flex items-center justify-center" onClick={() => setLightboxIndex(carouselIndex)}>
+                        <AnimatePresence initial={false} custom={direction}>
+                            <motion.img 
+                                key={carouselIndex}
+                                src={parsed.images[carouselIndex]} 
+                                alt={`${threadTitle} - Slide ${carouselIndex + 1}`} 
+                                custom={direction}
+                                variants={slideVariants}
+                                initial="enter"
+                                animate="center"
+                                exit="exit"
+                                transition={{
+                                    x: { type: "spring", stiffness: 300, damping: 30 },
+                                    opacity: { duration: 0.25 }
+                                }}
+                                drag="x"
+                                dragConstraints={{ left: 0, right: 0 }}
+                                dragElastic={1}
+                                onDragEnd={(_, { offset }) => {
+                                    const swipeThreshold = 50;
+                                    if (offset.x < -swipeThreshold) {
+                                        setDirection(1);
+                                        setCarouselIndex(prev => (prev === parsed.images.length - 1 ? 0 : prev + 1));
+                                    } else if (offset.x > swipeThreshold) {
+                                        setDirection(-1);
+                                        setCarouselIndex(prev => (prev === 0 ? parsed.images.length - 1 : prev - 1));
+                                    }
+                                }}
+                                className="absolute w-full h-full object-contain select-none"
+                            />
+                        </AnimatePresence>
                     </div>
 
                     {/* Navigation Arrows */}
@@ -1468,58 +1586,71 @@ export function ThreadMediaRenderer({ mediaUrl, mediaType, threadTitle, posterUr
             )}
 
             {/* LIGHTBOX MODAL */}
-            {lightboxIndex !== null && (
-                <div 
-                    className="fixed inset-0 z-[999] bg-black/95 flex flex-col items-center justify-center p-4 backdrop-blur-md transition-all select-none"
-                    onClick={() => setLightboxIndex(null)}
-                >
-                    {/* Close button */}
-                    <button 
-                        type="button"
+            <AnimatePresence>
+                {lightboxIndex !== null && (
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.25 }}
+                        className="fixed inset-0 z-[999] bg-black/95 flex flex-col items-center justify-center p-4 backdrop-blur-md select-none"
                         onClick={() => setLightboxIndex(null)}
-                        className="absolute top-6 right-6 p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-white border border-white/10 backdrop-blur-md transition-all z-50 cursor-pointer shadow-lg"
                     >
-                        <X className="w-5 h-5" />
-                    </button>
+                        {/* Close button */}
+                        <button 
+                            type="button"
+                            onClick={() => setLightboxIndex(null)}
+                            className="absolute top-6 right-6 p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-white border border-white/10 backdrop-blur-md transition-all z-50 cursor-pointer shadow-lg hover:scale-105 duration-200"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
 
-                    {/* Lightbox Content Container */}
-                    <div className="relative max-w-5xl w-full max-h-[85vh] flex items-center justify-center">
-                        <img 
-                            src={parsed.images[lightboxIndex]} 
-                            alt="" 
-                            className="max-w-full max-h-[85vh] object-contain rounded-lg transition-transform duration-300 shadow-2xl"
-                            onClick={(e) => e.stopPropagation()}
-                        />
+                        {/* Lightbox Content Container */}
+                        <div className="relative max-w-5xl w-full max-h-[85vh] flex items-center justify-center">
+                            <AnimatePresence initial={false} mode="wait">
+                                <motion.img 
+                                    key={lightboxIndex}
+                                    src={parsed.images[lightboxIndex]} 
+                                    alt="" 
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    transition={{ type: "spring", damping: 25, stiffness: 350 }}
+                                    className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                            </AnimatePresence>
 
-                        {/* Navigation Arrows for Lightbox */}
-                        {parsed.images.length > 1 && (
-                            <>
-                                <button 
-                                    type="button"
-                                    onClick={handlePrevLightbox}
-                                    className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/5 hover:bg-white/10 text-white border border-white/10 backdrop-blur-md transition-all z-20 cursor-pointer"
-                                >
-                                    <ChevronLeft className="w-6 h-6" />
-                                </button>
-                                <button 
-                                    type="button"
-                                    onClick={handleNextLightbox}
-                                    className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/5 hover:bg-white/10 text-white border border-white/10 backdrop-blur-md transition-all z-20 cursor-pointer"
-                                >
-                                    <ChevronRight className="w-6 h-6" />
-                                </button>
-                            </>
-                        )}
-                    </div>
-
-                    {/* Counter details below image */}
-                    {parsed.images.length > 1 && (
-                        <div className="mt-4 px-3 py-1 bg-white/5 backdrop-blur-sm border border-white/10 text-white rounded-full text-xs font-mono font-bold">
-                            {lightboxIndex + 1} / {parsed.images.length}
+                            {/* Navigation Arrows for Lightbox */}
+                            {parsed.images.length > 1 && (
+                                <>
+                                    <button 
+                                        type="button"
+                                        onClick={handlePrevLightbox}
+                                        className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/5 hover:bg-white/10 text-white border border-white/10 backdrop-blur-md transition-all z-20 cursor-pointer hover:scale-105 active:scale-95 duration-200"
+                                    >
+                                        <ChevronLeft className="w-6 h-6" />
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={handleNextLightbox}
+                                        className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/5 hover:bg-white/10 text-white border border-white/10 backdrop-blur-md transition-all z-20 cursor-pointer hover:scale-105 active:scale-95 duration-200"
+                                    >
+                                        <ChevronRight className="w-6 h-6" />
+                                    </button>
+                                </>
+                            )}
                         </div>
-                    )}
-                </div>
-            )}
+
+                        {/* Counter details below image */}
+                        {parsed.images.length > 1 && (
+                            <div className="mt-4 px-3 py-1 bg-white/5 backdrop-blur-sm border border-white/10 text-white rounded-full text-xs font-mono font-bold">
+                                {lightboxIndex + 1} / {parsed.images.length}
+                            </div>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

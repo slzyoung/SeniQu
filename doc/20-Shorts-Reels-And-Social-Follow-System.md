@@ -64,14 +64,26 @@ CREATE TABLE public.reels (
 
 ---
 
-## 2. Forum Video Uploads
+## 2. Forum Media Uploads & Display Customization
 
-Extends the Community Forum threads and replies to support video content uploads, bridging standard discussions with rich-media assets.
+Extends the Community Forum (both public and dashboard-level thread creation) to support rich, multi-media threads with validation, client-side preprocessing, and interactive layouts.
 
-### Features
-* **Multi-Format Upload Support**: Accepts standard video formats (mp4, mov, avi).
-* **Automated Processing**: Integrates with the backend media service for security screening, transcode queue, and preview thumbnail generation.
-* **Inline Players**: Renders custom React video players directly inside forum threads and replies with responsive bounds.
+### 2.1. Media Validation & Constraints
+* **Photos**: Supports selecting and uploading multiple photos (up to a maximum of **5 photos** per thread).
+* **Videos**: Supports uploading standard video formats (MP4, WebM, OGG, MOV) up to **150MB** and capped at a maximum duration of **1 minute (60 seconds)**. Videos are validated on the client side using HTML5 metadata extraction.
+* **Mutual Exclusivity**: Threads support either multiple images or a single video file to keep discussions clean and high-fidelity.
+
+### 2.2. Interactive Display Layouts
+When attaching multiple images, users can select how they want their media organized. This layout configuration is saved on the backend and rendered interactively on the client:
+* **Separates (Vertical Stack)**: Displays images sequentially in full width.
+* **Grid Collage**: A responsive grid collage presenting images beautifully based on the count.
+* **Carousel**: A mobile-first, touch-friendly slider using swipe gestures and dot indicators.
+
+### 2.3. Premium Animations & UX Polish
+* **Framer Motion Transitions**: Added `<AnimatePresence>` around image preview grids, enabling spring-animated slide-ins when selecting images and smooth scale-outs when removing them.
+* **Client-Side Image Compression**: Performs real-time canvas-based resizing down to target width presets (e.g. 1080p, 720p, etc.) before uploading, significantly saving bandwidth on mobile devices.
+* **Upload Progress Tracker**: An animated progression bar showing three stages: *Compressing Media*, *Uploading to Server*, and *Processing on Cloud*.
+* **Inline Custom Video Players**: Responsive native-wrapped video players with custom controls, play state tracking, mute toggles, and metadata previews.
 
 ---
 

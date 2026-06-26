@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
     X, Play, Pause, Upload, Music, Search, Scissors, 
-    Sparkles, AlertCircle, Video, FastForward, Crop
+    Sparkles, AlertCircle, Video, FastForward, Crop, LogOut
 } from 'lucide-react';
 import '../reels.css';
 import { useUploadReel } from '../../../hooks/useReels';
@@ -70,7 +70,16 @@ export default function UploadReelModal({ onClose }: Props) {
     // Audio selection states
     const [audioSource, setAudioSource] = useState<'original' | 'spotify' | 'internal'>('original');
 
-    // Spotify states
+    // Spotify states & handlers
+    const [spotifyToken, setSpotifyToken] = useState<string | null>(localStorage.getItem('spotify_token'));
+    const [spotifyUser, setSpotifyUser] = useState<{name: string, image: string} | null>(null);
+    const [liveSpotifyTracks, setLiveSpotifyTracks] = useState<any[]>([]);
+    const [searchingSpotify, setSearchingSpotify] = useState(false);
+    const [customClientId, setCustomClientId] = useState<string>(
+        (import.meta.env.VITE_SPOTIFY_CLIENT_ID as string) || localStorage.getItem('spotify_client_id') || ''
+    );
+    const [showDevSettings, setShowDevSettings] = useState(false);
+
     const [spotifySearch, setSpotifySearch] = useState('');
     const [selectedSpotifyTrack, setSelectedSpotifyTrack] = useState<any>(null);
     const [spotifyOffset, setSpotifyOffset] = useState(0);
@@ -84,6 +93,126 @@ export default function UploadReelModal({ onClose }: Props) {
     const [isPlayingInternalPreview, setIsPlayingInternalPreview] = useState(false);
 
     const upload = useUploadReel();
+
+    // On mount, check hash or existing token
+    useEffect(() => {
+        const hash = window.location.hash;
+        if (hash) {
+            const params = new URLSearchParams(hash.substring(1));
+            const token = params.get('access_token');
+            if (token) {
+                localStorage.setItem('spotify_token', token);
+                localStorage.setItem('spotify_token_expires', String(Date.now() + 3600 * 1000));
+                setSpotifyToken(token);
+                // Clear hash
+                window.history.replaceState(null, '', window.location.pathname + window.location.search);
+                setAudioSource('spotify');
+            }
+        }
+    }, []);
+
+    // Check token expiration & fetch profile
+    useEffect(() => {
+        if (!spotifyToken) return;
+        
+        const expires = localStorage.getItem('spotify_token_expires');
+        if (expires && Date.now() > Number(expires)) {
+            handleSpotifyDisconnect();
+            return;
+        }
+
+        fetchSpotifyProfile(spotifyToken);
+    }, [spotifyToken]);
+
+    const fetchSpotifyProfile = async (token: string) => {
+        try {
+            const res = await fetch('https://api.spotify.com/v1/me', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setSpotifyUser({
+                    name: data.display_name,
+                    image: data.images?.[0]?.url || ''
+                });
+            } else if (res.status === 401) {
+                handleSpotifyDisconnect();
+            }
+        } catch (err) {
+            console.error('Error fetching Spotify profile:', err);
+        }
+    };
+
+    const handleSpotifyDisconnect = () => {
+        localStorage.removeItem('spotify_token');
+        localStorage.removeItem('spotify_token_expires');
+        setSpotifyToken(null);
+        setSpotifyUser(null);
+        setLiveSpotifyTracks([]);
+        setSelectedSpotifyTrack(null);
+    };
+
+    const handleSpotifyConnect = () => {
+        const clientId = customClientId.trim() || '581c7f9994c944439c279c93df32d3d3'; // Fallback Client ID
+        localStorage.setItem('spotify_client_id', clientId);
+
+        const redirectUri = window.location.origin + '/';
+        const scopes = 'user-read-private user-read-email';
+        const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
+        
+        // Redirect
+        window.location.href = authUrl;
+    };
+
+    const handlePasteToken = (token: string) => {
+        const cleaned = token.trim();
+        if (!cleaned) return;
+        localStorage.setItem('spotify_token', cleaned);
+        localStorage.setItem('spotify_token_expires', String(Date.now() + 3600 * 1000));
+        setSpotifyToken(cleaned);
+        fetchSpotifyProfile(cleaned);
+    };
+
+    // Spotify live search API call
+    useEffect(() => {
+        if (!spotifyToken) {
+            setLiveSpotifyTracks([]);
+            return;
+        }
+        if (!spotifySearch.trim()) {
+            setLiveSpotifyTracks([]);
+            return;
+        }
+
+        const delayDebounceFn = setTimeout(async () => {
+            setSearchingSpotify(true);
+            try {
+                const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(spotifySearch)}&type=track&limit=15`, {
+                    headers: { 'Authorization': `Bearer ${spotifyToken}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const tracks = (data.tracks?.items || []).map((item: any) => ({
+                        id: item.id,
+                        title: item.name,
+                        artist: item.artists.map((a: any) => a.name).join(', '),
+                        artwork: item.album?.images?.[0]?.url || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&q=80',
+                        url: item.preview_url,
+                        duration: Math.round(item.duration_ms / 1000)
+                    }));
+                    setLiveSpotifyTracks(tracks);
+                } else if (res.status === 401) {
+                    handleSpotifyDisconnect();
+                }
+            } catch (err) {
+                console.error('Error searching Spotify:', err);
+            } finally {
+                setSearchingSpotify(false);
+            }
+        }, 500);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [spotifySearch, spotifyToken]);
 
     // Reset video time to trimStart on loop
     useEffect(() => {
@@ -169,6 +298,10 @@ export default function UploadReelModal({ onClose }: Props) {
             setSelectedSpotifyTrack(track);
             setInternalAudioFile(null);
             setInternalAudioUrl(null);
+            if (!track.url) {
+                setIsPlayingSpotifyPreview(false);
+                return;
+            }
             setIsPlayingSpotifyPreview(true);
             setTimeout(() => {
                 if (audioPreviewRef.current) {
@@ -238,6 +371,8 @@ export default function UploadReelModal({ onClose }: Props) {
         t.title.toLowerCase().includes(spotifySearch.toLowerCase()) || 
         t.artist.toLowerCase().includes(spotifySearch.toLowerCase())
     );
+
+    const displayTracks = spotifyToken ? (spotifySearch.trim() ? liveSpotifyTracks : CURATED_TRACKS) : filteredTracks;
 
     return createPortal(
         <div className="reel-upload-overlay" onClick={e => { if (e.target === e.currentTarget && !uploading) onClose(); }}>
@@ -475,44 +610,158 @@ export default function UploadReelModal({ onClose }: Props) {
 
                                     {audioSource === 'spotify' && (
                                         <div className="space-y-3 p-3.5 rounded-2xl bg-theme-border/10 border border-theme-border/20">
+                                            {/* Spotify Connection Header / Auth Prompt */}
+                                            {!spotifyToken ? (
+                                                <div className="p-3.5 rounded-2xl bg-amber-500/5 border border-amber-500/10 text-center space-y-2.5">
+                                                    <div className="flex justify-center">
+                                                        <div className="w-10 h-10 rounded-full bg-[#1DB954]/10 flex items-center justify-center text-[#1DB954]">
+                                                            <Music className="w-5 h-5" />
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-xs font-bold text-theme-text">Connect to Live Spotify</h4>
+                                                        <p className="text-[10px] text-theme-muted mt-0.5">Search millions of live tracks from Spotify's global database</p>
+                                                    </div>
+                                                    <div className="flex gap-2 justify-center">
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleSpotifyConnect}
+                                                            className="px-3 py-1.5 bg-[#1DB954] hover:bg-[#1ed760] text-black text-[10px] font-bold rounded-lg transition-colors flex items-center gap-1.5"
+                                                        >
+                                                            <Music className="w-3.5 h-3.5 fill-black text-black" />
+                                                            Connect Spotify
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowDevSettings(!showDevSettings)}
+                                                            className="px-3 py-1.5 bg-theme-border/20 hover:bg-theme-border/30 text-theme-text text-[10px] font-semibold rounded-lg transition-colors"
+                                                        >
+                                                            Token Options
+                                                        </button>
+                                                    </div>
+
+                                                    {showDevSettings && (
+                                                        <div className="text-left pt-2.5 border-t border-theme-border/20 space-y-2.5 animate-fadeIn">
+                                                            <div className="space-y-1">
+                                                                <label className="text-[9px] font-bold text-theme-muted uppercase tracking-wider">Spotify Client ID</label>
+                                                                <input 
+                                                                    type="text"
+                                                                    value={customClientId}
+                                                                    onChange={e => setCustomClientId(e.target.value)}
+                                                                    placeholder="Paste Client ID (e.g. from developer dashboard)"
+                                                                    className="w-full bg-theme-surface border border-theme-border/25 rounded-lg px-2.5 py-1.5 text-[10px] text-theme-text focus:outline-none focus:border-amber-500"
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <label className="text-[9px] font-bold text-theme-muted uppercase tracking-wider">Or Paste Access Token Directly</label>
+                                                                <div className="flex gap-1.5">
+                                                                    <input 
+                                                                        type="text"
+                                                                        placeholder="BQB_..."
+                                                                        id="pastedSpotifyTokenInput"
+                                                                        className="flex-1 bg-theme-surface border border-theme-border/25 rounded-lg px-2.5 py-1.5 text-[10px] text-theme-text focus:outline-none focus:border-amber-500"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            const val = (document.getElementById('pastedSpotifyTokenInput') as HTMLInputElement)?.value;
+                                                                            if (val) handlePasteToken(val);
+                                                                        }}
+                                                                        className="px-2.5 py-1.5 bg-amber-500 text-black text-[10px] font-bold rounded-lg hover:bg-amber-400 transition-colors"
+                                                                    >
+                                                                        Apply
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                            <p className="text-[9px] text-theme-muted leading-relaxed">
+                                                                💡 <strong>Tip:</strong> You can get a temporary token instantly from Spotify's <a href="https://developer.spotify.com/documentation/web-api/reference/search" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:underline">Web API Console</a>.
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#1DB954]/5 border border-[#1DB954]/25">
+                                                    <div className="flex items-center gap-2">
+                                                        {spotifyUser?.image ? (
+                                                            <img src={spotifyUser.image} alt={spotifyUser.name} className="w-6 h-6 rounded-full object-cover border border-[#1DB954]/30" />
+                                                        ) : (
+                                                            <div className="w-6 h-6 rounded-full bg-[#1DB954] flex items-center justify-center text-black text-[9px] font-bold">
+                                                                {spotifyUser?.name ? spotifyUser.name.substring(0, 1).toUpperCase() : 'S'}
+                                                            </div>
+                                                        )}
+                                                        <div>
+                                                            <p className="text-[10px] font-bold text-theme-text leading-none flex items-center gap-1">
+                                                                Connected to Spotify
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-[#1DB954] inline-block animate-pulse"></span>
+                                                            </p>
+                                                            <p className="text-[9px] text-theme-muted leading-none mt-0.5">{spotifyUser?.name || 'Spotify Session'}</p>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleSpotifyDisconnect}
+                                                        className="p-1 text-theme-muted hover:text-red-500 transition-colors rounded-lg hover:bg-theme-border/20 flex items-center gap-0.5 text-[9px] font-semibold"
+                                                    >
+                                                        <LogOut className="w-3.5 h-3.5" />
+                                                        Disconnect
+                                                    </button>
+                                                </div>
+                                            )}
+
                                             <div className="relative">
                                                 <Search className="absolute left-3 top-2.5 w-4 h-4 text-theme-muted" />
                                                 <input
                                                     type="text"
                                                     value={spotifySearch}
                                                     onChange={e => setSpotifySearch(e.target.value)}
-                                                    placeholder="Search Spotify track, artist, album..."
+                                                    placeholder={spotifyToken ? "Search Spotify track, artist, album..." : "Search curated heritage tracks..."}
                                                     className="w-full bg-theme-surface/50 border border-theme-border/20 rounded-xl pl-9 pr-4 py-2 text-xs focus:outline-none focus:border-amber-500 text-theme-text"
                                                 />
                                             </div>
 
-                                            {/* Curated Search List */}
+                                            {/* Search List */}
                                             <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
-                                                {filteredTracks.map(track => (
-                                                    <div 
-                                                        key={track.id} 
-                                                        onClick={() => playSpotifyPreview(track)}
-                                                        className={`flex items-center gap-3 p-2 rounded-xl cursor-pointer hover:bg-theme-border/20 transition-all border ${
-                                                            selectedSpotifyTrack?.id === track.id 
-                                                                ? 'border-amber-500/40 bg-amber-500/5' 
-                                                                : 'border-transparent'
-                                                        }`}
-                                                    >
-                                                        <img src={track.artwork} alt={track.title} className="w-10 h-10 rounded-lg object-cover" />
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="text-xs font-bold text-theme-text truncate">{track.title}</p>
-                                                            <p className="text-[10px] text-theme-muted truncate">{track.artist}</p>
-                                                        </div>
-                                                        <button 
-                                                            type="button" 
-                                                            className="w-7 h-7 rounded-full bg-theme-border/30 hover:bg-theme-border/50 flex items-center justify-center text-amber-500"
-                                                        >
-                                                            {selectedSpotifyTrack?.id === track.id && isPlayingSpotifyPreview ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                                                        </button>
+                                                {searchingSpotify ? (
+                                                    <div className="flex items-center justify-center py-6 gap-2">
+                                                        <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                                                        <span className="text-[10px] text-theme-muted font-medium">Searching Spotify database...</span>
                                                     </div>
-                                                ))}
-                                                {filteredTracks.length === 0 && (
-                                                    <p className="text-center text-[10px] text-theme-muted py-4">No results found on Spotify</p>
+                                                ) : (
+                                                    <>
+                                                        {displayTracks.map(track => (
+                                                            <div 
+                                                                key={track.id} 
+                                                                onClick={() => playSpotifyPreview(track)}
+                                                                className={`flex items-center gap-3 p-2 rounded-xl cursor-pointer hover:bg-theme-border/20 transition-all border ${
+                                                                    selectedSpotifyTrack?.id === track.id 
+                                                                        ? 'border-amber-500/40 bg-amber-500/5' 
+                                                                        : 'border-transparent'
+                                                                }`}
+                                                            >
+                                                                <img src={track.artwork} alt={track.title} className="w-10 h-10 rounded-lg object-cover" />
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-xs font-bold text-theme-text truncate">{track.title}</p>
+                                                                    <p className="text-[10px] text-theme-muted truncate flex items-center gap-1.5">
+                                                                        {track.artist}
+                                                                        {!track.url && (
+                                                                            <span className="text-[8px] bg-theme-border/30 px-1 py-0.5 rounded text-theme-muted font-semibold">
+                                                                                No Preview
+                                                                            </span>
+                                                                        )}
+                                                                    </p>
+                                                                </div>
+                                                                <button 
+                                                                    type="button" 
+                                                                    className="w-7 h-7 rounded-full bg-theme-border/30 hover:bg-theme-border/50 flex items-center justify-center text-amber-500"
+                                                                >
+                                                                    {selectedSpotifyTrack?.id === track.id && isPlayingSpotifyPreview ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                        {displayTracks.length === 0 && (
+                                                            <p className="text-center text-[10px] text-theme-muted py-4">No results found on Spotify</p>
+                                                        )}
+                                                    </>
                                                 )}
                                             </div>
 
@@ -532,7 +781,7 @@ export default function UploadReelModal({ onClose }: Props) {
                                                         onChange={e => {
                                                             const val = parseInt(e.target.value);
                                                             setSpotifyOffset(val);
-                                                            if (audioPreviewRef.current) {
+                                                            if (audioPreviewRef.current && selectedSpotifyTrack?.url) {
                                                                 audioPreviewRef.current.currentTime = val;
                                                             }
                                                         }}

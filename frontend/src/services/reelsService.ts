@@ -294,7 +294,6 @@ export const reelsService = {
         options?.onStatus?.('Uploading...');
 
         const formData = new FormData();
-        formData.append('file', file);
         if (options?.caption) {
             formData.append('caption', options.caption);
         }
@@ -304,6 +303,7 @@ export const reelsService = {
         if (options?.audioMetadata) {
             formData.append('audioMetadata', JSON.stringify(options.audioMetadata));
         }
+        formData.append('file', file);
 
         const response = await api.post('/reels/upload', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
