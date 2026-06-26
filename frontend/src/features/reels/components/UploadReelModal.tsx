@@ -41,6 +41,25 @@ const getFilterCss = (filterName: string) => {
     }
 };
 
+function generateRandomString(length: number): string {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+    for (let i = 0; i < length; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+}
+
+async function generateCodeChallenge(codeVerifier: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(codeVerifier);
+    const digest = await window.crypto.subtle.digest('SHA-256', data);
+    return btoa(String.fromCharCode.apply(null, [...new Uint8Array(digest)]))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+}
+
 export default function UploadReelModal({ onClose }: Props) {
     const fileRef = useRef<HTMLInputElement>(null);
     const audioFileRef = useRef<HTMLInputElement>(null);
@@ -94,8 +113,9 @@ export default function UploadReelModal({ onClose }: Props) {
 
     const upload = useUploadReel();
 
-    // On mount, check hash or existing token
+    // On mount, check hash or search params for Spotify authorization response
     useEffect(() => {
+        // 1. Check hash (Implicit Grant flow)
         const hash = window.location.hash;
         if (hash) {
             const params = new URLSearchParams(hash.substring(1));
@@ -107,7 +127,51 @@ export default function UploadReelModal({ onClose }: Props) {
                 // Clear hash
                 window.history.replaceState(null, '', window.location.pathname + window.location.search);
                 setAudioSource('spotify');
+                return;
             }
+        }
+
+        // 2. Check search params (Authorization Code Flow with PKCE)
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        if (code) {
+            const codeVerifier = localStorage.getItem('spotify_code_verifier') || '';
+            const clientId = localStorage.getItem('spotify_client_id') || '581c7f9994c944439c279c93df32d3d3';
+            const redirectUri = window.location.origin + '/';
+
+            // Clean query parameters from URL immediately
+            window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+
+            // Exchange authorization code for token
+            const payload = new URLSearchParams({
+                client_id: clientId,
+                grant_type: 'authorization_code',
+                code: code,
+                redirect_uri: redirectUri,
+                code_verifier: codeVerifier,
+            });
+
+            fetch('https://accounts.spotify.com/api/token', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: payload,
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.access_token) {
+                    localStorage.setItem('spotify_token', data.access_token);
+                    localStorage.setItem('spotify_token_expires', String(Date.now() + (data.expires_in || 3600) * 1000));
+                    setSpotifyToken(data.access_token);
+                    setAudioSource('spotify');
+                } else {
+                    console.error('Spotify token exchange failed:', data);
+                }
+            })
+            .catch(err => {
+                console.error('Error exchanging Spotify authorization code:', err);
+            });
         }
     }, []);
 
@@ -152,16 +216,29 @@ export default function UploadReelModal({ onClose }: Props) {
         setSelectedSpotifyTrack(null);
     };
 
-    const handleSpotifyConnect = () => {
+    const handleSpotifyConnect = async () => {
         const clientId = customClientId.trim() || '581c7f9994c944439c279c93df32d3d3'; // Fallback Client ID
         localStorage.setItem('spotify_client_id', clientId);
 
         const redirectUri = window.location.origin + '/';
         const scopes = 'user-read-private user-read-email';
-        const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
         
-        // Redirect
-        window.location.href = authUrl;
+        // PKCE generation
+        const codeVerifier = generateRandomString(128);
+        localStorage.setItem('spotify_code_verifier', codeVerifier);
+
+        try {
+            const codeChallenge = await generateCodeChallenge(codeVerifier);
+            const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&code_challenge_method=S256&code_challenge=${codeChallenge}`;
+            
+            // Redirect
+            window.location.href = authUrl;
+        } catch (err) {
+            console.error('Failed to generate PKCE challenge', err);
+            // Fallback to implicit grant if Web Crypto fails
+            const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
+            window.location.href = authUrl;
+        }
     };
 
     const handlePasteToken = (token: string) => {
@@ -642,6 +719,10 @@ export default function UploadReelModal({ onClose }: Props) {
 
                                                     {showDevSettings && (
                                                         <div className="text-left pt-2.5 border-t border-theme-border/20 space-y-2.5 animate-fadeIn">
+                                                            <div className="p-2 rounded bg-amber-500/10 border border-amber-500/20 text-[9px] text-amber-500 leading-normal space-y-1">
+                                                                <p className="font-bold">⚠️ Redirect URI Config Required:</p>
+                                                                <p>To avoid Spotify <strong>400 Bad Request</strong>, make sure to add <code>{window.location.origin}/</code> in your Spotify Developer Dashboard under <strong>Settings &gt; Redirect URIs</strong>.</p>
+                                                            </div>
                                                             <div className="space-y-1">
                                                                 <label className="text-[9px] font-bold text-theme-muted uppercase tracking-wider">Spotify Client ID</label>
                                                                 <input 
