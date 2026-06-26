@@ -6,6 +6,7 @@ import { ToastContainer } from '../ui/Toast';
 import { AuthModal } from '../AuthModal';
 import { useAuthModalStore } from '../../stores/useAuthModalStore';
 import { PrivyAuthBridge } from '../providers/PrivyAuthBridge';
+import { SpotifyAuthBridge } from '../providers/SpotifyAuthBridge';
 import { CookieConsent } from './CookieConsent';
 
 import { LoadingFallback } from './LoadingFallback';
@@ -24,6 +25,9 @@ export const GlobalLayout: React.FC = () => {
         <>
             {/* Privy → Backend JWT bridge (invisible UI component) */}
             <PrivyAuthBridge>
+                {/* Spotify Authentication Handler (Invisible UI component) */}
+                <SpotifyAuthBridge />
+                
                 <ScrollToTop />
                 {/* Main Content */}
                 <Suspense fallback={<LoadingFallback />}>

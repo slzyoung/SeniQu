@@ -53,8 +53,13 @@ function generateRandomString(length: number): string {
 async function generateCodeChallenge(codeVerifier: string): Promise<string> {
     const encoder = new TextEncoder();
     const data = encoder.encode(codeVerifier);
-    const digest = await window.crypto.subtle.digest('SHA-256', data);
-    return btoa(String.fromCharCode.apply(null, [...new Uint8Array(digest)]))
+    const digest = await window.crypto.subtle.digest('SHA-256', data as any);
+    const bytes = new Uint8Array(digest);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary)
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '');
@@ -113,9 +118,19 @@ export default function UploadReelModal({ onClose }: Props) {
 
     const upload = useUploadReel();
 
-    // On mount, check hash or search params for Spotify authorization response
+    // On mount, listen to global Spotify token updates and check url params
     useEffect(() => {
-        // 1. Check hash (Implicit Grant flow)
+        const handleTokenUpdate = () => {
+            const token = localStorage.getItem('spotify_token');
+            setSpotifyToken(token);
+            if (token) {
+                setAudioSource('spotify');
+            }
+        };
+
+        window.addEventListener('spotify_token_updated', handleTokenUpdate);
+
+        // Check hash (Implicit Grant flow callback)
         const hash = window.location.hash;
         if (hash) {
             const params = new URLSearchParams(hash.substring(1));
@@ -124,14 +139,12 @@ export default function UploadReelModal({ onClose }: Props) {
                 localStorage.setItem('spotify_token', token);
                 localStorage.setItem('spotify_token_expires', String(Date.now() + 3600 * 1000));
                 setSpotifyToken(token);
-                // Clear hash
                 window.history.replaceState(null, '', window.location.pathname + window.location.search);
                 setAudioSource('spotify');
-                return;
             }
         }
 
-        // 2. Check search params (Authorization Code Flow with PKCE)
+        // Check search params (Authorization Code Flow with PKCE)
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code');
         if (code) {
@@ -142,7 +155,6 @@ export default function UploadReelModal({ onClose }: Props) {
             // Clean query parameters from URL immediately
             window.history.replaceState(null, '', window.location.pathname + window.location.hash);
 
-            // Exchange authorization code for token
             const payload = new URLSearchParams({
                 client_id: clientId,
                 grant_type: 'authorization_code',
@@ -165,6 +177,7 @@ export default function UploadReelModal({ onClose }: Props) {
                     localStorage.setItem('spotify_token_expires', String(Date.now() + (data.expires_in || 3600) * 1000));
                     setSpotifyToken(data.access_token);
                     setAudioSource('spotify');
+                    window.dispatchEvent(new Event('spotify_token_updated'));
                 } else {
                     console.error('Spotify token exchange failed:', data);
                 }
@@ -173,6 +186,10 @@ export default function UploadReelModal({ onClose }: Props) {
                 console.error('Error exchanging Spotify authorization code:', err);
             });
         }
+
+        return () => {
+            window.removeEventListener('spotify_token_updated', handleTokenUpdate);
+        };
     }, []);
 
     // Check token expiration & fetch profile
@@ -214,11 +231,13 @@ export default function UploadReelModal({ onClose }: Props) {
         setSpotifyUser(null);
         setLiveSpotifyTracks([]);
         setSelectedSpotifyTrack(null);
+        window.dispatchEvent(new Event('spotify_token_updated'));
     };
 
     const handleSpotifyConnect = async () => {
         const clientId = customClientId.trim() || '581c7f9994c944439c279c93df32d3d3'; // Fallback Client ID
         localStorage.setItem('spotify_client_id', clientId);
+        localStorage.setItem('spotify_redirect_back', window.location.pathname);
 
         const redirectUri = window.location.origin + '/';
         const scopes = 'user-read-private user-read-email';
