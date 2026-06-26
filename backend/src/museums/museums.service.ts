@@ -1940,12 +1940,13 @@ out center body;`;
 
         const result: { coverImageUrl?: string; reviews?: any[]; description?: string } = {};
 
-        const placeId = place.id;
-        const placeName = place.name;
+        const placeId = typeof place === 'string' ? place : place?.id;
+        const placeName = typeof place === 'string' ? (dbId || '') : (place?.name || '');
+        const isUuid = placeId ? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(placeId) : false;
 
         // 1. Fetch Google Maps Photo if referenced in place object
-        const photoObj = place.photos && place.photos.length > 0 ? place.photos[0] : null;
-        if (photoObj && typeof photoObj === 'object' && photoObj.name && apiKey) {
+        const photoObj = (place && typeof place === 'object' && place.photos && place.photos.length > 0) ? place.photos[0] : null;
+        if (photoObj && typeof photoObj === 'object' && photoObj.name && apiKey && !isUuid) {
             try {
                 const staticPhotoUrl = await this.fetchGooglePlacePhotoUrl(photoObj.name, apiKey);
                 if (staticPhotoUrl) {
@@ -1958,7 +1959,7 @@ out center body;`;
         }
 
         // 2. Fetch Google Maps Details (Reviews & Photos) ONLY if budget/quota allows
-        if (apiKey && placeId && !placeId.startsWith('osm-')) {
+        if (apiKey && placeId && !placeId.startsWith('osm-') && !isUuid) {
             const budget = this.checkAndIncrementBudget('details', 'background');
             if (budget.allowed) {
                 const url = `https://places.googleapis.com/v1/places/${placeId}`;
@@ -2350,11 +2351,12 @@ out center body;`;
         let placeDataFromGoogle: any = null;
         let googleApiFailed = false;
 
-        // 2. Query Google Maps only if budget allows and API key is present
+        // 2. Query Google Maps only if budget allows, API key is present, and placeId is NOT a local database UUID
         const clientIp = ip || 'unknown';
         const budget = this.checkAndIncrementBudget('details', clientIp);
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(placeId);
 
-        if (budget.allowed && apiKey) {
+        if (budget.allowed && apiKey && !isUuid) {
             const url = `https://places.googleapis.com/v1/places/${placeId}`;
             try {
                 const res = await fetch(url, {
@@ -2380,7 +2382,11 @@ out center body;`;
                 googleApiFailed = true;
             }
         } else {
-            this.logger.warn(`[DETAILS] Google Maps limit exhausted or API key missing for IP ${clientIp}. Falling back to DB.`);
+            if (isUuid) {
+                this.logger.log(`[DETAILS] Local UUID placeId detected: ${placeId}. Skipping Google API fetch and falling back to DB.`);
+            } else {
+                this.logger.warn(`[DETAILS] Google Maps limit exhausted or API key missing for IP ${clientIp}. Falling back to DB.`);
+            }
             googleApiFailed = true;
         }
 

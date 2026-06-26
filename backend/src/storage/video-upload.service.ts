@@ -34,6 +34,7 @@ import {
     GetObjectCommand,
     DeleteObjectCommand,
     HeadObjectCommand,
+    CopyObjectCommand,
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { v4 as uuidv4 } from "uuid"
@@ -79,6 +80,8 @@ export interface UploadSession {
     updatedAt: Date
     /** Compression progress 0-100 */
     progress: number
+    /** original video MIME type */
+    mimeType?: string
 }
 
 const ALLOWED_VIDEO_MIMES = ["video/mp4", "video/webm", "video/ogg", "video/quicktime"]
@@ -219,6 +222,7 @@ export class VideoUploadService implements OnModuleInit {
             createdAt: new Date(),
             updatedAt: new Date(),
             progress: 0,
+            mimeType: params.mimeType,
         }
 
         this.sessions.set(sessionId, session)
@@ -345,22 +349,60 @@ export class VideoUploadService implements OnModuleInit {
             jobTracker.progress = 30
             session.progress = 30
 
-            // PHASE 3: Compress video — FILE-PATH based (zero buffer memory)
-            jobTracker.status = "compressing"
-            this.logger.log(
-                `🔄 Compressing video: ${this.formatSize(rawSize)} | ` +
-                `${metadata.width}x${metadata.height} | ${metadata.videoCodec}`
-            )
+            // PHASE 3: Process video (Compress or direct passthrough if > 10MB)
+            let video: any;
+            let thumbnail: any;
+            const isLargeVideo = rawSize > 10 * 1024 * 1024; // 10MB threshold
 
-            const audioMeta = session.audioMetadata || {}
-            const isMuted = audioMeta.originalVolume === 0 || audioMeta.mute === true
+            if (isLargeVideo) {
+                this.logger.log(
+                    `ℹ️ Video is large (${this.formatSize(rawSize)}), bypassing compression to conserve server resources.`
+                )
+                jobTracker.status = "copying_cdn"
+                
+                // Copy the raw file to the compressedKey path on R2 directly (extremely fast, zero server memory)
+                await this.s3Client.send(
+                    new CopyObjectCommand({
+                        Bucket: this.bucketName,
+                        CopySource: `${this.bucketName}/${encodeURIComponent(session.rawKey)}`,
+                        Key: session.compressedKey,
+                        ContentType: session.mimeType || "video/mp4",
+                        MetadataDirective: "REPLACE",
+                    })
+                )
 
-            const { video, thumbnail } = await this.videoProcessor.processVideoFromFile(
-                rawFilePath,
-                "video/mp4",
-                isMuted
-            )
-            tempFiles.push(video.videoPath, thumbnail.thumbnailPath)
+                // Generate thumbnail from raw downloaded file
+                const generatedThumb = await this.videoProcessor.generateThumbnailFromFile(rawFilePath)
+                tempFiles.push(generatedThumb.thumbnailPath)
+
+                thumbnail = generatedThumb
+                video = {
+                    videoPath: rawFilePath,
+                    contentType: session.mimeType || "video/mp4",
+                    size: rawSize,
+                    metadata,
+                }
+            } else {
+                // PHASE 3: Compress video — FILE-PATH based (zero buffer memory)
+                jobTracker.status = "compressing"
+                this.logger.log(
+                    `🔄 Compressing video: ${this.formatSize(rawSize)} | ` +
+                    `${metadata.width}x${metadata.height} | ${metadata.videoCodec}`
+                )
+
+                const audioMeta = session.audioMetadata || {}
+                const isMuted = audioMeta.originalVolume === 0 || audioMeta.mute === true
+
+                const processed = await this.videoProcessor.processVideoFromFile(
+                    rawFilePath,
+                    "video/mp4",
+                    isMuted
+                )
+                tempFiles.push(processed.video.videoPath, processed.thumbnail.thumbnailPath)
+
+                video = processed.video
+                thumbnail = processed.thumbnail
+            }
 
             // PHASE 3.5: Moderate Thumbnail (thumbnail buffer is tiny ~50KB, safe for memory)
             jobTracker.status = "moderating"
@@ -431,10 +473,15 @@ export class VideoUploadService implements OnModuleInit {
 
             // PHASE 4: Upload compressed video (streaming from disk) + thumbnail to R2
             jobTracker.status = "uploading_compressed"
-            await Promise.all([
-                this.uploadFileToR2(session.compressedKey, video.videoPath, video.contentType),
-                this.uploadToR2(session.thumbnailKey, thumbnail.buffer, thumbnail.contentType),
-            ])
+            if (isLargeVideo) {
+                // Video is already copied on R2, only upload the generated thumbnail
+                await this.uploadToR2(session.thumbnailKey, thumbnail.buffer, thumbnail.contentType)
+            } else {
+                await Promise.all([
+                    this.uploadFileToR2(session.compressedKey, video.videoPath, video.contentType),
+                    this.uploadToR2(session.thumbnailKey, thumbnail.buffer, thumbnail.contentType),
+                ])
+            }
 
             jobTracker.progress = 95
             session.progress = 95
@@ -611,9 +658,37 @@ export class VideoUploadService implements OnModuleInit {
             const audioMeta = options?.audioMetadata || {}
             const isMuted = audioMeta.originalVolume === 0 || audioMeta.mute === true
 
-            // Process video from file path — NO buffer in memory
-            const { video, thumbnail } = await this.videoProcessor.processVideoFromFile(tmpInputPath, mimeType, isMuted)
-            tempFiles.push(video.videoPath, thumbnail.thumbnailPath)
+            // Process video (Compress or direct passthrough if > 10MB)
+            let video: any;
+            let thumbnail: any;
+            const isLargeVideo = actualSize > 10 * 1024 * 1024; // 10MB threshold
+
+            if (isLargeVideo) {
+                this.logger.log(
+                    `ℹ️ Stream video is large (${this.videoProcessor.formatSize(actualSize)}), bypassing compression to conserve server resources.`
+                )
+                
+                // Analyze metadata from raw file
+                const metadata = await this.videoProcessor.getMetadataFromFile(tmpInputPath)
+
+                // Generate thumbnail from raw file
+                const generatedThumb = await this.videoProcessor.generateThumbnailFromFile(tmpInputPath)
+                tempFiles.push(generatedThumb.thumbnailPath)
+
+                thumbnail = generatedThumb
+                video = {
+                    videoPath: tmpInputPath,
+                    contentType: mimeType,
+                    size: actualSize,
+                    metadata,
+                }
+            } else {
+                // Process video from file path — NO buffer in memory
+                const processed = await this.videoProcessor.processVideoFromFile(tmpInputPath, mimeType, isMuted)
+                tempFiles.push(processed.video.videoPath, processed.thumbnail.thumbnailPath)
+                video = processed.video
+                thumbnail = processed.thumbnail
+            }
 
             // Moderate Thumbnail (thumbnail buffer is tiny ~50KB)
             this.logger.log(`🔍 Moderating stream video thumbnail for user ${userId}...`)
@@ -640,7 +715,7 @@ export class VideoUploadService implements OnModuleInit {
                 )
             }
 
-            // Upload compressed video (streaming from file) + thumbnail in parallel
+            // Upload video (streaming from file) + thumbnail in parallel
             await Promise.all([
                 this.uploadFileToR2(videoKey, video.videoPath, video.contentType),
                 this.uploadToR2(thumbnailKey, thumbnail.buffer, thumbnail.contentType),
