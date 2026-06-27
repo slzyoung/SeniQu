@@ -8,20 +8,32 @@ import { initializeAuth } from './stores';
 // Initialize token synchronously to prevent initial queries from going out unauthorized
 initializeAuth();
 
-// Prevent MetaMask MaxListenersExceededWarning memory leak warnings on hot reloads
+// Prevent wallet MaxListenersExceededWarning memory leak warnings
 if (typeof window !== 'undefined') {
-    const handleEthereum = () => {
-        const eth = (window as any).ethereum;
-        if (eth && typeof eth.setMaxListeners === 'function') {
+    const patchMaxListeners = (obj: any) => {
+        if (obj && typeof obj.setMaxListeners === 'function') {
             try {
-                eth.setMaxListeners(100);
+                obj.setMaxListeners(100);
             } catch (e) {
                 // Ignore any silent failures
             }
         }
     };
-    handleEthereum();
-    window.addEventListener('ethereum#initialized', handleEthereum, { once: true });
+
+    const handleWalletListeners = () => {
+        patchMaxListeners((window as any).ethereum);
+        patchMaxListeners((window as any).solana);
+        patchMaxListeners((window as any).phantom?.solana);
+        patchMaxListeners((window as any).solflare);
+    };
+
+    handleWalletListeners();
+    window.addEventListener('ethereum#initialized', handleWalletListeners, { once: true });
+    window.addEventListener('solana#initialized', handleWalletListeners, { once: true });
+    
+    // Also patch periodically/on interval for late-injected providers (e.g. extension load delays)
+    const interval = setInterval(handleWalletListeners, 1000);
+    setTimeout(() => clearInterval(interval), 10000);
 }
 
 // Create a client

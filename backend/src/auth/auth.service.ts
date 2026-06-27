@@ -667,11 +667,7 @@ export class AuthService {
             })
             isNewUser = true
 
-            // Auto-create Privy Embedded Wallet — FIRE AND FORGET (non-blocking)
-            // Don't let Privy API slowness block the OAuth redirect
-            this.privyService.createWithEmbeddedWallet({
-                email: user.email || undefined
-            }).catch(err => this.logger.warn(`[GoogleOAuth] Background Privy wallet creation failed: ${err.message}`))
+            // Privy Embedded Wallet will be auto-created in ensureEmbeddedWallet below
         } else if (!user.googleId) {
             await this.usersService.updateGoogleId(user.id, googleProfile.googleId)
             user.googleId = googleProfile.googleId
@@ -798,8 +794,8 @@ export class AuthService {
             }
 
             if (privyUser) {
-                // 1. Sync Privy ID if missing
-                if (!user.privyId) {
+                // 1. Sync Privy ID if missing or different
+                if (user.privyId !== privyUser.id) {
                     try {
                         await this.usersService.updatePrivyId(user.id, privyUser.id);
                         user.privyId = privyUser.id;
