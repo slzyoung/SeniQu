@@ -312,6 +312,16 @@ To resolve this and guarantee robust connectivity:
   ```
 * **Impact**: outbound HTTPS connections to external APIs (Google, Supabase, etc.) avoid unstable IPv6 routes, ensuring zero-latency OAuth callbacks.
 
+### 1.14 Hash Fragment Collision Resolution (Google OAuth vs Spotify Auth)
+
+When both Google OAuth and Spotify Web Playback integrations are active, they both receive authentication callbacks that deliver an `access_token` in the URL hash fragment (`#access_token=...`).
+- **Conflict**: The global `SpotifyAuthBridge` (rendered in `GlobalLayout`) intercepts any URL containing a hash with `access_token`, consumes it as a Spotify token, clears the URL hash via `replaceState`, and redirects the user. This preemptively strips the credentials from the URL, causing the Google OAuth callback handler (`AuthCallback` page) to receive an empty hash and fail with a `"No authentication data received"` error.
+- **Fix**: Added explicit guard conditions to `SpotifyAuthBridge.tsx` to immediately bypass execution when:
+  1. The current route is the Google callback page (`/auth/callback`).
+  2. The URL hash contains Google-specific query keys (such as `user` or `refresh_token`).
+- **Impact**: Restored flawless execution of Google Social Sign-In and local user logins alongside background Privy wallet provisioning.
+
+
 ## 2. Role-Based Access Control (RBAC)
 
 ### 2.1 User Roles

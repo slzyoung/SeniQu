@@ -6,6 +6,18 @@ export const SpotifyAuthBridge: React.FC = () => {
     const location = useLocation();
 
     useEffect(() => {
+        // Skip Spotify authentication processing on the Google OAuth callback page
+        // or if the URL hash contains Google OAuth params (user or refresh_token)
+        if (location.pathname === '/auth/callback') {
+            return;
+        }
+        if (location.hash) {
+            const params = new URLSearchParams(location.hash.substring(1));
+            if (params.has('user') || params.has('refresh_token')) {
+                return;
+            }
+        }
+
         // 1. Check for Spotify code in URL query params (Authorization Code Flow with PKCE)
         const urlParams = new URLSearchParams(location.search);
         const code = urlParams.get('code');
