@@ -67,6 +67,20 @@ const VERIFIED_CDN_INSTITUTIONS = [
     { name: 'Museum Paseban', city: 'dki jakarta', subDistrict: 'timur', type: 'museum', description: 'Museum sejarah lokal di Jakarta Timur.' }
 ];
 
+const generateSolanaSignature = (numOrId: string | number, seed: string) => {
+    // Generate a Solana-style base58 signature of length 88
+    const base58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    let hash = "";
+    // Create a pseudo-random looking string based on the input
+    const baseStr = `${seed}${numOrId}seniqusolanaproofofartpreservationsignature`;
+    for (let i = 0; i < 88; i++) {
+        const charCode = baseStr.charCodeAt(i % baseStr.length);
+        const index = (charCode + i * 17) % base58Alphabet.length;
+        hash += base58Alphabet[index];
+    }
+    return hash;
+};
+
 const generateLocalArtworks = () => {
     const list: Artwork[] = [];
 
@@ -86,7 +100,7 @@ const generateLocalArtworks = () => {
             category: 'Heritage',
             artist: { displayName: 'Tim Konservasi Batur' },
             poaCertificate: {
-                hash: `0x8f2d9c4b7a1e0f358b2c4d9e0f1a2b3c4d5e${num}`,
+                hash: generateSolanaSignature(num, 'batur'),
                 r2Path: `Bali/Museum/Museum Geopark Batur/IMG_${num}.jpg`
             }
         } as any);
@@ -108,7 +122,7 @@ const generateLocalArtworks = () => {
             category: 'Heritage',
             artist: { displayName: 'Tim Konservasi Bali' },
             poaCertificate: {
-                hash: `0x3c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a${num}`,
+                hash: generateSolanaSignature(num, 'upt'),
                 r2Path: `Bali/Museum/UPT. MUSEUM BALI/IMG_${num}.jpg`
             }
         } as any);
@@ -130,7 +144,7 @@ const generateLocalArtworks = () => {
             category: 'Heritage',
             artist: { displayName: 'Tim Seni Pasifika' },
             poaCertificate: {
-                hash: `0x5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b${num}`,
+                hash: generateSolanaSignature(num, 'pasifika'),
                 r2Path: `Bali/Museum/MUSEUM PASIFIKA/IMG_${num}.jpg`
             }
         } as any);
@@ -156,7 +170,7 @@ const generateLocalArtworks = () => {
             category: 'Heritage',
             artist: { displayName: 'Tim Konservasi Semarang' },
             poaCertificate: {
-                hash: `0x7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a${id}`,
+                hash: generateSolanaSignature(id, 'kotalama'),
                 r2Path: `Jawa Tengah/Semarang/Museum/Museum Kota Lama/IMG_20260409_${id}.jpg`
             }
         } as any);
@@ -213,7 +227,7 @@ const generateLocalArtworks = () => {
             category: 'Art',
             artist: { displayName: 'Kontributor Galeri' },
             poaCertificate: {
-                hash: `0x6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b${index}`,
+                hash: generateSolanaSignature(index, 'gallery'),
                 r2Path: `Jawa Tengah/Semarang/Galery/Semarang Contemporary Art Gallery/${item.file}`
             }
         } as any);
