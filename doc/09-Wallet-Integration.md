@@ -52,6 +52,7 @@ To guarantee high performance and reliability during the sign-in/callback redire
 During database migrations, Privy App ID changes, or environment switches, the database might store a stale or mismatched `privy_id` (e.g. `did:privy:cmnwl...` from an old environment) for an existing user.
 - **Problem**: When the user authenticates, the backend attempts to query Privy for the stale ID. This fails with `Privy user not found`, preventing the user's session from syncing or working correctly on the frontend.
 - **Fix**: In the `ensureEmbeddedWallet` routine, the backend compares the database-stored `privyId` with the active, authenticated/created `privyUser.id` from Privy's SDK. If they mismatch or the database record is stale, the database `privy_id` is automatically overwritten and updated to the correct, newly verified Privy ID, allowing seamless synchronization and login.
+- **Stale Wallet Eviction**: To prevent a state mismatch where the user sees a stale wallet address in their dashboard (which they no longer own under the new Privy ID), updating the `privy_id` triggers an automatic eviction of all existing `privy_wallets` entries for that user. This allows `syncWallets` to safely auto-provision and link fresh Ethereum and Solana embedded wallets associated with the new Privy ID.
 
 
 

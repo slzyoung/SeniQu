@@ -329,6 +329,18 @@ export class UsersService {
             this.logger.error(`Failed to update Privy ID: ${error.message}`)
             // Don't throw error here to allow flow to proceed
         }
+
+        // Clear old privy_wallets since they belong to a different/stale Privy account
+        const { error: deleteWalletsError } = await client
+            .from("privy_wallets")
+            .delete()
+            .eq("user_id", userId);
+
+        if (deleteWalletsError) {
+            this.logger.error(`Failed to clear stale privy_wallets on Privy ID update: ${deleteWalletsError.message}`);
+        } else {
+            this.logger.log(`Cleared stale privy_wallets for user ${userId} due to Privy ID change.`);
+        }
     }
 
     async findAll(page = 1, limit = 20): Promise<{ users: User[]; total: number }> {
