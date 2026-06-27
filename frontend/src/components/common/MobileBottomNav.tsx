@@ -23,6 +23,7 @@ import {
     ScanLine,
     Bookmark,
     Wallet,
+    Play,
     type LucideIcon,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -47,8 +48,8 @@ const guestNavItems: NavItem[] = [
     { path: ROUTES.HOME, icon: Home, label: 'Home' },
     { path: ROUTES.GALLERY, icon: Grid, label: 'Gallery' },
     { path: ROUTES.AI_GENRE, icon: ScanLine, label: 'Analyze', isCenter: true },
-    { path: ROUTES.NEARBY, icon: MapPin, label: 'Nearby' },
-    { path: ROUTES.COMMUNITY, icon: Bookmark, label: 'More' },
+    { path: ROUTES.REELS, icon: Play, label: 'Reels' },
+    { path: ROUTES.LOGIN, icon: Search, label: 'Explore' },
 ];
 
 const userNavItems: NavItem[] = [

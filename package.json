@@ -33,5 +33,8 @@
         "glob": "^10.4.5",
         "esbuild": "^0.25.0",
         "fast-uri": "^3.0.0"
+    },
+    "dependencies": {
+        "heic-convert": "^2.1.0"
     }
 }

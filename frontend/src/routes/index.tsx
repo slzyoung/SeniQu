@@ -158,6 +158,7 @@ const router = createBrowserRouter(
                 {/* Gallery Routes */}
                 <Route path={ROUTES.GALLERY} element={<PublicGallery />} />
                 <Route path={ROUTES.COLLECTIONS} element={<CollectionsPage />} />
+                <Route path="/collections/:cityId" element={<CollectionsPage />} />
                 <Route path={ROUTES.GALLERY_CITY_REGIONS} element={<CityRegions />} />
                 <Route path={ROUTES.GALLERY_REGION_MUSEUMS} element={<RegionMuseums />} />
                 <Route path={ROUTES.GALLERY_MUSEUM} element={<MuseumDetail />} />

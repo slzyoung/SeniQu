@@ -26,7 +26,8 @@ export function useArtworks(filters: ArtworkFilters = {}) {
         queryKey: artworkKeys.list(filters),
         queryFn: () => artworkService.getArtworks(filters),
         placeholderData: (previousData) => previousData,
-        staleTime: 1000 * 60, // 1 minute
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        refetchOnWindowFocus: false,
     });
 }
 

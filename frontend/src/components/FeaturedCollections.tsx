@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   ArrowRight,
   Heart,
-  Filter,
   Loader2,
   ChevronLeft,
   ChevronRight
@@ -38,14 +37,6 @@ interface CollectionData {
   imageUrl?: string;
 }
 
-const categories = [
-  'All',
-  'Painting',
-  'Sculpture',
-  'Digital',
-  'Photography',
-  'Installation'
-];
 
 // Helper to generate consistent gradients based on index
 const getGradient = (index: number) => {
@@ -220,15 +211,13 @@ CollectionCard.displayName = 'CollectionCard';
 export function FeaturedCollections() {
   const { ref, isVisible } = useScrollAnimation();
   const navigate = useNavigate();
-  const [activeCategory, setActiveCategory] = useState('All');
   const [favorites, setFavorites] = useState<string[]>([]);
   const [isHovered, setIsHovered] = useState(false);
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
   // Fetch real artworks
   const { data: artworksData, isLoading } = useArtworks({
-    limit: 6,
-    category: activeCategory === 'All' ? undefined : activeCategory
+    limit: 6
   });
 
   // Map to CollectionData format
@@ -313,38 +302,9 @@ export function FeaturedCollections() {
           <h2 className="text-3xl md:text-5xl font-serif text-theme-text mb-3 md:mb-4">
             Featured <span className="text-gold italic">Artworks</span>
           </h2>
-          <p className="text-theme-muted text-sm md:text-base max-w-2xl mx-auto flex items-center justify-center gap-2">
-            <Filter className="w-3.5 h-3.5 md:w-4 md:h-4" />
+          <p className="text-theme-muted text-sm md:text-base max-w-2xl mx-auto">
             Discover our diverse collection of Indonesian masterpieces
           </p>
-        </div>
-
-        {/* Category Tabs */}
-        <div className="relative mb-8 md:mb-12">
-          <div className="flex overflow-x-auto pb-2 hide-scrollbar snap-x snap-mandatory justify-start md:justify-center gap-2 md:gap-3 -mx-4 px-4 md:mx-0 md:px-0">
-            {categories.map((cat) =>
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`relative px-3.5 md:px-5 py-2 md:py-2.5 rounded-full text-xs md:text-sm font-medium transition-all snap-center whitespace-nowrap flex items-center gap-1.5 md:gap-2 ${activeCategory === cat ? 'text-charcoal' : 'text-theme-muted hover:text-theme-text bg-theme-surface/50 border border-theme-border'}`}>
-
-                {activeCategory === cat &&
-                  <motion.div
-                    layoutId="activeCategory"
-                    className="absolute inset-0 bg-gold rounded-full -z-10 shadow-[0_0_15px_rgba(201,168,76,0.4)]"
-                    transition={{
-                      type: 'spring',
-                      bounce: 0.2,
-                      duration: 0.6
-                    }} />
-
-                }
-                <span>{cat}</span>
-              </button>
-            )}
-          </div>
-          <div className="absolute left-0 top-0 bottom-2 w-6 bg-gradient-to-r from-theme-bg to-transparent md:hidden pointer-events-none" />
-          <div className="absolute right-0 top-0 bottom-2 w-6 bg-gradient-to-l from-theme-bg to-transparent md:hidden pointer-events-none" />
         </div>
 
         {/* Grid or Loader */}

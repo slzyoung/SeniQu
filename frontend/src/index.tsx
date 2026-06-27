@@ -8,6 +8,22 @@ import { initializeAuth } from './stores';
 // Initialize token synchronously to prevent initial queries from going out unauthorized
 initializeAuth();
 
+// Prevent MetaMask MaxListenersExceededWarning memory leak warnings on hot reloads
+if (typeof window !== 'undefined') {
+    const handleEthereum = () => {
+        const eth = (window as any).ethereum;
+        if (eth && typeof eth.setMaxListeners === 'function') {
+            try {
+                eth.setMaxListeners(100);
+            } catch (e) {
+                // Ignore any silent failures
+            }
+        }
+    };
+    handleEthereum();
+    window.addEventListener('ethereum#initialized', handleEthereum, { once: true });
+}
+
 // Create a client
 const queryClient = new QueryClient({
     defaultOptions: {

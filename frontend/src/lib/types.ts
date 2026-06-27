@@ -83,6 +83,11 @@ export interface Artwork {
     isBookmarked?: boolean;
     artworkType?: 'physical' | 'digital';
     poaCertificate?: any;
+    institutionId?: string;
+    region?: string;
+    primaryImageUrl?: string;
+    yearCreated?: number;
+    category?: string;
 }
 
 export interface ArtworkImage {

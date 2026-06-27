@@ -37,7 +37,6 @@ import { useToast } from '../../../../stores/useNotificationStore';
 import { useDebounce } from '../../../../hooks/useDebounce';
 import { validateVideo, formatFileSize, formatDuration, generateVideoThumbnail } from '../../../../lib/videoCompressor';
 import { useUploadStore } from '../../../../stores/useUploadStore';
-import { forumService } from '../../../../services/forumService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect } from 'react';
 import './CommunityPage.css';
@@ -971,8 +970,8 @@ export function CommunityPage() {
                             <button
                                 key={tab.id}
                                 className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${sortBy === tab.id
-                                        ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm'
-                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                                    ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm'
+                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                                     }`}
                                 onClick={() => setSortBy(tab.id)}
                             >
