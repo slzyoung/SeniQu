@@ -733,6 +733,19 @@ export function Profile() {
                             {/* Photography Section */}
                             <div className="pv2-section-header mt-8">
                                 <h2 className="pv2-section-title">Photography</h2>
+                                <div className="flex items-center gap-2">
+                                    {displayUser?.id === authUser?.id && (
+                                        <button
+                                            onClick={() => {
+                                                setShowPhotoUpload(true);
+                                            }}
+                                            className="p-1.5 rounded-full bg-[var(--ph-gold,#C9A84C)] hover:opacity-90 text-[#121214] font-bold shadow-md transition-all flex items-center justify-center cursor-pointer"
+                                            title="Upload Photography"
+                                        >
+                                            <Plus style={{ width: 14, height: 14 }} />
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
                             {isLoadingArts ? (
