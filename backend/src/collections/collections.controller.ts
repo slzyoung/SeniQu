@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger"
 import { CollectionsService } from "./collections.service"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { GetUser } from "../auth/decorators/get-user.decorator"
+import { Public } from "../auth/decorators/public.decorator"
 
 @ApiTags("Collections")
 @Controller("collections")
@@ -13,8 +14,18 @@ export class CollectionsController {
 
     @Post()
     @ApiOperation({ summary: "Create collection" })
-    async create(@Body() dto: { name: string; description: string }, @GetUser("id") ownerId: string) {
+    async create(
+        @Body() dto: { name: string; description: string; isPublic?: boolean; coverImageUrl?: string },
+        @GetUser("id") ownerId: string
+    ) {
         return this.collectionsService.create(dto, ownerId)
+    }
+
+    @Get("user/:userId")
+    @Public()
+    @ApiOperation({ summary: "Get public collections by user ID" })
+    async findByUser(@Param("userId") userId: string) {
+        return this.collectionsService.findByOwner(userId)
     }
 
     @Get("me")
@@ -35,5 +46,12 @@ export class CollectionsController {
     async removeArtwork(@Param("id") collectionId: string, @Param("artworkId") artworkId: string) {
         await this.collectionsService.removeArtwork(collectionId, artworkId)
         return { message: "Artwork removed from collection" }
+    }
+
+    @Delete(":id")
+    @ApiOperation({ summary: "Delete collection" })
+    async deleteCollection(@Param("id") collectionId: string, @GetUser("id") userId: string) {
+        await this.collectionsService.deleteCollection(collectionId, userId)
+        return { message: "Collection deleted successfully" }
     }
 }

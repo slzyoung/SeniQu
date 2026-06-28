@@ -33,6 +33,11 @@ export class UpdateUserDto {
     profileVideoUrl?: string
 
     @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    profileBackgroundUrl?: string
+
+    @ApiPropertyOptional()
     @IsObject()
     @IsOptional()
     socialLinks?: Record<string, string>

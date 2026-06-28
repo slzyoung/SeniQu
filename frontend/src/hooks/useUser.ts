@@ -267,6 +267,22 @@ export function useUploadProfileVideo() {
     });
 }
 
+export function useUploadProfileBackground() {
+    const queryClient = useQueryClient();
+    const toast = useToast();
+
+    return useMutation({
+        mutationFn: (file: File) => userService.uploadProfileBackground(file),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: userKeys.currentUser() });
+            toast.success('Background Updated', 'Your profile background has been updated.');
+        },
+        onError: () => {
+            toast.error('Upload Failed', 'Could not upload background image.');
+        },
+    });
+}
+
 // ============================================
 // WALLET HOOKS
 // ============================================

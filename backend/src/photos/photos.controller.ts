@@ -16,6 +16,7 @@ import { PhotosService } from "./photos.service"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { GetUser } from "../auth/decorators/get-user.decorator"
 import { BypassSecurity } from "../common/decorators/bypass-security.decorator"
+import { Public } from "../auth/decorators/public.decorator"
 import {
     CreatePhotoDto,
     UpdatePhotoDto,
@@ -278,6 +279,28 @@ export class PhotosController {
         return this.photosService.getCollections(userId)
     }
 
+    @Get("collections/:id/photos")
+    @Public()
+    @ApiOperation({ summary: "Get photos inside a collection" })
+    async getCollectionPhotos(
+        @Param("id") id: string,
+        @Req() req: any
+    ) {
+        let userId: string | undefined = undefined
+        const authHeader = req.headers?.authorization
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+            try {
+                const token = authHeader.substring(7)
+                const payloadStr = Buffer.from(token.split(".")[1], "base64").toString("utf-8")
+                const payload = JSON.parse(payloadStr)
+                userId = payload.id || payload.sub
+            } catch (e) {
+                // Ignore parsing/decoding errors
+            }
+        }
+        return this.photosService.getCollectionPhotos(id, userId)
+    }
+
     @Post("collections/:id/photos/:photoId")
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth("JWT-auth")
@@ -289,6 +312,18 @@ export class PhotosController {
     ) {
         await this.photosService.addPhotoToCollection(collectionId, photoId, userId)
         return { message: "Photo added to collection" }
+    }
+
+    @Delete("collections/:id")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth("JWT-auth")
+    @ApiOperation({ summary: "Delete a photo collection" })
+    async deleteCollection(
+        @Param("id") collectionId: string,
+        @GetUser("id") userId: string,
+    ) {
+        await this.photosService.deleteCollection(collectionId, userId)
+        return { message: "Photo collection deleted" }
     }
 
     // ─── Photography Request/Commission Endpoints ───

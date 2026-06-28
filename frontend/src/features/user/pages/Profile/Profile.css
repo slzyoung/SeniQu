@@ -1457,3 +1457,580 @@
 .pv2-hero-edit-btn:active {
     transform: scale(0.97);
 }
+
+/* Premium Dotted/Dashed Upload Card */
+.pv2-art-grid .pv2-upload-card {
+    aspect-ratio: 1;
+    border-radius: 22px;
+    border: 2px dashed rgba(0, 0, 0, 0.08);
+    background: var(--bg-surface);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+}
+
+.dark .pv2-art-grid .pv2-upload-card {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.pv2-art-grid .pv2-upload-card:hover {
+    border-color: var(--ph-gold, #C9A84C);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(201, 168, 76, 0.08);
+}
+
+.dark .pv2-art-grid .pv2-upload-card:hover {
+    box-shadow: 0 6px 16px rgba(201, 168, 76, 0.15);
+}
+
+.pv2-upload-icon-wrap {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(201, 168, 76, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+    transition: transform 0.3s ease;
+}
+
+.pv2-upload-card:hover .pv2-upload-icon-wrap {
+    transform: scale(1.1);
+}
+
+.pv2-upload-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 4px 0;
+    transition: color 0.2s ease;
+}
+
+.pv2-upload-card:hover .pv2-upload-title {
+    color: var(--ph-gold, #C9A84C);
+}
+
+.pv2-upload-subtitle {
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.4;
+    margin: 0;
+    max-width: 150px;
+}
+
+/* Premium Collection Badges & Action Buttons */
+.pv2-collection-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    padding: 3px 8px;
+    border-radius: 100px;
+    font-size: 8px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 10;
+}
+
+.pv2-collection-badge--artwork {
+    background: rgba(201, 168, 76, 0.15);
+    color: #c9a84c;
+    border: 1px solid rgba(201, 168, 76, 0.3);
+}
+
+.pv2-collection-badge--photography {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* Delete button overlay on collection cards — clearly visible for item management */
+.pv2-collection-delete-btn {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 15;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #dc2626;
+    color: #ffffff;
+    border: 1.5px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    cursor: pointer;
+    opacity: 0.9;
+    transform: scale(1);
+    transition: opacity 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.group\/col:hover .pv2-collection-delete-btn,
+.group\/item:hover .pv2-collection-delete-btn {
+    opacity: 1;
+    transform: scale(1.08);
+}
+
+.pv2-collection-delete-btn:hover {
+    background: #b91c1c;
+    transform: scale(1.15);
+}
+
+/* Custom Delete Confirm Modal Styles */
+.pv2-confirm-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 20px;
+}
+
+.pv2-confirm-modal-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 400px;
+    width: 100%;
+    box-shadow: 0 20px 40px var(--shadow-color);
+    text-align: center;
+    color: var(--text-primary);
+}
+
+.pv2-confirm-modal-card h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: var(--text-primary);
+}
+
+.pv2-confirm-modal-card p {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-muted);
+    margin-bottom: 24px;
+}
+
+.pv2-confirm-modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.pv2-confirm-btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    outline: none;
+}
+
+.pv2-confirm-btn--cancel {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+}
+
+.pv2-confirm-btn--cancel:hover:not(:disabled) {
+    background: var(--border-color);
+}
+
+.pv2-confirm-btn--danger {
+    background: #dc2626;
+    color: #fff;
+}
+
+.pv2-confirm-btn--danger:hover:not(:disabled) {
+    background: #b91c1c;
+}
+
+.pv2-confirm-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pv2-header-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(201, 168, 76, 0.2);
+    background: rgba(201, 168, 76, 0.08);
+    color: var(--ph-gold, #C9A84C);
+}
+
+.pv2-header-action-btn:hover {
+    background: var(--ph-gold, #C9A84C);
+    color: #121214;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(201, 168, 76, 0.2);
+}
+
+.pv2-header-action-btn--blue {
+    border-color: rgba(59, 130, 246, 0.2);
+    background: rgba(59, 130, 246, 0.08);
+    color: #3b82f6;
+}
+
+.pv2-header-action-btn--blue:hover {
+    background: #3b82f6;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+.dark .pv2-header-action-btn--blue {
+    color: #60a5fa;
+    border-color: rgba(96, 165, 250, 0.2);
+    background: rgba(96, 165, 250, 0.08);
+}
+
+.dark .pv2-header-action-btn--blue:hover {
+    background: #60a5fa;
+    color: #121214;
+    box-shadow: 0 4px 12px rgba(96, 165, 250, 0.3);
+}
+
+/* ============================================
+   ADD ART MODAL STYLE SYSTEM — Premium Theme Adaptive
+   ============================================ */
+.art-modal-sheet {
+    background: var(--bg-surface) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+.art-modal-header {
+    border-bottom: 1px solid var(--border-color) !important;
+}
+
+.art-modal-title {
+    color: var(--text-primary) !important;
+}
+
+.art-modal-close-btn {
+    color: var(--text-muted) !important;
+}
+.art-modal-close-btn:hover {
+    background: var(--bg-elevated) !important;
+}
+
+.art-modal-tabs {
+    background: var(--bg-elevated) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+.art-modal-tab-btn {
+    color: var(--text-muted) !important;
+}
+.art-modal-tab-btn:hover:not(.active) {
+    color: var(--text-primary) !important;
+}
+.art-modal-tab-btn.active {
+    background: var(--text-gold) !important;
+    color: #121214 !important;
+}
+
+.art-modal-label {
+    color: var(--text-muted) !important;
+}
+
+.art-modal-input,
+.art-modal-textarea,
+.art-modal-select {
+    background: var(--bg-primary) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+    outline: none !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+.art-modal-input:focus,
+.art-modal-textarea:focus,
+.art-modal-select:focus {
+    border-color: var(--text-gold) !important;
+    box-shadow: 0 0 0 2px var(--glow-gold) !important;
+}
+.art-modal-input::placeholder,
+.art-modal-textarea::placeholder {
+    color: var(--text-muted) !important;
+    opacity: 0.6 !important;
+}
+
+.art-modal-select option {
+    background: var(--bg-surface) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Category chip */
+.art-modal-cat-btn {
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-muted) !important;
+    background: transparent !important;
+}
+.art-modal-cat-btn:hover:not(.active) {
+    border-color: var(--text-gold) !important;
+    color: var(--text-primary) !important;
+}
+.art-modal-cat-btn.active {
+    background: var(--text-gold) !important;
+    border-color: var(--text-gold) !important;
+    color: #121214 !important;
+}
+
+/* Dropzone styling */
+.art-modal-dropzone {
+    border: 2px dashed var(--border-color) !important;
+    background: var(--bg-primary) !important;
+    transition: all 0.2s ease !important;
+}
+.art-modal-dropzone:hover {
+    border-color: var(--text-gold) !important;
+}
+.art-modal-dropzone.dragging {
+    border-color: var(--text-gold) !important;
+    background: var(--glow-gold) !important;
+}
+
+/* Option Cards (Free Share / Sell) */
+.art-modal-option-card {
+    border: 1.5px solid var(--border-color) !important;
+    background: var(--bg-primary) !important;
+    transition: all 0.2s ease !important;
+}
+.art-modal-option-card:hover {
+    border-color: var(--text-gold) !important;
+}
+.art-modal-option-card.active {
+    border-color: var(--text-gold) !important;
+    background: var(--glow-gold) !important;
+}
+
+/* Album Detail Modal Classes */
+.pv2-album-detail-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 24px;
+    max-width: 640px;
+    width: 100%;
+    max-height: 85vh;
+    box-shadow: 0 25px 50px -12px var(--shadow-color);
+    display: flex;
+    flex-direction: column;
+    color: var(--text-primary);
+    overflow: hidden;
+}
+
+.pv2-album-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+}
+
+.pv2-album-detail-header h3 {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0;
+    line-height: 1.2;
+    color: var(--text-primary);
+}
+
+.pv2-album-description {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    margin-bottom: 0;
+    line-height: 1.4;
+}
+
+.pv2-album-close-btn {
+    background: var(--bg-elevated);
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    padding: 8px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pv2-album-close-btn:hover {
+    background: var(--border-color);
+    transform: scale(1.05);
+}
+
+.pv2-album-detail-content {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+/* Custom Scrollbar for Album Detail Content */
+.pv2-album-detail-content::-webkit-scrollbar {
+    width: 6px;
+}
+.pv2-album-detail-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+.pv2-album-detail-content::-webkit-scrollbar-thumb {
+    background: var(--bg-elevated);
+    border-radius: 3px;
+}
+
+.pv2-album-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 16px;
+}
+
+.pv2-album-item-card {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    aspect-ratio: 1;
+    cursor: pointer;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+}
+
+.pv2-album-item-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pv2-album-item-card:hover img {
+    transform: scale(1.08);
+}
+
+.pv2-album-item-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+    padding: 12px 8px 8px;
+    color: #fff;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    display: flex;
+    align-items: flex-end;
+}
+
+.pv2-album-item-card:hover .pv2-album-item-overlay {
+    opacity: 1;
+}
+
+.pv2-album-item-overlay span {
+    font-size: 11px;
+    font-weight: 600;
+    line-clamp: 2;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.3;
+}
+
+/* ============================================
+   ADD ITEM FORM — Theme Adaptive
+   ============================================ */
+.pv2-add-item-form {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary);
+}
+
+.pv2-add-item-form h4 {
+    color: var(--text-primary) !important;
+}
+
+.pv2-add-item-form .pv2-aitf-label {
+    color: var(--text-muted);
+}
+
+.pv2-add-item-form .pv2-aitf-input {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+.pv2-add-item-form .pv2-aitf-input:focus {
+    border-color: rgba(201, 168, 76, 0.5);
+    outline: none;
+}
+.pv2-add-item-form .pv2-aitf-input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.6;
+}
+
+.pv2-add-item-form .pv2-aitf-input option {
+    background: var(--bg-surface);
+    color: var(--text-primary);
+}
+
+.pv2-add-item-form .pv2-aitf-dropzone {
+    border: 1px dashed var(--border-color);
+    background: var(--bg-primary);
+    transition: border-color 0.2s ease;
+}
+.pv2-add-item-form .pv2-aitf-dropzone:hover {
+    border-color: rgba(201, 168, 76, 0.5);
+}
+
+.pv2-add-item-form .pv2-aitf-dropzone-text {
+    color: var(--text-muted);
+}
+
+.pv2-add-item-form .pv2-aitf-dropzone-hint {
+    color: var(--text-muted);
+    opacity: 0.6;
+}
+
+.pv2-add-item-form .pv2-aitf-success-text {
+    color: var(--text-primary);
+}
+
+.pv2-add-item-form .pv2-aitf-progress-text {
+    color: var(--text-muted);
+}
+
+/* Empty state text */
+.pv2-album-empty-text {
+    color: var(--text-muted);
+}
+

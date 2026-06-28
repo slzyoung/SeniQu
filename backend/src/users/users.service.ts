@@ -17,6 +17,7 @@ export interface User {
     avatarChangeCount?: number
     profileVideoUrl?: string
     profileVideoChangeCount?: number
+    profileBackgroundUrl?: string
     userType: string
     adminRole?: string
     adminLevel?: number
@@ -251,6 +252,7 @@ export class UsersService {
                 ...(isChangingAvatar && { avatar_change_count: nextAvatarChangeCount }),
                 ...(dto.profileVideoUrl !== undefined && { profile_video_url: dto.profileVideoUrl }),
                 ...(isChangingProfileVideo && { profile_video_change_count: nextProfileVideoChangeCount }),
+                ...(dto.profileBackgroundUrl !== undefined && { profile_background_url: dto.profileBackgroundUrl }),
                 ...(dto.notificationPrefs && { notification_prefs: dto.notificationPrefs }),
                 ...(dto.isTwoFactorEnabled !== undefined && { is_two_factor_enabled: dto.isTwoFactorEnabled }),
                 ...(dto.loginAlertsEnabled !== undefined && { login_alerts_enabled: dto.loginAlertsEnabled }),
@@ -375,6 +377,7 @@ export class UsersService {
             avatarChangeCount: data.avatar_change_count || 0,
             profileVideoUrl: data.profile_video_url || null,
             profileVideoChangeCount: data.profile_video_change_count || 0,
+            profileBackgroundUrl: data.profile_background_url || null,
             userType: this.mapRoleToUserType(data.role),
             adminRole: data.admin_role_typed || data.admin_role,
             adminLevel: data.admin_level,
@@ -812,6 +815,7 @@ export class UsersService {
             .from("reels")
             .select("*", { count: "exact", head: true })
             .eq("user_id", userId)
+            .eq("status", "active")
 
         const { count: forumCount } = await client
             .from("forum_threads")

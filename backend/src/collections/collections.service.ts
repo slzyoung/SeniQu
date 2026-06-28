@@ -18,7 +18,7 @@ export class CollectionsService {
 
     constructor(private readonly db: DatabaseService) { }
 
-    async create(dto: { name: string; description: string; isPublic?: boolean }, ownerId: string): Promise<Collection> {
+    async create(dto: { name: string; description: string; isPublic?: boolean; coverImageUrl?: string }, ownerId: string): Promise<Collection> {
         const client = this.db.getAdminClient()
 
         const { data, error } = await client
@@ -28,6 +28,7 @@ export class CollectionsService {
                 description: dto.description,
                 owner_id: ownerId,
                 is_public: dto.isPublic ?? true,
+                cover_image_url: dto.coverImageUrl || null,
             })
             .select()
             .single()
@@ -65,6 +66,27 @@ export class CollectionsService {
             .delete()
             .eq("collection_id", collectionId)
             .eq("artwork_id", artworkId)
+    }
+
+    async deleteCollection(collectionId: string, userId: string): Promise<void> {
+        const client = this.db.getAdminClient()
+
+        // First remove all items in this collection
+        await client
+            .from("collection_items")
+            .delete()
+            .eq("collection_id", collectionId)
+
+        // Then delete the collection itself, verifying owner_id
+        const { error } = await client
+            .from("collections")
+            .delete()
+            .eq("id", collectionId)
+            .eq("owner_id", userId)
+
+        if (error) {
+            throw new Error(`Failed to delete collection: ${error.message}`)
+        }
     }
 
     private mapToCollection(data: any): Collection {

@@ -371,6 +371,31 @@ export const reelsService = {
     },
 
     /**
+     * Get replies to a specific comment
+     */
+    getReplies: async (commentId: string, page = 1, limit = 20): Promise<{ data: ReelComment[]; meta: any }> => {
+        const response = await api.get(`/reels/comments/${commentId}/replies`, {
+            params: { page, limit },
+        });
+        return response.data?.success !== undefined ? response.data.data : response.data;
+    },
+
+    /**
+     * Toggle like on a comment
+     */
+    toggleCommentLike: async (commentId: string): Promise<{ liked: boolean }> => {
+        const response = await api.post(`/reels/comments/${commentId}/like`);
+        return response.data?.success !== undefined ? response.data.data : response.data;
+    },
+
+    /**
+     * Delete a comment
+     */
+    deleteComment: async (commentId: string): Promise<void> => {
+        await api.delete(`/reels/comments/${commentId}`);
+    },
+
+    /**
      * Record a view/retention metric for a Reel
      */
     recordView: async (reelId: string, watchDuration = 0, completed = false): Promise<{ recorded: boolean }> => {

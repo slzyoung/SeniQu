@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     X, Heart, MessageCircle, ShoppingBag, Info,
     Camera, Aperture, Timer, Sun, MapPin, Download, Send,
-    Loader2, Gavel, Check, Ban, AlertCircle, Coins
+    Loader2, Gavel, Check, Ban, AlertCircle, Coins, Trash2
 } from 'lucide-react';
 import type { PhotoData } from './PhotoCard';
 import { photosService } from '../../../../../services/photosService';
@@ -15,9 +16,11 @@ interface Props {
     onClose: () => void;
     onLike?: (photoId: string) => void;
     onViewProfile?: (userId: string) => void;
+    onDelete?: (photoId: string) => Promise<void> | void;
+    isOwner?: boolean;
 }
 
-export function PhotoLightbox({ photo, onClose, onLike, onViewProfile }: Props) {
+export function PhotoLightbox({ photo, onClose, onLike, onViewProfile, onDelete, isOwner: propsIsOwner }: Props) {
     const [showExif, setShowExif] = useState(false);
     const [activeTab, setActiveTab] = useState<'comments' | 'offers'>('comments');
     const [commentText, setCommentText] = useState('');
@@ -34,10 +37,18 @@ export function PhotoLightbox({ photo, onClose, onLike, onViewProfile }: Props) 
     const [submittingOffer, setSubmittingOffer] = useState(false);
     const [offerError, setOfferError] = useState('');
     const [offerSuccess, setOfferSuccess] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 
     const { user, isAuthenticated } = useAuthStore();
 
-    const isOwner = photo?.userId === user?.id;
+    const isOwner = propsIsOwner ?? (
+        Boolean(user?.id) && (
+            photo?.userId === user?.id ||
+            (photo as any)?.user_id === user?.id ||
+            photo?.user?.id === user?.id
+        )
+    );
 
     useEffect(() => {
         if (photo) {
@@ -46,6 +57,17 @@ export function PhotoLightbox({ photo, onClose, onLike, onViewProfile }: Props) 
             setActiveTab('comments');
         }
     }, [photo]);
+
+    // Handle Escape key close
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
 
     // Fetch comments
     useEffect(() => {
@@ -158,52 +180,130 @@ export function PhotoLightbox({ photo, onClose, onLike, onViewProfile }: Props) 
 
     const authorAvatar = photo.user?.avatarUrl || photo.user?.avatar;
 
-    return (
-        <AnimatePresence>
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="photo-hub fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-0 sm:p-4 md:p-6"
-                onClick={onClose}
-            >
+    return createPortal(
+        <>
+            <AnimatePresence>
                 <motion.div
-                    initial={{ scale: 0.96, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.96, opacity: 0 }}
-                    transition={{ type: 'spring', damping: 25 }}
-                    onClick={e => e.stopPropagation()}
-                    className="relative w-full max-w-5xl h-full sm:h-[90vh] md:h-[80vh] bg-theme-bg border-0 sm:border border-theme-border rounded-none sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row"
+                    key="photo-lightbox-overlay"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="photo-hub fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-0 sm:p-4 md:p-6"
+                    onClick={onClose}
                 >
-                    {/* Close button */}
-                    <button
-                        onClick={onClose}
-                        className="absolute top-4 right-4 z-20 p-2.5 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors"
-                        aria-label="Close details"
+                    <motion.div
+                        initial={{ scale: 0.96, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.96, opacity: 0 }}
+                        transition={{ type: 'spring', damping: 25 }}
+                        onClick={e => e.stopPropagation()}
+                        className="relative w-full max-w-5xl h-full sm:h-[90vh] md:h-[80vh] bg-theme-bg border-0 sm:border border-theme-border rounded-none sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row"
                     >
-                        <X className="w-4.5 h-4.5" />
-                    </button>
+                        {/* Close button */}
+                        <button
+                            onClick={onClose}
+                            className="absolute top-4 right-4 z-30 p-2.5 rounded-full bg-black/60 hover:bg-black/85 text-white transition-all flex items-center justify-center border border-white/10"
+                            aria-label="Close details"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
 
-                    {/* Left Panel: Media Showcase */}
-                    <div className="flex-1 bg-black flex items-center justify-center relative p-3 sm:p-6 h-[40vh] sm:h-[45vh] md:h-full shrink-0">
-                        <img
-                            src={photo.originalUrl}
-                            alt={photo.title}
-                            className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
-                            onDoubleClick={handleLike}
-                        />
+                        {/* Left Panel: Media Showcase */}
+                        <div className="flex-1 bg-black flex items-center justify-center relative p-3 sm:p-6 h-[40vh] sm:h-[45vh] md:h-full shrink-0">
+                            <img
+                                src={photo.originalUrl}
+                                alt={photo.title}
+                                className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
+                                onDoubleClick={handleLike}
+                            />
 
-                        {/* Top bar over photo */}
-                        <div className="absolute top-4 left-4 flex gap-2">
-                            <button
-                                onClick={handleDownload}
-                                className="p-2.5 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors"
-                                title="Download / Buy"
-                            >
-                                <Download className="w-4 h-4" />
-                            </button>
+                            {/* Top bar over photo — Download + Delete buttons (top-left to avoid overlapping close btn) */}
+                            <div className="absolute top-4 left-4 flex gap-2 z-20">
+                                <button
+                                    onClick={handleDownload}
+                                    className="p-2.5 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors"
+                                    title="Download / Buy"
+                                >
+                                    <Download className="w-4 h-4" />
+                                </button>
+                                {isOwner && onDelete && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setShowConfirmDelete(true);
+                                        }}
+                                        disabled={isDeleting}
+                                        className="p-2.5 rounded-full bg-red-600/70 hover:bg-red-600 text-white transition-colors disabled:opacity-50"
+                                        title="Delete photo"
+                                    >
+                                        {isDeleting
+                                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                                            : <Trash2 className="w-4 h-4" />
+                                        }
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Inline delete confirmation overlay */}
+                            <AnimatePresence>
+                                {showConfirmDelete && (
+                                    <motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <motion.div
+                                            initial={{ scale: 0.9, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            exit={{ scale: 0.9, opacity: 0 }}
+                                            transition={{ type: 'spring', duration: 0.3 }}
+                                            className="bg-theme-surface border border-theme-border rounded-2xl p-6 max-w-xs w-full mx-4 text-center shadow-2xl"
+                                        >
+                                            <Trash2 className="w-8 h-8 text-red-500 mx-auto mb-3" />
+                                            <h4 className="text-theme-text font-bold text-base mb-1">Delete Photo</h4>
+                                            <p className="text-theme-muted text-sm mb-5">
+                                                Delete <strong className="text-theme-text">"{photo.title}"</strong>? This cannot be undone.
+                                            </p>
+                                            <div className="flex gap-3 justify-center">
+                                                <button
+                                                    onClick={() => setShowConfirmDelete(false)}
+                                                    disabled={isDeleting}
+                                                    className="px-5 py-2 rounded-lg bg-theme-bg hover:bg-theme-elevated text-theme-text text-sm font-medium transition-colors border border-theme-border disabled:opacity-50"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    onClick={async () => {
+                                                        setIsDeleting(true);
+                                                        try {
+                                                            if (onDelete) {
+                                                                await onDelete(photo.id);
+                                                            } else {
+                                                                await photosService.deletePhoto(photo.id);
+                                                            }
+                                                            onClose();
+                                                        } catch (err) {
+                                                            console.error('Failed to delete photo:', err);
+                                                        } finally {
+                                                            setIsDeleting(false);
+                                                            setShowConfirmDelete(false);
+                                                        }
+                                                    }}
+                                                    disabled={isDeleting}
+                                                    className="px-5 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-md"
+                                                >
+                                                    {isDeleting ? (
+                                                        <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Deleting...</>
+                                                    ) : 'Delete'}
+                                                </button>
+                                            </div>
+                                        </motion.div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
-                    </div>
 
                     {/* Right Panel: Social & Web3 Interactions */}
                     <div className="flex-1 md:w-[420px] md:max-w-[420px] border-t md:border-t-0 md:border-l border-theme-border flex flex-col bg-theme-surface overflow-hidden">
@@ -337,10 +437,10 @@ export function PhotoLightbox({ photo, onClose, onLike, onViewProfile }: Props) 
                                         </div>
                                     ) : (
                                         <div className="space-y-3.5">
-                                            {comments.map((comment) => {
+                                            {comments.map((comment, idx) => {
                                                 const commentAvatar = comment.user?.avatarUrl || comment.user?.avatar || comment.user?.avatar_url;
                                                 return (
-                                                    <div key={comment.id} className="flex gap-2.5 text-xs leading-relaxed">
+                                                    <div key={comment.id || `comment-${idx}-${comment.createdAt || ''}`} className="flex gap-2.5 text-xs leading-relaxed">
                                                         {commentAvatar ? (
                                                             <img
                                                                 src={commentAvatar}
@@ -438,11 +538,11 @@ export function PhotoLightbox({ photo, onClose, onLike, onViewProfile }: Props) 
                                         </div>
                                     ) : (
                                         <div className="space-y-2.5">
-                                            {offers.map((offer) => {
+                                            {offers.map((offer, idx) => {
                                                 const isOfferBuyer = offer.buyer_id === user?.id;
                                                 const offerAvatar = offer.users?.avatar_url || offer.users?.avatar;
                                                 return (
-                                                    <div key={offer.id} className="p-3 bg-theme-bg/20 border border-theme-border/50 rounded-xl flex items-center justify-between gap-2">
+                                                    <div key={offer.id || `offer-${idx}-${offer.createdAt || ''}`} className="p-3 bg-theme-bg/20 border border-theme-border/50 rounded-xl flex items-center justify-between gap-2">
                                                         <div className="flex items-center gap-2.5 min-w-0">
                                                             {offerAvatar ? (
                                                                 <img
@@ -560,6 +660,8 @@ export function PhotoLightbox({ photo, onClose, onLike, onViewProfile }: Props) 
                 </motion.div>
             </motion.div>
 
+            </AnimatePresence>
+
             <SolanaPurchaseModal
                 isOpen={checkoutOpen}
                 onClose={() => setCheckoutOpen(false)}
@@ -568,6 +670,7 @@ export function PhotoLightbox({ photo, onClose, onLike, onViewProfile }: Props) 
                     photo.downloadsCount = (photo.downloadsCount || 0) + 1;
                 }}
             />
-        </AnimatePresence>
+        </>,
+        document.body
     );
 }

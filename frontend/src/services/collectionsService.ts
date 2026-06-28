@@ -20,6 +20,8 @@ export interface Collection {
 export interface CreateCollectionDto {
     name: string;
     description: string;
+    isPublic?: boolean;
+    coverImageUrl?: string;
 }
 
 class CollectionsService {
@@ -32,6 +34,13 @@ class CollectionsService {
             CollectionsService.instance = new CollectionsService();
         }
         return CollectionsService.instance;
+    }
+
+    /**
+     * Get public collections of a user
+     */
+    async getUserCollections(userId: string): Promise<Collection[]> {
+        return apiGet<Collection[]>(`/collections/user/${userId}`);
     }
 
     /**
@@ -60,6 +69,13 @@ class CollectionsService {
      */
     async removeArtworkFromCollection(collectionId: string, artworkId: string): Promise<void> {
         return apiDelete(`/collections/${collectionId}/artworks/${artworkId}`);
+    }
+
+    /**
+     * Delete collection
+     */
+    async deleteCollection(collectionId: string): Promise<void> {
+        return apiDelete(`/collections/${collectionId}`);
     }
 }
 

@@ -23,6 +23,7 @@ const UserProfile = lazyWithRetry(() => import('../features/user/pages/Profile')
 const UserBookmarks = lazyWithRetry(() => import('../features/user/pages/Bookmarks'));
 const UserCollections = lazyWithRetry(() => import('../features/user/pages/MyCollectionsPage'));
 const UserSettings = lazyWithRetry(() => import('../features/user/pages/Settings'));
+const UserNotifications = lazyWithRetry(() => import('../features/user/pages/Notifications'));
 // New User Dashboard Pages
 const UserGallery = lazyWithRetry(() => import('../features/user/pages/GalleryPage'));
 const UserNearby = lazyWithRetry(() => import('../features/user/pages/NearbyMuseumsPage'));
@@ -183,6 +184,7 @@ const router = createBrowserRouter(
                 <Route path={ROUTES.USER_BOOKMARKS} element={<UserBookmarks />} />
                 <Route path={ROUTES.USER_COLLECTIONS} element={<UserCollections />} />
                 <Route path={ROUTES.USER_SETTINGS} element={<UserSettings />} />
+                <Route path="/dashboard/notifications" element={<UserNotifications />} />
                 {/* New User Dashboard Routes */}
                 <Route path={ROUTES.USER_GALLERY} element={<UserGallery />} />
                 <Route path={ROUTES.USER_NEARBY} element={<UserNearby />} />

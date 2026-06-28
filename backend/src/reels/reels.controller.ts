@@ -387,6 +387,29 @@ export class ReelsController {
         return this.reelsService.deleteComment(commentId, userId, role)
     }
 
+    @Public()
+    @SkipThrottle()
+    @Get("comments/:commentId/replies")
+    @ApiOperation({ summary: "Get replies to a comment" })
+    async getReplies(
+        @Param("commentId", ParseUUIDPipe) commentId: string,
+        @Query("page") page?: number,
+        @Query("limit") limit?: number,
+    ) {
+        return this.reelsService.getReplies(commentId, page || 1, limit || 20)
+    }
+
+    @Post("comments/:commentId/like")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth("JWT-auth")
+    @ApiOperation({ summary: "Toggle like on a comment" })
+    async toggleCommentLike(
+        @Param("commentId", ParseUUIDPipe) commentId: string,
+        @GetUser("id") userId: string,
+    ) {
+        return this.reelsService.toggleCommentLike(commentId, userId)
+    }
+
     // ==========================================
     // RESHARE
     // ==========================================

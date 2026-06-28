@@ -12,6 +12,7 @@ import { GlowCard } from '../../../components/GlowCard';
 import { museumService } from '../../../services/museumService';
 import { CITY_REGIONS_MAP, getRealPlaceCoverImage } from '../data/citiesRegistry';
 import { API_BASE_URL } from '../../../lib/constants';
+import { useAuthStore } from '../../../stores/useAuthStore';
 
 const CITIES = [
     { name: 'Bali', key: 'bali' },
@@ -392,7 +393,7 @@ const CurationCarousel = ({ onSelectCuration }: { onSelectCuration: (curation: t
 
     return (
         <div 
-            className="relative group/carousel py-1"
+            className="relative z-[1] group/carousel py-1"
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
         >
@@ -721,15 +722,23 @@ export default function CollectionsPage() {
         }
     }, [cityId, searchParams, artworks, museums]);
 
+    const { user } = useAuthStore();
     const [searchQuery, setSearchQuery] = useState<string>('');
-    const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+
+    const storageKey = useMemo(() => {
+        return user?.id ? `collections_recent_searches_${user.id}` : `collections_recent_searches_guest`;
+    }, [user?.id]);
+
+    const [recentSearches, setRecentSearches] = useState<string[]>([]);
+
+    useEffect(() => {
         try {
-            const saved = localStorage.getItem('collections_recent_searches');
-            return saved ? JSON.parse(saved) : ['Museum Nasional', 'Ubud', 'Sonobudoyo'];
+            const saved = localStorage.getItem(storageKey);
+            setRecentSearches(saved ? JSON.parse(saved) : []);
         } catch {
-            return ['Museum Nasional', 'Ubud', 'Sonobudoyo'];
+            setRecentSearches([]);
         }
-    });
+    }, [storageKey]);
 
     const { ref, isVisible } = useScrollAnimation();
 
@@ -905,7 +914,7 @@ export default function CollectionsPage() {
         setRecentSearches(prev => {
             const next = [query, ...prev.filter(q => q !== query)].slice(0, 5);
             try {
-                localStorage.setItem('collections_recent_searches', JSON.stringify(next));
+                localStorage.setItem(storageKey, JSON.stringify(next));
             } catch { }
             return next;
         });
@@ -915,7 +924,7 @@ export default function CollectionsPage() {
         setRecentSearches(prev => {
             const next = prev.filter(q => q !== query);
             try {
-                localStorage.setItem('collections_recent_searches', JSON.stringify(next));
+                localStorage.setItem(storageKey, JSON.stringify(next));
             } catch { }
             return next;
         });
@@ -942,13 +951,18 @@ export default function CollectionsPage() {
 
             {/* Search Bar at the Top */}
             {!isLoading && artworks.length > 0 && (
-                <div className="sticky top-[0px] md:top-[64px] z-30 -mx-4 px-4 py-3 bg-theme-bg/95 backdrop-blur-md border-b border-theme-border flex flex-col gap-2 mb-4 transition-colors duration-300">
+                <div className="sticky top-[0px] md:top-[64px] z-10 -mx-4 px-4 py-3 bg-theme-bg/95 backdrop-blur-md border-b border-theme-border flex flex-col gap-2 mb-4 transition-colors duration-300">
                     <div className="relative flex items-center">
                         <Search className="absolute left-4 w-4.5 h-4.5 text-theme-muted" />
                         <input
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    addRecentSearch(searchQuery);
+                                }
+                            }}
                             placeholder="Cari museum, cagar budaya, kota atau karya seni..."
                             className="w-full pl-11 pr-10 py-2.5 bg-theme-surface border border-theme-border/60 hover:border-gold/30 focus:border-gold/70 focus:ring-1 focus:ring-gold/70 rounded-full text-xs text-theme-text placeholder-theme-muted/70 outline-none transition-all"
                         />
@@ -1200,7 +1214,7 @@ export default function CollectionsPage() {
                                             <div key={artwork.id} className="w-full">
                                                 <GlowCard className="h-[200px] sm:h-[220px] rounded-xl overflow-hidden relative" hover={true}>
                                                     <div
-                                                        className="relative h-full w-full group cursor-pointer bg-theme-surface"
+                                                        className="relative z-[1] h-full w-full group cursor-pointer bg-theme-surface"
                                                         onClick={() => setSelectedArtwork(artwork)}
                                                     >
                                                         {primaryUrl ? (
@@ -1416,7 +1430,7 @@ export default function CollectionsPage() {
                                         onClick={() => {
                                             navigate(`/collections/${city.key.replace(/\s+/g, '-')}`);
                                         }}
-                                        className="relative rounded-2xl overflow-hidden h-[160px] sm:h-[180px] shadow-lg cursor-pointer group border border-theme-border/60 hover:border-gold/30 transition-all duration-300"
+                                        className="relative z-[1] rounded-2xl overflow-hidden h-[160px] sm:h-[180px] shadow-lg cursor-pointer group border border-theme-border/60 hover:border-gold/30 transition-all duration-300"
                                     >
                                         <img
                                             src={bgImage}

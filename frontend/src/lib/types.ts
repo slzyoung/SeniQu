@@ -12,6 +12,7 @@ export interface User {
     avatarChangeCount?: number;
     profileVideoUrl?: string;
     profileVideoChangeCount?: number;
+    profileBackgroundUrl?: string;
     bio?: string;
     role: typeof ROLES[keyof typeof ROLES];
     // walletAddress removed

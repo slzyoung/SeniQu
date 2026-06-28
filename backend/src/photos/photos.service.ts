@@ -441,6 +441,7 @@ export class PhotosService {
                 description: dto.description || null,
                 theme: dto.theme || "custom",
                 is_public: dto.isPublic !== false,
+                cover_photo_id: dto.coverPhotoId || null,
             })
             .select("*")
             .single()
@@ -469,6 +470,27 @@ export class PhotosService {
     }
 
     /**
+     * Get photos in a collection
+     */
+    async getCollectionPhotos(collectionId: string, viewerId?: string): Promise<any[]> {
+        const client = this.db.getClient()
+        const { data, error } = await client
+            .from("photo_collection_items")
+            .select(`
+                photo:photo_id(
+                    *,
+                    user_id,
+                    is_public
+                )
+            `)
+            .eq("collection_id", collectionId)
+
+        if (error) throw new Error(error.message)
+        const photos = (data || []).map(item => item.photo as any).filter(Boolean)
+        return photos.filter((p: any) => p.is_public || p.user_id === viewerId)
+    }
+
+    /**
      * Add photo to collection
      */
     async addPhotoToCollection(collectionId: string, photoId: string, userId: string): Promise<void> {
@@ -477,7 +499,7 @@ export class PhotosService {
         // Verify ownership of collection
         const { data: col } = await client
             .from("photo_collections")
-            .select("user_id, photo_count")
+            .select("user_id, photo_count, cover_photo_id")
             .eq("id", collectionId)
             .single()
 
@@ -488,9 +510,43 @@ export class PhotosService {
             photo_id: photoId,
         })
 
-        // Update count
+        // Update count and set cover_photo_id if not present
+        const updateData: any = { photo_count: (col.photo_count || 0) + 1 }
+        if (!col.cover_photo_id) {
+            updateData.cover_photo_id = photoId
+        }
+
         await client.from("photo_collections")
-            .update({ photo_count: (col.photo_count || 0) + 1 })
+            .update(updateData)
+            .eq("id", collectionId)
+    }
+
+    /**
+     * Delete a photo collection
+     */
+    async deleteCollection(collectionId: string, userId: string): Promise<void> {
+        const client = this.db.getAdminClient()
+
+        // Verify ownership first
+        const { data: col } = await client
+            .from("photo_collections")
+            .select("user_id")
+            .eq("id", collectionId)
+            .single()
+
+        if (!col) throw new NotFoundException("Photo collection not found")
+        if (col.user_id !== userId) throw new ForbiddenException("Not your collection")
+
+        // Delete photo collection items first
+        await client
+            .from("photo_collection_items")
+            .delete()
+            .eq("collection_id", collectionId)
+
+        // Delete the collection itself
+        await client
+            .from("photo_collections")
+            .delete()
             .eq("id", collectionId)
     }
 
@@ -614,9 +670,9 @@ export class PhotosService {
             .eq("is_public", true)
             .eq("status", "active")
 
-        // Count collections
+        // Count collections (albums)
         const { count: collectionsCount } = await client
-            .from("photo_collections")
+            .from("albums")
             .select("id", { count: "exact", head: true })
             .eq("user_id", userId)
             .eq("is_public", true)

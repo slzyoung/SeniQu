@@ -285,7 +285,7 @@ export function RequestBoard({}: Props) {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 flex justify-end"
+                        className="fixed inset-0 z-[100] flex justify-end"
                         style={{ background: 'var(--overlay)', backdropFilter: 'blur(8px)' }}
                         onClick={() => setSelectedRequest(null)}
                     >
@@ -467,7 +467,7 @@ export function RequestBoard({}: Props) {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4"
                         style={{ background: 'var(--overlay)', backdropFilter: 'blur(8px)' }}
                         onClick={() => setShowCreateModal(false)}
                     >
@@ -603,7 +603,7 @@ export function RequestBoard({}: Props) {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4"
                         style={{ background: 'var(--overlay)', backdropFilter: 'blur(8px)' }}
                         onClick={() => setShowSubmitProposalModal(false)}
                     >
