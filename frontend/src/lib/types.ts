@@ -88,6 +88,7 @@ export interface Artwork {
     primaryImageUrl?: string;
     yearCreated?: number;
     category?: string;
+    isForSale?: boolean;
 }
 
 export interface ArtworkImage {

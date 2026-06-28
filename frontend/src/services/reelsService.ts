@@ -91,6 +91,14 @@ export const reelsService = {
     },
 
     /**
+     * Get a single reel by ID
+     */
+    getReel: async (reelId: string): Promise<Reel> => {
+        const response = await api.get(`/reels/${reelId}`);
+        return response.data?.success !== undefined ? response.data.data : response.data;
+    },
+
+    /**
      * Get the user's saved/bookmarked reels
      */
     getSavedReels: async (page = 1, limit = 20): Promise<ReelsFeedResponse> => {

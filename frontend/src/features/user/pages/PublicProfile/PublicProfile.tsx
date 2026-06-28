@@ -369,7 +369,7 @@ export default function PublicProfile() {
                                     <div 
                                         key={reel.id} 
                                         className="pp-reel-card"
-                                        onClick={() => navigate('/reels', { state: { initialReelId: reel.id } })}
+                                        onClick={() => navigate('/reels', { state: { initialReelId: reel.id, creatorId: userId } })}
                                     >
                                         <img src={reel.thumbnailUrl || reel.thumbnail_url} alt={reel.caption} className="pp-reel-thumb" />
                                         <div className="pp-reel-overlay">

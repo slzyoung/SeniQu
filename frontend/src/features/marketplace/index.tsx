@@ -109,7 +109,7 @@ export function ArtDetail() {
     const [bidStatus, setBidStatus] = useState<'input' | 'simulating' | 'success'>('input');
 
     // Checkout form
-    const [recipientName, setRecipientName] = useState(user?.display_name || 'Guest User');
+    const [recipientName, setRecipientName] = useState(user?.displayName || 'Guest User');
     const [phone, setPhone] = useState('');
     const [address, setAddress] = useState('');
     const [courier, setCourier] = useState('Solana Air Cargo (Express)');
@@ -160,13 +160,13 @@ export function ArtDetail() {
                                 dimensions: res.dimensions || 'N/A',
                                 year: res.yearCreated || '2024',
                                 price: res.price || 0.5,
-                                imageUrl: res.primaryImageUrl || res.imageUrl || '',
+                                imageUrl: res.primaryImageUrl || (res.images && res.images[0]?.url) || '',
                                 category: res.category || 'Abstract',
                                 artist: {
-                                    id: res.artist?.id || res.artistId || res.userId || res.user_id || '',
-                                    userId: res.artist?.userId || res.userId || res.user_id || res.artistId || '',
+                                    id: res.artist?.id || '',
+                                    userId: res.artist?.userId || '',
                                     displayName: res.artist?.displayName || 'Unknown Artist',
-                                    avatarUrl: res.artist?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${res.title}`
+                                    avatarUrl: res.artist?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${res.title}`
                                 },
                                 isForSale: res.isForSale ?? true,
                                 institution: res.institutionId ? 'Verified Institution' : 'SeniQu Creator',
@@ -251,7 +251,7 @@ export function ArtDetail() {
         setTimeout(() => {
             setCurrentHighestBid(numericBid);
             setBidsList(prev => [
-                { user: user?.display_name || 'You (Verified Wallet)', amount: numericBid.toFixed(2), time: 'Just now' },
+                { user: user?.displayName || 'You (Verified Wallet)', amount: numericBid.toFixed(2), time: 'Just now' },
                 ...prev
             ]);
             setBidStatus('success');
@@ -332,12 +332,12 @@ export function ArtDetail() {
         );
     }
 
-    const poa = art.poaCertificate || {
-        tokenId: `PoA-SOL-${(art.id || '1').substring(0, 8).toUpperCase()}`,
-        verifiableHash: 'e69c1042fbdad047913374246830720b',
-        mintedAt: '2026-06-19T10:00:00Z',
-        creatorWallet: 'SolPrivyCreatorSignature',
-        status: 'Verified'
+    const poa = {
+        tokenId: art.poaCertificate?.tokenId || `PoA-SOL-${(art.id || '1').substring(0, 8).toUpperCase()}`,
+        verifiableHash: art.poaCertificate?.verifiableHash || 'e69c1042fbdad047913374246830720b',
+        mintedAt: art.poaCertificate?.mintedAt || '2026-06-19T10:00:00Z',
+        creatorWallet: art.poaCertificate?.creatorWallet || 'SolPrivyCreatorSignature',
+        status: art.poaCertificate?.status || 'Verified'
     };
 
     return (
@@ -466,11 +466,11 @@ export function ArtDetail() {
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                             <span>On-chain Creator Signature:</span>
-                            <span style={{ fontFamily: 'monospace', color: '#FFFFFF' }}>{poa.creatorWallet.substring(0, 16)}...</span>
+                            <span style={{ fontFamily: 'monospace', color: '#FFFFFF' }}>{poa.creatorWallet?.substring(0, 16)}...</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                             <span>Verifiable Hash:</span>
-                            <span style={{ fontFamily: 'monospace', color: '#10B981' }}>{poa.verifiableHash.substring(0, 12)}...</span>
+                            <span style={{ fontFamily: 'monospace', color: '#10B981' }}>{poa.verifiableHash?.substring(0, 12)}...</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 8, marginTop: 4 }}>
                             <span>Product Format:</span>
@@ -515,22 +515,38 @@ export function ArtDetail() {
                     <p className="art-detail-mockup__price-val" style={{ color: 'var(--mk-accent)', fontSize: '20px' }}>{art.price} SOL</p>
                 </div>
                 
-                <div style={{ display: 'flex', gap: 10, flexGrow: 1, justifyContent: 'flex-end' }}>
-                    <button 
-                        className="art-market-btn-secondary" 
-                        onClick={() => { setBidAmount(''); setBidStatus('input'); setShowBidModal(true); }}
-                        style={{ padding: '12px 20px', fontSize: '13px', width: 'auto' }}
-                    >
-                        Bid
-                    </button>
-                    <button 
-                        className="art-detail-mockup__add-btn" 
-                        onClick={() => { setCheckoutStep('details'); setShowCheckoutModal(true); }}
-                        style={{ padding: '12px 24px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: 6 }}
-                    >
-                        <Coins style={{ width: 16, height: 16 }} /> Buy Now
-                    </button>
-                </div>
+                {art.isForSale ? (
+                    <div style={{ display: 'flex', gap: 10, flexGrow: 1, justifyContent: 'flex-end' }}>
+                        <button 
+                            className="art-market-btn-secondary" 
+                            onClick={() => { setBidAmount(''); setBidStatus('input'); setShowBidModal(true); }}
+                            style={{ padding: '12px 20px', fontSize: '13px', width: 'auto' }}
+                        >
+                            Bid
+                        </button>
+                        <button 
+                            className="art-detail-mockup__add-btn" 
+                            onClick={() => { setCheckoutStep('details'); setShowCheckoutModal(true); }}
+                            style={{ padding: '12px 24px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: 6 }}
+                        >
+                            <Coins style={{ width: 16, height: 16 }} /> Buy Now
+                        </button>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', gap: 10, flexGrow: 1, justifyContent: 'flex-end' }}>
+                        <span style={{ 
+                            padding: '12px 20px', 
+                            fontSize: '13px', 
+                            fontWeight: 600,
+                            borderRadius: '12px',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            color: 'var(--mk-text-muted)',
+                            border: '1px solid rgba(255, 255, 255, 0.08)'
+                        }}>
+                            Not For Sale
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* ====== MODAL: SOLANA CHECKOUT ====== */}

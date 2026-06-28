@@ -49,12 +49,13 @@ export default function Bookmarks() {
     const { data: savedReelsRes, isLoading: reelsLoading } = useSavedReels(1, 50);
     const toggleReshare = useToggleReelReshare();
 
-    const reelsArray = Array.isArray(savedReelsRes)
-        ? savedReelsRes
-        : Array.isArray(savedReelsRes?.data)
-            ? savedReelsRes.data
-            : Array.isArray(savedReelsRes?.data?.data)
-                ? savedReelsRes.data.data
+    const savedRes: any = savedReelsRes;
+    const reelsArray = Array.isArray(savedRes)
+        ? savedRes
+        : Array.isArray(savedRes?.data)
+            ? savedRes.data
+            : Array.isArray(savedRes?.data?.data)
+                ? savedRes.data.data
                 : [];
 
     const savedReels = reelsArray.map((reel: any) => ({
@@ -213,7 +214,7 @@ export default function Bookmarks() {
                                 <div
                                     key={reel.id}
                                     className="bm-reel-card"
-                                    onClick={() => navigate('/reels')}
+                                    onClick={() => navigate('/reels', { state: { initialReelId: reel.id } })}
                                 >
                                     {reel.thumbnailUrl ? (
                                         <img src={reel.thumbnailUrl} alt={reel.caption} className="bm-reel-thumb" loading="lazy" />

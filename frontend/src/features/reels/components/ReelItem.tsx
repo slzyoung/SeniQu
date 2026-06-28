@@ -356,6 +356,11 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
                         className="flex items-center gap-2.5 cursor-pointer hover:opacity-85 transition-opacity"
                         style={{ minWidth: 0, flex: '0 1 auto' }}
                         onClick={() => {
+                            if (!user) {
+                                toast.error('Login Required', 'Sign in to view creator profiles');
+                                openAuthModal();
+                                return;
+                            }
                             if (reelUserId) navigate(`/profile/${reelUserId}`);
                         }}
                     >
