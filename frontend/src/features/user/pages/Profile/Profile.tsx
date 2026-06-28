@@ -671,8 +671,8 @@ export function Profile() {
                                             <p className="pv2-stat-label">Bookmarks</p>
                                         </div>
                                         <div className="pv2-stat">
-                                            <p className="pv2-stat-value">{stats?.collectionsCount || 0}</p>
-                                            <p className="pv2-stat-label">Collections</p>
+                                            <p className="pv2-stat-value">{stats?.albumsCount || 0}</p>
+                                            <p className="pv2-stat-label">Albums</p>
                                         </div>
                                         <div className="pv2-stat">
                                             <p className="pv2-stat-value">{stats?.artworksCount || 0}</p>

@@ -429,30 +429,78 @@ export class UsersService {
         viewsCount: number
         bookmarksCount: number
         collectionsCount: number
-        artCount: number
+        albumsCount: number
+        artworksCount: number
         likesCount: number
     }> {
         const client = this.db.getAdminClient()
 
         // Get bookmarks count
-        const { count: bookmarksCount } = await client
-            .from("bookmarks")
-            .select("*", { count: "exact", head: true })
-            .eq("user_id", userId)
+        let bookmarksCount = 0;
+        try {
+            const { count } = await client
+                .from("bookmarks")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+            bookmarksCount = count || 0;
+        } catch (err) {
+            this.logger.warn(`Failed to fetch bookmarks count: ${err.message}`);
+        }
 
         // Get collections count
-        const { count: collectionsCount } = await client
-            .from("collections")
-            .select("*", { count: "exact", head: true })
-            .eq("user_id", userId)
+        let collectionsCount = 0;
+        try {
+            const { count } = await client
+                .from("collections")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+            collectionsCount = count || 0;
+        } catch (err) {
+            this.logger.warn(`Failed to fetch collections count: ${err.message}`);
+        }
 
-        // For now, return placeholder values for views, arts, and likes
-        // These can be implemented when the corresponding tables exist
+        // Get albums count
+        let albumsCount = 0;
+        try {
+            const { count } = await client
+                .from("albums")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+            albumsCount = count || 0;
+        } catch (err) {
+            this.logger.warn(`Failed to fetch albums count: ${err.message}`);
+        }
+
+        // Get AI artworks count
+        let aiArtworksCount = 0;
+        try {
+            const { count } = await client
+                .from("ai_artworks")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+            aiArtworksCount = count || 0;
+        } catch (err) {
+            this.logger.warn(`Failed to fetch ai_artworks count: ${err.message}`);
+        }
+
+        // Get photos count
+        let photosCount = 0;
+        try {
+            const { count } = await client
+                .from("photos")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+            photosCount = count || 0;
+        } catch (err) {
+            this.logger.warn(`Failed to fetch photos count: ${err.message}`);
+        }
+
         return {
             viewsCount: 0,
-            bookmarksCount: bookmarksCount || 0,
-            collectionsCount: collectionsCount || 0,
-            artCount: 0,
+            bookmarksCount,
+            collectionsCount,
+            albumsCount,
+            artworksCount: aiArtworksCount + photosCount,
             likesCount: 0,
         }
     }

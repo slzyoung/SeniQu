@@ -102,6 +102,7 @@ export function useUserStats() {
         placeholderData: {
             bookmarksCount: 0,
             collectionsCount: 0,
+            albumsCount: 0,
             viewsCount: 0,
             artworksCount: 0,
             likesCount: 0,

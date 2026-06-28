@@ -17,6 +17,7 @@ export interface UserStats {
     viewsCount: number;
     bookmarksCount: number;
     collectionsCount: number;
+    albumsCount: number;
     artworksCount: number;
     likesCount: number;
 }
