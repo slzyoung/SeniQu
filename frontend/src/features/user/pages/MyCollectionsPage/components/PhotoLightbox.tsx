@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -29,6 +29,23 @@ export function PhotoLightbox({ photo, onClose, onLike, onViewProfile, onDelete,
     const [comments, setComments] = useState<any[]>([]);
     const [commentsLoading, setCommentsLoading] = useState(false);
     const [checkoutOpen, setCheckoutOpen] = useState(false);
+
+    const [localLikedPhotoComments, setLocalLikedPhotoComments] = useState<Record<string, boolean>>(() => {
+        try {
+            const saved = localStorage.getItem('liked_photo_comments');
+            return saved ? JSON.parse(saved) : {};
+        } catch {
+            return {};
+        }
+    });
+    const [photoCommentLikesCount, setPhotoCommentLikesCount] = useState<Record<string, number>>({});
+    const [photoReplyingTo, setPhotoReplyingTo] = useState<{ id: string; name: string } | null>(null);
+    const [expandedPhotoReplies, setExpandedPhotoReplies] = useState<Record<string, boolean>>({});
+    const photoCommentInputRef = useRef<HTMLInputElement>(null);
+
+    const getBaseLikes = (commentId: string) => {
+        return 0;
+    };
 
     // Offers state
     const [offers, setOffers] = useState<any[]>([]);
@@ -80,6 +97,21 @@ export function PhotoLightbox({ photo, onClose, onLike, onViewProfile, onDelete,
         }
     }, [photo?.id]);
 
+    useEffect(() => {
+        const counts: Record<string, number> = {};
+        comments.forEach((c: any) => {
+            const base = getBaseLikes(c.id);
+            counts[c.id] = base + (localLikedPhotoComments[c.id] ? 1 : 0);
+        });
+        setPhotoCommentLikesCount(prev => ({ ...counts, ...prev }));
+    }, [comments, localLikedPhotoComments]);
+
+    const parsedPhotoComments = useMemo(() => {
+        const topLevel = comments.filter((c: any) => !c.parentId && !c.parent_id);
+        const replies = comments.filter((c: any) => c.parentId || c.parent_id);
+        return { topLevel, replies };
+    }, [comments]);
+
     // Fetch offers
     const fetchOffers = async () => {
         if (!photo?.id || !isAuthenticated) return;
@@ -109,9 +141,10 @@ export function PhotoLightbox({ photo, onClose, onLike, onViewProfile, onDelete,
     const handleAddComment = async () => {
         if (!commentText.trim() || !photo.id) return;
         try {
-            const newComment = await photosService.addComment(photo.id, commentText);
+            const newComment = await photosService.addComment(photo.id, commentText, photoReplyingTo?.id || undefined);
             setComments(prev => [...prev, newComment]);
             setCommentText('');
+            setPhotoReplyingTo(null);
             photo.commentsCount = (photo.commentsCount || 0) + 1;
         } catch (err) {
             console.error('Error adding comment:', err);
@@ -350,45 +383,6 @@ export function PhotoLightbox({ photo, onClose, onLike, onViewProfile, onDelete,
                             </div>
                         </div>
 
-                        {/* Description & EXIF Toggler */}
-                        <div className="p-4 border-b border-theme-border space-y-2 max-h-36 overflow-y-auto shrink-0">
-                            {photo.description && (
-                                <p className="text-xs text-theme-text/80 leading-relaxed">{photo.description}</p>
-                            )}
-
-                            <button
-                                onClick={() => setShowExif(!showExif)}
-                                className="flex items-center gap-1 text-[10px] font-bold text-gold hover:underline"
-                            >
-                                <Info className="w-3.5 h-3.5" />
-                                {showExif ? 'Hide Technical Metadata' : 'Show Technical Metadata'}
-                            </button>
-
-                            {/* EXIF details */}
-                            <AnimatePresence>
-                                {showExif && (
-                                    <motion.div
-                                        initial={{ height: 0, opacity: 0 }}
-                                        animate={{ height: 'auto', opacity: 1 }}
-                                        exit={{ height: 0, opacity: 0 }}
-                                        className="overflow-hidden"
-                                    >
-                                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-theme-border/50">
-                                            {exifItems.map((item, idx) => (
-                                                <div key={idx} className="flex items-center gap-2">
-                                                    <item.icon className="w-3.5 h-3.5 text-theme-muted shrink-0" />
-                                                    <div className="min-w-0">
-                                                        <span className="text-[9px] text-theme-muted uppercase block leading-none">{item.label}</span>
-                                                        <span className="text-[11px] font-semibold text-theme-text truncate block mt-0.5">{item.value}</span>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-
                         {/* Social Buttons */}
                         <div className="px-4 py-2 border-b border-theme-border bg-theme-bg/10 flex items-center gap-4 shrink-0">
                             <motion.button
@@ -424,6 +418,68 @@ export function PhotoLightbox({ photo, onClose, onLike, onViewProfile, onDelete,
 
                         {/* Interactive Content area */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+                            {/* Description / Caption & EXIF (Instagram style caption) */}
+                            {(photo.description || photo.camera) && (
+                                <div className="border-b border-theme-border/10 pb-4 mb-2">
+                                    <div className="flex gap-2.5 text-xs leading-relaxed items-start">
+                                        {authorAvatar ? (
+                                            <img
+                                                src={authorAvatar}
+                                                alt={photo.user?.displayName || 'User'}
+                                                className="w-7 h-7 rounded-full object-cover border border-theme-border shrink-0 cursor-pointer"
+                                                onClick={() => onViewProfile?.(photo.userId)}
+                                            />
+                                        ) : (
+                                            <div className="w-7 h-7 rounded-full bg-theme-bg flex items-center justify-center text-gold font-bold text-[10px] border border-theme-border shrink-0 cursor-pointer" onClick={() => onViewProfile?.(photo.userId)}>
+                                                {photo.user?.displayName?.charAt(0) || 'U'}
+                                            </div>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <p>
+                                                <span className="font-bold text-theme-text mr-1.5 cursor-pointer hover:underline" onClick={() => onViewProfile?.(photo.userId)}>
+                                                    @{photo.user?.displayName || 'Anonymous'}
+                                                </span>
+                                                <span className="text-theme-text/85 break-words whitespace-pre-wrap leading-relaxed">{photo.description}</span>
+                                            </p>
+                                            
+                                            {/* Collapsible EXIF details */}
+                                            <div className="mt-2">
+                                                <button
+                                                    onClick={() => setShowExif(!showExif)}
+                                                    className="flex items-center gap-1 text-[10px] font-bold text-gold hover:underline"
+                                                >
+                                                    <Info className="w-3.5 h-3.5" />
+                                                    {showExif ? 'Hide Technical Metadata' : 'Show Technical Metadata'}
+                                                </button>
+
+                                                <AnimatePresence>
+                                                    {showExif && (
+                                                        <motion.div
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: 'auto', opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            className="overflow-hidden mt-2"
+                                                        >
+                                                            <div className="grid grid-cols-2 gap-2 p-2 rounded-xl bg-theme-bg/30 border border-theme-border/50">
+                                                                {exifItems.map((item, idx) => (
+                                                                    <div key={idx} className="flex items-center gap-1.5">
+                                                                        <item.icon className="w-3 h-3 text-theme-muted shrink-0" />
+                                                                        <div className="min-w-0">
+                                                                            <span className="text-[8px] text-theme-muted uppercase block leading-none">{item.label}</span>
+                                                                            <span className="text-[10px] font-semibold text-theme-text truncate block mt-0.5">{item.value}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {activeTab === 'comments' ? (
                                 <>
                                     {commentsLoading ? (
@@ -436,31 +492,162 @@ export function PhotoLightbox({ photo, onClose, onLike, onViewProfile, onDelete,
                                             <p className="text-xs text-theme-muted font-medium">No comments yet.</p>
                                         </div>
                                     ) : (
-                                        <div className="space-y-3.5">
-                                            {comments.map((comment, idx) => {
+                                        <div className="space-y-4">
+                                            {parsedPhotoComments.topLevel.map((comment, idx) => {
                                                 const commentAvatar = comment.user?.avatarUrl || comment.user?.avatar || comment.user?.avatar_url;
+                                                const isCommentLiked = !!localLikedPhotoComments[comment.id];
+                                                const likes = photoCommentLikesCount[comment.id] || getBaseLikes(comment.id);
+                                                const commentReplies = parsedPhotoComments.replies.filter((r: any) => r.parentId === comment.id || r.parent_id === comment.id);
+
                                                 return (
-                                                    <div key={comment.id || `comment-${idx}-${comment.createdAt || ''}`} className="flex gap-2.5 text-xs leading-relaxed">
-                                                        {commentAvatar ? (
-                                                            <img
-                                                                src={commentAvatar}
-                                                                alt={comment.user?.displayName || 'User'}
-                                                                className="w-7 h-7 rounded-full object-cover border border-theme-border shrink-0"
-                                                            />
-                                                        ) : (
-                                                            <div className="w-7 h-7 rounded-full bg-theme-bg flex items-center justify-center text-gold font-bold text-[10px] border border-theme-border shrink-0">
-                                                                {comment.user?.displayName?.charAt(0) || 'U'}
+                                                    <div key={comment.id || `comment-${idx}`} className="border-b border-theme-border/10 pb-3 last:border-0 last:pb-0">
+                                                        <div className="flex gap-2.5 text-xs leading-relaxed relative">
+                                                            {commentAvatar ? (
+                                                                <img
+                                                                    src={commentAvatar}
+                                                                    alt={comment.user?.displayName || 'User'}
+                                                                    className="w-7 h-7 rounded-full object-cover border border-theme-border shrink-0"
+                                                                />
+                                                            ) : (
+                                                                <div className="w-7 h-7 rounded-full bg-theme-bg flex items-center justify-center text-gold font-bold text-[10px] border border-theme-border shrink-0">
+                                                                    {comment.user?.displayName?.charAt(0) || 'U'}
+                                                                </div>
+                                                            )}
+                                                            <div className="flex-1 min-w-0">
+                                                                <p>
+                                                                    <span className="font-bold text-theme-text mr-1.5 cursor-pointer hover:underline" onClick={() => onViewProfile?.(comment.user?.id || '')}>
+                                                                        @{comment.user?.displayName || 'User'}
+                                                                    </span>
+                                                                    <span className="text-theme-text/85 break-words whitespace-pre-wrap leading-relaxed">{comment.content}</span>
+                                                                </p>
+                                                                <div className="flex items-center gap-3 mt-1.5">
+                                                                    <span className="text-[9px] text-theme-muted">
+                                                                        {new Date(comment.createdAt || comment.created_at).toLocaleDateString()}
+                                                                    </span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setPhotoReplyingTo({ id: comment.id, name: comment.user?.displayName || 'User' });
+                                                                            setCommentText(`@${comment.user?.displayName || 'User'} `);
+                                                                            photoCommentInputRef.current?.focus();
+                                                                        }}
+                                                                        className="text-[9px] font-bold text-gold uppercase tracking-wider hover:opacity-80 transition-opacity"
+                                                                    >
+                                                                        Reply
+                                                                    </button>
+                                                                    {likes > 0 && (
+                                                                        <span className="text-[9px] text-theme-muted font-medium">{likes} {likes === 1 ? 'like' : 'likes'}</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Heart Button */}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const commentId = comment.id;
+                                                                    const isLiked = !localLikedPhotoComments[commentId];
+                                                                    const updatedLiked = { ...localLikedPhotoComments, [commentId]: isLiked };
+                                                                    setLocalLikedPhotoComments(updatedLiked);
+                                                                    localStorage.setItem('liked_photo_comments', JSON.stringify(updatedLiked));
+                                                                    setPhotoCommentLikesCount(prev => ({
+                                                                        ...prev,
+                                                                        [commentId]: (prev[commentId] || getBaseLikes(commentId)) + (isLiked ? 1 : -1)
+                                                                    }));
+                                                                }}
+                                                                className={`shrink-0 p-1 rounded-full hover:bg-theme-muted/10 transition-colors ${isCommentLiked ? 'text-red-500' : 'text-theme-muted hover:text-red-500'}`}
+                                                            >
+                                                                <Heart className={`w-3.5 h-3.5 ${isCommentLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Replies Container */}
+                                                        {commentReplies.length > 0 && (
+                                                            <div className="ml-9 mt-2 space-y-2">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setExpandedPhotoReplies(prev => ({ ...prev, [comment.id]: !prev[comment.id] }));
+                                                                    }}
+                                                                    className="flex items-center gap-1 text-[9px] font-bold text-theme-muted hover:text-theme-text transition-colors"
+                                                                >
+                                                                    <span className="w-3 h-[1px] bg-theme-muted/40 inline-block mr-1"></span>
+                                                                    {expandedPhotoReplies[comment.id] ? `Hide replies` : `View replies (${commentReplies.length})`}
+                                                                </button>
+
+                                                                {expandedPhotoReplies[comment.id] && (
+                                                                    <div className="space-y-2">
+                                                                        {commentReplies.map((reply) => {
+                                                                            const replyAvatar = reply.user?.avatarUrl || reply.user?.avatar || reply.user?.avatar_url;
+                                                                            const isReplyLiked = !!localLikedPhotoComments[reply.id];
+                                                                            const replyLikes = photoCommentLikesCount[reply.id] || getBaseLikes(reply.id);
+
+                                                                            return (
+                                                                                <div key={reply.id} className="flex gap-2 text-xs leading-relaxed relative bg-theme-muted/3 p-1.5 rounded-lg">
+                                                                                    {replyAvatar ? (
+                                                                                        <img
+                                                                                            src={replyAvatar}
+                                                                                            alt={reply.user?.displayName || 'User'}
+                                                                                            className="w-6 h-6 rounded-full object-cover border border-theme-border shrink-0"
+                                                                                        />
+                                                                                    ) : (
+                                                                                        <div className="w-6 h-6 rounded-full bg-theme-bg flex items-center justify-center text-gold font-bold text-[9px] border border-theme-border shrink-0">
+                                                                                            {reply.user?.displayName?.charAt(0) || 'U'}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div className="flex-1 min-w-0">
+                                                                                        <p>
+                                                                                            <span className="font-bold text-theme-text mr-1 cursor-pointer hover:underline" onClick={() => onViewProfile?.(reply.user?.id || '')}>
+                                                                                                @{reply.user?.displayName || 'User'}
+                                                                                            </span>
+                                                                                            <span className="text-theme-text/80 break-words whitespace-pre-wrap leading-relaxed">{reply.content}</span>
+                                                                                        </p>
+                                                                                        <div className="flex items-center gap-2.5 mt-1">
+                                                                                            <span className="text-[8px] text-theme-muted">
+                                                                                                {new Date(reply.createdAt || reply.created_at).toLocaleDateString()}
+                                                                                            </span>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={() => {
+                                                                                                    setPhotoReplyingTo({ id: comment.id, name: reply.user?.displayName || 'User' });
+                                                                                                    setCommentText(`@${reply.user?.displayName || 'User'} `);
+                                                                                                    photoCommentInputRef.current?.focus();
+                                                                                                }}
+                                                                                                className="text-[8px] font-bold text-gold uppercase tracking-wider hover:opacity-80 transition-opacity"
+                                                                                            >
+                                                                                                Reply
+                                                                                            </button>
+                                                                                            {replyLikes > 0 && (
+                                                                                                <span className="text-[8px] text-theme-muted font-medium">{replyLikes} {replyLikes === 1 ? 'like' : 'likes'}</span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    {/* Heart Button */}
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            const replyId = reply.id;
+                                                                                            const isLiked = !localLikedPhotoComments[replyId];
+                                                                                            const updatedLiked = { ...localLikedPhotoComments, [replyId]: isLiked };
+                                                                                            setLocalLikedPhotoComments(updatedLiked);
+                                                                                            localStorage.setItem('liked_photo_comments', JSON.stringify(updatedLiked));
+                                                                                            setPhotoCommentLikesCount(prev => ({
+                                                                                                ...prev,
+                                                                                                [replyId]: (prev[replyId] || getBaseLikes(replyId)) + (isLiked ? 1 : -1)
+                                                                                            }));
+                                                                                        }}
+                                                                                        className={`shrink-0 p-0.5 rounded-full hover:bg-theme-muted/10 transition-colors ${isReplyLiked ? 'text-red-500' : 'text-theme-muted hover:text-red-500'}`}
+                                                                                    >
+                                                                                        <Heart className={`w-3 h-3 ${isReplyLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                                                                                    </button>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         )}
-                                                        <div>
-                                                            <p>
-                                                                <span className="font-bold text-theme-text mr-1.5">@{comment.user?.displayName || 'User'}</span>
-                                                                <span className="text-theme-text/85">{comment.content}</span>
-                                                            </p>
-                                                            <span className="text-[9px] text-theme-muted block mt-0.5">
-                                                                {new Date(comment.createdAt).toLocaleDateString()}
-                                                            </span>
-                                                        </div>
                                                     </div>
                                                 );
                                             })}
@@ -624,21 +811,57 @@ export function PhotoLightbox({ photo, onClose, onLike, onViewProfile, onDelete,
                         {/* Interactive Footer (Add Comment / Purchase Trigger) */}
                         <div className="p-4 border-t border-theme-border bg-theme-bg/10 shrink-0">
                             {activeTab === 'comments' ? (
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={commentText}
-                                        onChange={e => setCommentText(e.target.value)}
-                                        placeholder="Add a comment..."
-                                        className="flex-1 px-3 py-2 rounded-xl bg-theme-bg border border-theme-border text-xs text-theme-text placeholder-theme-muted outline-none focus:border-gold"
-                                    />
-                                    <button
-                                        onClick={handleAddComment}
-                                        disabled={!commentText.trim()}
-                                        className="p-2 rounded-xl bg-gold text-[#1a1a1a] hover:bg-gold-dark transition-all disabled:opacity-40 shrink-0"
-                                    >
-                                        <Send className="w-4 h-4" />
-                                    </button>
+                                <div className="space-y-2">
+                                    {/* Replying indicator */}
+                                    {photoReplyingTo && (
+                                        <div className="flex items-center justify-between bg-gold/10 border border-gold/20 px-3 py-1 rounded-lg">
+                                            <span className="text-[10px] text-gold font-medium">
+                                                Replying to @{photoReplyingTo.name}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setPhotoReplyingTo(null)}
+                                                className="text-theme-muted hover:text-theme-text"
+                                            >
+                                                <X className="w-2.5 h-2.5" />
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Quick Emoji Bar */}
+                                    <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1">
+                                        {['❤️', '🙌', '🔥', '😮', '👏', '😍', '💡', '🎨'].map(emoji => (
+                                            <button
+                                                key={emoji}
+                                                type="button"
+                                                onClick={() => {
+                                                    setCommentText(prev => prev + emoji);
+                                                    photoCommentInputRef.current?.focus();
+                                                }}
+                                                className="text-xs p-1 rounded hover:bg-theme-muted/10 transition-colors"
+                                            >
+                                                {emoji}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                        <input
+                                            ref={photoCommentInputRef}
+                                            type="text"
+                                            value={commentText}
+                                            onChange={e => setCommentText(e.target.value)}
+                                            placeholder={photoReplyingTo ? "Write a reply..." : "Add a comment..."}
+                                            className="flex-1 px-3 py-2 rounded-xl bg-theme-bg border border-theme-border text-xs text-theme-text placeholder-theme-muted outline-none focus:border-gold"
+                                        />
+                                        <button
+                                            onClick={handleAddComment}
+                                            disabled={!commentText.trim()}
+                                            className="p-2 rounded-xl bg-gold text-[#1a1a1a] hover:bg-gold-dark transition-all disabled:opacity-40 shrink-0"
+                                        >
+                                            <Send className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 </div>
                             ) : (
                                 photo.isForSale ? (

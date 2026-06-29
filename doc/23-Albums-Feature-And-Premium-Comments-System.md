@@ -128,3 +128,23 @@ To deliver a premium visual aesthetic across both themes, several contrast, visi
 ### 3.2. Theme-Specific Visual Polish
 * The global index layout incorporates dynamic theme variables (`var(--bg-surface)`, `var(--text-primary)`, and `var(--border-color)`) on the comments drawers to match system settings seamlessly.
 * Solved style issues on public profiles and album cards to display descriptions and status overlays correctly.
+
+---
+
+## 4. Multi-Module Threaded Comments and Memory Leak Resolution
+
+Following the successful deployment of the Reels comments drawer, the premium Instagram-style threaded comments, replies, and like systems were extended to the rest of the application's interactive portals:
+
+1. **Broadened Comments Threading**:
+   * Integrated full nested comment systems inside the **Photography Hub Lightbox** (`PhotoLightbox.tsx`), the **AI Curation Lab Detail Drawer** (`AICurationPage.tsx`), **Community Forum Threads** (`ThreadView` inside `src/features/community/index.tsx`), and the **AI Generation Dashboard** (`AIDashboardPage.tsx`).
+   * Supported quick emoji reaction bars, input focus, dynamic parent-comment replying indicators, and custom date formatting.
+   * Handled routing correctly when users click avatars or display names, pointing to `/profile/:id` while preserving other title and action targets.
+
+2. **Memory Leak and Event Loop Prevention (`MaxListenersExceededWarning`)**:
+   * Fixed critical background memory leak warnings in browser consoles.
+   * Identified and replaced a common react anti-pattern: `useEffect` loops driven by reference-unstable raw arrays (such as the comments list fetched on every render) that update state locally, rescheduling renders and recreating array instances indefinitely.
+   * Refactored like counters to compute values dynamically during render loops using the stable `localLiked` registry map instead of maintaining intermediate state variables and effects. This solved the issues completely, maintaining smooth 60fps performance and preventing listener limit threshold warnings.
+   * Ensured compilation cleanliness across modules by removing unused imports, parameters, and hooks (e.g. resolving `useEffect is not defined` errors).
+
+3. **Curation Result Access Optimization**:
+   * Fine-tuned restoration lab transitions in AI Curation results. Users who are not the creator or curator of a specific generation are redirected gracefully to the default Restoration tab, avoiding display of privileged edit controls or blank states.

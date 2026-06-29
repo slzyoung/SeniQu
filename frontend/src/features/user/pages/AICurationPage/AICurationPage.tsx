@@ -5,7 +5,7 @@
  * and certificate export.
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Upload,
@@ -27,6 +27,7 @@ import {
     Search,
     X,
     Heart,
+    Send,
     Film,
     Box
 } from 'lucide-react';
@@ -45,6 +46,8 @@ import {
 
 import { useNavigate } from 'react-router-dom';
 import './AICurationPage.css';
+
+const EMPTY_COMMENTS: any[] = [];
 
 export function AICurationPage() {
     const navigate = useNavigate();
@@ -98,6 +101,32 @@ export function AICurationPage() {
     // Likes and comments state
     const [likesState, setLikesState] = useState<{ count: number; liked: boolean }>({ count: 0, liked: false });
     const [newCommentText, setNewCommentText] = useState('');
+    const [localLikedCurationComments, setLocalLikedCurationComments] = useState<Record<string, boolean>>(() => {
+        try {
+            const saved = localStorage.getItem('liked_curation_comments');
+            return saved ? JSON.parse(saved) : {};
+        } catch {
+            return {};
+        }
+    });
+    const [replyingTo, setReplyingTo] = useState<{ id: string; name: string } | null>(null);
+    const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
+    const commentInputRef = useRef<HTMLTextAreaElement>(null);
+
+    // Queries and Mutations
+    const quotaQuery = useCurationQuota();
+    const historyQuery = useCurationHistory();
+    const publicQuery = usePublicCurations();
+    const curationMutation = useHeritageCuration();
+    const publishMutation = usePublishCuration();
+
+    const { data: serverComments = EMPTY_COMMENTS } = useHeritageCurationComments(selectedDetailCuration?.id || '');
+    const likeMutation = useLikeHeritageCuration();
+    const addCommentMutation = useAddHeritageCurationComment();
+
+    const getBaseLikes = (commentId: string) => {
+        return 0;
+    };
 
     // Modal Before/After slider handlers
     const handleModalMove = (clientX: number) => {
@@ -160,26 +189,47 @@ export function AICurationPage() {
         e.preventDefault();
         if (!newCommentText.trim() || !selectedDetailCuration) return;
 
+        let content = newCommentText.trim();
+        if (replyingTo) {
+            content = `[reply:${replyingTo.id}] ${content}`;
+        }
+
         addCommentMutation.mutate({
             curationId: selectedDetailCuration.id,
-            content: newCommentText.trim()
+            content: content
         }, {
             onSuccess: () => {
                 setNewCommentText('');
+                setReplyingTo(null);
             }
         });
     };
 
-    // Queries and Mutations
-    const quotaQuery = useCurationQuota();
-    const historyQuery = useCurationHistory();
-    const publicQuery = usePublicCurations();
-    const curationMutation = useHeritageCuration();
-    const publishMutation = usePublishCuration();
 
-    const { data: serverComments = [] } = useHeritageCurationComments(selectedDetailCuration?.id || '');
-    const likeMutation = useLikeHeritageCuration();
-    const addCommentMutation = useAddHeritageCurationComment();
+
+    const parsedComments = useMemo(() => {
+        const list = serverComments.map((c: any) => {
+            const match = c.content.match(/^\[reply:([^\]]+)\](.*)/);
+            if (match) {
+                return {
+                    ...c,
+                    parentId: match[1],
+                    content: match[2].trim()
+                };
+            }
+            return {
+                ...c,
+                parentId: null
+            };
+        });
+
+        const topLevel = list.filter((c: any) => !c.parentId);
+        const replies = list.filter((c: any) => c.parentId);
+
+        return { topLevel, replies };
+    }, [serverComments]);
+
+
 
     // Drag handler refs for Before/After slider
     const containerRef = useRef<HTMLDivElement>(null);
@@ -879,25 +929,27 @@ Dibuat secara otomatis menggunakan SeniQu Digital Curation Engine.`;
                     // RESTORATION LAB VIEW
                     <div className="curator-lab-view">
                         {/* Quota Progress Bar Banner */}
-                        <div className="curator-quota-banner">
-                            <div className="quota-info">
-                                <span className="quota-label">Your Daily Curation Quota</span>
-                                <span className="quota-value">
-                                    {quotaQuery.data ? quotaQuery.data.remaining : 3} / 3 remaining
-                                </span>
+                        {!curationResult && (
+                            <div className="curator-quota-banner">
+                                <div className="quota-info">
+                                    <span className="quota-label">Your Daily Curation Quota</span>
+                                    <span className="quota-value">
+                                        {quotaQuery.data ? quotaQuery.data.remaining : 3} / 3 remaining
+                                    </span>
+                                </div>
+                                <div className="quota-bar-outer">
+                                    <div
+                                        className="quota-bar-inner"
+                                        style={{
+                                            width: `${((quotaQuery.data ? quotaQuery.data.remaining : 3) / 3) * 100}%`
+                                        }}
+                                    />
+                                </div>
+                                <p className="quota-note">
+                                    *The system limits to 3 curations per day to maintain model quality. Quota resets at midnight.
+                                </p>
                             </div>
-                            <div className="quota-bar-outer">
-                                <div
-                                    className="quota-bar-inner"
-                                    style={{
-                                        width: `${((quotaQuery.data ? quotaQuery.data.remaining : 3) / 3) * 100}%`
-                                    }}
-                                />
-                            </div>
-                            <p className="quota-note">
-                                *The system limits to 3 curations per day to maintain model quality. Quota resets at midnight.
-                            </p>
-                        </div>
+                        )}
 
                         {/* Interactive Laboratory workspace split layout */}
                         <div className="curator-lab-workspace">
@@ -2009,27 +2061,29 @@ Dibuat secara otomatis menggunakan SeniQu Digital Curation Engine.`;
                                         <h2 className="modal-curation-title">{selectedDetailCuration.curation_name}</h2>
                                         
                                         {/* Curator Info */}
-                                        <div 
-                                            className="modal-curator-profile cursor-pointer hover:opacity-85 transition-opacity"
-                                            onClick={() => {
-                                                const userId = selectedDetailCuration.user_id;
-                                                if (userId) {
-                                                    setSelectedDetailCuration(null);
-                                                    navigate(`/profile/${userId}`);
-                                                }
-                                            }}
-                                        >
-                                            {selectedDetailCuration.users?.avatar_url ? (
-                                                <img
-                                                    src={selectedDetailCuration.users.avatar_url}
-                                                    alt={selectedDetailCuration.users.display_name}
-                                                    className="modal-curator-avatar"
-                                                />
-                                            ) : (
-                                                <div className="modal-curator-avatar-placeholder">
-                                                    <User className="w-4 h-4 text-gold" />
-                                                </div>
-                                            )}
+                                        <div className="modal-curator-profile">
+                                            <div 
+                                                className="cursor-pointer hover:opacity-85 transition-opacity"
+                                                onClick={() => {
+                                                    const userId = selectedDetailCuration.user_id;
+                                                    if (userId) {
+                                                        setSelectedDetailCuration(null);
+                                                        navigate(`/profile/${userId}`);
+                                                    }
+                                                }}
+                                            >
+                                                {selectedDetailCuration.users?.avatar_url ? (
+                                                    <img
+                                                        src={selectedDetailCuration.users.avatar_url}
+                                                        alt={selectedDetailCuration.users.display_name}
+                                                        className="modal-curator-avatar"
+                                                    />
+                                                ) : (
+                                                    <div className="modal-curator-avatar-placeholder">
+                                                        <User className="w-4 h-4 text-gold" />
+                                                    </div>
+                                                )}
+                                            </div>
                                             <div className="modal-curator-text">
                                                 <p className="modal-curator-name">
                                                     @{selectedDetailCuration.users?.username || selectedDetailCuration.users?.display_name || 'slzyoung'}
@@ -2040,7 +2094,8 @@ Dibuat secara otomatis menggunakan SeniQu Digital Curation Engine.`;
                                             {/* Action Button to Load in Lab */}
                                             <button
                                                 className="modal-open-lab-btn"
-                                                onClick={() => {
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
                                                     handleLoadCuration(selectedDetailCuration);
                                                     setSelectedDetailCuration(null);
                                                 }}
@@ -2193,73 +2248,275 @@ Dibuat secara otomatis menggunakan SeniQu Digital Curation Engine.`;
                                                 </div>
                                             </div>
                                         )}
-                                    </div>
-
-                                    {/* Discussion / Comments Section */}
+                                                                    {/* Discussion / Comments Section */}
                                     <div className="modal-discussion-section">
-                                        <h4 className="discussion-title">Community Discussion</h4>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <h4 className="discussion-title flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-theme-muted">
+                                                <span>Community Discussion</span>
+                                                <span className="text-[11px] font-normal text-theme-muted">({serverComments.length})</span>
+                                            </h4>
+                                        </div>
                                         
+                                        {/* Quick Emoji Bar */}
+                                        <div className="flex items-center gap-1.5 pb-2 overflow-x-auto scrollbar-none border-b border-theme-border/30 mb-3">
+                                            {['❤️', '🙌', '🔥', '😮', '👏', '😍', '💡', '🎨'].map(emoji => (
+                                                <button
+                                                    key={emoji}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setNewCommentText(prev => prev + emoji);
+                                                        commentInputRef.current?.focus();
+                                                    }}
+                                                    className="text-sm p-1 rounded hover:bg-theme-muted/10 transition-colors"
+                                                >
+                                                    {emoji}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Replying to indicator */}
+                                        {replyingTo && (
+                                            <div className="flex items-center justify-between bg-gold/10 border border-gold/20 px-3 py-1.5 rounded-lg mb-2">
+                                                <span className="text-[11px] text-gold font-medium">
+                                                    Replying to @{replyingTo.name}
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setReplyingTo(null)}
+                                                    className="text-theme-muted hover:text-text-primary"
+                                                >
+                                                    <X className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        )}
+
                                         {/* Post comment form */}
-                                        <form onSubmit={handleSubmitComment} className="comment-form-box">
-                                            <textarea
-                                                className="comment-textarea"
-                                                placeholder="Write your curatorial analysis comment..."
+                                        <form onSubmit={handleSubmitComment} className="flex gap-2 mb-4">
+                                            <input
+                                                ref={commentInputRef}
+                                                type="text"
+                                                className="flex-1 px-3 py-2.5 rounded-xl bg-theme-bg/60 border border-theme-border text-xs text-text-primary placeholder-theme-muted outline-none focus:border-gold"
+                                                placeholder={replyingTo ? `Write a reply...` : "Write your curatorial analysis..."}
                                                 value={newCommentText}
                                                 onChange={(e) => setNewCommentText(e.target.value)}
-                                                rows={2}
                                                 maxLength={500}
                                             />
                                             <button
                                                 type="submit"
                                                 disabled={!newCommentText.trim()}
-                                                className="comment-submit-btn"
+                                                className="p-2.5 rounded-xl bg-gold text-[#1a1a1a] hover:bg-gold-dark transition-all disabled:opacity-40 shrink-0 flex items-center justify-center"
                                             >
-                                                Send
+                                                <Send className="w-4 h-4" />
                                             </button>
                                         </form>
 
                                         {/* Comments list */}
-                                        <div className="comments-list-box">
-                                            {serverComments.length > 0 ? (
-                                                serverComments.map((comment) => (
-                                                    <div key={comment.id} className="comment-bubble-item">
-                                                        <div className="comment-header-row">
-                                                            <div 
-                                                                className="flex items-center gap-1.5 cursor-pointer hover:opacity-85 transition-opacity"
-                                                                onClick={() => {
-                                                                    const userId = comment.user_id || comment.user?.id;
-                                                                    if (userId) {
-                                                                        setSelectedDetailCuration(null);
-                                                                        navigate(`/profile/${userId}`);
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <div className="commenter-avatar-box">
-                                                                    {comment.user.avatar_url ? (
-                                                                        <img src={comment.user.avatar_url} alt="" />
+                                        <div className="comments-list-box max-h-[350px] overflow-y-auto pr-1">
+                                            {parsedComments.topLevel.length > 0 ? (
+                                                parsedComments.topLevel.map((comment) => {
+                                                    const isCommentLiked = !!localLikedCurationComments[comment.id];
+                                                    const likes = isCommentLiked ? 1 : 0;
+                                                    const commentReplies = parsedComments.replies.filter((r: any) => r.parentId === comment.id);
+
+                                                    return (
+                                                        <div key={comment.id} className="comment-thread-group mb-3 border-b border-theme-border/10 pb-3 last:border-0 last:pb-0">
+                                                            {/* Main Comment Bubble */}
+                                                            <div className="comment-bubble-item relative flex items-start gap-2.5 p-2.5 rounded-xl bg-theme-muted/5 hover:bg-theme-muted/10 transition-all">
+                                                                {/* Avatar */}
+                                                                <div 
+                                                                    className="commenter-avatar-box cursor-pointer hover:opacity-85 shrink-0"
+                                                                    onClick={() => {
+                                                                        const userId = comment.user_id || comment.user?.id;
+                                                                        if (userId) {
+                                                                            setSelectedDetailCuration(null);
+                                                                            navigate(`/profile/${userId}`);
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    {comment.user?.avatar_url ? (
+                                                                        <img src={comment.user.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover" />
                                                                     ) : (
-                                                                        <User className="w-3.5 h-3.5 text-gold" />
+                                                                        <div className="w-7 h-7 rounded-full bg-theme-bg border border-theme-border flex items-center justify-center">
+                                                                            <User className="w-3.5 h-3.5 text-gold" />
+                                                                        </div>
                                                                     )}
                                                                 </div>
-                                                                <span className="commenter-name">{comment.user.display_name}</span>
+
+                                                                {/* Body */}
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                                        <span 
+                                                                            className="commenter-name font-semibold text-xs cursor-pointer hover:underline text-text-primary"
+                                                                            onClick={() => {
+                                                                                const userId = comment.user_id || comment.user?.id;
+                                                                                if (userId) {
+                                                                                    setSelectedDetailCuration(null);
+                                                                                    navigate(`/profile/${userId}`);
+                                                                                }
+                                                                            }}
+                                                                        >
+                                                                            {comment.user?.display_name || 'Anonymous'}
+                                                                        </span>
+                                                                        <span className="comment-date text-[9px] text-theme-muted">
+                                                                            {new Date(comment.created_at).toLocaleDateString('id-ID', {
+                                                                                hour: '2-digit',
+                                                                                minute: '2-digit'
+                                                                            })}
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="comment-body-text text-xs text-text-primary mt-1 pr-6 leading-relaxed whitespace-pre-wrap break-words">{comment.content}</p>
+                                                                    
+                                                                    {/* Action Row */}
+                                                                    <div className="flex items-center gap-3 mt-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setReplyingTo({ id: comment.id, name: comment.user?.display_name || 'User' });
+                                                                                setNewCommentText(`@${comment.user?.display_name || 'User'} `);
+                                                                                commentInputRef.current?.focus();
+                                                                            }}
+                                                                            className="text-[10px] font-bold text-gold uppercase tracking-wider hover:opacity-85 transition-opacity"
+                                                                        >
+                                                                            Reply
+                                                                        </button>
+                                                                        {likes > 0 && (
+                                                                            <span className="text-[10px] text-theme-muted font-medium">{likes} {likes === 1 ? 'like' : 'likes'}</span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Heart Icon to Like */}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const commentId = comment.id;
+                                                                        const isLiked = !localLikedCurationComments[commentId];
+                                                                        const updatedLiked = { ...localLikedCurationComments, [commentId]: isLiked };
+                                                                        setLocalLikedCurationComments(updatedLiked);
+                                                                        localStorage.setItem('liked_curation_comments', JSON.stringify(updatedLiked));
+                                                                    }}
+                                                                    className={`shrink-0 p-1.5 rounded-full hover:bg-theme-muted/10 transition-colors ${isCommentLiked ? 'text-red-500' : 'text-theme-muted hover:text-red-500'}`}
+                                                                >
+                                                                    <Heart className={`w-3.5 h-3.5 ${isCommentLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                                                                </button>
                                                             </div>
-                                                            <span className="comment-date">
-                                                                {new Date(comment.created_at).toLocaleDateString('id-ID', {
-                                                                    hour: '2-digit',
-                                                                    minute: '2-digit'
-                                                                })}
-                                                            </span>
+
+                                                            {/* Nested Replies */}
+                                                            {commentReplies.length > 0 && (
+                                                                <div className="ml-9 mt-2 space-y-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setExpandedReplies(prev => ({ ...prev, [comment.id]: !prev[comment.id] }));
+                                                                        }}
+                                                                        className="flex items-center gap-1 text-[10px] font-bold text-theme-muted hover:text-text-primary transition-colors"
+                                                                    >
+                                                                        <span className="w-4 h-[1px] bg-theme-muted/40 inline-block mr-1"></span>
+                                                                        {expandedReplies[comment.id] ? `Hide replies` : `View replies (${commentReplies.length})`}
+                                                                    </button>
+
+                                                                    {expandedReplies[comment.id] && (
+                                                                        <div className="space-y-2">
+                                                                            {commentReplies.map((reply) => {
+                                                                                const isReplyLiked = !!localLikedCurationComments[reply.id];
+                                                                                const replyLikes = isReplyLiked ? 1 : 0;
+
+                                                                                return (
+                                                                                    <div key={reply.id} className="comment-bubble-item relative flex items-start gap-2 p-2 rounded-xl bg-theme-muted/3 hover:bg-theme-muted/5 transition-all">
+                                                                                        {/* Avatar */}
+                                                                                        <div 
+                                                                                            className="commenter-avatar-box cursor-pointer hover:opacity-85 shrink-0"
+                                                                                            onClick={() => {
+                                                                                                const userId = reply.user_id || reply.user?.id;
+                                                                                                if (userId) {
+                                                                                                    setSelectedDetailCuration(null);
+                                                                                                    navigate(`/profile/${userId}`);
+                                                                                                }
+                                                                                            }}
+                                                                                        >
+                                                                                            {reply.user?.avatar_url ? (
+                                                                                                <img src={reply.user.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
+                                                                                            ) : (
+                                                                                                <div className="w-6 h-6 rounded-full bg-theme-bg border border-theme-border flex items-center justify-center">
+                                                                                                    <User className="w-3 h-3 text-gold" />
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+
+                                                                                        {/* Body */}
+                                                                                        <div className="flex-1 min-w-0">
+                                                                                            <div className="flex items-center gap-1 flex-wrap">
+                                                                                                <span 
+                                                                                                    className="commenter-name font-semibold text-[11px] cursor-pointer hover:underline text-text-primary"
+                                                                                                    onClick={() => {
+                                                                                                        const userId = reply.user_id || reply.user?.id;
+                                                                                                        if (userId) {
+                                                                                                            setSelectedDetailCuration(null);
+                                                                                                            navigate(`/profile/${userId}`);
+                                                                                                        }
+                                                                                                    }}
+                                                                                                >
+                                                                                                    {reply.user?.display_name || 'Anonymous'}
+                                                                                                </span>
+                                                                                                <span className="comment-date text-[8px] text-theme-muted">
+                                                                                                    {new Date(reply.created_at).toLocaleDateString('id-ID', {
+                                                                                                        hour: '2-digit',
+                                                                                                        minute: '2-digit'
+                                                                                                    })}
+                                                                                                </span>
+                                                                                            </div>
+                                                                                            <p className="comment-body-text text-xs text-text-primary mt-0.5 pr-6 leading-relaxed whitespace-pre-wrap break-words">{reply.content}</p>
+                                                                                            
+                                                                                            {/* Action Row */}
+                                                                                            <div className="flex items-center gap-3 mt-1">
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={() => {
+                                                                                                        setReplyingTo({ id: comment.id, name: reply.user?.display_name || 'User' });
+                                                                                                        setNewCommentText(`@${reply.user?.display_name || 'User'} `);
+                                                                                                        commentInputRef.current?.focus();
+                                                                                                    }}
+                                                                                                    className="text-[9px] font-bold text-gold uppercase tracking-wider hover:opacity-85 transition-opacity"
+                                                                                                >
+                                                                                                    Reply
+                                                                                                </button>
+                                                                                                {replyLikes > 0 && (
+                                                                                                    <span className="text-[9px] text-theme-muted font-medium">{replyLikes} {replyLikes === 1 ? 'like' : 'likes'}</span>
+                                                                                                )}
+                                                                                            </div>
+                                                                                        </div>
+
+                                                                                        {/* Heart Icon to Like */}
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => {
+                                                                                                const replyId = reply.id;
+                                                                                                const isLiked = !localLikedCurationComments[replyId];
+                                                                                                const updatedLiked = { ...localLikedCurationComments, [replyId]: isLiked };
+                                                                                                setLocalLikedCurationComments(updatedLiked);
+                                                                                                localStorage.setItem('liked_curation_comments', JSON.stringify(updatedLiked));
+                                                                                            }}
+                                                                                            className={`shrink-0 p-1 rounded-full hover:bg-theme-muted/10 transition-colors ${isReplyLiked ? 'text-red-500' : 'text-theme-muted hover:text-red-500'}`}
+                                                                                        >
+                                                                                            <Heart className={`w-3 h-3 ${isReplyLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                                                                                        </button>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        <p className="comment-body-text">{comment.content}</p>
-                                                    </div>
-                                                ))
+                                                    );
+                                                })
                                             ) : (
                                                 <p className="no-comments-fallback text-center py-4 text-theme-muted text-xs">
                                                     No comments yet. Start the conversation!
                                                 </p>
                                             )}
                                         </div>
-                                    </div>
+                                    </div>      </div>
                                 </div>
                             </div>
                         </motion.div>

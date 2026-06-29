@@ -1817,21 +1817,23 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: var(--card-glass);
-  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--card-glass-border);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   cursor: pointer;
   transition: all 0.2s ease;
   z-index: 10;
 }
 
 .curation-modal-close:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.2);
+  background: rgba(0, 0, 0, 0.8);
+  color: var(--gold);
+  border-color: var(--gold);
   transform: scale(1.05);
 }
 
@@ -2489,7 +2491,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 200px;
+  max-height: 450px;
   overflow-y: auto;
   padding-right: 4px;
 }
