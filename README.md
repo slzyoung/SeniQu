@@ -133,7 +133,7 @@ npm run dev
 
 ## 📚 Documentation
 
-Deep-dive into SenaQu's internal architecture via the [`/doc`](./doc) directory:
+Deep-dive into SeniQu's internal architecture via the [`/doc`](./doc) directory:
 
 - 🏗️ **[Architecture Overview](./doc/01-Architecture.md)**: System design and structural patterns.
 - 🎨 **[Frontend Guide](./doc/02-Frontend-Guide.md)**: React components, routing, theming.

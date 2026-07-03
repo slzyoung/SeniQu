@@ -23,6 +23,7 @@ const UserProfile = lazyWithRetry(() => import('../features/user/pages/Profile')
 const UserBookmarks = lazyWithRetry(() => import('../features/user/pages/Bookmarks'));
 const UserCollections = lazyWithRetry(() => import('../features/user/pages/MyCollectionsPage'));
 const UserSettings = lazyWithRetry(() => import('../features/user/pages/Settings'));
+const UserNotifications = lazyWithRetry(() => import('../features/user/pages/Notifications'));
 // New User Dashboard Pages
 const UserGallery = lazyWithRetry(() => import('../features/user/pages/GalleryPage'));
 const UserNearby = lazyWithRetry(() => import('../features/user/pages/NearbyMuseumsPage'));
@@ -158,6 +159,7 @@ const router = createBrowserRouter(
                 {/* Gallery Routes */}
                 <Route path={ROUTES.GALLERY} element={<PublicGallery />} />
                 <Route path={ROUTES.COLLECTIONS} element={<CollectionsPage />} />
+                <Route path="/collections/:cityId" element={<CollectionsPage />} />
                 <Route path={ROUTES.GALLERY_CITY_REGIONS} element={<CityRegions />} />
                 <Route path={ROUTES.GALLERY_REGION_MUSEUMS} element={<RegionMuseums />} />
                 <Route path={ROUTES.GALLERY_MUSEUM} element={<MuseumDetail />} />
@@ -182,6 +184,7 @@ const router = createBrowserRouter(
                 <Route path={ROUTES.USER_BOOKMARKS} element={<UserBookmarks />} />
                 <Route path={ROUTES.USER_COLLECTIONS} element={<UserCollections />} />
                 <Route path={ROUTES.USER_SETTINGS} element={<UserSettings />} />
+                <Route path="/dashboard/notifications" element={<UserNotifications />} />
                 {/* New User Dashboard Routes */}
                 <Route path={ROUTES.USER_GALLERY} element={<UserGallery />} />
                 <Route path={ROUTES.USER_NEARBY} element={<UserNearby />} />

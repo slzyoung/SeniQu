@@ -68,7 +68,7 @@ export function DashboardLayout({
                 />
 
                 {/* Page Content - Add bottom padding for mobile nav */}
-                <main className="flex-1 p-4 sm:p-6 pb-24 md:pb-6">
+                <main className="relative z-10 flex-1 p-4 sm:p-6 pb-24 md:pb-6">
                     <ErrorBoundary>
                         <Outlet />
                     </ErrorBoundary>

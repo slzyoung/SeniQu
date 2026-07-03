@@ -17,6 +17,7 @@ export interface User {
     avatarChangeCount?: number
     profileVideoUrl?: string
     profileVideoChangeCount?: number
+    profileBackgroundUrl?: string
     userType: string
     adminRole?: string
     adminLevel?: number
@@ -251,6 +252,7 @@ export class UsersService {
                 ...(isChangingAvatar && { avatar_change_count: nextAvatarChangeCount }),
                 ...(dto.profileVideoUrl !== undefined && { profile_video_url: dto.profileVideoUrl }),
                 ...(isChangingProfileVideo && { profile_video_change_count: nextProfileVideoChangeCount }),
+                ...(dto.profileBackgroundUrl !== undefined && { profile_background_url: dto.profileBackgroundUrl }),
                 ...(dto.notificationPrefs && { notification_prefs: dto.notificationPrefs }),
                 ...(dto.isTwoFactorEnabled !== undefined && { is_two_factor_enabled: dto.isTwoFactorEnabled }),
                 ...(dto.loginAlertsEnabled !== undefined && { login_alerts_enabled: dto.loginAlertsEnabled }),
@@ -329,6 +331,18 @@ export class UsersService {
             this.logger.error(`Failed to update Privy ID: ${error.message}`)
             // Don't throw error here to allow flow to proceed
         }
+
+        // Clear old privy_wallets since they belong to a different/stale Privy account
+        const { error: deleteWalletsError } = await client
+            .from("privy_wallets")
+            .delete()
+            .eq("user_id", userId);
+
+        if (deleteWalletsError) {
+            this.logger.error(`Failed to clear stale privy_wallets on Privy ID update: ${deleteWalletsError.message}`);
+        } else {
+            this.logger.log(`Cleared stale privy_wallets for user ${userId} due to Privy ID change.`);
+        }
     }
 
     async findAll(page = 1, limit = 20): Promise<{ users: User[]; total: number }> {
@@ -363,6 +377,7 @@ export class UsersService {
             avatarChangeCount: data.avatar_change_count || 0,
             profileVideoUrl: data.profile_video_url || null,
             profileVideoChangeCount: data.profile_video_change_count || 0,
+            profileBackgroundUrl: data.profile_background_url || null,
             userType: this.mapRoleToUserType(data.role),
             adminRole: data.admin_role_typed || data.admin_role,
             adminLevel: data.admin_level,
@@ -414,30 +429,78 @@ export class UsersService {
         viewsCount: number
         bookmarksCount: number
         collectionsCount: number
-        artCount: number
+        albumsCount: number
+        artworksCount: number
         likesCount: number
     }> {
         const client = this.db.getAdminClient()
 
         // Get bookmarks count
-        const { count: bookmarksCount } = await client
-            .from("bookmarks")
-            .select("*", { count: "exact", head: true })
-            .eq("user_id", userId)
+        let bookmarksCount = 0;
+        try {
+            const { count } = await client
+                .from("bookmarks")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+            bookmarksCount = count || 0;
+        } catch (err) {
+            this.logger.warn(`Failed to fetch bookmarks count: ${err.message}`);
+        }
 
         // Get collections count
-        const { count: collectionsCount } = await client
-            .from("collections")
-            .select("*", { count: "exact", head: true })
-            .eq("user_id", userId)
+        let collectionsCount = 0;
+        try {
+            const { count } = await client
+                .from("collections")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+            collectionsCount = count || 0;
+        } catch (err) {
+            this.logger.warn(`Failed to fetch collections count: ${err.message}`);
+        }
 
-        // For now, return placeholder values for views, arts, and likes
-        // These can be implemented when the corresponding tables exist
+        // Get albums count
+        let albumsCount = 0;
+        try {
+            const { count } = await client
+                .from("albums")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+            albumsCount = count || 0;
+        } catch (err) {
+            this.logger.warn(`Failed to fetch albums count: ${err.message}`);
+        }
+
+        // Get AI artworks count
+        let aiArtworksCount = 0;
+        try {
+            const { count } = await client
+                .from("ai_artworks")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+            aiArtworksCount = count || 0;
+        } catch (err) {
+            this.logger.warn(`Failed to fetch ai_artworks count: ${err.message}`);
+        }
+
+        // Get photos count
+        let photosCount = 0;
+        try {
+            const { count } = await client
+                .from("photos")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", userId)
+            photosCount = count || 0;
+        } catch (err) {
+            this.logger.warn(`Failed to fetch photos count: ${err.message}`);
+        }
+
         return {
             viewsCount: 0,
-            bookmarksCount: bookmarksCount || 0,
-            collectionsCount: collectionsCount || 0,
-            artCount: 0,
+            bookmarksCount,
+            collectionsCount,
+            albumsCount,
+            artworksCount: aiArtworksCount + photosCount,
             likesCount: 0,
         }
     }
@@ -800,6 +863,7 @@ export class UsersService {
             .from("reels")
             .select("*", { count: "exact", head: true })
             .eq("user_id", userId)
+            .eq("status", "active")
 
         const { count: forumCount } = await client
             .from("forum_threads")

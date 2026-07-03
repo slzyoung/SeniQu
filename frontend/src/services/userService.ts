@@ -17,6 +17,7 @@ export interface UserStats {
     viewsCount: number;
     bookmarksCount: number;
     collectionsCount: number;
+    albumsCount: number;
     artworksCount: number;
     likesCount: number;
 }
@@ -41,6 +42,7 @@ export const updateProfileSchema = z.object({
     bio: z.string().max(500).optional().transform(val => val ? sanitizeInput(val) : val),
     avatarUrl: z.string().optional().or(z.literal('')),
     profileVideoUrl: z.string().optional().or(z.literal('')),
+    profileBackgroundUrl: z.string().optional().or(z.literal('')),
     socialLinks: z.object({
         twitter: z.string().optional().or(z.literal('')),
         instagram: z.string().optional().or(z.literal('')),
@@ -108,6 +110,7 @@ class UserService {
             avatarChangeCount: user.avatarChangeCount || user.avatar_change_count || 0,
             profileVideoUrl: user.profileVideoUrl || user.profile_video_url || '',
             profileVideoChangeCount: user.profileVideoChangeCount || user.profile_video_change_count || 0,
+            profileBackgroundUrl: user.profileBackgroundUrl || user.profile_background_url || '',
             role: role as any,
             wallets: (user.wallets || []).map((w: any) => ({
                 chainType: w.chainType || w.chain_type,
@@ -244,6 +247,19 @@ class UserService {
      */
     async uploadProfileVideo(file: File): Promise<{ url: string }> {
         const result = await uploadFile(file, 'videos');
+        return { url: result.url };
+    }
+
+    /**
+     * Upload profile background
+     */
+    async uploadProfileBackground(file: File): Promise<{ url: string }> {
+        const compressedFile = await compressImage(file, {
+            maxWidth: 1200,
+            maxHeight: 600,
+            quality: 0.8,
+        });
+        const result = await uploadFile(compressedFile, 'general');
         return { url: result.url };
     }
 

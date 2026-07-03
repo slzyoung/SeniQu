@@ -7,8 +7,9 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { Search, Loader2, Play, Link2, X, SlidersHorizontal, PlusCircle } from 'lucide-react';
-import { useReelsFeed } from '../../hooks/useReels';
+import { useReelsFeed, useReel } from '../../hooks/useReels';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useToast } from '../../stores/useNotificationStore';
 import ReelItem from './components/ReelItem';
@@ -22,7 +23,21 @@ const REEL_CATEGORIES = ['All', 'Art', 'Music', 'Dance', 'Nature', 'Culture', 'P
 export function ReelsPage() {
     const { user, isAuthenticated } = useAuthStore();
     const toast = useToast();
-    const { data, fetchNextPage, hasNextPage, isFetching, isLoading } = useReelsFeed();
+    const location = useLocation();
+    const [searchParams] = useSearchParams();
+
+    // Extract query/state parameters
+    const initialReelId = useMemo(() => {
+        return location.state?.initialReelId || searchParams.get('v') || null;
+    }, [location.state, searchParams]);
+
+    const filterCreatorId = useMemo(() => {
+        return location.state?.creatorId || searchParams.get('creatorId') || undefined;
+    }, [location.state, searchParams]);
+
+    const { data, fetchNextPage, hasNextPage, isFetching, isLoading } = useReelsFeed(10, filterCreatorId);
+    const { data: singleReelData } = useReel(initialReelId || '', !!initialReelId);
+
     const [isMuted, setIsMuted] = useState(true);
     const [activeReelId, setActiveReelId] = useState<string | null>(null);
     const [showUpload, setShowUpload] = useState(false);
@@ -35,7 +50,16 @@ export function ReelsPage() {
     const [activeCategory, setActiveCategory] = useState<string>('All');
     const searchInputRef = useRef<HTMLInputElement>(null);
 
-    const allReels = data?.pages.flatMap(p => p.data) || [];
+    const allReels = useMemo(() => {
+        const feedReels = data?.pages.flatMap(p => p.data) || [];
+        if (initialReelId && singleReelData) {
+            const exists = feedReels.some((r: any) => r.id === initialReelId);
+            if (!exists) {
+                return [singleReelData, ...feedReels];
+            }
+        }
+        return feedReels;
+    }, [data, initialReelId, singleReelData]);
 
     // Client-side search + category filter
     const reels = useMemo(() => {
@@ -102,6 +126,22 @@ export function ReelsPage() {
         }, { threshold: 0.6 });
         return () => observer.current?.disconnect();
     }, []);
+
+    // Scroll to initial reel when loaded
+    useEffect(() => {
+        if (!isLoading && reels.length > 0 && initialReelId) {
+            const index = reels.findIndex((r: any) => r.id === initialReelId);
+            if (index !== -1) {
+                setActiveReelId(initialReelId);
+                setTimeout(() => {
+                    const el = document.querySelector(`[data-reel-id="${initialReelId}"]`);
+                    if (el) {
+                        el.scrollIntoView({ behavior: 'auto', block: 'start' });
+                    }
+                }, 100);
+            }
+        }
+    }, [isLoading, reels, initialReelId]);
 
     // Infinite scroll trigger
     const containerRef = useRef<HTMLDivElement>(null);

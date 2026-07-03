@@ -4,12 +4,14 @@
  * elegant horizontal brands widget, and responsive masonry work showcase.
  */
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import {
     ArrowLeft, Camera, FolderHeart, Loader2, Folder,
     Phone, MessageSquare, Share2, Coins, Award, Heart, CheckCircle
 } from 'lucide-react';
 import { photosService, type PhotographerStats } from '../../../../../services/photosService';
+import { albumsService } from '../../../../../services/albumsService';
 import { PhotoCard, type PhotoData } from './PhotoCard';
 import { ChatDrawer } from './ChatDrawer';
 import { useAuthStore } from '../../../../../stores/useAuthStore';
@@ -27,9 +29,45 @@ export function PhotographerProfile({ userId, onClose, onSelectPhoto, onLikePhot
     const [photos, setPhotos] = useState<PhotoData[]>([]);
     const [collections, setCollections] = useState<any[]>([]);
     const [selectedCollection, setSelectedCollection] = useState<any | null>(null);
+    const [albumPhotos, setAlbumPhotos] = useState<PhotoData[]>([]);
+    const [isLoadingAlbumPhotos, setIsLoadingAlbumPhotos] = useState(false);
     const [activeTab, setActiveTab] = useState<'photos' | 'collections'>('photos');
     const [isLoading, setIsLoading] = useState(true);
     const [showChat, setShowChat] = useState(false);
+
+    useEffect(() => {
+        if (!selectedCollection) {
+            setAlbumPhotos([]);
+            return;
+        }
+        const loadAlbumPhotos = async () => {
+            setIsLoadingAlbumPhotos(true);
+            try {
+                const rawItems = await albumsService.getAlbumItems(selectedCollection.id);
+                const parsed: PhotoData[] = (rawItems || []).map((item: any) => ({
+                    id: item.id,
+                    userId: item.userId || item.user_id || userId,
+                    title: item.title || 'Untitled',
+                    description: item.description,
+                    originalUrl: item.originalUrl || item.original_url || 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80',
+                    mediumUrl: item.mediumUrl || item.medium_url,
+                    thumbnailUrl: item.thumbnailUrl || item.thumbnail_url,
+                    isPublic: item.isPublic !== false && item.is_public !== false,
+                    isForSale: false,
+                    price: 0,
+                    likesCount: 0,
+                    commentsCount: 0,
+                    createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+                }));
+                setAlbumPhotos(parsed);
+            } catch (err) {
+                console.error('Failed to load collection photos:', err);
+            } finally {
+                setIsLoadingAlbumPhotos(false);
+            }
+        };
+        loadAlbumPhotos();
+    }, [selectedCollection, userId]);
 
     useEffect(() => {
         const loadProfile = async () => {
@@ -38,11 +76,12 @@ export function PhotographerProfile({ userId, onClose, onSelectPhoto, onLikePhot
                 const [statsRes, photosRes, collectionsRes] = await Promise.all([
                     photosService.getPhotographerStats(userId),
                     photosService.getPhotos({ userId, limit: 30 }),
-                    photosService.getPublicCollections(userId)
+                    albumsService.getUserAlbums(userId)
                 ]);
                 setStats(statsRes);
                 setPhotos(photosRes.data);
-                setCollections(collectionsRes);
+                const publicAlbums = (collectionsRes || []).filter((c: any) => c.isPublic !== false && c.is_public !== false);
+                setCollections(publicAlbums);
             } catch (err) {
                 console.error('Failed to load photographer profile:', err);
             } finally {
@@ -55,13 +94,13 @@ export function PhotographerProfile({ userId, onClose, onSelectPhoto, onLikePhot
     const displayName = stats?.displayName || 'Photographer';
     const initial = displayName.charAt(0).toUpperCase();
 
-    return (
+    return createPortal(
         <motion.div
             initial={{ opacity: 0, x: '100%' }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 250 }}
-            className="fixed inset-0 z-50 overflow-y-auto"
+            className="fixed inset-0 z-[100] overflow-y-auto"
             style={{
                 background: 'var(--bg-primary)',
                 color: 'var(--text-primary)'
@@ -81,7 +120,7 @@ export function PhotographerProfile({ userId, onClose, onSelectPhoto, onLikePhot
                         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] aspect-square rounded-full bg-orange-400/5 blur-[80px]" />
 
                         {/* Top navigation actions */}
-                        <div className="absolute top-5 left-4 right-4 flex items-center justify-between z-10">
+                        <div className="absolute top-5 left-4 right-4 flex items-center justify-between z-30">
                             <button
                                 onClick={onClose}
                                 className="p-2.5 rounded-full backdrop-blur-md shadow-sm transition-all"
@@ -213,10 +252,10 @@ export function PhotographerProfile({ userId, onClose, onSelectPhoto, onLikePhot
                             }}
                         >
                             {[
-                                { value: stats?.photosCount || 0, label: 'Photos', icon: Camera },
-                                { value: stats?.collectionsCount || 0, label: 'Collections', icon: Folder },
-                                { value: stats?.likesReceived || 0, label: 'Likes', icon: Heart },
-                                { value: photos.filter(p => p.isForSale).length, label: 'Listed', icon: Coins },
+                                {value: stats?.photosCount || 0, label: 'Photos', icon: Camera},
+                                {value: stats?.collectionsCount || 0, label: 'Albums', icon: Folder},
+                                {value: stats?.likesReceived || 0, label: 'Likes', icon: Heart},
+                                {value: photos.filter(p => p.isForSale).length, label: 'Listed', icon: Coins},
                             ].map((item) => (
                                 <div key={item.label} className="flex flex-col items-center justify-center">
                                     <span className="text-base font-extrabold tracking-tight">
@@ -303,7 +342,7 @@ export function PhotographerProfile({ userId, onClose, onSelectPhoto, onLikePhot
                                         background: 'var(--text-gold)',
                                     } : {}}
                                 >
-                                    Collections
+                                    Albums
                                 </button>
                             </div>
                         </div>
@@ -338,7 +377,7 @@ export function PhotographerProfile({ userId, onClose, onSelectPhoto, onLikePhot
                             </div>
                         )}
 
-                        {/* Collections Grid */}
+                        {/* Albums Grid */}
                         {activeTab === 'collections' && (
                             <div className="space-y-4">
                                 {selectedCollection ? (
@@ -348,20 +387,39 @@ export function PhotographerProfile({ userId, onClose, onSelectPhoto, onLikePhot
                                             className="text-xs flex items-center gap-1 mb-4 font-semibold hover:underline"
                                             style={{ color: 'var(--text-gold)' }}
                                         >
-                                            <ArrowLeft className="w-3 h-3" /> Back to Collections
+                                            <ArrowLeft className="w-3 h-3" /> Back to Albums
                                         </button>
                                         <h4 className="text-sm font-bold mb-1">{selectedCollection.title}</h4>
                                         <p className="text-xs text-[var(--text-muted)] mb-4">{selectedCollection.description || 'No description'}</p>
-                                        <div
-                                            className="py-12 text-center border-2 border-dashed rounded-[20px]"
-                                            style={{
-                                                borderColor: 'var(--border-color)',
-                                                background: 'var(--bg-surface)'
-                                            }}
-                                        >
-                                            <Folder className="w-8 h-8 text-[var(--text-muted)]/30 mx-auto mb-2" />
-                                            <p className="text-xs text-[var(--text-muted)]">Collection photos coming soon</p>
-                                        </div>
+                                        
+                                        {isLoadingAlbumPhotos ? (
+                                            <div className="flex justify-center py-12">
+                                                <Loader2 className="w-6 h-6 text-[var(--text-gold)] animate-spin" />
+                                            </div>
+                                        ) : albumPhotos.length === 0 ? (
+                                            <div
+                                                className="py-12 text-center border-2 border-dashed rounded-[20px]"
+                                                style={{
+                                                    borderColor: 'var(--border-color)',
+                                                    background: 'var(--bg-surface)'
+                                                }}
+                                            >
+                                                <Camera className="w-8 h-8 text-[var(--text-muted)]/30 mx-auto mb-2" />
+                                                <p className="text-xs text-[var(--text-muted)]">No photos in this album yet</p>
+                                            </div>
+                                        ) : (
+                                            <div className="coll-masonry">
+                                                {albumPhotos.map((photo, i) => (
+                                                    <PhotoCard
+                                                        key={photo.id}
+                                                        photo={photo}
+                                                        index={i}
+                                                        onSelect={onSelectPhoto}
+                                                        onLike={onLikePhoto}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 ) : collections.length === 0 ? (
                                     <div
@@ -372,7 +430,7 @@ export function PhotographerProfile({ userId, onClose, onSelectPhoto, onLikePhot
                                         }}
                                     >
                                         <FolderHeart className="w-8 h-8 text-[var(--text-muted)]/30 mx-auto mb-2" />
-                                        <p className="text-xs text-[var(--text-muted)]">No collections created yet</p>
+                                        <p className="text-xs text-[var(--text-muted)]">No albums created yet</p>
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-2 gap-3">
@@ -387,15 +445,15 @@ export function PhotographerProfile({ userId, onClose, onSelectPhoto, onLikePhot
                                                 }}
                                             >
                                                 <div className="aspect-square relative overflow-hidden bg-black/10">
-                                                    {col.cover_photo?.thumbnail_url ? (
-                                                        <img src={col.cover_photo.thumbnail_url} alt={col.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                                    {col.coverUrl || col.cover_url || col.cover_photo?.thumbnail_url ? (
+                                                        <img src={col.coverUrl || col.cover_url || col.cover_photo?.thumbnail_url} alt={col.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                                                     ) : (
                                                         <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)]/40">
                                                             <Folder className="w-8 h-8" />
                                                         </div>
                                                     )}
                                                     <div className="absolute bottom-2 left-2 bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded-full text-[10px] font-bold text-white">
-                                                        {col.photo_count || 0} items
+                                                        {col.itemCount ?? col.item_count ?? col.photo_count ?? 0} items
                                                     </div>
                                                 </div>
                                                 <div className="p-3">
@@ -420,6 +478,7 @@ export function PhotographerProfile({ userId, onClose, onSelectPhoto, onLikePhot
                     recipientAvatar={stats?.avatarUrl}
                 />
             )}
-        </motion.div>
+        </motion.div>,
+        document.body
     );
 }

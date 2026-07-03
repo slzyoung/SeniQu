@@ -204,6 +204,7 @@ class PhotosService {
             price?: number;
             currency?: string;
             locationName?: string;
+            isPublic?: boolean;
         },
         onProgress?: (progress: number) => void
     ): Promise<PhotoData> {
@@ -220,6 +221,7 @@ class PhotosService {
         if (metadata.price !== undefined) formData.append('price', String(metadata.price));
         if (metadata.currency) formData.append('currency', metadata.currency);
         if (metadata.locationName) formData.append('locationName', metadata.locationName);
+        if (metadata.isPublic !== undefined) formData.append('isPublic', String(metadata.isPublic));
 
 
         const response = await api.post('/photos/upload', formData, {
@@ -244,6 +246,45 @@ class PhotosService {
         const res = await apiGet<any[]>('/photos/collections/public', { params: { userId } });
         return this.unwrap<any[]>(res);
     }
+
+    /**
+     * Get photos inside a collection
+     */
+    async getCollectionPhotos(collectionId: string): Promise<PhotoData[]> {
+        const res = await apiGet<any[]>(`/photos/collections/${collectionId}/photos`);
+        return this.unwrap<PhotoData[]>(res);
+    }
+
+    /**
+     * Create a photo collection
+     */
+    async createCollection(dto: {
+        title: string;
+        description?: string;
+        theme?: string;
+        isPublic?: boolean;
+        coverPhotoId?: string;
+    }): Promise<any> {
+        const res = await apiPost<any>('/photos/collections', dto);
+        return this.unwrap<any>(res);
+    }
+
+    /**
+     * Add a photo to a collection
+     */
+    async addPhotoToCollection(collectionId: string, photoId: string): Promise<any> {
+        const res = await apiPost<any>(`/photos/collections/${collectionId}/photos/${photoId}`);
+        return this.unwrap<any>(res);
+    }
+
+    /**
+     * Delete a photo collection
+     */
+    async deleteCollection(collectionId: string): Promise<void> {
+        const res = await apiDelete<any>(`/photos/collections/${collectionId}`);
+        return this.unwrap<void>(res);
+    }
+
 
     /**
      * Create a photography request/commission

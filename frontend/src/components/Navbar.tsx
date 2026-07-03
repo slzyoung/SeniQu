@@ -39,7 +39,7 @@ export function Navbar() {
     { label: 'Profile', icon: User, path: ROUTES.USER_PROFILE },
   ] : [
     { label: 'About', path: '/#about' },
-    { label: 'Collections', path: '/#collections' },
+    { label: 'Collections', path: ROUTES.COLLECTIONS },
     { label: 'Artists', path: '/#artists' },
     { label: 'How It Works', path: '/#how-it-works' },
   ];
@@ -293,8 +293,15 @@ export function Navbar() {
                     ) : (
                       <a
                         href={item.path}
+                        onClick={(e) => {
+                          setMobileMenuOpen(false);
+                          if (!item.path.startsWith('/#')) {
+                            e.preventDefault();
+                            navigate(item.path);
+                          }
+                        }}
                         className="text-3xl font-serif text-theme-text hover:text-gold transition-colors block"
-                        onClick={() => setMobileMenuOpen(false)}>
+                      >
                         {item.label}
                       </a>
                     )}

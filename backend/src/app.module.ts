@@ -35,6 +35,8 @@ import { AiModule } from "./modules/ai/ai.module"
 import { PhotosModule } from "./photos/photos.module"
 import { MessagesModule } from "./messages/messages.module"
 import { ReelsModule } from "./reels/reels.module"
+import { AlbumsModule } from "./albums/albums.module"
+
 
 @Module({
     imports: [
@@ -110,6 +112,7 @@ import { ReelsModule } from "./reels/reels.module"
         PhotosModule,
         MessagesModule,
         ReelsModule,
+        AlbumsModule,
     ],
     controllers: [AppController, JwksController],
     providers: [

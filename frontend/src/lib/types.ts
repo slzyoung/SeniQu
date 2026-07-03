@@ -12,6 +12,7 @@ export interface User {
     avatarChangeCount?: number;
     profileVideoUrl?: string;
     profileVideoChangeCount?: number;
+    profileBackgroundUrl?: string;
     bio?: string;
     role: typeof ROLES[keyof typeof ROLES];
     // walletAddress removed
@@ -83,6 +84,12 @@ export interface Artwork {
     isBookmarked?: boolean;
     artworkType?: 'physical' | 'digital';
     poaCertificate?: any;
+    institutionId?: string;
+    region?: string;
+    primaryImageUrl?: string;
+    yearCreated?: number;
+    category?: string;
+    isForSale?: boolean;
 }
 
 export interface ArtworkImage {

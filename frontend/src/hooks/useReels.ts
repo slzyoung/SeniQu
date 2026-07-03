@@ -241,6 +241,14 @@ export function useCreateReelComment() {
     });
 }
 
+export function useReel(reelId: string, enabled = true) {
+    return useQuery({
+        queryKey: reelsKeys.reel(reelId),
+        queryFn: () => reelsService.getReel(reelId),
+        enabled: enabled && !!reelId,
+    });
+}
+
 /**
  * Hook to record watch/view metrics
  */
@@ -262,6 +270,7 @@ export function useDeleteReel() {
         mutationFn: (reelId: string) => reelsService.deleteReel(reelId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: reelsKeys.feed() });
+            queryClient.invalidateQueries({ queryKey: ['users'] });
             toast.success('Reel Deleted', 'Your Reel has been deleted.');
         },
         onError: () => {

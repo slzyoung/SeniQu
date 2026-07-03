@@ -48,6 +48,13 @@ To guarantee high performance and reliability during the sign-in/callback redire
 - **How**: During user sign-in or account creation in the Google OAuth callback, the `ensureEmbeddedWallet` and `createWithEmbeddedWallet` functions are invoked as un-awaited background promises.
 - **Fail-safe**: Any errors or API timeouts from Privy are safely captured and logged asynchronously, ensuring that the primary authentication thread immediately redirect the user to the frontend dashboard.
 
+### 2.2.2 Privy ID Sync & Mismatch Resolution (Stale/Mismatched Privy IDs)
+During database migrations, Privy App ID changes, or environment switches, the database might store a stale or mismatched `privy_id` (e.g. `did:privy:cmnwl...` from an old environment) for an existing user.
+- **Problem**: When the user authenticates, the backend attempts to query Privy for the stale ID. This fails with `Privy user not found`, preventing the user's session from syncing or working correctly on the frontend.
+- **Fix**: In the `ensureEmbeddedWallet` routine, the backend compares the database-stored `privyId` with the active, authenticated/created `privyUser.id` from Privy's SDK. If they mismatch or the database record is stale, the database `privy_id` is automatically overwritten and updated to the correct, newly verified Privy ID, allowing seamless synchronization and login.
+- **Stale Wallet Eviction**: To prevent a state mismatch where the user sees a stale wallet address in their dashboard (which they no longer own under the new Privy ID), updating the `privy_id` triggers an automatic eviction of all existing `privy_wallets` entries for that user. This allows `syncWallets` to safely auto-provision and link fresh Ethereum and Solana embedded wallets associated with the new Privy ID.
+
+
 
 ### 2.3 Wallet Creation & Linking
 When a user visits the **Wallet Page** (`/dashboard/wallet`):
@@ -118,6 +125,12 @@ The system supports multiple signature formats to ensure compatibility across al
 -   **Hex String**: Standard Ethereum (0x...) or some WalletConnect responses.
 -   **Object**: Some providers return `{ signature: ... }` objects.
 The `useManualWallet` hook includes robust logic to parse and normalize these into a consistent format for backend verification.
+
+### 3.4 EventEmitter Memory Leak Mitigation (Possible EventEmitter memory leak detected)
+Hot-reloading during development or unstable WebSocket connection retries from underlying WalletConnect/Reown AppKit packages can register redundant event listeners on the injected wallet provider objects, causing `MaxListenersExceededWarning` in the browser console.
+- **Problem**: Warnings like `Possible EventEmitter memory leak detected. 11 close listeners added.` clutter logs and could potentially impact performance.
+- **Fix**: In the frontend entrypoint (`frontend/src/index.tsx`), a global protection routine executes on load and during early initialization (using a interval/timer setup for late-injected extension providers). It scans and intercepts standard provider instances (such as `window.ethereum`, `window.solana`, `window.phantom?.solana`, and `window.solflare`), invoking `.setMaxListeners(100)` to safely permit developer/network reload patterns without warnings.
+
 
 ---
 

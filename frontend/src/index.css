@@ -24,6 +24,13 @@
   --glow-gold: rgba(201, 168, 76, 0.08);
   --glass-bg: rgba(255, 255, 255, 0.6);
   --glass-border: rgba(0, 0, 0, 0.06);
+
+  /* Unified Theme Variable Fallbacks */
+  --theme-surface: var(--bg-surface);
+  --theme-border: var(--border-color);
+  --theme-text: var(--text-primary);
+  --theme-muted: var(--text-muted);
+  --theme-elevated: var(--bg-elevated);
 }
 
 .dark {

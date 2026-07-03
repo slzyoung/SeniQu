@@ -155,7 +155,7 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
     return (
         <header
             className={`
-        sticky top-0 z-30
+        sticky top-0 z-[50]
         h-16 px-6
         bg-theme-surface/80 backdrop-blur-xl
         border-b border-theme-border
@@ -422,7 +422,7 @@ export function Header({ title, subtitle, actions, className = '' }: HeaderProps
                                                 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] dark:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)]
                                                 overflow-hidden
                                                 
-                                                fixed right-4 top-[76px] w-[260px]
+                                                fixed right-4 top-[64px] w-[280px] max-w-[calc(100vw-32px)]
                                                 md:absolute md:top-full md:right-0 md:mt-3 md:w-[280px]
                                                 rounded-[24px] ring-1 ring-black/5 dark:ring-white/5
                                             `}

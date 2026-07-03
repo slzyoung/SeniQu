@@ -91,6 +91,14 @@ export const reelsService = {
     },
 
     /**
+     * Get a single reel by ID
+     */
+    getReel: async (reelId: string): Promise<Reel> => {
+        const response = await api.get(`/reels/${reelId}`);
+        return response.data?.success !== undefined ? response.data.data : response.data;
+    },
+
+    /**
      * Get the user's saved/bookmarked reels
      */
     getSavedReels: async (page = 1, limit = 20): Promise<ReelsFeedResponse> => {
@@ -360,6 +368,31 @@ export const reelsService = {
             parentId,
         });
         return response.data?.success !== undefined ? response.data.data : response.data;
+    },
+
+    /**
+     * Get replies to a specific comment
+     */
+    getReplies: async (commentId: string, page = 1, limit = 20): Promise<{ data: ReelComment[]; meta: any }> => {
+        const response = await api.get(`/reels/comments/${commentId}/replies`, {
+            params: { page, limit },
+        });
+        return response.data?.success !== undefined ? response.data.data : response.data;
+    },
+
+    /**
+     * Toggle like on a comment
+     */
+    toggleCommentLike: async (commentId: string): Promise<{ liked: boolean }> => {
+        const response = await api.post(`/reels/comments/${commentId}/like`);
+        return response.data?.success !== undefined ? response.data.data : response.data;
+    },
+
+    /**
+     * Delete a comment
+     */
+    deleteComment: async (commentId: string): Promise<void> => {
+        await api.delete(`/reels/comments/${commentId}`);
     },
 
     /**

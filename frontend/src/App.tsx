@@ -11,6 +11,24 @@ import { AppRouter } from './routes';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { PrivyWrapper } from './components/providers/PrivyProvider';
 
+// Mitigate MaxListenersExceededWarning from injected Web3 browser extension providers
+if (typeof window !== 'undefined') {
+  const providers = [
+    (window as any).ethereum,
+    (window as any).phantom?.solana,
+    (window as any).solana,
+  ];
+  providers.forEach((provider) => {
+    if (provider && typeof provider.setMaxListeners === 'function') {
+      try {
+        provider.setMaxListeners(100);
+      } catch (err) {
+        console.debug('Failed to setMaxListeners on provider:', err);
+      }
+    }
+  });
+}
+
 
 export function App() {
   return (

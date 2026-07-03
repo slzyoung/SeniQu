@@ -35,7 +35,8 @@ import {
     Camera,
     Mail,
     Play,
-    GalleryHorizontal
+    GalleryHorizontal,
+    Library
 } from 'lucide-react';
 import { SidebarSection } from '../components/ui/Sidebar';
 import { ROUTES } from '../lib/constants';
@@ -62,16 +63,22 @@ export const userSidebarSections: SidebarSection[] = [
                 path: ROUTES.USER_GALLERY,
             },
             {
-                id: 'collections',
-                label: 'Photography Hub',
-                icon: <Camera className="w-5 h-5" />,
-                path: ROUTES.USER_COLLECTIONS,
+                id: 'public-collections',
+                label: 'Collections',
+                icon: <Library className="w-5 h-5" />,
+                path: ROUTES.COLLECTIONS,
             },
             {
                 id: 'nearby',
                 label: 'Nearby Museums',
                 icon: <MapPin className="w-5 h-5" />,
                 path: ROUTES.USER_NEARBY,
+            },
+            {
+                id: 'collections',
+                label: 'Photography Hub',
+                icon: <Camera className="w-5 h-5" />,
+                path: ROUTES.USER_COLLECTIONS,
             },
         ],
     },
@@ -543,6 +550,12 @@ export const publicSidebarSections: SidebarSection[] = [
                 label: 'Art Gallery',
                 icon: <GalleryHorizontal className="w-5 h-5" />,
                 path: ROUTES.GALLERY,
+            },
+            {
+                id: 'public-collections',
+                label: 'Collections',
+                icon: <Library className="w-5 h-5" />,
+                path: ROUTES.COLLECTIONS,
             },
             {
                 id: 'nearby',

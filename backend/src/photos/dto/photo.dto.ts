@@ -215,6 +215,11 @@ export class CreatePhotoCollectionDto {
     @IsOptional()
     @IsBoolean()
     isPublic?: boolean
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    @IsString()
+    coverPhotoId?: string
 }
 
 export class CreateCommentDto {

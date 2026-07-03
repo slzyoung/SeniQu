@@ -126,11 +126,50 @@ export default function AIDashboardPage() {
   const lastTapRef = useRef<{ id: string; time: number } | null>(null);
   const FEED_PAGE_SIZE = 8;
 
+  const [localLikedAIComments, setLocalLikedAIComments] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('liked_ai_comments');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const [aiReplyingTo, setAiReplyingTo] = useState<{ id: string; name: string } | null>(null);
+  const [expandedAIReplies, setExpandedAIReplies] = useState<Record<string, boolean>>({});
+  const aiCommentInputRef = useRef<HTMLInputElement>(null);
+
+
+
   const { data: commentsData, isLoading: commentsLoading } = useAIComments(
     selectedArtwork?.id || '',
     screen === 'edit'
   );
   const comments = commentsData || [];
+
+
+
+  const parsedAIComments = useMemo(() => {
+    const list = comments.map((c: any) => {
+      const match = c.content.match(/^\[reply:([^\]]+)\](.*)/);
+      if (match) {
+        return {
+          ...c,
+          parentId: match[1],
+          content: match[2].trim()
+        };
+      }
+      return {
+        ...c,
+        parentId: null
+      };
+    });
+
+    const topLevel = list.filter((c: any) => !c.parentId);
+    const replies = list.filter((c: any) => c.parentId);
+
+    return { topLevel, replies };
+  }, [comments]);
 
   const handleGenerate = useCallback(async () => {
     const cleanPrompt = sanitize(prompt).trim();
@@ -376,14 +415,18 @@ export default function AIDashboardPage() {
 
     const handleAddComment = async (e: React.FormEvent) => {
       e.preventDefault();
-      const text = commentContent.trim();
+      let text = commentContent.trim();
       if (!text) return;
+      if (aiReplyingTo) {
+        text = `[reply:${aiReplyingTo.id}] ${text}`;
+      }
       try {
         await addCommentMutation.mutateAsync({
           artworkId,
           content: text,
         });
         setCommentContent('');
+        setAiReplyingTo(null);
       } catch (err) {
         console.error('Add comment failed', err);
       }
@@ -532,7 +575,6 @@ export default function AIDashboardPage() {
               </button>
             </div>
           )}
-
           {/* Comments Section */}
           {(!isOwner || selectedArtwork.visibility === 'public') && (
             <div className="aic-comments">
@@ -541,7 +583,40 @@ export default function AIDashboardPage() {
                 Comments ({comments.length})
               </h3>
 
-              <div className="aic-comments__list">
+              {/* Quick Emoji Bar */}
+              <div className="flex items-center gap-1.5 pb-2 overflow-x-auto scrollbar-none border-b border-white/5 mb-3">
+                {['❤️', '🙌', '🔥', '😮', '👏', '😍', '💡', '🎨'].map(emoji => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => {
+                      setCommentContent(prev => prev + emoji);
+                      aiCommentInputRef.current?.focus();
+                    }}
+                    className="text-sm p-1 rounded hover:bg-white/5 transition-colors"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+
+              {/* Replying to indicator */}
+              {aiReplyingTo && (
+                <div className="flex items-center justify-between bg-gold/10 border border-gold/20 px-3 py-1.5 rounded-lg mb-3">
+                  <span className="text-[11px] text-gold font-medium">
+                    Replying to @{aiReplyingTo.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAiReplyingTo(null)}
+                    className="text-gray-400 hover:text-white"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+
+              <div className="aic-comments__list max-h-[350px] overflow-y-auto pr-1">
                 {commentsLoading ? (
                   <div className="aic-comments__loading">
                     <Loader2 className="w-5 h-5 animate-spin text-gold" />
@@ -549,43 +624,175 @@ export default function AIDashboardPage() {
                 ) : comments.length === 0 ? (
                   <p className="aic-comments__empty">No comments yet. Be the first to share your thoughts!</p>
                 ) : (
-                  comments.map((comment) => (
-                    <div key={comment.id} className="aic-comment-card">
-                      <img
-                        src={comment.user?.avatar_url || 'https://ui-avatars.com/api/?name=U'}
-                        alt={comment.user?.display_name}
-                        className="aic-comment-card__avatar cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => {
-                          const authorId = comment.user?.id;
-                          if (authorId) navigate(`/profile/${authorId}`);
-                        }}
-                      />
-                      <div className="aic-comment-card__body">
-                        <div className="aic-comment-card__head">
-                          <span 
-                            className="aic-comment-card__username cursor-pointer hover:underline"
+                  parsedAIComments.topLevel.map((comment) => {
+                    const isCommentLiked = !!localLikedAIComments[comment.id];
+                    const likes = isCommentLiked ? 1 : 0;
+                    const commentReplies = parsedAIComments.replies.filter((r: any) => r.parentId === comment.id);
+
+                    return (
+                      <div key={comment.id} className="aic-comment-thread mb-3 border-b border-white/5 pb-3 last:border-0 last:pb-0">
+                        {/* Main Comment */}
+                        <div className="aic-comment-card relative flex items-start gap-2.5 p-2 rounded-xl bg-white/5 hover:bg-white/[0.08] transition-all">
+                          <img
+                            src={comment.user?.avatar_url || 'https://ui-avatars.com/api/?name=U'}
+                            alt={comment.user?.display_name}
+                            className="aic-comment-card__avatar cursor-pointer hover:opacity-80 transition-opacity"
                             onClick={() => {
                               const authorId = comment.user?.id;
                               if (authorId) navigate(`/profile/${authorId}`);
                             }}
+                          />
+                          <div className="aic-comment-card__body flex-1 min-w-0 bg-transparent p-0">
+                            <div className="aic-comment-card__head">
+                              <span 
+                                className="aic-comment-card__username cursor-pointer hover:underline text-xs font-bold text-white"
+                                onClick={() => {
+                                  const authorId = comment.user?.id;
+                                  if (authorId) navigate(`/profile/${authorId}`);
+                                }}
+                              >
+                                {comment.user?.display_name}
+                              </span>
+                              <span className="aic-comment-card__date text-[9px] text-gray-400">
+                                {new Date(comment.created_at).toLocaleDateString()}
+                              </span>
+                            </div>
+                            <p className="aic-comment-card__text text-xs text-gray-205 mt-1 pr-6 leading-relaxed whitespace-pre-wrap break-words">{comment.content}</p>
+                            
+                            {/* Action Row */}
+                            <div className="flex items-center gap-3 mt-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAiReplyingTo({ id: comment.id, name: comment.user?.display_name || 'User' });
+                                  setCommentContent(`@${comment.user?.display_name || 'User'} `);
+                                  aiCommentInputRef.current?.focus();
+                                }}
+                                className="text-[10px] font-bold text-gold uppercase tracking-wider hover:opacity-85 transition-opacity"
+                              >
+                                Reply
+                              </button>
+                              {likes > 0 && (
+                                <span className="text-[10px] text-gray-400 font-medium">{likes} {likes === 1 ? 'like' : 'likes'}</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Heart Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const commentId = comment.id;
+                              const isLiked = !localLikedAIComments[commentId];
+                              const updatedLiked = { ...localLikedAIComments, [commentId]: isLiked };
+                              setLocalLikedAIComments(updatedLiked);
+                              localStorage.setItem('liked_ai_comments', JSON.stringify(updatedLiked));
+                            }}
+                            className={`shrink-0 p-1 rounded-full hover:bg-white/5 transition-colors ${isCommentLiked ? 'text-red-500' : 'text-gray-400 hover:text-red-500'}`}
                           >
-                            {comment.user?.display_name}
-                          </span>
-                          <span className="aic-comment-card__date">
-                            {new Date(comment.created_at).toLocaleDateString()}
-                          </span>
+                            <Heart className={`w-3.5 h-3.5 ${isCommentLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                          </button>
                         </div>
-                        <p className="aic-comment-card__text">{comment.content}</p>
+
+                        {/* Nested Replies */}
+                        {commentReplies.length > 0 && (
+                          <div className="ml-9 mt-2 space-y-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExpandedAIReplies(prev => ({ ...prev, [comment.id]: !prev[comment.id] }));
+                              }}
+                              className="flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-white transition-colors"
+                            >
+                              <span className="w-4 h-[1px] bg-gray-400/30 inline-block mr-1"></span>
+                              {expandedAIReplies[comment.id] ? `Hide replies` : `View replies (${commentReplies.length})`}
+                            </button>
+
+                            {expandedAIReplies[comment.id] && (
+                              <div className="space-y-2">
+                                {commentReplies.map((reply) => {
+                                  const isReplyLiked = !!localLikedAIComments[reply.id];
+                                  const replyLikes = isReplyLiked ? 1 : 0;
+
+                                  return (
+                                    <div key={reply.id} className="aic-comment-card relative flex items-start gap-2.5 p-2 rounded-xl bg-white/3 hover:bg-white/5 transition-all">
+                                      <img
+                                        src={reply.user?.avatar_url || 'https://ui-avatars.com/api/?name=U'}
+                                        alt={reply.user?.display_name}
+                                        className="aic-comment-card__avatar cursor-pointer hover:opacity-80 transition-opacity"
+                                        onClick={() => {
+                                          const authorId = reply.user?.id;
+                                          if (authorId) navigate(`/profile/${authorId}`);
+                                        }}
+                                      />
+                                      <div className="aic-comment-card__body flex-1 min-w-0 bg-transparent p-0">
+                                        <div className="aic-comment-card__head">
+                                          <span 
+                                            className="aic-comment-card__username cursor-pointer hover:underline text-[11px] font-bold text-white"
+                                            onClick={() => {
+                                              const authorId = reply.user?.id;
+                                              if (authorId) navigate(`/profile/${authorId}`);
+                                            }}
+                                          >
+                                            {reply.user?.display_name}
+                                          </span>
+                                          <span className="aic-comment-card__date text-[8px] text-gray-400">
+                                            {new Date(reply.created_at).toLocaleDateString()}
+                                          </span>
+                                        </div>
+                                        <p className="aic-comment-card__text text-xs text-gray-300 mt-0.5 pr-6 leading-relaxed whitespace-pre-wrap break-words">{reply.content}</p>
+                                        
+                                        {/* Action Row */}
+                                        <div className="flex items-center gap-3 mt-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setAiReplyingTo({ id: comment.id, name: reply.user?.display_name || 'User' });
+                                              setCommentContent(`@${reply.user?.display_name || 'User'} `);
+                                              aiCommentInputRef.current?.focus();
+                                            }}
+                                            className="text-[9px] font-bold text-gold uppercase tracking-wider hover:opacity-85 transition-opacity"
+                                          >
+                                            Reply
+                                          </button>
+                                          {replyLikes > 0 && (
+                                            <span className="text-[9px] text-gray-400 font-medium">{replyLikes} {replyLikes === 1 ? 'like' : 'likes'}</span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Heart Button */}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const replyId = reply.id;
+                                          const isLiked = !localLikedAIComments[replyId];
+                                          const updatedLiked = { ...localLikedAIComments, [replyId]: isLiked };
+                                          setLocalLikedAIComments(updatedLiked);
+                                          localStorage.setItem('liked_ai_comments', JSON.stringify(updatedLiked));
+                                        }}
+                                        className={`shrink-0 p-1 rounded-full hover:bg-white/5 transition-colors ${isReplyLiked ? 'text-red-500' : 'text-gray-400 hover:text-red-500'}`}
+                                      >
+                                        <Heart className={`w-3 h-3 ${isReplyLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
 
               <form className="aic-comments__form" onSubmit={handleAddComment}>
                 <input
+                  ref={aiCommentInputRef}
                   type="text"
-                  placeholder="Add a comment..."
+                  placeholder={aiReplyingTo ? `Write a reply...` : "Add a comment..."}
                   className="aic-comments__input"
                   value={commentContent}
                   onChange={(e) => setCommentContent(e.target.value)}
