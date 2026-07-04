@@ -55,6 +55,7 @@
         "git-filter-repo": "^0.0.30",
         "glob": "^10.5.0",
         "google-auth-library": "^10.5.0",
+        "heic-convert": "^2.1.0",
         "helmet": "^7.1.0",
         "install": "^0.13.0",
         "joi": "^17.13.3",
@@ -68,7 +69,6 @@
         "rxjs": "^7.8.1",
         "sanitize-html": "^2.11.0",
         "sharp": "^0.34.5",
-        "heic-convert": "^2.1.0",
         "tweetnacl": "^1.0.3",
         "uuid": "^9.0.1",
         "winston": "^3.13.1"
@@ -86,6 +86,7 @@
         "@types/node": "^20.14.11",
         "@types/nodemailer": "^8.0.0",
         "@types/passport-jwt": "^4.0.1",
+        "@types/phoenix": "^1.6.7",
         "@typescript-eslint/eslint-plugin": "^7.16.1",
         "@typescript-eslint/parser": "^7.16.1",
         "eslint": "^8.56.0",
