@@ -15,6 +15,9 @@ services:
       - "${PORT:-3001}:${PORT:-3001}"
     env_file:
       - .env.tencent
+    volumes:
+      - ./private.pem:/app/private.pem:ro
+      - ./public.pem:/app/public.pem:ro
     environment:
       - NODE_ENV=production
       - PORT=${PORT:-3001}

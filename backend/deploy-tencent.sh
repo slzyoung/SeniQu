@@ -105,9 +105,10 @@ deploy_to_server() {
     
     log_info "Deploying to Tencent Cloud server: ${SERVER_HOST}"
     
-    # Copy env file to server
-    log_info "Uploading environment configuration..."
-    scp .env.tencent "${SERVER_USER}@${SERVER_HOST}:/opt/seniqu/.env.tencent"
+    # Copy env file and keys to server
+    log_info "Uploading environment configuration and PEM keys..."
+    ssh "${SERVER_USER}@${SERVER_HOST}" "mkdir -p /opt/seniqu"
+    scp .env.tencent private.pem public.pem "${SERVER_USER}@${SERVER_HOST}:/opt/seniqu/"
     
     # Deploy via SSH
     ssh "${SERVER_USER}@${SERVER_HOST}" << ENDSSH
@@ -129,6 +130,8 @@ deploy_to_server() {
             --restart unless-stopped \
             -p ${HOST_PORT}:${CONTAINER_PORT} \
             --env-file /opt/seniqu/.env.tencent \
+            -v /opt/seniqu/private.pem:/app/private.pem:ro \
+            -v /opt/seniqu/public.pem:/app/public.pem:ro \
             -e NODE_ENV=production \
             -e PORT=${CONTAINER_PORT} \
             -e NODE_OPTIONS="--max-old-space-size=512" \
