@@ -1,0 +1,53 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+dist-server
+
+# Environment files (injected at runtime)
+.env
+.env.*
+*.env
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.sublime-workspace
+
+# Tests
+coverage
+.nyc_output
+test
+
+# Docs & misc
+README.md
+CHANGELOG.md
+LICENSE
+*.md
+
+# Scripts (development only)
+scripts
+
+# PEM files (injected via env vars)
+*.pem
+
+# Supabase local config
+supabase
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Render config (not needed for Tencent)
+render.yaml
+.env.render
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
