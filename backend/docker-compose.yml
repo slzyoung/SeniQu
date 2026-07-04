@@ -7,8 +7,8 @@ version: '3.8'
 services:
   seniqu-backend:
     build:
-      context: ..
-      dockerfile: backend/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     container_name: seniqu-backend
     restart: unless-stopped
     ports:

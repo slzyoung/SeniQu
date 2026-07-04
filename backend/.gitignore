@@ -46,7 +46,6 @@ coverage
 *.env.tencent.example
 
 # NestJS
-nest-cli.json
 webpack.config.js
 # Misc
 .coverage

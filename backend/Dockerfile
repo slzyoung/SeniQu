@@ -10,7 +10,7 @@ WORKDIR /app
 # Install build tools for native modules (sharp, bcryptjs, etc.)
 RUN apk add --no-cache python3 make g++ vips-dev
 
-COPY backend/package.json backend/package-lock.json ./
+COPY package.json package-lock.json ./
 RUN npm ci --only=production && npm cache clean --force
 
 # Stage 2: Build TypeScript
@@ -19,10 +19,10 @@ WORKDIR /app
 
 RUN apk add --no-cache python3 make g++ vips-dev
 
-COPY backend/package.json backend/package-lock.json backend/tsconfig.json backend/nest-cli.json ./
+COPY package.json package-lock.json tsconfig.json nest-cli.json ./
 RUN npm ci
 
-COPY backend/src/ ./src/
+COPY src/ ./src/
 RUN npm run build
 
 # Stage 3: Production runtime
@@ -39,7 +39,7 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy compiled dist from builder stage
 COPY --from=builder /app/dist ./dist
 # Copy package.json for metadata
-COPY backend/package.json ./
+COPY package.json ./
 
 # Set proper ownership
 RUN chown -R nestjs:nodejs /app
