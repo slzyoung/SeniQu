@@ -28,7 +28,11 @@ export const configuration = () => ({
         appId: process.env.PRIVY_APP_ID,
         appSecret: process.env.PRIVY_APP_SECRET,
         verificationKey: process.env.PRIVY_VERIFICATION_KEY,
-        signingKey: process.env.PRIVY_SIGNING_KEY,
+        signingKey: process.env.PRIVY_SIGNING_KEY || (
+            (process.env.PRIVY_SIGNING_KEY_1 || "") +
+            (process.env.PRIVY_SIGNING_KEY_2 || "") +
+            (process.env.PRIVY_SIGNING_KEY_3 || "")
+        ) || undefined,
     },
 
     // Google OAuth
@@ -120,6 +124,9 @@ export const validationSchema = Joi.object({
     PRIVY_APP_ID: Joi.string().required(),
     PRIVY_APP_SECRET: Joi.string().required(),
     PRIVY_SIGNING_KEY: Joi.string().optional(),
+    PRIVY_SIGNING_KEY_1: Joi.string().optional(),
+    PRIVY_SIGNING_KEY_2: Joi.string().optional(),
+    PRIVY_SIGNING_KEY_3: Joi.string().optional(),
     PRIVY_VERIFICATION_KEY: Joi.string().optional(),
 
     // Google
