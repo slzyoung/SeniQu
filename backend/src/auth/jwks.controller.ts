@@ -19,7 +19,17 @@ export class JwksController {
             const envKey = this.configService.get<string>("PRIVY_PUBLIC_KEY")
             if (envKey) {
                 // Remove surrounding quotes if they exist
-                let key = envKey.replace(/^"|"$/g, '')
+                let key = envKey.replace(/^"|"$/g, '').trim()
+                
+                // Decode base64 if key doesn't start with -----BEGIN
+                if (!key.startsWith('-----BEGIN') && /^[a-zA-Z0-9+/=\s]+$/.test(key)) {
+                    try {
+                        key = Buffer.from(key, 'base64').toString('utf-8').trim()
+                    } catch (e: any) {
+                        this.logger.error(`Failed to decode base64 PRIVY_PUBLIC_KEY: ${e.message}`)
+                    }
+                }
+
                 // Handle both literal newlines and escaped "\n" strings
                 publicKeyPem = key.includes("\\n")
                     ? key.replace(/\\n/g, "\n")
