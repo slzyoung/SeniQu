@@ -599,6 +599,7 @@ export default function CollectionsPage() {
     const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
     const [followedInstitutions, setFollowedInstitutions] = useState<Record<string, boolean>>({});
     const [activeModalTab, setActiveModalTab] = useState<'info' | 'security'>('info');
+    const [isTransitioning, setIsTransitioning] = useState(false);
 
     // Breadcrumb state navigation
     const [activeCity, setActiveCity] = useState<{ name: string; key: string } | null>(null);
@@ -984,7 +985,31 @@ export default function CollectionsPage() {
     };
 
     return (
-        <PageContainer className="max-w-7xl mx-auto pt-4 pb-20 px-4 bg-theme-bg min-h-screen text-theme-text transition-colors duration-300">
+        <PageContainer className="max-w-7xl mx-auto pt-4 pb-20 px-4 bg-theme-bg min-h-screen text-theme-text transition-colors duration-300 relative">
+            <AnimatePresence>
+                {isTransitioning && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-theme-bg/80 backdrop-blur-md z-50 flex flex-col items-center justify-center gap-3"
+                    >
+                        <div className="relative w-12 h-12 flex items-center justify-center">
+                            <div className="absolute inset-0 border-4 border-gold/20 rounded-full" />
+                            <div className="absolute inset-0 border-4 border-t-gold rounded-full animate-spin" />
+                        </div>
+                        <motion.span
+                            initial={{ opacity: 0, y: 5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.1 }}
+                            className="text-xs font-serif font-bold text-gold uppercase tracking-widest"
+                        >
+                            Opening Collection...
+                        </motion.span>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <SEOHead
                 title="Regional Museum & Heritage Collections"
                 description="Preserved historical artifacts and digital art collections from Indonesian cities, powered securely by Cloudflare R2 CDN."
@@ -1124,18 +1149,27 @@ export default function CollectionsPage() {
                                     {Object.entries(instGroups).map(([instName, group]) => (
                                         <div
                                             key={instName}
-                                            onClick={() => {
+                                            onClick={async () => {
                                                 addRecentSearch(searchQuery);
+                                                setIsTransitioning(true);
+                                                
+                                                // Clear search queries to immediately exit search state view
+                                                setSearchQuery('');
+                                                setDebouncedQuery('');
+
                                                 const primaryArt = group.list[0];
                                                 if (primaryArt) {
                                                     const regKey = (primaryArt.region || '').toLowerCase();
                                                     const matchedCity = CITIES.find(c => c.key === regKey || (c.key === 'dki jakarta' && regKey.includes('jakarta')) || (c.key === 'jawa tengah' && regKey.includes('tengah')));
                                                     if (matchedCity) {
+                                                        // Brief async delay for smooth visual transition
+                                                        await new Promise(resolve => setTimeout(resolve, 200));
                                                         navigate(`/collections/${matchedCity.key.replace(/\s+/g, '-')}?museum=${encodeURIComponent(instName)}`);
                                                         const subD = getInstitutionSubDistrict(group.info, matchedCity.key);
                                                         if (subD) setActiveSubDistrict(subD);
                                                     }
                                                 }
+                                                setIsTransitioning(false);
                                             }}
                                             className="bg-theme-surface border border-theme-border rounded-xl p-4 shadow-md relative overflow-hidden transition-all duration-300 hover:border-gold/30 hover:scale-[1.01] cursor-pointer group"
                                         >
@@ -1339,7 +1373,12 @@ export default function CollectionsPage() {
                                         return (
                                             <div
                                                 key={instName}
-                                                onClick={() => navigate(`/collections/${cityId}?museum=${encodeURIComponent(instName)}`)}
+                                                onClick={async () => {
+                                                    setIsTransitioning(true);
+                                                    await new Promise(resolve => setTimeout(resolve, 200));
+                                                    navigate(`/collections/${cityId}?museum=${encodeURIComponent(instName)}`);
+                                                    setIsTransitioning(false);
+                                                }}
                                                 className="bg-theme-surface border border-theme-border rounded-xl overflow-hidden shadow-md cursor-pointer hover:border-gold/30 hover:scale-[1.01] transition-all duration-300 flex flex-col group h-[200px]"
                                             >
                                                 <div className="relative h-[65%] w-full bg-black overflow-hidden">
@@ -1494,8 +1533,12 @@ export default function CollectionsPage() {
                                 </h3>
                             </div>
                             <CurationCarousel 
-                                onSelectCuration={(curation) => {
+                                toughness-optimized="true"
+                                onSelectCuration={async (curation) => {
+                                    setIsTransitioning(true);
+                                    await new Promise(resolve => setTimeout(resolve, 200));
                                     navigate(`/collections/${curation.cityKey.replace(/\s+/g, '-')}?museum=${encodeURIComponent(curation.institutionName)}`);
+                                    setIsTransitioning(false);
                                 }} 
                             />
                         </div>
