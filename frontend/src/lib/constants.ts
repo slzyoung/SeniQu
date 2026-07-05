@@ -6,7 +6,7 @@ const getApiBaseUrl = () => {
     if (typeof window !== 'undefined') {
         const hostname = window.location.hostname;
         if (hostname === 'seniqu.art' || hostname === 'www.seniqu.art' || hostname === 'seniquapp.netlify.app') {
-            return 'https://seniquwebapp-kyxx.onrender.com/api/v1';
+            return 'https://api.seniqu.art/api/v1';
         }
     }
     return 'http://localhost:3001/api/v1';

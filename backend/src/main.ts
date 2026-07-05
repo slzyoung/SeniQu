@@ -94,7 +94,7 @@ async function bootstrap() {
         "https://seniqu.art",
         "https://www.seniqu.art",
         "https://rpc.ankr.com/solana",
-        "https://seniquwebapp-kyxx.onrender.com",
+        "https://api.seniqu.art",
         "https://solana-mainnet.rpc.extrnode.com/",
     ]
 
