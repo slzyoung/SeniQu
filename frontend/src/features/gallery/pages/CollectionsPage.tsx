@@ -1060,7 +1060,7 @@ export default function CollectionsPage() {
                             <ChevronRight className="w-3.5 h-3.5 text-theme-muted/50" />
                             <button
                                 onClick={() => {
-                                    setActiveInstitution(null);
+                                    navigate(`/collections/${activeCity!.key.replace(/\s+/g, '-')}`);
                                 }}
                                 className={`hover:text-gold transition-colors ${!activeInstitution ? 'text-gold' : ''}`}
                             >
@@ -1126,13 +1126,12 @@ export default function CollectionsPage() {
                                             key={instName}
                                             onClick={() => {
                                                 addRecentSearch(searchQuery);
-                                                setActiveInstitution({ name: instName, info: group.info, list: group.list });
                                                 const primaryArt = group.list[0];
                                                 if (primaryArt) {
                                                     const regKey = (primaryArt.region || '').toLowerCase();
                                                     const matchedCity = CITIES.find(c => c.key === regKey || (c.key === 'dki jakarta' && regKey.includes('jakarta')) || (c.key === 'jawa tengah' && regKey.includes('tengah')));
                                                     if (matchedCity) {
-                                                        navigate(`/collections/${matchedCity.key.replace(/\s+/g, '-')}`);
+                                                        navigate(`/collections/${matchedCity.key.replace(/\s+/g, '-')}?museum=${encodeURIComponent(instName)}`);
                                                         const subD = getInstitutionSubDistrict(group.info, matchedCity.key);
                                                         if (subD) setActiveSubDistrict(subD);
                                                     }
@@ -1340,7 +1339,7 @@ export default function CollectionsPage() {
                                         return (
                                             <div
                                                 key={instName}
-                                                onClick={() => setActiveInstitution({ name: instName, info: group.info, list: group.list })}
+                                                onClick={() => navigate(`/collections/${cityId}?museum=${encodeURIComponent(instName)}`)}
                                                 className="bg-theme-surface border border-theme-border rounded-xl overflow-hidden shadow-md cursor-pointer hover:border-gold/30 hover:scale-[1.01] transition-all duration-300 flex flex-col group h-[200px]"
                                             >
                                                 <div className="relative h-[65%] w-full bg-black overflow-hidden">
