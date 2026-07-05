@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Heart, MessageCircle, Share2, Volume2, VolumeX, Play, Pause, Trash2, Bookmark, MoreVertical, Music, X } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Volume2, VolumeX, Play, Pause, Trash2, Bookmark, MoreVertical, Music, X, Plus } from 'lucide-react';
 import { useToggleReelLike, useToggleReelReshare, useRecordReelView, useDeleteReel } from '../../../hooks/useReels';
 import { useAuthStore } from '../../../stores/useAuthStore';
 import { useToast } from '../../../stores/useNotificationStore';
@@ -33,9 +33,10 @@ interface Props {
     onOpenComments: () => void;
     onShare: () => void;
     observerRef: (el: HTMLDivElement | null) => void;
+    onCreateClick?: () => void;
 }
 
-export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpenComments, onShare, observerRef }: Props) {
+export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpenComments, onShare, observerRef, onCreateClick }: Props) {
     const navigate = useNavigate();
     const videoRef = useRef<HTMLVideoElement>(null);
     const audioTrackRef = useRef<HTMLAudioElement | null>(null);
