@@ -14,11 +14,11 @@ const globalAny: any = globalThis;
 // Initialize strictly once
 if (!globalAny._seniquSolanaConnectors) {
     try {
-        console.log('[WalletConnectors] Initializing Solana connectors...');
+        if (import.meta.env.DEV) console.log('[WalletConnectors] Initializing Solana connectors...');
         globalAny._seniquSolanaConnectors = toSolanaWalletConnectors({
             shouldAutoConnect: false, // EXPLICITLY FALSE to prevent Solflare/Phantom popups
         });
-        console.log('[WalletConnectors] Solana connectors initialized successfully.');
+        if (import.meta.env.DEV) console.log('[WalletConnectors] Solana connectors initialized successfully.');
     } catch (error: any) {
         // Ignore "WalletConnect Core is already initialized" error
         // This happens during HMR or strict mode double-mount

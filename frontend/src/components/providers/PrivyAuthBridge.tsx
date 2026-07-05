@@ -60,7 +60,7 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
 
         // Stop after max retries to prevent infinite loops (429s)
         if (failedAttemptsRef.current >= MAX_RETRIES) {
-            console.warn(`[PrivyAuthBridge] Max retries (${MAX_RETRIES}) exceeded for token exchange. Stop.`);
+            if (import.meta.env.DEV) console.warn(`[PrivyAuthBridge] Max retries (${MAX_RETRIES}) exceeded for token exchange. Stop.`);
             return;
         }
 
@@ -70,12 +70,12 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
             const privyToken = await getAccessToken();
 
             if (!privyToken) {
-                console.warn('[PrivyAuthBridge] No Privy access token available');
+                if (import.meta.env.DEV) console.warn('[PrivyAuthBridge] No Privy access token available');
                 failedAttemptsRef.current += 1;
                 return;
             }
 
-            console.log(`[PrivyAuthBridge] Exchanging Privy token for backend JWT (Attempt ${failedAttemptsRef.current + 1}/${MAX_RETRIES})...`);
+            if (import.meta.env.DEV) console.log(`[PrivyAuthBridge] Exchanging Privy token for backend JWT (Attempt ${failedAttemptsRef.current + 1}/${MAX_RETRIES})...`);
 
             // 1. Ensure Embedded Wallet Exists
             let embeddedWalletAddress = user?.wallet?.address;
@@ -87,14 +87,14 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
 
                 if (linkedWallet) {
                     embeddedWalletAddress = (linkedWallet as any).address;
-                    console.log('[PrivyAuthBridge] Found wallet in linked accounts:', embeddedWalletAddress);
+                    if (import.meta.env.DEV) console.log('[PrivyAuthBridge] Found wallet in linked accounts:', embeddedWalletAddress);
                 } else {
                     // Try to auto-create if missing
-                    console.log('[PrivyAuthBridge] No embedded wallet found. Attempting to create one...');
+                    if (import.meta.env.DEV) console.log('[PrivyAuthBridge] No embedded wallet found. Attempting to create one...');
                     try {
                         const wallet = await createWallet();
                         embeddedWalletAddress = wallet.address;
-                        console.log('[PrivyAuthBridge] Embedded wallet created:', embeddedWalletAddress);
+                        if (import.meta.env.DEV) console.log('[PrivyAuthBridge] Embedded wallet created:', embeddedWalletAddress);
                     } catch (wErr: any) {
                         console.error('[PrivyAuthBridge] Failed to create embedded wallet:', wErr);
                         // Continue anyway - backend can handle it
@@ -112,7 +112,7 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
             // If the response user has no wallets, but we found one locally, we should assume the backend is just catching up
             // and we should keep the local knowledge or force a patch.
             if ((!response.user.wallets || response.user.wallets.length === 0) && embeddedWalletAddress) {
-                console.warn('[PrivyAuthBridge] Backend returned user without wallets, but local wallet exists. Patching local state.');
+                if (import.meta.env.DEV) console.warn('[PrivyAuthBridge] Backend returned user without wallets, but local wallet exists. Patching local state.');
                 // We construct a temporary wallet object for the UI
                 if (!response.user.wallets) response.user.wallets = [];
                 response.user.wallets.push({
@@ -130,7 +130,7 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
             lastExchangedPrivyIdRef.current = user?.id || null;
             failedAttemptsRef.current = 0; // Reset on success
 
-            console.log('[PrivyAuthBridge] Token exchange successful, user:', response.user.id);
+            if (import.meta.env.DEV) console.log('[PrivyAuthBridge] Token exchange successful, user:', response.user.id);
 
             // Redirect ONLY from auth-specific pages (landing, login, callback)
             // Do NOT redirect from public content pages like /gallery/nearby, /marketplace, etc.
@@ -184,7 +184,7 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
         if (!ready) return;
 
         if (!authenticated && backendAuthenticated && wasPrivyLoginRef.current) {
-            console.log('[PrivyAuthBridge] Privy logged out.');
+            if (import.meta.env.DEV) console.log('[PrivyAuthBridge] Privy logged out.');
             // FIX: Auto-logout disabled to prevent session instability.
         }
     }, [ready, authenticated, backendAuthenticated, storeLogout]);
@@ -201,7 +201,7 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
         if (!backendAuthenticated) {
             // If backend logs out (user clicks Sign Out), ensure Privy also logs out
             if (authenticated) {
-                console.warn('[PrivyAuthBridge] Backend logged out. SKIPPING Privy logout to prevent loop.');
+                if (import.meta.env.DEV) console.warn('[PrivyAuthBridge] Backend logged out. SKIPPING Privy logout to prevent loop.');
 
                 // FIX: Disable backend -> Privy logout sync.
                 // If the backend session expires (401), we don't want to kill the wallet connection immediately.
@@ -227,19 +227,19 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
             // Only fetch if backend says we are authenticated
             if (!backendAuthenticated) return undefined;
 
-            console.log("[PrivyAuthBridge] Fetching custom token for hydration...");
+            if (import.meta.env.DEV) console.log("[PrivyAuthBridge] Fetching custom token for hydration...");
             // @ts-ignore
             window.__HAS_ATTEMPTED_PRIVY_HYDRATION = true; // Mark as attempted
 
             const { privyToken } = await authService.getPrivySyncToken();
 
             if (privyToken) {
-                console.log("[PrivyAuthBridge] Hydration token received.");
+                if (import.meta.env.DEV) console.log("[PrivyAuthBridge] Hydration token received.");
                 return privyToken;
             }
             return undefined;
         } catch (error) {
-            console.error("[PrivyAuthBridge] Failed to fetch hydration token:", error);
+            if (import.meta.env.DEV) console.error("[PrivyAuthBridge] Failed to fetch hydration token:", error);
             // Don't disable custom auth immediately on network error, but prevent loops
             // disableCustomAuth(); 
             return undefined;
@@ -253,7 +253,7 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
         const isBadRequest = error?.message?.includes('400') || error?.status === 400;
 
         if (isBadRequest) {
-            console.warn("[PrivyAuthBridge] Critical Auth Error (400). Disabling hydration PERMANENTLY for this session.");
+            if (import.meta.env.DEV) console.warn("[PrivyAuthBridge] Critical Auth Error (400). Disabling hydration PERMANENTLY for this session.");
             disableCustomAuth();
         } else {
             // For other errors, just log it. Don't disable yet.
@@ -293,7 +293,7 @@ export function PrivyAuthBridge({ children }: PrivyAuthBridgeProps) {
             // Add a small delay/debounce to avoid conflict with initial login
             const timer = setTimeout(() => {
                 createWallet().then(wallet => {
-                    console.log("[PrivyAuthBridge] Auto-created wallet:", wallet.address);
+                    if (import.meta.env.DEV) console.log("[PrivyAuthBridge] Auto-created wallet:", wallet.address);
                 }).catch(() => {
                     // console.error("[PrivyAuthBridge] Auto-create failed:", err);
                 });

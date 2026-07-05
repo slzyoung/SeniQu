@@ -313,7 +313,7 @@ class AuthService {
         const validatedData = validationResult.data;
 
         try {
-            console.log('[AuthService] Calling login API...');
+            if (import.meta.env.DEV) console.log('[AuthService] Calling login API...');
             const rawResponse = await apiPost<any>(API_ENDPOINTS.AUTH_LOGIN, validatedData, {
                 headers: getSecurityHeaders(),
             });
@@ -322,7 +322,7 @@ class AuthService {
 
             // Check if OTP step is required
             if (response?.requiresOtp) {
-                console.log('[AuthService] OTP required, email:', response.email);
+                if (import.meta.env.DEV) console.log('[AuthService] OTP required, email:', response.email);
                 return response as OtpRequiredResponse;
             }
 
@@ -377,7 +377,7 @@ class AuthService {
 
             // Check if verification step is required
             if (response?.requiresVerification) {
-                console.log('[AuthService] Email verification required');
+                if (import.meta.env.DEV) console.log('[AuthService] Email verification required');
                 resetRateLimit(`auth:register:${credentials.email}`);
                 return response as VerificationRequiredResponse;
             }
@@ -556,7 +556,7 @@ class AuthService {
             return { privyToken: data.privyToken || null };
         } catch (error) {
             // detailed logging for debug
-            console.warn('[Helper] Failed to get Privy sync token', error);
+            if (import.meta.env.DEV) console.warn('[Helper] Failed to get Privy sync token', error);
             return { privyToken: null };
         }
     }
