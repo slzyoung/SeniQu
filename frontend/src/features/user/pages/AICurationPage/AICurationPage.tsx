@@ -93,7 +93,7 @@ export function AICurationPage() {
     const [isPlayingSimulation, setIsPlayingSimulation] = useState(false);
     const [isGeneratingSimulation, setIsGeneratingSimulation] = useState(false);
     const [simulationProgress, setSimulationProgress] = useState(0);
-    const [showSimulationOverlay, setShowSimulationOverlay] = useState(true);
+
 
     // Interactive Brush Reveal Mode state
     const [isBrushMode, setIsBrushMode] = useState(false);
@@ -111,7 +111,7 @@ export function AICurationPage() {
     });
     const [replyingTo, setReplyingTo] = useState<{ id: string; name: string } | null>(null);
     const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
-    const commentInputRef = useRef<HTMLTextAreaElement>(null);
+    const commentInputRef = useRef<HTMLInputElement>(null);
 
     // Queries and Mutations
     const quotaQuery = useCurationQuota();
@@ -124,9 +124,7 @@ export function AICurationPage() {
     const likeMutation = useLikeHeritageCuration();
     const addCommentMutation = useAddHeritageCurationComment();
 
-    const getBaseLikes = (commentId: string) => {
-        return 0;
-    };
+
 
     // Modal Before/After slider handlers
     const handleModalMove = (clientX: number) => {
