@@ -407,11 +407,27 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
                         </button>
                     )}
 
-                    <div style={{ flex: 1 }} />
-
-                    <button onClick={() => setShowOptions(true)} className="reel-options-btn">
-                        <MoreVertical style={{ width: 20, height: 20 }} />
+                    <button
+                        onClick={() => setShowOptions(true)}
+                        className="reel-options-btn"
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '6px',
+                            marginLeft: '4px',
+                            opacity: 0.85,
+                            transition: 'opacity 0.2s, transform 0.2s',
+                        }}
+                    >
+                        <MoreVertical style={{ width: 18, height: 18 }} />
                     </button>
+
+                    <div style={{ flex: 1 }} />
                 </div>
 
                 {/* Caption */}

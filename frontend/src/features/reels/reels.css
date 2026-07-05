@@ -1605,12 +1605,12 @@
     100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* Mobile: bottom-right, above the navbar */
+/* Mobile: top-right, below global header, clear of any overlays */
 @media (max-width: 767px) {
     .reels-fab {
-        top: auto;
-        right: 16px;
-        bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+        bottom: auto;
+        top: calc(76px + env(safe-area-inset-top, 0px));
+        right: 12px;
     }
 }
 
