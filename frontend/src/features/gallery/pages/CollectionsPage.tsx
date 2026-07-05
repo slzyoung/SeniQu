@@ -244,8 +244,18 @@ const HeicImage = ({ src, alt, className, style, priority = false }: { src: stri
     const [loaded, setLoaded] = useState(false);
 
     const isHeic = src?.toLowerCase().endsWith('.heic');
+
+    // Check if the browser supports HEIC natively (Safari or Apple device user agent)
+    const supportsHeicNatively = useMemo(() => {
+        if (typeof window === 'undefined') return false;
+        const ua = window.navigator.userAgent.toLowerCase();
+        const isSafari = ua.includes('safari') && !ua.includes('chrome') && !ua.includes('android');
+        const isApple = ua.includes('iphone') || ua.includes('ipad') || ua.includes('macintosh') || ua.includes('ipod');
+        return isSafari || isApple;
+    }, []);
+
     const displaySrc = isHeic
-        ? `${API_BASE_URL}/proxy?url=${encodeURIComponent(src)}`
+        ? (supportsHeicNatively ? src : `${API_BASE_URL}/proxy?url=${encodeURIComponent(src)}`)
         : src;
 
     // Reset state when src changes
@@ -722,6 +732,12 @@ export default function CollectionsPage() {
                         info: instInfo,
                         list: instArtworks
                     });
+                    
+                    // Resolve and set subdistrict synchronously to avoid layout shifts / race conditions
+                    const subD = getInstitutionSubDistrict(instInfo, matchedCity.key);
+                    if (subD) {
+                        setActiveSubDistrict(subD);
+                    }
                 } else {
                     setActiveInstitution(null);
                 }
@@ -1165,8 +1181,6 @@ export default function CollectionsPage() {
                                                         // Brief async delay for smooth visual transition
                                                         await new Promise(resolve => setTimeout(resolve, 200));
                                                         navigate(`/collections/${matchedCity.key.replace(/\s+/g, '-')}?museum=${encodeURIComponent(instName)}`);
-                                                        const subD = getInstitutionSubDistrict(group.info, matchedCity.key);
-                                                        if (subD) setActiveSubDistrict(subD);
                                                     }
                                                 }
                                                 setIsTransitioning(false);
@@ -1330,8 +1344,8 @@ export default function CollectionsPage() {
                 }
 
                 // HIERARCHY LEVEL 3: Museum / Institution list in the selected Sub-District
-                if (activeSubDistrict) {
-                    const cityKey = activeCity!.key;
+                if (activeSubDistrict && activeCity) {
+                    const cityKey = activeCity.key;
                     const instGroups = getCuratorsInSubDistrict(cityKey, activeSubDistrict.id);
 
                     return (
