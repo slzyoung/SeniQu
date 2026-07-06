@@ -1,18 +1,52 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { motion, useInView } from 'framer-motion';
-import { Landmark, Globe2, BookOpen, MapPin } from 'lucide-react';
-import { GlowCard } from './GlowCard';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { motion, AnimatePresence, useInView } from 'framer-motion';
+import { X } from 'lucide-react';
 
-interface StatItemProps {
+interface StatItem {
+  id: string;
   value: string;
   label: string;
-  icon: React.ElementType;
-  delay: number;
+  image: string;
+  fact: string;
 }
 
-function StatItem({ value, label, icon: Icon, delay }: StatItemProps) {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: '-50px' });
+const CDN = 'https://cdn.seniqu.art/assets/landing/stats';
+
+const stats: StatItem[] = [
+  {
+    id: 'cultural',
+    value: '4,859+',
+    label: 'Cultural Sites',
+    image: `${CDN}/cultural_sites.jpg`,
+    fact: 'From ancient temples of Borobudur to royal palaces of Yogyakarta — Indonesia holds one of the richest cultural tapestries in Southeast Asia.',
+  },
+  {
+    id: 'museums',
+    value: '450',
+    label: 'Museums',
+    image: `${CDN}/museums.jpeg`,
+    fact: 'Spanning art, history, science, and heritage — Indonesian museums safeguard stories from over 17,000 islands.',
+  },
+  {
+    id: 'heritage',
+    value: '1,941',
+    label: 'Heritage Items',
+    image: `${CDN}/heritage_items.jpeg`,
+    fact: 'UNESCO-listed and nationally registered artifacts, dances, textiles, and intangible heritage preserved for future generations.',
+  },
+  {
+    id: 'islands',
+    value: '17,000+',
+    label: 'Islands',
+    image: `${CDN}/islands.jpeg`,
+    fact: 'The world\'s largest archipelago — each island carries unique traditions, languages, and artistic expressions.',
+  },
+];
+
+/* ═══════════════════════════════════════════════════════
+   Animated Counter
+   ═══════════════════════════════════════════════════════ */
+function AnimatedCount({ value, isInView }: { value: string; isInView: boolean }) {
   const numericValue = parseInt(value.replace(/[^0-9]/g, ''));
   const suffix = value.replace(/[0-9,]/g, '');
   const [count, setCount] = useState(0);
@@ -37,58 +71,196 @@ function StatItem({ value, label, icon: Icon, delay }: StatItemProps) {
   }, [isInView, numericValue]);
 
   return (
-    <GlowCard className="flex-1 min-w-0 rounded-xl md:rounded-2xl" hover={true}>
-      <div
-        ref={ref}
-        className="flex flex-col items-center justify-center p-4 md:p-8 text-center h-full relative overflow-hidden"
-      >
-        <Icon className="absolute -right-4 -bottom-4 w-20 md:w-24 h-20 md:h-24 text-theme-text opacity-[0.03] rotate-[-15deg]" />
+    <>
+      {count.toLocaleString()}
+      <span className="text-gold">{suffix}</span>
+    </>
+  );
+}
 
-        <div className="w-9 h-9 md:w-12 md:h-12 rounded-full bg-gold/10 flex items-center justify-center mb-2 md:mb-4 text-gold">
-          <Icon className="w-4 h-4 md:w-6 md:h-6" />
-        </div>
+/* ═══════════════════════════════════════════════════════
+   Stat Card (compact grid item)
+   ═══════════════════════════════════════════════════════ */
+function StatCard({ stat, delay, onOpen }: { stat: StatItem; delay: number; onOpen: () => void }) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, margin: '-50px' });
 
+  return (
+    <motion.div
+      ref={ref}
+      layoutId={`stat-card-${stat.id}`}
+      initial={{ opacity: 0, y: 30 }}
+      animate={isInView ? { opacity: 1, y: 0 } : {}}
+      transition={{ duration: 0.6, delay }}
+      onClick={onOpen}
+      className="group relative rounded-2xl md:rounded-3xl overflow-hidden aspect-[4/5] md:aspect-[3/4] shadow-lg hover:shadow-2xl transition-shadow duration-500 cursor-pointer active:scale-[0.97] touch-manipulation"
+      style={{ WebkitTapHighlightColor: 'transparent' }}
+      whileTap={{ scale: 0.97 }}
+    >
+      {/* Background Image */}
+      <motion.img
+        layoutId={`stat-img-${stat.id}`}
+        src={stat.image}
+        alt={stat.label}
+        loading="lazy"
+        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+      />
+
+      {/* Gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+
+      {/* Content overlay at bottom */}
+      <div className="absolute inset-x-0 bottom-0 p-4 md:p-6 text-white">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6, delay }}
-          className="font-serif text-2xl md:text-5xl text-theme-text font-bold mb-0.5 md:mb-2 drop-shadow-[0_0_10px_rgba(201,168,76,0.2)]"
+          transition={{ duration: 0.6, delay: delay + 0.1 }}
+          className="font-serif text-3xl md:text-5xl font-bold mb-0.5 md:mb-1 drop-shadow-lg"
         >
-          {count.toLocaleString()}
-          <span className="text-gold">{suffix}</span>
+          <AnimatedCount value={stat.value} isInView={isInView} />
         </motion.div>
 
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={isInView ? { opacity: 1 } : {}}
-          transition={{ duration: 0.6, delay: delay + 0.2 }}
-          className="text-[9px] md:text-sm text-theme-muted uppercase tracking-wider md:tracking-widest font-medium leading-tight"
+          layoutId={`stat-label-${stat.id}`}
+          className="text-[10px] md:text-sm text-white/80 uppercase tracking-widest font-medium"
         >
-          {label}
+          {stat.label}
         </motion.div>
 
         <motion.div
           initial={{ width: 0 }}
           animate={isInView ? { width: '32px' } : {}}
-          transition={{ duration: 1, delay: delay + 0.4 }}
-          className="h-0.5 md:h-1 bg-gold/50 mt-3 md:mt-6 rounded-full"
+          transition={{ duration: 1, delay: delay + 0.5 }}
+          className="h-[2px] bg-gold/70 mt-2.5 md:mt-4 rounded-full"
         />
       </div>
-    </GlowCard>
+    </motion.div>
   );
 }
 
+/* ═══════════════════════════════════════════════════════
+   Expanded Stat Overlay
+   ═══════════════════════════════════════════════════════ */
+function ExpandedStat({ stat, onClose }: { stat: StatItem; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', handler);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[100] flex items-end md:items-center justify-center"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      {/* Backdrop */}
+      <motion.div
+        className="absolute inset-0 bg-black/70 backdrop-blur-md"
+        onClick={onClose}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      />
+
+      {/* Expanded Card */}
+      <motion.div
+        layoutId={`stat-card-${stat.id}`}
+        className="relative w-full md:w-[520px] md:max-h-[85vh] max-h-[92vh] rounded-t-3xl md:rounded-3xl overflow-hidden bg-black shadow-2xl z-10"
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      >
+        {/* Image — hero */}
+        <motion.div className="relative aspect-[16/10] overflow-hidden">
+          <motion.img
+            layoutId={`stat-img-${stat.id}`}
+            src={stat.image}
+            alt={stat.label}
+            className="w-full h-full object-cover"
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+
+          {/* Close button */}
+          <motion.button
+            onClick={onClose}
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/50 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/80 hover:text-white hover:bg-black/70 transition-all duration-200 z-20"
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            transition={{ delay: 0.15 }}
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </motion.button>
+
+          {/* Large stat overlay on image */}
+          <div className="absolute bottom-4 left-5 text-white">
+            <div className="font-serif text-5xl md:text-6xl font-bold drop-shadow-lg">
+              {stat.value}
+            </div>
+            <motion.div
+              layoutId={`stat-label-${stat.id}`}
+              className="text-xs md:text-sm text-white/70 uppercase tracking-widest font-medium mt-1"
+            >
+              {stat.label}
+            </motion.div>
+          </div>
+        </motion.div>
+
+        {/* Detail Content */}
+        <motion.div
+          className="p-5 md:p-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ delay: 0.15, duration: 0.3 }}
+        >
+          <p className="text-white/60 text-sm md:text-base leading-relaxed">
+            {stat.fact}
+          </p>
+          <div className="mt-4 h-[2px] w-10 bg-gold/50 rounded-full" />
+        </motion.div>
+
+        {/* Bottom safe area */}
+        <div className="h-[env(safe-area-inset-bottom,0px)]" />
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   Main StatsBar Section
+   ═══════════════════════════════════════════════════════ */
 export function StatsBar() {
+  const [selected, setSelected] = useState<StatItem | null>(null);
+
+  const handleOpen = useCallback((stat: StatItem) => setSelected(stat), []);
+  const handleClose = useCallback(() => setSelected(null), []);
+
   return (
     <section className="w-full bg-theme-bg relative z-20 pt-16 md:pt-24 px-4 md:px-6 pb-8 md:pb-12">
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
-          <StatItem value="4,859+" label="Cultural Sites" icon={Landmark} delay={0} />
-          <StatItem value="450" label="Museums" icon={Globe2} delay={0.15} />
-          <StatItem value="1,941" label="Heritage Items" icon={BookOpen} delay={0.3} />
-          <StatItem value="17,000+" label="Islands" icon={MapPin} delay={0.45} />
+          {stats.map((stat, i) => (
+            <StatCard key={stat.id} stat={stat} delay={i * 0.15} onOpen={() => handleOpen(stat)} />
+          ))}
         </div>
       </div>
+
+      {/* Expanded overlay */}
+      <AnimatePresence>
+        {selected && (
+          <ExpandedStat stat={selected} onClose={handleClose} />
+        )}
+      </AnimatePresence>
     </section>
   );
 }

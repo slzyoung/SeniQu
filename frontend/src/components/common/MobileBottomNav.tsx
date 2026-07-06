@@ -8,7 +8,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     Home,
-    Search,
     User,
     Palette,
     BarChart3,
@@ -19,11 +18,10 @@ import {
     Building2,
     Bell,
     Grid,
-    MapPin,
     ScanLine,
-    Bookmark,
     Wallet,
     Play,
+    Compass,
     type LucideIcon,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -49,12 +47,12 @@ const guestNavItems: NavItem[] = [
     { path: ROUTES.GALLERY, icon: Grid, label: 'Gallery' },
     { path: ROUTES.AI_GENRE, icon: ScanLine, label: 'Analyze', isCenter: true },
     { path: ROUTES.REELS, icon: Play, label: 'Reels' },
-    { path: ROUTES.LOGIN, icon: Search, label: 'Explore' },
+    { path: ROUTES.LOGIN, icon: Compass, label: 'Explore' },
 ];
 
 const userNavItems: NavItem[] = [
     { path: ROUTES.USER_DASHBOARD, icon: Home, label: 'Home' },
-    { path: ROUTES.USER_NEARBY, icon: Search, label: 'Explore' },
+    { path: ROUTES.USER_NEARBY, icon: Compass, label: 'Explore' },
     { path: ROUTES.USER_GENRE_IDENTIFIER, icon: ScanLine, label: 'Analyze', isCenter: true },
     { path: ROUTES.USER_WALLET, icon: Wallet, label: 'Wallet' },
     { path: ROUTES.USER_PROFILE, icon: User, label: 'Profile' },

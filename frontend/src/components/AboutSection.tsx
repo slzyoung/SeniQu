@@ -1,43 +1,190 @@
-
-import { motion } from 'framer-motion';
+import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
-import { GlowCard } from './GlowCard';
-import { Landmark, Smartphone, Brain, Globe2 } from 'lucide-react';
+import { X, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 
+interface Feature {
+    id: string;
+    image: string;
+    title: string;
+    description: string;
+    detail: string;
+}
+
+const CDN = 'https://cdn.seniqu.art/assets/landing/features';
+
+const features: Feature[] = [
+    {
+        id: 'centralized',
+        image: `${CDN}/centralized_platform.jpg`,
+        title: 'Centralized Platform',
+        description: 'Unified ecosystem for heritage sites.',
+        detail: 'One platform connecting 4,800+ cultural sites, museums, and heritage locations across Indonesia. Manage, explore, and preserve — all in one place.',
+    },
+    {
+        id: 'immersive',
+        image: `${CDN}/immersive_experience.jpeg`,
+        title: 'Immersive Experience',
+        description: 'Smart navigation & interactive tools.',
+        detail: 'AR-powered exhibitions, 360° virtual tours, and interactive storytelling that brings centuries of heritage to life on your device.',
+    },
+    {
+        id: 'ai',
+        image: `${CDN}/ai_enhanced.png`,
+        title: 'AI-Enhanced',
+        description: 'Automated insights & multilingual guides.',
+        detail: 'Gemini-powered art analysis, genre identification, multilingual audio guides, and intelligent curation — heritage meets cutting-edge AI.',
+    },
+    {
+        id: 'tourism',
+        image: `${CDN}/tourism_optimized.jpeg`,
+        title: 'Tourism Optimized',
+        description: 'Personalized routes & recommendations.',
+        detail: 'Smart itineraries, nearby discovery with Google Maps integration, and community-driven recommendations for cultural tourism.',
+    },
+];
+
+/* ═══════════════════════════════════════════════════════
+   Expanded Card Overlay (fullscreen modal)
+   ═══════════════════════════════════════════════════════ */
+function ExpandedCard({
+    feature,
+    onClose,
+}: {
+    feature: Feature;
+    onClose: () => void;
+}) {
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handler);
+        document.body.style.overflow = 'hidden';
+        return () => {
+            window.removeEventListener('keydown', handler);
+            document.body.style.overflow = '';
+        };
+    }, [onClose]);
+
+    return (
+        <motion.div
+            className="fixed inset-0 z-[100] flex items-end md:items-center justify-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+        >
+            {/* Backdrop */}
+            <motion.div
+                className="absolute inset-0 bg-black/80 backdrop-blur-md"
+                onClick={onClose}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+            />
+
+            {/* Expanded Content Box */}
+            <motion.div
+                layoutId={`card-${feature.id}`}
+                className="relative w-full md:w-[540px] md:max-h-[85vh] max-h-[90vh] rounded-t-3xl md:rounded-3xl overflow-hidden bg-black border border-white/10 shadow-2xl z-10 flex flex-col"
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            >
+                {/* Hero Image */}
+                <div className="relative aspect-[4/3] md:aspect-[16/10] overflow-hidden flex-shrink-0">
+                    <motion.img
+                        layoutId={`img-${feature.id}`}
+                        src={feature.image}
+                        alt={feature.title}
+                        className="w-full h-full object-cover"
+                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+
+                    {/* Close Button */}
+                    <button
+                        onClick={onClose}
+                        className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center text-white/80 hover:text-white hover:bg-black/70 hover:scale-105 transition-all duration-200 z-20"
+                        aria-label="Close"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+
+                {/* Body Details */}
+                <div className="p-6 md:p-8 overflow-y-auto flex-grow">
+                    <motion.h3
+                        layoutId={`title-${feature.id}`}
+                        className="font-serif font-bold text-white text-2xl md:text-3xl mb-3 leading-tight"
+                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    >
+                        {feature.title}
+                    </motion.h3>
+
+                    <p className="text-white/70 text-sm md:text-base leading-relaxed mb-6">
+                        {feature.detail}
+                    </p>
+
+                    <div
+                        className="inline-flex items-center gap-2 text-gold text-sm font-medium cursor-pointer hover:gap-3 transition-all duration-300"
+                        onClick={onClose}
+                    >
+                        <span>Explore More</span>
+                        <ArrowRight className="w-4 h-4" />
+                    </div>
+                </div>
+
+                {/* Safe Area Spacer for iOS/Android */}
+                <div className="h-[env(safe-area-inset-bottom,0px)]" />
+            </motion.div>
+        </motion.div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════
+   Main About Section with Swipeable Carousel
+   ═══════════════════════════════════════════════════════ */
 export function AboutSection() {
     const { ref, isVisible } = useScrollAnimation();
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const [selected, setSelected] = useState<Feature | null>(null);
+    const handleClose = () => setSelected(null);
+    const [isAutoplay, setIsAutoplay] = useState(true);
+    const dragX = useMotionValue(0);
+    const containerRef = useRef<HTMLDivElement>(null);
 
-    const features = [
-        {
-            icon: Landmark,
-            title: 'Centralized Platform',
-            description: 'Unified ecosystem for heritage sites.'
-        },
-        {
-            icon: Smartphone,
-            title: 'Immersive Experience',
-            description: 'Smart navigation & interactive tools.'
-        },
-        {
-            icon: Brain,
-            title: 'AI-Enhanced',
-            description: 'Automated insights & multilingual guides.'
-        },
-        {
-            icon: Globe2,
-            title: 'Tourism Optimized',
-            description: 'Personalized routes & recommendations.'
+    const nextSlide = () => {
+        setCurrentIndex((prev) => (prev + 1) % features.length);
+    };
+
+    const prevSlide = () => {
+        setCurrentIndex((prev) => (prev - 1 + features.length) % features.length);
+    };
+
+    // Auto-slide effect
+    useEffect(() => {
+        if (!isAutoplay || selected) return;
+        const interval = setInterval(nextSlide, 5000);
+        return () => clearInterval(interval);
+    }, [isAutoplay, selected]);
+
+    // Handle swipe end gesture
+    const handleDragEnd = () => {
+        const x = dragX.get();
+        if (x < -50) {
+            nextSlide();
+        } else if (x > 50) {
+            prevSlide();
         }
-    ];
+    };
 
     return (
         <section id="about" className="py-20 md:py-32 bg-theme-bg relative overflow-hidden">
-            {/* Background Decorations */}
-            <div className="absolute top-0 right-0 w-96 h-96 bg-gold/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-900/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
+            {/* Background Decor */}
+            <div className="absolute top-0 right-0 w-96 h-96 bg-gold/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-900/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2 pointer-events-none" />
 
             <div className="max-w-7xl mx-auto px-4 md:px-6 relative z-10">
-                {/* Section Header — centered */}
+                {/* Section Header */}
                 <motion.div
                     ref={ref}
                     initial={{ opacity: 0, y: 20 }}
@@ -61,27 +208,139 @@ export function AboutSection() {
                     </p>
                 </motion.div>
 
-                {/* Features Grid — 4 cards */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
-                    {features.map((feature, index) => (
-                        <motion.div
-                            key={index}
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.5, delay: index * 0.1 }}
+                {/* Carousel Container */}
+                <div 
+                    className="relative w-full max-w-4xl mx-auto px-4"
+                    onMouseEnter={() => setIsAutoplay(false)}
+                    onMouseLeave={() => setIsAutoplay(true)}
+                    onTouchStart={() => setIsAutoplay(false)}
+                >
+                    {/* Navigation Buttons (Desktop only) */}
+                    <div className="hidden md:block">
+                        <button
+                            onClick={prevSlide}
+                            className="absolute left-[-20px] top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/80 hover:text-white hover:bg-black/70 hover:scale-105 transition-all duration-200 z-20"
+                            aria-label="Previous slide"
                         >
-                            <GlowCard className="h-full rounded-2xl p-4 md:p-8 text-center flex flex-col items-center justify-start bg-theme-bg/40 backdrop-blur-sm border border-gold/10 hover:border-gold/30 transition-all duration-300 group" hover={true}>
-                                <div className="mt-2 md:mt-0 w-10 h-10 md:w-14 md:h-14 rounded-xl bg-gradient-to-br from-gold/10 to-transparent border border-gold/20 flex items-center justify-center mx-auto mb-4 md:mb-6 shadow-inner group-hover:scale-110 transition-transform duration-300">
-                                    <feature.icon className="w-4 h-4 md:w-6 md:h-6 text-gold drop-shadow-sm" />
-                                </div>
-                                <h4 className="font-serif font-semibold text-theme-text mb-1.5 md:mb-3 text-[13px] md:text-lg tracking-wide">{feature.title}</h4>
-                                <p className="text-[11px] md:text-[14px] text-theme-muted/80 leading-relaxed font-light">{feature.description}</p>
-                            </GlowCard>
+                            <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={nextSlide}
+                            className="absolute right-[-20px] top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/80 hover:text-white hover:bg-black/70 hover:scale-105 transition-all duration-200 z-20"
+                            aria-label="Next slide"
+                        >
+                            <ChevronRight className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    {/* Sliding Viewport */}
+                    <div 
+                        ref={containerRef}
+                        className="overflow-hidden relative py-6 touch-pan-y"
+                    >
+                        <motion.div
+                            drag="x"
+                            dragConstraints={{ left: 0, right: 0 }}
+                            style={{ x: dragX }}
+                            onDragEnd={handleDragEnd}
+                            className="flex justify-center items-center gap-4 md:gap-8"
+                        >
+                            {features.map((feature, index) => {
+                                // Calculate index offsets for premium 3D carousel centering
+                                const diff = (index - currentIndex + features.length) % features.length;
+                                
+                                // Active card
+                                const isActive = diff === 0;
+                                // Left card (previous)
+                                const isLeft = diff === features.length - 1;
+                                // Right card (next)
+                                const isRight = diff === 1;
+                                
+                                // Hide other cards
+                                const isVisible = isActive || isLeft || isRight;
+
+                                if (!isVisible) return null;
+
+                                return (
+                                    <motion.div
+                                        key={feature.id}
+                                        onClick={() => isActive ? setSelected(feature) : setCurrentIndex(index)}
+                                        className={`relative w-[280px] md:w-[360px] aspect-[3/4] rounded-3xl overflow-hidden shadow-2xl cursor-pointer transition-all duration-500 border ${
+                                            isActive 
+                                                ? 'border-gold/50 scale-100 z-10 opacity-100' 
+                                                : 'border-white/5 scale-90 opacity-40 blur-[1px]'
+                                        }`}
+                                        animate={{
+                                            scale: isActive ? 1.02 : 0.9,
+                                            opacity: isActive ? 1 : 0.4,
+                                            x: isLeft ? -20 : isRight ? 20 : 0,
+                                        }}
+                                        transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+                                        style={{
+                                            order: isLeft ? 1 : isActive ? 2 : 3,
+                                            flexShrink: 0,
+                                            WebkitTapHighlightColor: 'transparent',
+                                        }}
+                                    >
+                                        {/* Background Image */}
+                                        <motion.img
+                                            layoutId={`img-${feature.id}`}
+                                            src={feature.image}
+                                            alt={feature.title}
+                                            className="absolute inset-0 w-full h-full object-cover"
+                                        />
+
+                                        {/* Gradient Overlay */}
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/10" />
+
+                                        {/* Content Box */}
+                                        <div className="absolute inset-x-0 bottom-0 p-5 md:p-7 text-white">
+                                            <motion.h4
+                                                layoutId={`title-${feature.id}`}
+                                                className="font-serif font-bold text-white text-lg md:text-xl mb-1.5 md:mb-2 leading-tight"
+                                            >
+                                                {feature.title}
+                                            </motion.h4>
+                                            <p className="text-[11px] md:text-xs text-white/70 leading-relaxed font-light line-clamp-2">
+                                                {feature.description}
+                                            </p>
+                                        </div>
+
+                                        {/* Active spotlight line */}
+                                        {isActive && (
+                                            <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-gold to-transparent" />
+                                        )}
+                                    </motion.div>
+                                );
+                            })}
                         </motion.div>
-                    ))}
+                    </div>
+
+                    {/* Progress dots & line */}
+                    <div className="flex flex-col items-center gap-3 mt-6">
+                        {/* Dot indicator */}
+                        <div className="flex gap-2">
+                            {features.map((_, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => setCurrentIndex(index)}
+                                    className={`h-2 rounded-full transition-all duration-300 ${
+                                        index === currentIndex ? 'w-6 bg-gold' : 'w-2 bg-white/20'
+                                    }`}
+                                    aria-label={`Go to slide ${index + 1}`}
+                                />
+                            ))}
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            {/* Expanded details overlay */}
+            <AnimatePresence>
+                {selected && (
+                    <ExpandedCard feature={selected} onClose={handleClose} />
+                )}
+            </AnimatePresence>
         </section>
     );
 }
