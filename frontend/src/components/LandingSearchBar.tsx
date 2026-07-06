@@ -4,6 +4,7 @@ import { Search, SlidersHorizontal } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../stores/useAuthStore';
 import { useAuthModalStore } from '../stores/useAuthModalStore';
+import { useLanguage } from '../hooks/useLanguage';
 import { CITY_WHITELIST } from '../features/gallery/data/citiesRegistry';
 import './LandingPage.css';
 
@@ -14,6 +15,7 @@ export function LandingSearchBar() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
   const { openAuthModal } = useAuthModalStore();
+  const { t } = useLanguage();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,7 +68,7 @@ export function LandingSearchBar() {
         <input
           type="text"
           className="landing-search__input"
-          placeholder="Search museums, artworks, cities..."
+          placeholder={t('searchBar.placeholder')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
@@ -81,7 +83,7 @@ export function LandingSearchBar() {
             }
           }}
         >
-          <SlidersHorizontal /> EXPLORE
+          <SlidersHorizontal /> {t('searchBar.explore')}
         </button>
       </form>
     </motion.div>

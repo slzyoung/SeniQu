@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
 import { X, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useLanguage } from '../hooks/useLanguage';
 
 interface Feature {
     id: string;
@@ -98,66 +99,70 @@ function ExpandedCard({
                         className="w-full h-full object-cover"
                         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
-                    {/* Close Button */}
+                    {/* Close button */}
                     <button
                         onClick={onClose}
-                        className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/50 backdrop-blur-md border border-white/15 flex items-center justify-center text-white/80 hover:text-white hover:bg-black/70 hover:scale-105 transition-all duration-200 z-20"
+                        className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/50 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/80 hover:text-white hover:bg-black/70 transition-all duration-200 z-20"
                         aria-label="Close"
                     >
                         <X className="w-4 h-4" />
                     </button>
-                </div>
 
-                {/* Body Details */}
-                <div className="p-6 md:p-8 overflow-y-auto flex-grow">
-                    <motion.h3
-                        layoutId={`title-${feature.id}`}
-                        className="font-serif font-bold text-white text-2xl md:text-3xl mb-3 leading-tight"
-                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                    >
-                        {feature.title}
-                    </motion.h3>
-
-                    <p className="text-white/70 text-sm md:text-base leading-relaxed mb-6">
-                        {feature.detail}
-                    </p>
-
-                    <div
-                        className="inline-flex items-center gap-2 text-gold text-sm font-medium cursor-pointer hover:gap-3 transition-all duration-300"
-                        onClick={onClose}
-                    >
-                        <span>Explore More</span>
-                        <ArrowRight className="w-4 h-4" />
+                    {/* Title Overlay */}
+                    <div className="absolute bottom-5 left-5 right-5 text-white">
+                        <motion.h3
+                            layoutId={`title-${feature.id}`}
+                            className="font-serif text-2xl md:text-3xl font-bold text-white drop-shadow-md"
+                        >
+                            {feature.title}
+                        </motion.h3>
                     </div>
                 </div>
 
-                {/* Safe Area Spacer for iOS/Android */}
-                <div className="h-[env(safe-area-inset-bottom,0px)]" />
+                {/* Details text area */}
+                <div className="p-6 md:p-8 overflow-y-auto max-h-[40vh] md:max-h-[50vh]">
+                    <p className="text-white/60 text-sm md:text-base leading-relaxed mb-4">
+                        {feature.detail}
+                    </p>
+                    <div className="h-[2px] w-12 bg-gold/50 rounded-full" />
+                </div>
+
+                {/* Safe area padding */}
+                <div className="h-[env(safe-area-inset-bottom,0px)] bg-black" />
             </motion.div>
         </motion.div>
     );
 }
 
 /* ═══════════════════════════════════════════════════════
-   Main About Section with Swipeable Carousel
+   Main AboutSection Component
    ═══════════════════════════════════════════════════════ */
 export function AboutSection() {
     const { ref, isVisible } = useScrollAnimation();
     const [currentIndex, setCurrentIndex] = useState(0);
     const [selected, setSelected] = useState<Feature | null>(null);
+    const { t } = useLanguage();
+
+    const localizedFeatures = features.map((feat, idx) => ({
+        ...feat,
+        title: t(`about.featureTitle${idx}`),
+        description: t(`about.featureDesc${idx}`),
+        detail: t(`about.featureDetail${idx}`),
+    }));
+
     const handleClose = () => setSelected(null);
     const [isAutoplay, setIsAutoplay] = useState(true);
     const dragX = useMotionValue(0);
     const containerRef = useRef<HTMLDivElement>(null);
 
     const nextSlide = () => {
-        setCurrentIndex((prev) => (prev + 1) % features.length);
+        setCurrentIndex((prev) => (prev + 1) % localizedFeatures.length);
     };
 
     const prevSlide = () => {
-        setCurrentIndex((prev) => (prev - 1 + features.length) % features.length);
+        setCurrentIndex((prev) => (prev - 1 + localizedFeatures.length) % localizedFeatures.length);
     };
 
     // Auto-slide effect
@@ -165,7 +170,7 @@ export function AboutSection() {
         if (!isAutoplay || selected) return;
         const interval = setInterval(nextSlide, 5000);
         return () => clearInterval(interval);
-    }, [isAutoplay, selected]);
+    }, [isAutoplay, selected, localizedFeatures.length]);
 
     // Handle swipe end gesture
     const handleDragEnd = () => {
@@ -194,17 +199,21 @@ export function AboutSection() {
                 >
                     <div className="flex items-center justify-center gap-2 mb-4">
                         <span className="h-px w-8 bg-gold/50" />
-                        <span className="text-gold text-xs uppercase tracking-[0.2em] font-medium">Why SeniQu</span>
+                        <span className="text-gold text-xs uppercase tracking-[0.2em] font-medium">{t('about.label')}</span>
                         <span className="h-px w-8 bg-gold/50" />
                     </div>
 
                     <h2 className="text-4xl md:text-5xl lg:text-6xl font-serif text-theme-text mb-4 leading-tight">
-                        Bridging <span className="text-gold italic">Culture</span> & <span className="text-gold italic">Technology</span>
+                        {t('about.title').split(' ').map((word, i) => {
+                            if (word.toLowerCase() === 'culture' || word.toLowerCase() === 'budaya' || word.toLowerCase() === 'technology' || word.toLowerCase() === 'teknologi') {
+                                return <span key={i} className="text-gold italic">{word} </span>;
+                            }
+                            return word + ' ';
+                        })}
                     </h2>
 
                     <p className="text-theme-muted text-base md:text-lg leading-relaxed max-w-xl mx-auto">
-                        Only 54–68% of Indonesia's cultural assets are digitally structured.
-                        SeniQu transforms that gap into opportunity.
+                        {t('about.subtitle')}
                     </p>
                 </motion.div>
 
@@ -245,14 +254,14 @@ export function AboutSection() {
                             onDragEnd={handleDragEnd}
                             className="flex justify-center items-center gap-4 md:gap-8"
                         >
-                            {features.map((feature, index) => {
+                            {localizedFeatures.map((feature, index) => {
                                 // Calculate index offsets for premium 3D carousel centering
-                                const diff = (index - currentIndex + features.length) % features.length;
+                                const diff = (index - currentIndex + localizedFeatures.length) % localizedFeatures.length;
                                 
                                 // Active card
                                 const isActive = diff === 0;
                                 // Left card (previous)
-                                const isLeft = diff === features.length - 1;
+                                const isLeft = diff === localizedFeatures.length - 1;
                                 // Right card (next)
                                 const isRight = diff === 1;
                                 
@@ -320,7 +329,7 @@ export function AboutSection() {
                     <div className="flex flex-col items-center gap-3 mt-6">
                         {/* Dot indicator */}
                         <div className="flex gap-2">
-                            {features.map((_, index) => (
+                            {localizedFeatures.map((_, index) => (
                                 <button
                                     key={index}
                                     onClick={() => setCurrentIndex(index)}
@@ -338,7 +347,10 @@ export function AboutSection() {
             {/* Expanded details overlay */}
             <AnimatePresence>
                 {selected && (
-                    <ExpandedCard feature={selected} onClose={handleClose} />
+                    <ExpandedCard 
+                        feature={localizedFeatures.find(f => f.id === selected.id) || selected} 
+                        onClose={handleClose} 
+                    />
                 )}
             </AnimatePresence>
         </section>

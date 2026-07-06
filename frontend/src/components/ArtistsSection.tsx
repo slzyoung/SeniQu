@@ -6,13 +6,13 @@ import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../lib/constants';
 import { useState, useEffect } from 'react';
 import { museumService } from '../services/museumService';
+import { useLanguage } from '../hooks/useLanguage';
 
 interface Artist {
     id: string;
     name: string;
     title: string;
     avatar: string;
-    // cover: removed as per request
     verified: boolean;
     rank: number;
     wikipediaTitle: string;
@@ -52,6 +52,7 @@ function BioModal({ artist, onClose }: { artist: Artist; onClose: () => void }) 
     const [bio, setBio] = useState<string>('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
+    const { t } = useLanguage();
 
     useEffect(() => {
         const fetchBio = async () => {
@@ -101,7 +102,7 @@ function BioModal({ artist, onClose }: { artist: Artist; onClose: () => void }) 
                 >
                     <button
                         onClick={onClose}
-                        className="absolute top-4 right-4 p-2 rounded-full hover:bg-theme-bg/50 transition-colors z-10"
+                        className="absolute top-4 right-4 p-2 rounded-full hover:bg-theme-bg/50 transition-colors z-10 cursor-pointer"
                     >
                         <X className="w-6 h-6 text-theme-muted hover:text-theme-text" />
                     </button>
@@ -128,15 +129,15 @@ function BioModal({ artist, onClose }: { artist: Artist; onClose: () => void }) 
                                 href={`https://en.wikipedia.org/wiki/${artist.wikipediaTitle}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 text-gold hover:text-gold-light text-sm font-medium transition-colors"
+                                className="inline-flex items-center gap-2 text-gold hover:text-gold-light text-sm font-medium transition-colors cursor-pointer"
                             >
-                                Read on Wikipedia <ExternalLink className="w-3 h-3" />
+                                {t('artists.readWiki')} <ExternalLink className="w-3 h-3" />
                             </a>
                         </div>
 
                         {/* Right Side: Bio */}
                         <div className="w-full md:w-2/3 p-6 md:p-8 max-h-[60vh] overflow-y-auto">
-                            <h4 className="text-lg font-bold text-theme-text mb-4 border-b border-theme-border pb-2">Biography</h4>
+                            <h4 className="text-lg font-bold text-theme-text mb-4 border-b border-theme-border pb-2">{t('artists.bio')}</h4>
                             {loading ? (
                                 <div className="space-y-3 animate-pulse">
                                     <div className="h-4 bg-theme-border/30 rounded w-full"></div>
@@ -144,7 +145,7 @@ function BioModal({ artist, onClose }: { artist: Artist; onClose: () => void }) 
                                     <div className="h-4 bg-theme-border/30 rounded w-4/6"></div>
                                 </div>
                             ) : error ? (
-                                <p className="text-red-400">Failed to load biography.</p>
+                                <p className="text-red-400">{t('artists.failedBio')}</p>
                             ) : (
                                 <p className="text-theme-text/80 leading-relaxed text-sm md:text-base">
                                     {bio}
@@ -165,7 +166,7 @@ function ArtistCard({ artist, index, onSelect }: { artist: Artist; index: number
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: index * 0.1 }}
             viewport={{ once: true }}
-            className="group relative h-[280px] w-full cursor-pointer" // Reduced height since cover is gone
+            className="group relative h-[280px] w-full cursor-pointer"
             onClick={() => onSelect(artist)}
         >
             <GlowCard className="h-full overflow-hidden rounded-2xl border-theme-border/50 transition-all duration-300 group-hover:border-gold/30 bg-theme-surface" hover={true}>
@@ -210,6 +211,14 @@ export function ArtistsSection() {
     const { ref, isVisible } = useScrollAnimation();
     const navigate = useNavigate();
     const [selectedArtist, setSelectedArtist] = useState<Artist | null>(null);
+    const { t } = useLanguage();
+
+    const localizedArtists = FEATURED_ARTISTS.map((artist) => ({
+        ...artist,
+        title: artist.id === '1' ? t('artists.radenSalehTitle') :
+               artist.id === '2' ? t('artists.affandiTitle') :
+               artist.id === '3' ? t('artists.basukiAbdullahTitle') : artist.title
+    }));
 
     return (
         <section id="artists" className="py-16 md:py-24 bg-theme-surface relative">
@@ -222,25 +231,30 @@ export function ArtistsSection() {
                     <div className="text-center md:text-left">
                         <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
                             <Star className="w-4 h-4 text-gold fill-gold" />
-                            <span className="text-gold text-xs uppercase tracking-widest font-bold">Top Creators</span>
+                            <span className="text-gold text-xs uppercase tracking-widest font-bold">{t('artists.label')}</span>
                         </div>
                         <h2 className="text-3xl md:text-4xl font-serif text-theme-text">
-                            Featured <span className="text-gold italic">Artists</span>
+                            {t('artists.title').split(' ').map((word, i, arr) => {
+                                if (i === arr.length - 1) {
+                                    return <span key={i} className="text-gold italic">{word}</span>;
+                                }
+                                return word + ' ';
+                            })}
                         </h2>
                     </div>
 
                     <button
                         onClick={() => navigate(ROUTES.GALLERY)}
-                        className="group flex items-center gap-2 px-6 py-3 rounded-full border border-theme-border hover:border-gold/50 hover:bg-gold/5 transition-all"
+                        className="group flex items-center gap-2 px-6 py-3 rounded-full border border-theme-border hover:border-gold/50 hover:bg-gold/5 transition-all cursor-pointer"
                     >
-                        <span className="text-sm font-medium text-theme-text group-hover:text-gold">View All Artists</span>
+                        <span className="text-sm font-medium text-theme-text group-hover:text-gold">{t('artists.viewAll')}</span>
                         <ArrowRight className="w-4 h-4 text-theme-muted group-hover:text-gold group-hover:translate-x-1 transition-all" />
                     </button>
                 </div>
 
                 {/* Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-                    {FEATURED_ARTISTS.map((artist, index) => (
+                    {localizedArtists.map((artist, index) => (
                         <ArtistCard
                             key={artist.id}
                             artist={artist}
@@ -254,7 +268,7 @@ export function ArtistsSection() {
             {/* Modal */}
             {selectedArtist && (
                 <BioModal
-                    artist={selectedArtist}
+                    artist={localizedArtists.find(a => a.id === selectedArtist.id) || selectedArtist}
                     onClose={() => setSelectedArtist(null)}
                 />
             )}

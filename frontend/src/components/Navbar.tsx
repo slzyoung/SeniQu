@@ -10,6 +10,7 @@ import { getDashboardRoute } from '../lib/utils';
 import { ROUTES } from '../lib/constants';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLogout } from '../hooks/useLogout';
+import { useLanguage } from '../hooks/useLanguage';
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -17,6 +18,7 @@ export function Navbar() {
   const { mobileMenuOpen, toggleMobileMenu, setMobileMenuOpen } = useUIStore();
   const { openAuthModal } = useAuthModalStore();
   const { isAuthenticated, user } = useAuthStore();
+  const { language, setLanguage, t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const handleLogout = useLogout();
@@ -33,16 +35,46 @@ export function Navbar() {
   }, []);
 
   const menuItems = isAuthenticated ? [
-    { label: 'Dashboard', icon: LayoutDashboard, path: getDashboardRoute(user?.role || 'user') },
-    { label: 'Art Gallery', icon: Image, path: ROUTES.GALLERY },
-    { label: 'Photography Hub', icon: Camera, path: ROUTES.USER_COLLECTIONS },
-    { label: 'Profile', icon: User, path: ROUTES.USER_PROFILE },
+    { label: t('navbar.dashboard'), icon: LayoutDashboard, path: getDashboardRoute(user?.role || 'user') },
+    { label: t('navbar.explore'), icon: Image, path: ROUTES.GALLERY },
+    { label: t('navbar.myPhotographyHub'), icon: Camera, path: ROUTES.USER_COLLECTIONS },
+    { label: t('navbar.profile'), icon: User, path: ROUTES.USER_PROFILE },
   ] : [
-    { label: 'About', path: '/#about' },
-    { label: 'Collections', path: ROUTES.COLLECTIONS },
-    { label: 'Artists', path: '/#artists' },
-    { label: 'How It Works', path: '/#how-it-works' },
+    { label: t('navbar.about'), path: '/#about' },
+    { label: t('navbar.collections'), path: ROUTES.COLLECTIONS },
+    { label: t('navbar.artists'), path: '/#artists' },
+    { label: t('navbar.howItWorks'), path: '/#how-it-works' },
   ];
+
+  const toggleLanguage = () => {
+    setLanguage(language === 'en' ? 'id' : 'en');
+  };
+
+  const LanguageToggle = () => (
+    <button
+      onClick={toggleLanguage}
+      className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 hover:scale-105 active:scale-95 ${
+        useReelsStyle
+          ? 'text-white hover:text-gold bg-white/10'
+          : 'text-theme-text hover:text-gold bg-theme-elevated'
+      }`}
+      title={language === 'en' ? 'Switch to Bahasa Indonesia' : 'Ubah ke Bahasa Inggris'}
+      aria-label="Toggle language"
+    >
+      <AnimatePresence mode="wait">
+        <motion.span
+          key={language}
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 4 }}
+          transition={{ duration: 0.15 }}
+          className="text-lg"
+        >
+          {language === 'en' ? '🇬🇧' : '🇮🇩'}
+        </motion.span>
+      </AnimatePresence>
+    </button>
+  );
 
   return (
     <>
@@ -108,16 +140,20 @@ export function Navbar() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
-            {!isAuthenticated && ['About', 'Collections', 'Artists', 'How It Works'].map((item) =>
+            {!isAuthenticated && [
+              { key: 'about', label: t('navbar.about'), path: '/#about' },
+              { key: 'collections', label: t('navbar.collections'), path: ROUTES.COLLECTIONS },
+              { key: 'artists', label: t('navbar.artists'), path: '/#artists' },
+              { key: 'howItWorks', label: t('navbar.howItWorks'), path: '/#how-it-works' },
+            ].map((item) => (
               <a
-                key={item}
-                href={`/#${item.toLowerCase().replace(/\s+/g, '-')}`}
+                key={item.key}
+                href={item.path}
                 className="text-theme-muted hover:text-gold transition-colors text-sm tracking-wide font-medium relative group">
-
-                {item}
+                {item.label}
                 <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-gold transition-all duration-300 group-hover:w-full" />
               </a>
-            )}
+            ))}
             {/* Authenticated Desktop Links */}
             {isAuthenticated && (
               <>
@@ -125,21 +161,21 @@ export function Navbar() {
                   href={ROUTES.GALLERY}
                   className="text-theme-muted hover:text-gold transition-colors text-sm tracking-wide font-medium relative group"
                 >
-                  Explore
+                  {t('navbar.explore')}
                   <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-gold transition-all duration-300 group-hover:w-full" />
                 </a>
                 <a
                   href={ROUTES.USER_COLLECTIONS}
                   className="text-theme-muted hover:text-gold transition-colors text-sm tracking-wide font-medium relative group"
                 >
-                  My Photography Hub
+                  {t('navbar.myPhotographyHub')}
                   <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-gold transition-all duration-300 group-hover:w-full" />
                 </a>
                 <a
                   href={ROUTES.USER_PROFILE}
                   className="text-theme-muted hover:text-gold transition-colors text-sm tracking-wide font-medium relative group"
                 >
-                  Profile
+                  {t('navbar.profile')}
                   <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-gold transition-all duration-300 group-hover:w-full" />
                 </a>
               </>
@@ -149,6 +185,7 @@ export function Navbar() {
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-4">
+            <LanguageToggle />
             <ThemeToggle />
 
             {isAuthenticated && user ? (
@@ -158,7 +195,7 @@ export function Navbar() {
               >
                 <div className="absolute inset-0 bg-gold/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
                 <span className="text-sm font-medium tracking-wide relative z-10">
-                  Dashboard
+                  {t('navbar.dashboard')}
                 </span>
                 <User className="w-4 h-4 transition-transform group-hover:scale-110 relative z-10" />
               </a>
@@ -168,7 +205,7 @@ export function Navbar() {
                 className="group flex items-center gap-2 px-5 py-2.5 border border-gold/50 rounded-full text-gold hover:bg-gold hover:text-charcoal hover:shadow-lg hover:shadow-gold/20 transition-all duration-300 relative overflow-hidden">
                 <div className="absolute inset-0 bg-gold/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
                 <span className="text-sm font-medium tracking-wide relative z-10">
-                  Sign In
+                  {t('navbar.signIn')}
                 </span>
                 <User className="w-4 h-4 transition-transform group-hover:scale-110 relative z-10" />
               </button>
@@ -190,7 +227,6 @@ export function Navbar() {
                 <Search className="w-5 h-5" />
               </button>
             )}
-            <ThemeToggle />
             <button
               onClick={toggleMobileMenu}
               className={`relative w-10 h-10 flex items-center justify-center transition-colors focus:outline-none ${
@@ -263,6 +299,17 @@ export function Navbar() {
             className="fixed inset-0 z-40 bg-theme-bg/90 pt-24 px-6 md:hidden">
 
             <div className="flex flex-col space-y-6">
+              {/* Quick Settings Row */}
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 }}
+                className="flex items-center justify-end gap-3"
+              >
+                <LanguageToggle />
+                <ThemeToggle />
+              </motion.div>
+
               {menuItems.map(
                 (item, index) =>
                   <motion.div
@@ -329,14 +376,14 @@ export function Navbar() {
                       openAuthModal();
                     }}
                     className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gold text-charcoal rounded-full font-medium shadow-lg shadow-gold/20">
-                    <span>Sign In</span>
+                    <span>{t('navbar.signIn')}</span>
                     <User className="w-5 h-5" />
                   </button>
                 ) : (
                   <button
                     onClick={handleLogout}
                     className="w-full flex items-center justify-center gap-2 px-6 py-3 border border-red-500/30 text-red-500 hover:bg-red-500/10 rounded-full font-medium transition-colors">
-                    <span>Sign Out</span>
+                    <span>{t('navbar.signOut')}</span>
                     <LogOut className="w-5 h-5" />
                   </button>
                 )}

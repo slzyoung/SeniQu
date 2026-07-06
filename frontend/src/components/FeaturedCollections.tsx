@@ -14,7 +14,8 @@ import {
   Heart,
   Loader2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RefreshCw
 } from
   'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -22,6 +23,7 @@ import { useScrollAnimation } from '../hooks/useScrollAnimation';
 import { GlowCard } from './GlowCard';
 import { useArtworks } from '../hooks/useArtworks';
 import { ROUTES } from '../lib/constants';
+import { useLanguage } from '../hooks/useLanguage';
 
 interface CollectionData {
   id: string; // Changed to string to match UUID
@@ -211,13 +213,14 @@ CollectionCard.displayName = 'CollectionCard';
 export function FeaturedCollections() {
   const { ref, isVisible } = useScrollAnimation();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [favorites, setFavorites] = useState<string[]>([]);
   const [isHovered, setIsHovered] = useState(false);
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
   // Fetch real artworks
-  const { data: artworksData, isLoading } = useArtworks({
-    limit: 6
+  const { data: artworksData, isLoading, refetch, isFetching } = useArtworks({
+    limit: 12
   });
 
   // Map to CollectionData format
@@ -295,15 +298,30 @@ export function FeaturedCollections() {
           <div className="flex items-center justify-center gap-2 mb-3 md:mb-4">
             <div className="h-[1px] w-6 md:w-8 bg-gold/50" />
             <span className="text-gold text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em]">
-              Curated Gallery
+              {t('featured.label')}
             </span>
             <div className="h-[1px] w-6 md:w-8 bg-gold/50" />
           </div>
-          <h2 className="text-3xl md:text-5xl font-serif text-theme-text mb-3 md:mb-4">
-            Featured <span className="text-gold italic">Artworks</span>
+          <h2 className="text-3xl md:text-5xl font-serif text-theme-text mb-3 md:mb-4 flex items-center justify-center gap-3">
+            <span>
+              {t('featured.title').split(' ').map((word, idx) => {
+                if (word.toLowerCase() === 'artworks' || word.toLowerCase() === 'karya') {
+                  return <span key={idx} className="text-gold italic">{word} </span>;
+                }
+                return word + ' ';
+              })}
+            </span>
+            <button
+              onClick={() => refetch()}
+              disabled={isFetching || isLoading}
+              className="p-1.5 md:p-2 rounded-full hover:bg-theme-elevated transition-all duration-200 text-theme-muted hover:text-gold disabled:opacity-50 flex items-center justify-center active:scale-95 shadow-sm"
+              title={t('featured.refresh')}
+            >
+              <RefreshCw className={`w-4 h-4 md:w-5 md:h-5 ${isFetching ? 'animate-spin text-gold' : ''}`} />
+            </button>
           </h2>
           <p className="text-theme-muted text-sm md:text-base max-w-2xl mx-auto">
-            Discover our diverse collection of Indonesian masterpieces
+            {t('featured.subtitle')}
           </p>
         </div>
 

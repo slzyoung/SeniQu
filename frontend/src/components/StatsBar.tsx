@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, useInView } from 'framer-motion';
 import { X } from 'lucide-react';
+import { useLanguage } from '../hooks/useLanguage';
 
 interface StatItem {
   id: string;
@@ -241,6 +242,13 @@ function ExpandedStat({ stat, onClose }: { stat: StatItem; onClose: () => void }
    ═══════════════════════════════════════════════════════ */
 export function StatsBar() {
   const [selected, setSelected] = useState<StatItem | null>(null);
+  const { t } = useLanguage();
+
+  const localizedStats = stats.map((stat) => ({
+    ...stat,
+    label: t(`stats.${stat.id}Label`),
+    fact: t(`stats.${stat.id}Fact`),
+  }));
 
   const handleOpen = useCallback((stat: StatItem) => setSelected(stat), []);
   const handleClose = useCallback(() => setSelected(null), []);
@@ -249,7 +257,7 @@ export function StatsBar() {
     <section className="w-full bg-theme-bg relative z-20 pt-16 md:pt-24 px-4 md:px-6 pb-8 md:pb-12">
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
-          {stats.map((stat, i) => (
+          {localizedStats.map((stat, i) => (
             <StatCard key={stat.id} stat={stat} delay={i * 0.15} onOpen={() => handleOpen(stat)} />
           ))}
         </div>
@@ -258,7 +266,10 @@ export function StatsBar() {
       {/* Expanded overlay */}
       <AnimatePresence>
         {selected && (
-          <ExpandedStat stat={selected} onClose={handleClose} />
+          <ExpandedStat 
+            stat={localizedStats.find(s => s.id === selected.id) || selected} 
+            onClose={handleClose} 
+          />
         )}
       </AnimatePresence>
     </section>

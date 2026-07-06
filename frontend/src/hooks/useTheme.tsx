@@ -10,7 +10,7 @@ export function ThemeProvider({ children }: {children: React.ReactNode;}) {
   const [theme, setTheme] = useState<Theme>(() => {
     // Check localStorage first
     if (typeof window !== 'undefined') {
-      const savedTheme = localStorage.getItem('seniqu-theme');
+      const savedTheme = localStorage.getItem('seniqu-theme-v3');
       if (savedTheme === 'light' || savedTheme === 'dark') {
         return savedTheme;
       }
@@ -25,7 +25,7 @@ export function ThemeProvider({ children }: {children: React.ReactNode;}) {
     // Add new class
     root.classList.add(theme);
     // Save to localStorage
-    localStorage.setItem('seniqu-theme', theme);
+    localStorage.setItem('seniqu-theme-v3', theme);
   }, [theme]);
   const toggleTheme = () => {
     setTheme((prev) => prev === 'dark' ? 'light' : 'dark');

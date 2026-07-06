@@ -2,32 +2,32 @@ import { Landmark, Wifi, Brain } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
 import { GlowCard } from './GlowCard';
+import { useLanguage } from '../hooks/useLanguage';
 
 export function HowItWorks() {
   const { ref, isVisible } = useScrollAnimation();
+  const { t } = useLanguage();
+
   const steps = [
     {
       icon: Landmark,
       number: '01',
-      title: 'Discover Cultural Spaces',
-      description:
-        'Browse museums, galleries & heritage buildings across the archipelago in one unified platform.',
+      title: t('howItWorks.stepTitle0'),
+      description: t('howItWorks.stepDesc0'),
       delay: 0
     },
     {
       icon: Brain,
       number: '02',
-      title: 'AI-Powered Insights',
-      description:
-        'Get smart summaries, audio guides, and contextual storytelling personalized to your interests.',
+      title: t('howItWorks.stepTitle1'),
+      description: t('howItWorks.stepDesc1'),
       delay: 0.15
     },
     {
       icon: Wifi,
       number: '03',
-      title: 'Interactive Exploration',
-      description:
-        'Navigate with digital guides, curated routes, and immersive content that transforms every visit.',
+      title: t('howItWorks.stepTitle2'),
+      description: t('howItWorks.stepDesc2'),
       delay: 0.3
     }
   ];
@@ -51,10 +51,15 @@ export function HowItWorks() {
           className={`text-center mb-12 md:mb-20 transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
 
           <h2 className="text-3xl md:text-5xl font-serif text-theme-text mb-3 md:mb-4">
-            How It <span className="text-gold italic">Works</span>
+            {t('howItWorks.title').split(' ').map((word, i, arr) => {
+              if (i === arr.length - 1) {
+                return <span key={i} className="text-gold italic">{word}</span>;
+              }
+              return word + ' ';
+            })}
           </h2>
           <p className="text-theme-muted text-sm md:text-base max-w-lg mx-auto">
-            Three simple steps to explore Indonesia's cultural heritage.
+            {t('howItWorks.subtitle')}
           </p>
         </div>
 
@@ -99,11 +104,11 @@ export function HowItWorks() {
                     <div className="w-12 h-12 rounded-xl bg-theme-bg border border-gold/30 flex items-center justify-center flex-shrink-0">
                       <step.icon className="w-6 h-6 text-gold" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-base font-serif font-bold text-theme-text mb-1">
+                    <div>
+                      <h3 className="font-serif font-bold text-theme-text text-lg mb-1 leading-tight">
                         {step.title}
                       </h3>
-                      <p className="text-theme-muted leading-relaxed text-xs">
+                      <p className="text-theme-muted text-xs leading-relaxed font-light">
                         {step.description}
                       </p>
                     </div>
@@ -112,32 +117,30 @@ export function HowItWorks() {
               </div>
 
               {/* Desktop: vertical card layout */}
-              <div className="hidden md:block">
-                <GlowCard
-                  className="h-full rounded-2xl p-8 text-center"
-                  hover={true}>
-
-                  <div className="relative flex flex-col items-center">
-                    <span className="absolute -top-4 -right-4 text-8xl font-serif font-bold text-theme-text opacity-[0.03] select-none">
-                      {step.number}
-                    </span>
-                    <div className="w-20 h-20 rounded-2xl bg-theme-bg border border-gold/30 flex items-center justify-center mb-6 shadow-lg shadow-gold/5 relative overflow-hidden">
-                      <div className="absolute inset-0 bg-gold/10 animate-pulse-glow" />
-                      <step.icon className="w-8 h-8 text-gold relative z-10" />
-                    </div>
-                    <h3 className="text-xl font-serif font-bold text-theme-text mb-3">
-                      {step.title}
-                    </h3>
-                    <p className="text-theme-muted leading-relaxed text-sm">
-                      {step.description}
-                    </p>
+              <div className="hidden md:flex flex-col items-center text-center">
+                {/* Decorative Step Circle */}
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  className="w-16 h-16 rounded-2xl bg-theme-surface border border-theme-border flex items-center justify-center relative group hover:border-gold/30 hover:shadow-xl transition-all duration-300">
+                  <div className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-theme-bg border border-gold/30 text-gold text-xs font-serif font-bold flex items-center justify-center">
+                    {step.number}
                   </div>
-                </GlowCard>
+                  <step.icon className="w-7 h-7 text-theme-muted group-hover:text-gold transition-colors duration-300" />
+                </motion.div>
+
+                {/* Text Content */}
+                <div className="mt-8 px-4">
+                  <h3 className="text-xl font-serif font-bold text-theme-text mb-3 leading-snug">
+                    {step.title}
+                  </h3>
+                  <p className="text-theme-muted text-sm leading-relaxed font-light">
+                    {step.description}
+                  </p>
+                </div>
               </div>
             </motion.div>
           )}
         </div>
       </div>
     </section>);
-
 }
