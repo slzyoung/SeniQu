@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
 import { X, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -67,7 +68,7 @@ function ExpandedCard({
         };
     }, [onClose]);
 
-    return (
+    return createPortal(
         <motion.div
             className="fixed inset-0 z-[100] flex items-end md:items-center justify-center"
             initial={{ opacity: 0 }}
@@ -132,7 +133,8 @@ function ExpandedCard({
                 {/* Safe area padding */}
                 <div className="h-[env(safe-area-inset-bottom,0px)] bg-black" />
             </motion.div>
-        </motion.div>
+        </motion.div>,
+        document.body
     );
 }
 

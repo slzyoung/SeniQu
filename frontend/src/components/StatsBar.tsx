@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useInView } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useLanguage } from '../hooks/useLanguage';
@@ -155,7 +156,7 @@ function ExpandedStat({ stat, onClose }: { stat: StatItem; onClose: () => void }
     };
   }, [onClose]);
 
-  return (
+  return createPortal(
     <motion.div
       className="fixed inset-0 z-[100] flex items-end md:items-center justify-center"
       initial={{ opacity: 0 }}
@@ -233,7 +234,8 @@ function ExpandedStat({ stat, onClose }: { stat: StatItem; onClose: () => void }
         {/* Bottom safe area */}
         <div className="h-[env(safe-area-inset-bottom,0px)]" />
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body
   );
 }
 
