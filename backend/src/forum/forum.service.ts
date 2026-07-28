@@ -143,11 +143,13 @@ export class ForumService {
             throw new NotFoundException(`Thread not found`)
         }
 
-        // Increment views
-        await this.supabase
-            .from("forum_threads")
-            .update({ views: data.views + 1 })
-            .eq("id", data.id)
+        // Increment views in background (non-blocking for faster Fastify response)
+        (async () => {
+            await this.supabase
+                .from("forum_threads")
+                .update({ views: data.views + 1 })
+                .eq("id", data.id)
+        })().catch((err: any) => this.logger.warn(`Failed to increment views for thread ${data.id}: ${err?.message || err}`))
 
         return { data: { ...data, title: this.cleanText(data.title), content: data.content ? this.cleanText(data.content) : data.content } }
     }
@@ -167,11 +169,13 @@ export class ForumService {
             throw new NotFoundException(`Thread not found`)
         }
 
-        // Increment views
-        await this.supabase
-            .from("forum_threads")
-            .update({ views: data.views + 1 })
-            .eq("id", data.id)
+        // Increment views in background (non-blocking for faster Fastify response)
+        (async () => {
+            await this.supabase
+                .from("forum_threads")
+                .update({ views: data.views + 1 })
+                .eq("id", data.id)
+        })().catch((err: any) => this.logger.warn(`Failed to increment views for thread ${data.id}: ${err?.message || err}`))
 
         return { data: { ...data, title: this.cleanText(data.title), content: data.content ? this.cleanText(data.content) : data.content } }
     }
