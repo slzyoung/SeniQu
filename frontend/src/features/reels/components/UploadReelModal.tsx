@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
     X, Play, Pause, Upload, Music, Search, Scissors, 
-    Palette, AlertCircle, Video, FastForward, Crop, LogOut, MapPin, Sliders
+    Palette, AlertCircle, Video, FastForward, Crop, LogOut, MapPin
 } from 'lucide-react';
 import '../reels.css';
 import { validateVideo, generateVideoThumbnail, formatFileSize } from '../../../lib/videoCompressor';
@@ -94,9 +94,9 @@ export default function UploadReelModal({ onClose }: Props) {
     const [preview, setPreview] = useState<string | null>(null);
     const [caption, setCaption] = useState('');
     const [hashtags, setHashtags] = useState('');
-    const [progress, setProgress] = useState(0);
-    const [uploading, setUploading] = useState(false);
-    const [uploadStatus, setUploadStatus] = useState<string>('');
+    const [progress] = useState(0);
+    const [uploading] = useState(false);
+    const [uploadStatus] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
     const [warning, setWarning] = useState<string | null>(null);
     const [meta, setMeta] = useState<any>(null);
@@ -115,73 +115,106 @@ export default function UploadReelModal({ onClose }: Props) {
     const [showLocationDropdown, setShowLocationDropdown] = useState(false);
     const [liveLocationResults, setLiveLocationResults] = useState<{ name: string; address?: string; lat?: number; lng?: number }[]>([]);
     const [searchingLocation, setSearchingLocation] = useState(false);
+    const locationDropdownRef = useRef<HTMLDivElement>(null);
 
-    // Real-time location search via Google Places API (backend proxy) + Nominatim fallback
+    // Click outside listener for location dropdown
     useEffect(() => {
-        if (!locationSearch.trim() || locationSearch.trim().length < 2) {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (locationDropdownRef.current && !locationDropdownRef.current.contains(event.target as Node)) {
+                setShowLocationDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Real-time location search via Nominatim (instant) + Google Places API with AbortController & fast timeout
+    useEffect(() => {
+        const query = locationSearch.trim();
+        if (!query || query.length < 2 || (selectedLocation && selectedLocation.name.toLowerCase() === query.toLowerCase())) {
             setLiveLocationResults([]);
             setSearchingLocation(false);
             return;
         }
 
-        const query = locationSearch.trim();
+        const controller = new AbortController();
         setSearchingLocation(true);
 
         const timer = setTimeout(async () => {
             try {
                 const results: { name: string; address?: string; lat?: number; lng?: number }[] = [];
 
-                // 1. Query Backend Google Places API via museumService
+                // 1. Query Nominatim OpenStreetMap API FIRST (Instant, ~200ms)
                 try {
-                    const placeRes = await museumService.searchNearbyPlaces(-6.1754, 106.8272, 70000, query);
-                    if (placeRes?.places && placeRes.places.length > 0) {
-                        placeRes.places.forEach((p: any) => {
-                            results.push({
-                                name: p.name || p.displayName?.text || query,
-                                address: p.address || p.formattedAddress || '',
-                                lat: p.latitude || p.location?.latitude,
-                                lng: p.longitude || p.location?.longitude,
-                            });
+                    const nomRes = await fetch(
+                        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=8&countrycodes=id,sg,my`,
+                        { 
+                            signal: controller.signal,
+                            headers: { 
+                                'User-Agent': 'SeniQu-ArtHeritage/1.0 (contact@seniqu.art)',
+                                'Accept-Language': 'id,en-US;q=0.9,en;q=0.8'
+                            } 
+                        }
+                    );
+                    if (nomRes.ok && !controller.signal.aborted) {
+                        const data = await nomRes.json();
+                        data.forEach((item: any) => {
+                            const lat = parseFloat(item.lat);
+                            const lng = parseFloat(item.lon);
+                            const name = item.name || item.display_name.split(',')[0].trim();
+                            const address = item.display_name;
+                            if (!results.some(r => r.name.toLowerCase() === name.toLowerCase())) {
+                                results.push({ name, address, lat, lng });
+                            }
                         });
                     }
-                } catch (e) {
-                    console.warn('Google Places search warning:', e);
-                }
-
-                // 2. Query Nominatim OpenStreetMap API for address results if needed
-                if (results.length < 5) {
-                    try {
-                        const nomRes = await fetch(
-                            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=6&countrycodes=id,sg,my`,
-                            { headers: { 'User-Agent': 'SeniQu-WebApp/1.0' } }
-                        );
-                        if (nomRes.ok) {
-                            const data = await nomRes.json();
-                            data.forEach((item: any) => {
-                                const lat = parseFloat(item.lat);
-                                const lng = parseFloat(item.lon);
-                                const name = item.display_name.split(',')[0];
-                                const address = item.display_name;
-                                if (!results.some(r => r.name.toLowerCase() === name.toLowerCase())) {
-                                    results.push({ name, address, lat, lng });
-                                }
-                            });
-                        }
-                    } catch (e) {
+                } catch (e: any) {
+                    if (e.name !== 'AbortError') {
                         console.warn('Nominatim search warning:', e);
                     }
                 }
 
-                setLiveLocationResults(results);
-            } catch (err) {
-                console.error('Location search error:', err);
-            } finally {
-                setSearchingLocation(false);
-            }
-        }, 350);
+                // 2. Query Backend Google Places API via museumService with a strict 1-second timeout race
+                if (!controller.signal.aborted) {
+                    try {
+                        const backendPromise = museumService.searchNearbyPlaces(-6.1754, 106.8272, 70000, query);
+                        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Backend timeout')), 1000));
+                        const placeRes = await Promise.race([backendPromise, timeoutPromise]) as any;
+                        if (placeRes?.places && placeRes.places.length > 0) {
+                            placeRes.places.forEach((p: any) => {
+                                const name = p.name || p.displayName?.text || query;
+                                const address = p.address || p.formattedAddress || '';
+                                const lat = p.latitude || p.location?.latitude;
+                                const lng = p.longitude || p.location?.longitude;
+                                if (!results.some(r => r.name.toLowerCase() === name.toLowerCase())) {
+                                    results.unshift({ name, address, lat, lng });
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        // Silent catch on timeout so Nominatim results show immediately without hanging
+                    }
+                }
 
-        return () => clearTimeout(timer);
-    }, [locationSearch]);
+                if (!controller.signal.aborted) {
+                    setLiveLocationResults(results);
+                }
+            } catch (err: any) {
+                if (err.name !== 'AbortError') {
+                    console.error('Location search error:', err);
+                }
+            } finally {
+                if (!controller.signal.aborted) {
+                    setSearchingLocation(false);
+                }
+            }
+        }, 250);
+
+        return () => {
+            clearTimeout(timer);
+            controller.abort();
+        };
+    }, [locationSearch, selectedLocation]);
 
     // Audio selection states
     const [audioSource, setAudioSource] = useState<'original' | 'spotify' | 'internal'>('original');
@@ -655,14 +688,11 @@ export default function UploadReelModal({ onClose }: Props) {
             'Proses upload video Anda sedang berjalan. Anda bisa melanjutkan aktivitas di SeniQu.'
         );
 
+        // Auto-expand background upload manager widget
+        window.dispatchEvent(new CustomEvent('open_upload_manager'));
+
         onClose();
     };
-
-    // Curated filtering
-    const filteredTracks = CURATED_TRACKS.filter(t => 
-        t.title.toLowerCase().includes(spotifySearch.toLowerCase()) || 
-        t.artist.toLowerCase().includes(spotifySearch.toLowerCase())
-    );
 
     const displayTracks = spotifySearch.trim() ? liveSpotifyTracks : CURATED_TRACKS;
 
@@ -695,7 +725,7 @@ export default function UploadReelModal({ onClose }: Props) {
                                     <Upload className="w-6 h-6 text-amber-500" />
                                 </div>
                                 <span className="text-theme-text text-sm font-semibold mt-1">Upload short video</span>
-                                <span className="text-theme-muted text-[11px] text-center max-w-[220px] mt-1">Max 60s · 100MB · Portrait ratio recommended</span>
+                                <span className="text-theme-muted text-[11px] text-center max-w-[220px] mt-1">Max 60s · 150MB · Portrait ratio recommended</span>
                             </button>
                             {error && <p className="text-xs text-red-500 bg-red-500/10 p-3 rounded-lg border border-red-500/20 mt-4 w-full max-w-sm text-center">{error}</p>}
                         </div>
@@ -1381,7 +1411,7 @@ export default function UploadReelModal({ onClose }: Props) {
                             </div>
 
                             {/* Location Selector */}
-                            <div className="relative">
+                            <div ref={locationDropdownRef} className="relative">
                                 <label className="flex items-center justify-between mb-1.5 font-sans">
                                     <span className="flex items-center gap-1.5 font-semibold text-xs text-theme-text">
                                         <MapPin className="w-3.5 h-3.5 text-amber-500" /> Tag Location (Explore Maps)
@@ -1398,18 +1428,18 @@ export default function UploadReelModal({ onClose }: Props) {
                                 </label>
 
                                 {selectedLocation ? (
-                                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400">
-                                        <MapPin className="w-4 h-4 flex-shrink-0 text-amber-500" />
+                                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800/60 text-amber-950 dark:text-amber-200">
+                                        <MapPin className="w-4 h-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
                                         <div className="min-w-0 flex-1">
                                             <p className="text-xs font-semibold truncate">{selectedLocation.name}</p>
                                             {selectedLocation.lat !== undefined && selectedLocation.lng !== undefined && (
-                                                <p className="text-[10px] opacity-75 font-mono">{selectedLocation.lat.toFixed(4)}, {selectedLocation.lng.toFixed(4)} • Linked to Explore Maps</p>
+                                                <p className="text-[10px] text-slate-600 dark:text-zinc-400 font-mono">{selectedLocation.lat.toFixed(4)}, {selectedLocation.lng.toFixed(4)} • Linked to Explore Maps</p>
                                             )}
                                         </div>
                                         <button
                                             type="button"
                                             onClick={() => { setSelectedLocation(null); setLocationSearch(''); }}
-                                            className="w-5 h-5 rounded-full bg-amber-500/20 hover:bg-amber-500/40 flex items-center justify-center text-amber-700 dark:text-amber-300"
+                                            className="w-5 h-5 rounded-full bg-amber-200/60 dark:bg-amber-500/20 hover:bg-amber-300 dark:hover:bg-amber-500/40 flex items-center justify-center text-amber-900 dark:text-amber-200"
                                         >
                                             <X className="w-3 h-3" />
                                         </button>
@@ -1425,23 +1455,23 @@ export default function UploadReelModal({ onClose }: Props) {
                                             }}
                                             onFocus={() => setShowLocationDropdown(true)}
                                             placeholder="Tag a museum, gallery, or landmark..."
-                                            className="w-full bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-100 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
+                                            className="w-full bg-slate-100 dark:bg-zinc-800/80 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-zinc-100 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 placeholder:text-slate-500 dark:placeholder:text-zinc-500 font-medium"
                                         />
-                                        <MapPin className="w-4 h-4 text-theme-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                                        <MapPin className="w-4 h-4 text-slate-500 dark:text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
 
                                         {/* Dropdown Suggestions */}
                                         {showLocationDropdown && (
-                                            <div className="absolute top-full left-0 right-0 mt-1 z-30 max-h-56 overflow-y-auto rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xl p-1.5 space-y-1">
+                                            <div className="absolute top-full left-0 right-0 mt-1 z-30 max-h-56 overflow-y-auto rounded-xl bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-800 shadow-2xl p-1.5 space-y-1">
                                                 {searchingLocation && (
-                                                    <p className="text-xs text-amber-500 px-2 py-1.5 font-medium animate-pulse flex items-center gap-1.5">
-                                                        <MapPin className="w-3.5 h-3.5 animate-spin" />
-                                                        Mencari lokasi real-time (Google Maps)...
+                                                    <p className="text-xs text-amber-800 dark:text-amber-300 px-2 py-1.5 font-semibold animate-pulse flex items-center gap-1.5">
+                                                        <MapPin className="w-3.5 h-3.5 animate-spin text-amber-600 dark:text-amber-400" />
+                                                        Mencari lokasi real-time (Google Maps / OSM)...
                                                     </p>
                                                 )}
 
                                                 {liveLocationResults.length > 0 && (
                                                     <div>
-                                                        <p className="text-[10px] text-amber-600 dark:text-amber-400 px-2 py-1 uppercase tracking-wider font-semibold">Google Maps / Live Locations</p>
+                                                        <p className="text-[10px] text-amber-800 dark:text-amber-400 px-2 py-1 uppercase tracking-wider font-bold">Google Maps / Live Locations</p>
                                                         {liveLocationResults.map((loc, idx) => (
                                                             <button
                                                                 key={'live-step3-' + idx}
@@ -1451,19 +1481,19 @@ export default function UploadReelModal({ onClose }: Props) {
                                                                     setLocationSearch(loc.name);
                                                                     setShowLocationDropdown(false);
                                                                 }}
-                                                                className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-start gap-2 transition-colors text-xs text-slate-800 dark:text-zinc-200"
+                                                                className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-start gap-2 transition-colors text-xs text-slate-900 dark:text-zinc-100 font-medium"
                                                             >
-                                                                <MapPin className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                                                                <MapPin className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
                                                                 <div className="min-w-0 flex-1">
-                                                                    <p className="truncate font-medium">{loc.name}</p>
-                                                                    {loc.address && <p className="truncate text-[10px] text-theme-muted">{loc.address}</p>}
+                                                                    <p className="truncate font-semibold text-slate-900 dark:text-zinc-100">{loc.name}</p>
+                                                                    {loc.address && <p className="truncate text-[10px] text-slate-600 dark:text-zinc-400 font-normal">{loc.address}</p>}
                                                                 </div>
                                                             </button>
                                                         ))}
                                                     </div>
                                                 )}
 
-                                                <p className="text-[10px] text-theme-muted px-2 py-1 uppercase tracking-wider font-semibold mt-1">Explore Heritage Presets</p>
+                                                <p className="text-[10px] text-slate-600 dark:text-zinc-400 px-2 py-1 uppercase tracking-wider font-bold mt-1">Explore Heritage Presets</p>
                                                 {HERITAGE_LOCATIONS.filter(loc => loc.name.toLowerCase().includes(locationSearch.toLowerCase())).map((loc, idx) => (
                                                     <button
                                                         key={'preset-step3-' + idx}
@@ -1473,9 +1503,9 @@ export default function UploadReelModal({ onClose }: Props) {
                                                             setLocationSearch(loc.name);
                                                             setShowLocationDropdown(false);
                                                         }}
-                                                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2 transition-colors text-xs text-slate-800 dark:text-zinc-200"
+                                                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2 transition-colors text-xs text-slate-900 dark:text-zinc-100 font-medium"
                                                     >
-                                                        <MapPin className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                                                        <MapPin className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
                                                         <span className="truncate">{loc.name}</span>
                                                     </button>
                                                 ))}
@@ -1487,9 +1517,9 @@ export default function UploadReelModal({ onClose }: Props) {
                                                             setSelectedLocation({ name: locationSearch.trim() });
                                                             setShowLocationDropdown(false);
                                                         }}
-                                                        className="w-full text-left px-2.5 py-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-medium text-xs flex items-center gap-2"
+                                                        className="w-full text-left px-2.5 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/60 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-950 dark:text-amber-200 font-semibold text-xs flex items-center gap-2 transition-colors"
                                                     >
-                                                        <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                                                        <MapPin className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
                                                         <span>Gunakan lokasi kustom: "{locationSearch.trim()}"</span>
                                                     </button>
                                                 )}

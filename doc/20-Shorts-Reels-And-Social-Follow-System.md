@@ -251,14 +251,21 @@ To empower content creators to tag precise geographical origins for their videos
 
 ### 8.1. Debounced Location Search Pipeline
 During Step 2 and Step 3 of the Reels Upload funnel (`UploadReelModal.tsx`), creators can search for location tags in real time:
-1. **Google Places API Proxy**: Queries `museumService.searchNearbyPlaces(lat, lng, radius, query)`, routing requests safely through NestJS backend proxy endpoints to keep API keys hidden and enforce rate-limiting.
-2. **OpenStreetMap (Nominatim) Fallback**: If fewer than 5 results return, the search queries OpenStreetMap Nominatim for global coverage without extra API cost.
-3. **Heritage Presets & Custom Locations**: Preserves curated Indonesian museum presets while enabling creators to select `"Gunakan lokasi kustom: ..."` for unindexed or newly discovered locations.
+1. **Instant OpenStreetMap (Nominatim) Query**: Executed first with a 250ms debounce and compliant user-agent (`SeniQu-ArtHeritage/1.0 (contact@seniqu.art)`), returning results for landmarks (e.g., *"Waduk Sempor"*, *"Museum Macan"*, *"Borobudur"*) within **~200ms**.
+2. **Backend Proxy & Strict Race Timeout**: Calls NestJS `museumService.searchNearbyPlaces` wrapped in a **1-second `Promise.race` timeout** at the frontend level and **2.5-second fast timeout per mirror** at the backend level. This prevents Overpass mirror delays or 504 errors from freezing the user search UI.
+3. **AbortController Cancellation**: Every keystroke triggers an `AbortController` signal to cleanly cancel in-flight HTTP requests.
+4. **Click-Outside Detection**: A container ref (`locationDropdownRef`) and `mousedown` document listener auto-close the suggestion list when the user clicks elsewhere.
+5. **High-Contrast Theme Polish**: Dropdown elements feature high-contrast text (`text-amber-800 dark:text-amber-300`, `text-slate-600 dark:text-zinc-400 font-bold uppercase`, `bg-amber-50 text-amber-950 border-amber-300`) ensuring perfect readability in Light Mode without washed-out yellow tones.
 
-### 8.2. Metadata Persistence & CDN Pipeline
+### 8.2. Metadata Persistence & Database Schema
 * **Payload Structure**: Captures `locationName`, `locationLat`, and `locationLng`.
-* **Database Indexing**: Stored in PostgreSQL `reels` table columns (`location_name`, `location_lat`, `location_lng`).
-* **Direct-to-CDN Uploads**: Forwarded seamlessly via `useUploadStore` during both legacy API and direct Cloudflare R2 CDN background uploads.
+* **Database Migration (`072_add_reels_location_columns.sql`)**:
+  ```sql
+  ALTER TABLE public.reels ADD COLUMN IF NOT EXISTS location_name TEXT;
+  ALTER TABLE public.reels ADD COLUMN IF NOT EXISTS location_lat NUMERIC;
+  ALTER TABLE public.reels ADD COLUMN IF NOT EXISTS location_lng NUMERIC;
+  ```
+* **Direct-to-CDN Uploads**: Forwarded seamlessly via `useUploadStore` during both direct Cloudflare R2 CDN uploads and Fastify multipart background uploads.
 
 ### 8.3. Interactive Feed Tagging & Map Synchronization
 * **Reel Feed Badge**: `ReelItem.tsx` renders a theme-aware MapPin pill showing the location tag.
@@ -267,6 +274,21 @@ During Step 2 and Step 3 of the Reels Upload funnel (`UploadReelModal.tsx`), cre
   /nearby?lat={lat}&lng={lng}&search={locationName}
   ```
 * **URL Search Parameter Parsing**: On page mount, `PublicNearbyPage.tsx` parses `lat`, `lng`, and `search` query parameters, automatically centering the map, placing a target pin, and fetching nearby places for the selected coordinates.
+
+---
+
+## 9. Non-Intrusive Enterprise Background Upload Manager
+
+To enable users to upload large video files (up to **150MB**) without blocking their navigation or forcing them to wait on modal dialogs, SeniQu features a background video upload manager (`BackgroundUploadWidget.tsx`).
+
+### Key Architecture Details
+1. **Event-Driven Auto-Expansion**: Submitting a Reel fires an `open_upload_manager` custom window event, instantly opening the upload widget.
+2. **IndexedDB State Persistence**: Managed globally via Zustand (`useUploadStore.ts`), persisting upload tasks, chunk progress, retries, and errors across page navigations.
+3. **Glassmorphic Dual-State UI**:
+   - **Mini-Pill (Collapsed)**: A compact pill showing upload count, progress percentage, and an animated spinner.
+   - **Expanded View**: Detailed task cards with file metadata, progress bar, pause/resume/cancel controls, and error retry actions.
+4. **Mobile Navigation Polish**: Positioned at `bottom-[calc(4.2rem+env(safe-area-inset-bottom))]` on mobile screens to sit cleanly above `MobileBottomNav` without overlapping bottom navigation buttons.
+5. **Backend Capacity (Fastify 200MB)**: Fastify server payload limits are configured to `200MB` (`bodyLimit: 200 * 1024 * 1024`), ensuring zero file truncations or 413 Payload Too Large errors during multi-part background uploads.
 
 
 
