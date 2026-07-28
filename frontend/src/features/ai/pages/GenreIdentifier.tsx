@@ -1,1 +1,2 @@
-export { GenreIdentifier as default } from '../index';
+export { default } from '../../user/pages/GenreIdentifierPage/GenreIdentifierPage';
+

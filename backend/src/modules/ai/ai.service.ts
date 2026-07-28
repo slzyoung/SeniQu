@@ -731,39 +731,55 @@ export class AiService {
       }
 
       const base64Data = buffer.toString('base64');
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: 'Analyze the provided image. Determine if the image is a genuine piece of artwork (e.g., a painting, drawing, sculpture, digital design, traditional craft, or photography of physical art) and is appropriate for a public gallery (no NSFW, no hate speech, not a random personal selfie/meme, not a screenshot of text/unrelated app). Respond ONLY with a JSON object containing keys: isArtwork (boolean), isAppropriate (boolean), and reason (string describing the analysis).'
-                  },
-                  {
-                    inlineData: {
-                      mimeType: mimeType,
-                      data: base64Data,
-                    }
-                  }
-                ]
-              }
-            ],
-            generationConfig: {
-              responseMimeType: 'application/json'
-            }
-          })
-        }
-      );
+      const models = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+      let response: Response | null = null;
+      let lastErrText = '';
 
-      if (!response.ok) {
-        const errText = await response.text();
-        this.logger.error(`Gemini Moderation API error (status ${response.status}): ${errText}`);
+      for (const model of models) {
+        try {
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                contents: [
+                  {
+                    parts: [
+                      {
+                        text: 'Analyze the provided image. Determine if the image is a genuine piece of artwork (e.g., a painting, drawing, sculpture, digital design, traditional craft, or photography of physical art) and is appropriate for a public gallery (no NSFW, no hate speech, not a random personal selfie/meme, not a screenshot of text/unrelated app). Respond ONLY with a JSON object containing keys: isArtwork (boolean), isAppropriate (boolean), and reason (string describing the analysis).'
+                      },
+                      {
+                        inlineData: {
+                          mimeType: mimeType,
+                          data: base64Data,
+                        }
+                      }
+                    ]
+                  }
+                ],
+                generationConfig: {
+                  responseMimeType: 'application/json'
+                }
+              })
+            }
+          );
+          if (res.ok) {
+            response = res;
+            break;
+          } else {
+            lastErrText = await res.text();
+            this.logger.warn(`Gemini Moderation model ${model} failed (status ${res.status}): ${lastErrText.substring(0, 150)}`);
+          }
+        } catch (e: any) {
+          lastErrText = e.message;
+        }
+      }
+
+      if (!response || !response.ok) {
+        this.logger.error(`Gemini Moderation API error across models: ${lastErrText}`);
         return { isArtwork: true, isAppropriate: true, reason: 'API call failed, bypassing moderation.' };
       }
 
@@ -1000,11 +1016,13 @@ Ensure your JSON output is valid, complete, and not truncated. Do not include an
       const base64Data = buffer.toString('base64');
       let curationResult: any;
       let textResponse = '';
+      const modelsToTry = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
 
-      for (let attempt = 1; attempt <= 3; attempt++) {
+      for (let attempt = 1; attempt <= modelsToTry.length; attempt++) {
+        const currentModel = modelsToTry[attempt - 1];
         try {
           const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${geminiApiKey}`,
             {
               method: 'POST',
               headers: {
@@ -1026,7 +1044,7 @@ Ensure your JSON output is valid, complete, and not truncated. Do not include an
                 ],
                 generationConfig: {
                   responseMimeType: 'application/json',
-                  temperature: attempt === 1 ? 0.3 : attempt === 2 ? 0.6 : 0.1,
+                  temperature: 0.2,
                 }
               })
             }
@@ -1455,14 +1473,37 @@ Ensure your JSON output is valid, complete, and not truncated. Do not include an
 
       this.logger.log(`Heritage scan for user ${userId} (quota: ${quota.remaining}/${quota.limit} remaining)...`);
 
-      // 2. Call Gemini 2.5 Flash
       const geminiApiKey = this.configService.get<string>('ai.geminiApiKey');
       if (!geminiApiKey) {
         throw new InternalServerErrorException('API Key Gemini tidak terkonfigurasi.');
       }
 
+      // 2. Prepare R2 Upload Promise & Gemini Prompt in parallel
+
+      const extension = mimeType.split('/')[1] || 'jpg';
+      const filename = `scan_${uuidv4()}.${extension}`;
+      const fakeFile: Express.Multer.File = {
+        fieldname: 'file',
+        originalname: filename,
+        encoding: '7bit',
+        mimetype: mimeType,
+        size: buffer.length,
+        buffer,
+        stream: null as any,
+        destination: '',
+        filename,
+        path: '',
+      };
+
+      // Execute R2 CDN Upload in background parallel with Gemini API
+      const r2UploadPromise = this.storageService.uploadFile(fakeFile, 'ai-scans', userId)
+        .catch(err => {
+          this.logger.warn(`R2 upload warning: ${err.message}`);
+          return { url: '' };
+        });
+
       const scanPrompt = `Kamu adalah ahli arkeolog, sejarawan, dan kurator museum nasional Indonesia yang sangat berpengalaman.
-Analisis gambar karya seni, arsip sejarah, artefak, candi, relief, batik, tenun, atau objek budaya Nusantara ini dengan sangat detail.
+Analisis gambar karya seni, arsip sejarah, artefak, candi, relief, batik, tenun, atau objek budaya ini dengan sangat detail.
 
 Kamu HARUS merespon HANYA dengan objek JSON valid berikut (gunakan bahasa Indonesia untuk semua teks deskripsi):
 {
@@ -1487,80 +1528,68 @@ Kamu HARUS merespon HANYA dengan objek JSON valid berikut (gunakan bahasa Indone
 PENTING:
 - Nilai confidence harus integer 0-100 berdasarkan seberapa yakin identifikasi ini
 - Berikan analisis yang sangat spesifik dan terperinci, bukan generik
-- Jika gambar buram atau tidak jelas, tetap berikan identifikasi terbaik yang mungkin
-- Pastikan format JSON valid dan lengkap
 - Jangan sertakan teks tambahan di luar JSON`;
 
       const base64Data = buffer.toString('base64');
       let scanResult: any;
+      const modelsToTry = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
 
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{
-                  parts: [
-                    { text: scanPrompt },
-                    { inlineData: { mimeType, data: base64Data } }
-                  ]
-                }],
-                generationConfig: {
-                  responseMimeType: 'application/json',
-                  temperature: attempt === 1 ? 0.2 : attempt === 2 ? 0.5 : 0.1,
-                }
-              })
-            }
-          );
-
-          if (!response.ok) {
-            const errText = await response.text().catch(() => '');
-            throw new Error(`Gemini status ${response.status}: ${errText.substring(0, 200)}`);
-          }
-
-          const result = await response.json();
-          const textResponse = result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-          if (!textResponse) {
-            throw new Error('Gemini returned empty response');
-          }
-
-          const cleaned = this.cleanJsonResponse(textResponse);
-          scanResult = JSON.parse(cleaned);
-          break; // success
-        } catch (err: any) {
-          this.logger.warn(`Heritage scan Gemini attempt ${attempt} failed: ${err.message}`);
-          if (attempt === 3) {
-            this.logger.error(`All 3 Gemini scan attempts failed for user ${userId}`);
-            throw new InternalServerErrorException(
-              'Gagal menganalisis gambar setelah beberapa percobaan. Silakan coba lagi.'
+      // Start Gemini processing
+      const geminiPromise = (async () => {
+        for (let attempt = 1; attempt <= modelsToTry.length; attempt++) {
+          const currentModel = modelsToTry[attempt - 1];
+          try {
+            const response = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${geminiApiKey}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{
+                    parts: [
+                      { text: scanPrompt },
+                      { inlineData: { mimeType, data: base64Data } }
+                    ]
+                  }],
+                  generationConfig: {
+                    responseMimeType: 'application/json',
+                    temperature: 0.1,
+                    maxOutputTokens: 2048,
+                  }
+                })
+              }
             );
+
+            if (!response.ok) {
+              const errText = await response.text().catch(() => '');
+              throw new Error(`Gemini (${currentModel}) status ${response.status}: ${errText.substring(0, 200)}`);
+            }
+
+            const result = await response.json();
+            const textResponse = result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+            if (!textResponse) {
+              throw new Error(`Gemini (${currentModel}) returned empty response`);
+            }
+
+            const cleaned = this.cleanJsonResponse(textResponse);
+            return JSON.parse(cleaned);
+          } catch (err: any) {
+            this.logger.warn(`Heritage scan Gemini attempt ${attempt} (${currentModel}) failed: ${err.message}`);
+            if (attempt === modelsToTry.length) {
+              throw new InternalServerErrorException(
+                'Gagal menganalisis gambar setelah beberapa percobaan. Silakan coba lagi.'
+              );
+            }
           }
         }
-      }
+      })();
 
-      // 3. Upload image to R2 CDN
-      const extension = mimeType.split('/')[1] || 'jpg';
-      const filename = `scan_${uuidv4()}.${extension}`;
-      const fakeFile: Express.Multer.File = {
-        fieldname: 'file',
-        originalname: filename,
-        encoding: '7bit',
-        mimetype: mimeType,
-        size: buffer.length,
-        buffer,
-        stream: null as any,
-        destination: '',
-        filename,
-        path: '',
-      };
+      // Await both parallel operations (Gemini AI analysis + R2 CDN upload)
+      const [resResult, uploadResult] = await Promise.all([geminiPromise, r2UploadPromise]);
+      scanResult = resResult;
+      const imageUrl = uploadResult?.url || '';
 
-      this.logger.log(`Uploading heritage scan image to R2 CDN...`);
-      const uploadResult = await this.storageService.uploadFile(fakeFile, 'ai-scans', userId);
-      const imageUrl = uploadResult.url;
 
       // 4. Save scan to database
       const { data, error: insertError } = await supabase

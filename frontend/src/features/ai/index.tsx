@@ -3,194 +3,22 @@
  * Uses real API data with artwork analysis hooks
  */
 
-import { useState, useRef } from 'react';
 import { PageContainer } from '../../components/common/DashboardLayout';
-import { Card, CardContent, Button, Badge } from '../../components/ui';
+import { Card, Button } from '../../components/ui';
 import {
-    Search,
-    Upload,
     Image as ImageIcon,
     Loader2,
     Eye,
     Heart,
-    CheckCircle
 } from 'lucide-react';
+
 import { useArtworks } from '../../hooks/useArtworks';
 import { Link } from 'react-router-dom';
 import { SEOHead } from '../../components/common/SEOHead';
 
-export function GenreIdentifier() {
-    const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [result, setResult] = useState<{
-        genre: string;
-        style: string;
-        era: string;
-        confidence: number;
-        similar: { title: string; artist: string }[];
-    } | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+import GenreIdentifierPage from '../user/pages/GenreIdentifierPage/GenreIdentifierPage';
 
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            setUploadedFile(file);
-            setPreviewUrl(URL.createObjectURL(file));
-            setResult(null);
-        }
-    };
-
-    const handleAnalyze = async () => {
-        if (!uploadedFile) return;
-
-        setIsAnalyzing(true);
-
-        // Simulate AI analysis (replace with real API call when available)
-        setTimeout(() => {
-            setResult({
-                genre: 'Impressionism',
-                style: 'Post-Impressionist',
-                era: 'Late 19th Century',
-                confidence: 92,
-                similar: [
-                    { title: 'Starry Night', artist: 'Vincent van Gogh' },
-                    { title: 'Water Lilies', artist: 'Claude Monet' },
-                ]
-            });
-            setIsAnalyzing(false);
-        }, 2000);
-    };
-
-    return (
-        <PageContainer
-            className="max-w-7xl mx-auto"
-            title="AI Genre Identifier"
-            subtitle="Upload artwork to identify its genre and style"
-        >
-            <SEOHead
-                title="AI Genre Identifier"
-                description="Automatically identify art genres and styles with AI technology. Upload artworks for in-depth analysis."
-                canonical="/ai/genre"
-            />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Upload Section */}
-                <Card variant="elevated">
-                    <CardContent className="p-6">
-                        <h3 className="text-lg font-semibold text-theme-text mb-4">Upload Artwork</h3>
-
-                        {!previewUrl ? (
-                            <div
-                                onClick={() => fileInputRef.current?.click()}
-                                className="border-2 border-dashed border-theme-border rounded-xl p-12 flex flex-col items-center justify-center text-center cursor-pointer hover:border-gold transition-colors"
-                            >
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleFileSelect}
-                                    className="hidden"
-                                />
-                                <Upload className="w-12 h-12 text-theme-muted mb-4" />
-                                <p className="text-theme-text font-medium">Click to upload</p>
-                                <p className="text-theme-muted text-sm mt-1">JPG, PNG, WebP up to 10MB</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                <div className="relative aspect-square rounded-xl overflow-hidden bg-theme-elevated">
-                                    <img
-                                        src={previewUrl}
-                                        alt="Preview"
-                                        className="w-full h-full object-contain"
-                                    />
-                                </div>
-                                <div className="flex gap-3">
-                                    <Button
-                                        variant="secondary"
-                                        className="flex-1"
-                                        onClick={() => { setPreviewUrl(null); setUploadedFile(null); setResult(null); }}
-                                    >
-                                        Clear
-                                    </Button>
-                                    <Button
-                                        variant="gold"
-                                        className="flex-1"
-                                        onClick={handleAnalyze}
-                                        disabled={isAnalyzing}
-                                    >
-                                        {isAnalyzing ? (
-                                            <>
-                                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                                Analyzing...
-                                            </>
-                                        ) : (
-                                            <>
-                                                Analyze
-                                            </>
-                                        )}
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-
-                {/* Results Section */}
-                <Card variant="elevated">
-                    <CardContent className="p-6">
-                        <h3 className="text-lg font-semibold text-theme-text mb-4">Analysis Results</h3>
-
-                        {!result ? (
-                            <div className="text-center py-12">
-                                <Search className="w-12 h-12 text-theme-muted mx-auto mb-4" />
-                                <p className="text-theme-muted">
-                                    Upload an artwork to get AI analysis results
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="space-y-6">
-                                <div className="flex items-center gap-2 text-green-500">
-                                    <CheckCircle className="w-5 h-5" />
-                                    <span className="font-medium">Analysis Complete ({result.confidence}% confidence)</span>
-                                </div>
-
-                                <div className="grid grid-cols-3 gap-4">
-                                    <div className="bg-theme-surface rounded-xl p-4 text-center">
-                                        <p className="text-xs text-theme-muted mb-1">Genre</p>
-                                        <p className="font-semibold text-theme-text">{result.genre}</p>
-                                    </div>
-                                    <div className="bg-theme-surface rounded-xl p-4 text-center">
-                                        <p className="text-xs text-theme-muted mb-1">Style</p>
-                                        <p className="font-semibold text-theme-text">{result.style}</p>
-                                    </div>
-                                    <div className="bg-theme-surface rounded-xl p-4 text-center">
-                                        <p className="text-xs text-theme-muted mb-1">Era</p>
-                                        <p className="font-semibold text-theme-text">{result.era}</p>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <p className="text-sm text-theme-muted mb-3">Similar Artworks</p>
-                                    <div className="space-y-2">
-                                        {result.similar.map((item, idx) => (
-                                            <div key={idx} className="flex items-center justify-between bg-theme-surface rounded-lg p-3">
-                                                <div>
-                                                    <p className="font-medium text-theme-text">{item.title}</p>
-                                                    <p className="text-sm text-theme-muted">{item.artist}</p>
-                                                </div>
-                                                <Badge variant="default">Match</Badge>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
-        </PageContainer>
-    );
-}
+export { GenreIdentifierPage as GenreIdentifier };
 
 export function AICuration() {
     // Fetch recommended artworks using real API
@@ -274,4 +102,5 @@ export function AICuration() {
     );
 }
 
-export default { GenreIdentifier, AICuration };
+export default { GenreIdentifier: GenreIdentifierPage, AICuration };
+

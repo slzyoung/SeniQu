@@ -470,19 +470,19 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(76, 175, 80, 0.1);
-  border: 1px solid rgba(76, 175, 80, 0.2);
+  background: #F0FDF4;
+  border: 1px solid #BBF7D0;
   padding: 6px 16px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  color: #43A047;
+  color: #15803D;
 }
 
 .dark .gid-confidence-badge {
-  background: rgba(76, 175, 80, 0.12);
-  border-color: rgba(76, 175, 80, 0.25);
-  color: #81C784;
+  background: rgba(22, 101, 52, 0.25);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #4ADE80;
 }
 
 .gid-style-badge {
@@ -490,10 +490,16 @@
   padding: 6px 16px;
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 500;
-  background: var(--glow-gold);
-  border: 1px solid rgba(201, 168, 76, 0.2);
-  color: var(--text-gold);
+  font-weight: 600;
+  background: #FEF3C7;
+  border: 1px solid #FDE68A;
+  color: #92400E;
+}
+
+.dark .gid-style-badge {
+  background: rgba(180, 83, 9, 0.25);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #FDE68A;
 }
 
 
@@ -513,6 +519,11 @@
   transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);
   position: relative;
   overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.dark .gid-audio-card {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 /* Shimmer on hover */
@@ -523,7 +534,7 @@
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.04), transparent);
+  background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.08), transparent);
   transition: left 0.6s ease;
 }
 
@@ -533,16 +544,16 @@
 
 .gid-audio-card:hover {
   background: var(--bg-elevated);
-  border-color: rgba(201, 168, 76, 0.15);
+  border-color: rgba(124, 107, 212, 0.3);
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px var(--shadow-color);
+  box-shadow: 0 8px 24px var(--shadow-color);
 }
 
 .gid-audio-play {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #7C6BD4, #5B4CB0);
+  background: linear-gradient(135deg, #4F46E5, #4338CA);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -550,13 +561,17 @@
   cursor: pointer;
   flex-shrink: 0;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 16px rgba(124, 107, 212, 0.3);
+  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.35);
   color: #fff;
 }
 
+.dark .gid-audio-play {
+  background: linear-gradient(135deg, #D97706, #B45309);
+  box-shadow: 0 4px 16px rgba(217, 119, 6, 0.35);
+}
+
 .gid-audio-play:hover {
-  transform: scale(1.1);
-  box-shadow: 0 6px 24px rgba(124, 107, 212, 0.45);
+  transform: scale(1.08);
 }
 
 .gid-audio-info {
@@ -567,12 +582,11 @@
 }
 
 .gid-audio-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-muted);
   letter-spacing: 1.2px;
   text-transform: uppercase;
-  opacity: 0.7;
 }
 
 .gid-audio-title {
@@ -594,21 +608,15 @@
   animation: gid-wave 0.8s ease-in-out infinite alternate;
 }
 
-/* Alternating wave bar colors — gold & purple */
-.gid-audio-wave-bar:nth-child(1) { height: 8px;  background: rgba(201, 168, 76, 0.5); }
-.gid-audio-wave-bar:nth-child(2) { height: 18px; background: rgba(124, 107, 212, 0.5); }
-.gid-audio-wave-bar:nth-child(3) { height: 26px; background: rgba(201, 168, 76, 0.6); }
-.gid-audio-wave-bar:nth-child(4) { height: 14px; background: rgba(124, 107, 212, 0.5); }
-.gid-audio-wave-bar:nth-child(5) { height: 10px; background: rgba(201, 168, 76, 0.4); }
-
-@keyframes gid-wave {
-  0% { transform: scaleY(0.4); }
-  100% { transform: scaleY(1.3); }
-}
+.gid-audio-wave-bar:nth-child(1) { height: 8px;  background: #4F46E5; }
+.gid-audio-wave-bar:nth-child(2) { height: 18px; background: #D97706; }
+.gid-audio-wave-bar:nth-child(3) { height: 26px; background: #4F46E5; }
+.gid-audio-wave-bar:nth-child(4) { height: 14px; background: #D97706; }
+.gid-audio-wave-bar:nth-child(5) { height: 10px; background: #4F46E5; }
 
 
 /* ================================================
-   § 7. PATTERN MEANING CARD
+   § 7. PATTERN MEANING & DESCRIPTION CARD
    ================================================ */
 
 .gid-pattern-card {
@@ -618,42 +626,29 @@
   padding: 20px;
   position: relative;
   overflow: hidden;
-  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
 }
 
-.gid-pattern-card.cursor-pointer {
-  cursor: pointer;
+.dark .gid-pattern-card {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
 .gid-pattern-card.cursor-pointer:hover {
-  border-color: rgba(124, 107, 212, 0.3);
+  border-color: rgba(99, 102, 241, 0.35);
   background: var(--bg-elevated);
-}
-
-/* Corner accent — gold triangle */
-.gid-pattern-card::after {
-  content: '';
-  position: absolute;
-  top: -1px;
-  right: -1px;
-  width: 60px;
-  height: 60px;
-  background: linear-gradient(225deg, rgba(201, 168, 76, 0.1), transparent 70%);
-  border-bottom-left-radius: 30px;
-  pointer-events: none;
 }
 
 .gid-pattern-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  color: var(--text-gold);
-  letter-spacing: 1.4px;
+  color: var(--text-primary);
+  letter-spacing: 1.2px;
   text-transform: uppercase;
-  margin-bottom: 16px;
-  opacity: 0.8;
+  margin-bottom: 12px;
 }
 
 .gid-pattern-body {
@@ -663,23 +658,30 @@
 }
 
 .gid-pattern-thumb {
-  width: 60px;
-  height: 60px;
+  width: 52px;
+  height: 52px;
   flex-shrink: 0;
   border-radius: 14px;
-  background: var(--glow-gold);
+  background: #FEF3C7;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(201, 168, 76, 0.12);
-  color: var(--text-gold);
+  border: 1px solid #FCD34D;
+  color: #D97706;
+}
+
+.dark .gid-pattern-thumb {
+  background: rgba(217, 119, 6, 0.18);
+  border-color: rgba(217, 119, 6, 0.35);
+  color: #FBBF24;
 }
 
 .gid-pattern-text {
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 1.65;
-  color: var(--text-muted);
+  color: var(--text-primary);
   margin: 0;
+  font-weight: 400;
 }
 
 .gid-genre-tags {
@@ -690,33 +692,43 @@
 }
 
 .gid-genre-tag {
-  font-size: 11px;
-  padding: 5px 14px;
+  font-size: 12px;
+  padding: 6px 14px;
   border-radius: 999px;
-  font-weight: 500;
+  font-weight: 600;
   transition: all 0.25s ease;
 }
 
-/* Alternating tag colors — purple & gold */
+/* Light Mode Tag Colors */
 .gid-genre-tag:nth-child(odd) {
-  background: rgba(124, 107, 212, 0.1);
-  border: 1px solid rgba(124, 107, 212, 0.18);
-  color: #7C6BD4;
-}
-
-.dark .gid-genre-tag:nth-child(odd) {
-  color: #B4A6E8;
+  background: #EEF2FF;
+  border: 1px solid #C7D2FE;
+  color: #4338CA;
 }
 
 .gid-genre-tag:nth-child(even) {
-  background: var(--glow-gold);
-  border: 1px solid rgba(201, 168, 76, 0.18);
-  color: var(--text-gold);
+  background: #FEF3C7;
+  border: 1px solid #FDE68A;
+  color: #92400E;
+}
+
+/* Dark Mode Tag Colors */
+.dark .gid-genre-tag:nth-child(odd) {
+  background: rgba(67, 56, 202, 0.25);
+  border-color: rgba(129, 140, 248, 0.35);
+  color: #C7D2FE;
+}
+
+.dark .gid-genre-tag:nth-child(even) {
+  background: rgba(180, 83, 9, 0.25);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #FDE68A;
 }
 
 .gid-genre-tag:hover {
   transform: translateY(-1px);
 }
+
 
 
 /* ================================================
