@@ -18,9 +18,7 @@ import {
     Users,
     Building2,
     Bell,
-    Grid,
     ScanLine,
-    Wallet,
     Play,
     Compass,
     type LucideIcon,
@@ -45,17 +43,17 @@ interface NavItem {
 
 const guestNavItems: NavItem[] = [
     { path: ROUTES.HOME, icon: Home, label: 'Home' },
-    { path: ROUTES.GALLERY, icon: Grid, label: 'Gallery' },
+    { path: ROUTES.NEARBY_PUBLIC, icon: Compass, label: 'Explore' },
     { path: ROUTES.AI_GENRE, icon: ScanLine, label: 'Analyze', isCenter: true },
     { path: ROUTES.REELS, icon: Play, label: 'Reels' },
-    { path: ROUTES.LOGIN, icon: Compass, label: 'Explore' },
+    { path: ROUTES.LOGIN, icon: User, label: 'Profile' },
 ];
 
 const userNavItems: NavItem[] = [
     { path: ROUTES.USER_DASHBOARD, icon: Home, label: 'Home' },
     { path: ROUTES.USER_NEARBY, icon: Compass, label: 'Explore' },
     { path: ROUTES.USER_GENRE_IDENTIFIER, icon: ScanLine, label: 'Analyze', isCenter: true },
-    { path: ROUTES.USER_WALLET, icon: Wallet, label: 'Wallet' },
+    { path: ROUTES.REELS, icon: Play, label: 'Reels' },
     { path: ROUTES.USER_PROFILE, icon: User, label: 'Profile' },
 ];
 

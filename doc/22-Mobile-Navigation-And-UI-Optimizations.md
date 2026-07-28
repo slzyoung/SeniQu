@@ -54,3 +54,28 @@ To eliminate visual distraction and ensure an enterprise-grade experience across
 - **Refined Elevation Shadows**: Reduced drop shadow aggressiveness (`shadow-sm`, subtle ambient glows) on `MobileBottomNav` and `SideNav` to avoid harsh borders and provide smooth visual hierarchy.
 - **Icon & Typography Styling**: Cleaned up active button states to use subtle brand gold highlights (`text-amber-500` / `bg-amber-500/10`) without overpowering content.
 
+---
+
+## 7. Unauthenticated Location Auth Guard & Reels-Wallet Reordering
+
+- **Location Tag Auth Interception (`ReelItem.tsx`)**:
+  - Intercepted unauthenticated guest clicks on location badges in short video reels.
+  - Displays a clear toast notification (`"Login Required"`) and opens the Privy Auth Modal without causing a hard page refresh or stripping media playback context.
+- **Mobile Bottom Navigation & Sidebar Swap**:
+  - **Mobile Bottom Nav**: Swapped `Wallet` with `Reels` in `MobileBottomNav.tsx` (`Home`, `Explore`, `Analyze` center AI, `Reels`, `Profile`). This optimizes mobile engagement by prioritizing high-frequency video feed access on mobile devices.
+  - **Sidebar Organization**: Placed `My Wallet` under the **Commerce** section in `sidebar.tsx` directly beneath `Arts Marketplace` (`Arts Marketplace` -> `My Wallet` -> `My Arts`).
+  - **Mobile Drawer Drawer Sync (`MobileSidebar.tsx`)**: Removed `wallet` from `MOBILE_HIDDEN_IDS` so `My Wallet` renders cleanly in the expanded mobile drawer menu.
+
+---
+
+## 8. Ultra-Modern Glassmorphic Cookie Consent Banner
+
+- **Compact Web3 Glassmorphism Pill (`CookieConsent.tsx`)**:
+  - Redesigned the cookie consent banner from a bulky full-width panel into an ultra-sleek, compact Web3 glassmorphism floating pill.
+  - Uses explicit HSL theme CSS variables to ensure crisp contrast and readability across both Light Mode and Dark Mode.
+- **Device-Aware Positioning**:
+  - **Mobile**: Positioned at `bottom-20` (floating safely above `MobileBottomNav` height) so it never obstructs or overlaps the mobile bottom navigation bar.
+  - **Desktop**: Positioned neatly at `bottom-6 right-6 max-w-md`.
+- **Responsive Display & Fast Mounting**:
+  - Reduced initialization delay to 400ms for responsive first-time visitor detection, ensuring compliance without degrading perceived page load speed.
+

@@ -27,7 +27,6 @@ import type { SidebarSection, SidebarItem } from './Sidebar';
  * We hide these from the mobile sidebar to avoid duplication.
  */
 const MOBILE_HIDDEN_IDS = new Set([
-    'wallet',
     'nearby',
     'genre-identifier',
     'profile',

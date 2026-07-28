@@ -436,6 +436,11 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
+                            if (!user) {
+                                toast.error('Login Required', 'Sign in to explore location details and nearby heritage sites.');
+                                openAuthModal();
+                                return;
+                            }
                             const locName = reel.locationName || reel.location_name;
                             const lat = reel.locationLat ?? reel.location_lat;
                             const lng = reel.locationLng ?? reel.location_lng;
