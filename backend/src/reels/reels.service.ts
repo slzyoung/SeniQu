@@ -114,7 +114,7 @@ export class ReelsService {
         videoUrl: string; videoKey: string; thumbnailUrl?: string; thumbnailKey?: string;
         caption?: string; hashtags?: string[];
         duration?: number; width?: number; height?: number; fileSize?: number; aspectRatio?: string;
-        audioMetadata?: any;
+        audioMetadata?: any; locationName?: string; locationLat?: number; locationLng?: number;
     }) {
         const { data: reel, error } = await this.supabase
             .from("reels")
@@ -132,6 +132,9 @@ export class ReelsService {
                 file_size: data.fileSize || 0,
                 aspect_ratio: data.aspectRatio || "9:16",
                 audio_metadata: data.audioMetadata || {},
+                location_name: data.locationName || null,
+                location_lat: data.locationLat ?? null,
+                location_lng: data.locationLng ?? null,
                 status: "active",
             })
             .select(`*, user:users!reels_user_id_fkey(id, display_name, avatar_url, role)`)

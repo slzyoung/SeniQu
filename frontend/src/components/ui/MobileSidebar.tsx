@@ -130,7 +130,7 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
                 aria-hidden={!mobileMenuOpen}
                 className={`
                     fixed inset-0 z-[60]
-                    bg-black/30 backdrop-blur-[2px]
+                    bg-black/20 backdrop-blur-[2px]
                     transition-all duration-300 ease-out
                     ${mobileMenuOpen
                         ? 'opacity-100 pointer-events-auto'
@@ -149,7 +149,7 @@ export function MobileSidebar({ sections, footer }: MobileSidebarProps) {
                 className={`
                     fixed inset-y-0 left-0 z-[65]
                     bg-theme-surface
-                    shadow-[4px_0_24px_-4px_rgba(0,0,0,0.12)]
+                    shadow-[2px_0_12px_rgba(0,0,0,0.06)] dark:shadow-[2px_0_16px_rgba(0,0,0,0.25)]
                     flex flex-col
                     border-r border-theme-border/40
                     transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]
@@ -456,10 +456,9 @@ function MobileNavItem({
                         {/* Active indicator */}
                         {isActive && (
                             <div
-                                className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-[3.5px] h-6 rounded-full"
+                                className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-full"
                                 style={{
                                     backgroundColor: 'var(--active-indicator)',
-                                    boxShadow: '0 0 6px var(--active-indicator)'
                                 }}
                             />
                         )}

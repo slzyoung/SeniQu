@@ -12,6 +12,19 @@ export class CreateReelDto {
     @IsArray()
     @IsOptional()
     hashtags?: string[]
+
+    @ApiPropertyOptional({ description: "Location name" })
+    @IsString()
+    @IsOptional()
+    locationName?: string
+
+    @ApiPropertyOptional({ description: "Location latitude" })
+    @IsOptional()
+    locationLat?: number
+
+    @ApiPropertyOptional({ description: "Location longitude" })
+    @IsOptional()
+    locationLng?: number
 }
 
 export class CreateReelCommentDto {

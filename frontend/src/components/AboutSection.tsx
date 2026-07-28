@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
-import { X, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '../hooks/useLanguage';
 
 interface Feature {
@@ -232,7 +232,7 @@ export function AboutSection() {
                 </motion.div>
 
                 {/* Carousel Container */}
-                <div 
+                <div
                     className="relative w-full max-w-4xl mx-auto px-0 md:px-4 select-none"
                     onMouseEnter={() => setIsAutoplay(false)}
                     onMouseLeave={() => setIsAutoplay(true)}
@@ -258,7 +258,7 @@ export function AboutSection() {
                     </div>
 
                     {/* Sliding Viewport */}
-                    <div 
+                    <div
                         ref={containerRef}
                         className="overflow-hidden relative py-6 touch-pan-y"
                     >
@@ -272,14 +272,14 @@ export function AboutSection() {
                             {localizedFeatures.map((feature, index) => {
                                 // Calculate index offsets for premium 3D carousel centering
                                 const diff = (index - currentIndex + localizedFeatures.length) % localizedFeatures.length;
-                                
+
                                 // Active card
                                 const isActive = diff === 0;
                                 // Left card (previous)
                                 const isLeft = diff === localizedFeatures.length - 1;
                                 // Right card (next)
                                 const isRight = diff === 1;
-                                
+
                                 // Hide other cards
                                 const isVisible = isActive || isLeft || isRight;
 
@@ -289,16 +289,15 @@ export function AboutSection() {
                                     <motion.div
                                         key={feature.id}
                                         onClick={() => isActive ? setSelected(feature) : setCurrentIndex(index)}
-                                        className={`relative w-[260px] md:w-[360px] aspect-[3/4] rounded-3xl overflow-hidden shadow-2xl cursor-pointer transition-all duration-500 border ${
-                                            isActive 
-                                                ? 'border-gold/50 scale-100 z-10 opacity-100' 
+                                        className={`relative w-[260px] md:w-[360px] aspect-[3/4] rounded-3xl overflow-hidden shadow-2xl cursor-pointer transition-all duration-500 border ${isActive
+                                                ? 'border-gold/50 scale-100 z-10 opacity-100'
                                                 : 'border-white/5 scale-90 opacity-40 blur-[1px]'
-                                        }`}
+                                            }`}
                                         animate={{
                                             scale: isActive ? 1.02 : 0.9,
                                             opacity: isActive ? 1 : 0.4,
-                                            x: isMobile 
-                                                ? (isLeft ? 30 : isRight ? -30 : 0) 
+                                            x: isMobile
+                                                ? (isLeft ? 30 : isRight ? -30 : 0)
                                                 : (isLeft ? -20 : isRight ? 20 : 0),
                                         }}
                                         transition={{ type: 'spring', stiffness: 260, damping: 26 }}
@@ -338,33 +337,32 @@ export function AboutSection() {
                                         )}
 
                                         {/* Spinning gold circle ornament */}
-                                        <div className={`absolute top-4 right-4 z-10 w-11 h-11 flex items-center justify-center transition-all duration-500 text-gold ${
-                                            isActive ? 'opacity-100 scale-100' : 'opacity-40 scale-90'
-                                        }`}>
+                                        <div className={`absolute top-4 right-4 z-10 w-11 h-11 flex items-center justify-center transition-all duration-500 text-gold ${isActive ? 'opacity-100 scale-100' : 'opacity-40 scale-90'
+                                            }`}>
                                             <svg className="w-full h-full animate-spin-slow" viewBox="0 0 100 100">
-                                                <circle 
-                                                    cx="50" 
-                                                    cy="50" 
-                                                    r="44" 
-                                                    fill="none" 
-                                                    stroke="currentColor" 
-                                                    strokeWidth="2" 
+                                                <circle
+                                                    cx="50"
+                                                    cy="50"
+                                                    r="44"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2"
                                                     strokeDasharray="6,6"
                                                     className="opacity-70"
                                                 />
-                                                <circle 
-                                                    cx="50" 
-                                                    cy="50" 
-                                                    r="30" 
-                                                    fill="none" 
-                                                    stroke="currentColor" 
+                                                <circle
+                                                    cx="50"
+                                                    cy="50"
+                                                    r="30"
+                                                    fill="none"
+                                                    stroke="currentColor"
                                                     strokeWidth="1.5"
                                                     className="opacity-80"
                                                 />
-                                                <circle 
-                                                    cx="50" 
-                                                    cy="50" 
-                                                    r="6" 
+                                                <circle
+                                                    cx="50"
+                                                    cy="50"
+                                                    r="6"
                                                     fill="currentColor"
                                                     className="opacity-90"
                                                 />
@@ -384,9 +382,8 @@ export function AboutSection() {
                                 <button
                                     key={index}
                                     onClick={() => setCurrentIndex(index)}
-                                    className={`h-2 rounded-full transition-all duration-300 ${
-                                        index === currentIndex ? 'w-6 bg-gold' : 'w-2 bg-white/20'
-                                    }`}
+                                    className={`h-2 rounded-full transition-all duration-300 ${index === currentIndex ? 'w-6 bg-gold' : 'w-2 bg-white/20'
+                                        }`}
                                     aria-label={`Go to slide ${index + 1}`}
                                 />
                             ))}
@@ -398,9 +395,9 @@ export function AboutSection() {
             {/* Expanded details overlay */}
             <AnimatePresence>
                 {selected && (
-                    <ExpandedCard 
-                        feature={localizedFeatures.find(f => f.id === selected.id) || selected} 
-                        onClose={handleClose} 
+                    <ExpandedCard
+                        feature={localizedFeatures.find(f => f.id === selected.id) || selected}
+                        onClose={handleClose}
                     />
                 )}
             </AnimatePresence>

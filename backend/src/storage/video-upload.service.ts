@@ -66,6 +66,10 @@ export interface UploadSession {
     hashtags?: string[]
     /** Audio metadata from editor */
     audioMetadata?: any
+    /** Location tagging */
+    locationName?: string
+    locationLat?: number
+    locationLng?: number
     /** Context: 'reel' or 'forum' */
     context: "reel" | "forum"
     /** Thread/post IDs for forum context */
@@ -154,6 +158,9 @@ export class VideoUploadService implements OnModuleInit {
         caption?: string
         hashtags?: string[]
         audioMetadata?: any
+        locationName?: string
+        locationLat?: number
+        locationLng?: number
         threadId?: string
         postId?: string
     }): Promise<{
@@ -216,6 +223,9 @@ export class VideoUploadService implements OnModuleInit {
             caption: params.caption,
             hashtags: params.hashtags,
             audioMetadata: params.audioMetadata,
+            locationName: params.locationName,
+            locationLat: params.locationLat,
+            locationLng: params.locationLng,
             context: params.context,
             threadId: params.threadId,
             postId: params.postId,

@@ -1075,6 +1075,13 @@
     animation: drawerSlideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
+[data-theme="light"] .reel-upload-modal,
+:root:not(.dark) .reel-upload-modal {
+    background: #ffffff;
+    border-color: rgba(0, 0, 0, 0.08);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+}
+
 .reel-upload-form {
     flex: 1;
     overflow-y: auto;

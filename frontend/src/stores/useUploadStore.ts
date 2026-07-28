@@ -19,6 +19,9 @@ export interface UploadTask {
     caption?: string;
     hashtags?: string[];
     audioMetadata?: any;
+    locationName?: string;
+    locationLat?: number;
+    locationLng?: number;
     forumOptions?: {
         threadId?: string;
         postId?: string;
@@ -136,6 +139,9 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
             caption: task.caption,
             hashtags: task.hashtags,
             audioMetadata: task.audioMetadata,
+            locationName: task.locationName,
+            locationLat: task.locationLat,
+            locationLng: task.locationLng,
             forumOptions: task.forumOptions,
         };
         await saveToDB(task.id, task.file, metadata);
@@ -199,6 +205,9 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
                     caption: task.caption,
                     hashtags: task.hashtags,
                     audioMetadata: task.audioMetadata,
+                    locationName: task.locationName,
+                    locationLat: task.locationLat,
+                    locationLng: task.locationLng,
                     onProgress,
                     onStatus,
                     xhrRef,
@@ -305,6 +314,9 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
                 caption: item.metadata.caption,
                 hashtags: item.metadata.hashtags,
                 audioMetadata: item.metadata.audioMetadata,
+                locationName: item.metadata.locationName,
+                locationLat: item.metadata.locationLat,
+                locationLng: item.metadata.locationLng,
                 forumOptions: item.metadata.forumOptions,
                 progress: 0,
                 status: 'failed', // Mark as failed on restore so user can manually resume/retry

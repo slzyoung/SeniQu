@@ -43,3 +43,14 @@ Added a dedicated **Collections** sidebar link to allow logged-in and guest user
 
 ## 5. Hamburger Menu Redirect
 Refined the **Collections** navigation trigger in the mobile overlay hamburger menu in `Navbar.tsx` to route smoothly via React Router (`navigate(ROUTES.COLLECTIONS)`) rather than triggering a hash link or full-page reload, keeping transitions instantaneous and clean.
+
+---
+
+## 6. Mobile Bottom Navigation & Side Navigation Polish
+
+To eliminate visual distraction and ensure an enterprise-grade experience across both Light and Dark themes:
+
+- **Neutral Color Palette**: Replaced vibrant yellow/amber backgrounds on `MobileBottomNav.tsx` in Light mode with modern neutral tones (`bg-white/95 border-slate-200/80` in light mode, `bg-zinc-950/95 border-zinc-800/80` in dark mode).
+- **Refined Elevation Shadows**: Reduced drop shadow aggressiveness (`shadow-sm`, subtle ambient glows) on `MobileBottomNav` and `SideNav` to avoid harsh borders and provide smooth visual hierarchy.
+- **Icon & Typography Styling**: Cleaned up active button states to use subtle brand gold highlights (`text-amber-500` / `bg-amber-500/10`) without overpowering content.
+

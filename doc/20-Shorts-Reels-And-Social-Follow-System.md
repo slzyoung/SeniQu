@@ -243,4 +243,30 @@ To provide a bulletproof user experience for all creators—regardless of whethe
 4. **Content Security Policy Integration**:
    * To prevent browser-level blocks during search requests, `https://itunes.apple.com` is whitelisted under the `connect-src` header in the production hosting config (`netlify.toml` and `_headers`).
 
+---
+
+## 8. Real-Time Location Tagging & Interactive Map Routing
+
+To empower content creators to tag precise geographical origins for their videos—and to allow viewers to instantly discover tagged heritage sites on an interactive map—SeniQu implements a production-ready, real-time location tagging system.
+
+### 8.1. Debounced Location Search Pipeline
+During Step 2 and Step 3 of the Reels Upload funnel (`UploadReelModal.tsx`), creators can search for location tags in real time:
+1. **Google Places API Proxy**: Queries `museumService.searchNearbyPlaces(lat, lng, radius, query)`, routing requests safely through NestJS backend proxy endpoints to keep API keys hidden and enforce rate-limiting.
+2. **OpenStreetMap (Nominatim) Fallback**: If fewer than 5 results return, the search queries OpenStreetMap Nominatim for global coverage without extra API cost.
+3. **Heritage Presets & Custom Locations**: Preserves curated Indonesian museum presets while enabling creators to select `"Gunakan lokasi kustom: ..."` for unindexed or newly discovered locations.
+
+### 8.2. Metadata Persistence & CDN Pipeline
+* **Payload Structure**: Captures `locationName`, `locationLat`, and `locationLng`.
+* **Database Indexing**: Stored in PostgreSQL `reels` table columns (`location_name`, `location_lat`, `location_lng`).
+* **Direct-to-CDN Uploads**: Forwarded seamlessly via `useUploadStore` during both legacy API and direct Cloudflare R2 CDN background uploads.
+
+### 8.3. Interactive Feed Tagging & Map Synchronization
+* **Reel Feed Badge**: `ReelItem.tsx` renders a theme-aware MapPin pill showing the location tag.
+* **Instant Map Navigation**: Clicking the location pill navigates directly to:
+  ```
+  /nearby?lat={lat}&lng={lng}&search={locationName}
+  ```
+* **URL Search Parameter Parsing**: On page mount, `PublicNearbyPage.tsx` parses `lat`, `lng`, and `search` query parameters, automatically centering the map, placing a target pin, and fetching nearby places for the selected coordinates.
+
+
 

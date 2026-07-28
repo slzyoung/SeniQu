@@ -27,6 +27,13 @@ export interface Reel {
     height: number;
     fileSize: number;
     aspectRatio: string;
+    audioMetadata?: any;
+    locationName?: string;
+    location_name?: string;
+    locationLat?: number;
+    location_lat?: number;
+    locationLng?: number;
+    location_lng?: number;
     likeCount: number;
     commentCount: number;
     shareCount: number;
@@ -119,6 +126,9 @@ export const reelsService = {
             caption?: string;
             hashtags?: string[];
             audioMetadata?: any;
+            locationName?: string;
+            locationLat?: number;
+            locationLng?: number;
             onProgress?: (progress: number) => void;
             onStatus?: (status: string) => void;
             xhrRef?: { current: XMLHttpRequest | null };
@@ -146,6 +156,9 @@ export const reelsService = {
             caption?: string;
             hashtags?: string[];
             audioMetadata?: any;
+            locationName?: string;
+            locationLat?: number;
+            locationLng?: number;
             onProgress?: (progress: number) => void;
             onStatus?: (status: string) => void;
             xhrRef?: { current: XMLHttpRequest | null };
@@ -164,6 +177,9 @@ export const reelsService = {
             caption: options?.caption,
             hashtags: options?.hashtags,
             audioMetadata: options?.audioMetadata,
+            locationName: options?.locationName,
+            locationLat: options?.locationLat,
+            locationLng: options?.locationLng,
         });
 
         const initData = initResponse.data?.success !== undefined
@@ -300,6 +316,9 @@ export const reelsService = {
             caption?: string;
             hashtags?: string[];
             audioMetadata?: any;
+            locationName?: string;
+            locationLat?: number;
+            locationLng?: number;
             onProgress?: (progress: number) => void;
             onStatus?: (status: string) => void;
         },
@@ -315,6 +334,15 @@ export const reelsService = {
         }
         if (options?.audioMetadata) {
             formData.append('audioMetadata', JSON.stringify(options.audioMetadata));
+        }
+        if (options?.locationName) {
+            formData.append('locationName', options.locationName);
+        }
+        if (options?.locationLat !== undefined) {
+            formData.append('locationLat', String(options.locationLat));
+        }
+        if (options?.locationLng !== undefined) {
+            formData.append('locationLng', String(options.locationLng));
         }
         formData.append('file', file);
 

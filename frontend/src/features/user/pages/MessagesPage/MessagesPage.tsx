@@ -116,7 +116,12 @@ export function MessagesPage() {
         try {
             const data = await messagingService.getConversations();
             setConversations(data);
-        } catch (err) {
+        } catch (err: any) {
+            // Stop polling on 401 — auth interceptor handles logout
+            if (err?.response?.status === 401 && convosPollRef.current) {
+                clearInterval(convosPollRef.current);
+                convosPollRef.current = undefined;
+            }
             console.error('Failed to load conversations:', err);
         } finally {
             if (showLoading) setIsConvosLoading(false);

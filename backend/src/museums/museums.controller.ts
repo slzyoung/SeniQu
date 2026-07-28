@@ -195,8 +195,8 @@ export class MuseumsController {
         );
     }
 
+    @Public()
     @Get("maps-config")
-    @UseGuards(JwtAuthGuard)
     @Throttle({ default: { limit: 5, ttl: 60000 } })
     @ApiOperation({ summary: "Get Google Maps client configuration" })
     @ApiResponse({ status: 200, description: "Maps API key for client-side rendering" })
