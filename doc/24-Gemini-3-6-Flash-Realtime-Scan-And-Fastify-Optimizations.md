@@ -4,16 +4,17 @@ This document details the transition from dummy simulations to live **Gemini 3.6
 
 ---
 
-## 1. Real-Time Gemini 3.6 Flash AI Detection
+## 1. Dual Gemini 3.6 Flash & 3.5 Flash AI Engine Architecture
 
-1. **Replacement of Legacy Mock Code**:
-   - Replaced all legacy `DEMO_DETECTIONS` mock components with real live API calls via `useHeritageScan` and `useDetectGenre`.
-   - Re-exported the real camera & file-upload component from `frontend/src/features/user/pages/GenreIdentifierPage/GenreIdentifierPage.tsx`.
+1. **Production Model Chain**:
+   - Primary: `gemini-3.6-flash`
+   - Secondary: `gemini-3.5-flash`
+   - Fallback: `gemini-2.5-flash` ➔ `gemini-2.0-flash`
 
-2. **Backend AI Engine Configuration**:
-   - Primary model configured to `gemini-3.6-flash`.
-   - Temperature tuned to `0.1` and `maxOutputTokens` set to `2048` for ultra-fast, deterministic JSON responses.
-   - Resilient fallback chain: `gemini-3.6-flash` ➔ `gemini-3.5-flash` ➔ `gemini-2.5-flash` ➔ `gemini-2.0-flash` ➔ `gemini-1.5-flash`.
+2. **Enterprise Production Best Practices**:
+   - `maxOutputTokens` expanded from `2048` to `4096` to prevent response truncation errors.
+   - Per-model 503 (high demand) and 429 (rate limit) 600ms backoff auto-retry before switching models.
+   - `safeParseJson` algorithm with automatic string and bracket closure repair to protect against unterminated JSON formatting.
 
 ---
 

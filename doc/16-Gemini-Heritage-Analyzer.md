@@ -34,26 +34,24 @@ The **Heritage Scanner** allows users to perform real-time AR camera scanning or
 
 ---
 
-## 2. Gemini 3.6 Flash Integration & Resilient Fallback Chain
+## 2. Gemini 3.6 Flash & 3.5 Flash Integration & Resilient Production Fallback Chain
 
-### Primary Model Selection
-- **Primary Model**: `gemini-3.6-flash`
+### Model Tier Architecture
+- **Primary Model**: `gemini-3.6-flash` (First-choice model for real-time, high-accuracy Nusantara cultural recognition)
+- **Secondary Model**: `gemini-3.5-flash` (Production standby model for seamless failover)
+- **Backup Fallback Models**: `gemini-2.5-flash` ➔ `gemini-2.0-flash`
 - **Configuration**:
   - `responseMimeType: "application/json"`
   - `temperature: 0.1` (Low temperature for deterministic, highly accurate cultural identification)
-  - `maxOutputTokens: 2048`
+  - `maxOutputTokens: 4096` (Expanded token budget to prevent output truncation on long curatorial descriptions)
 
-### Resilient Fallback Chain
-In the event of API rate limits or regional availability issues on Gemini 3.6 Flash, the backend `AiService.scanHeritage` automatically executes an integrated fallback attempt loop:
-1. `gemini-3.6-flash` (Primary)
-2. `gemini-3.5-flash`
-3. `gemini-2.5-flash`
-4. `gemini-2.0-flash`
-5. `gemini-1.5-flash`
-
----
-
-## 3. Fastify & Backend Speed Optimizations
+### Production Best Practices & Resilience Strategies
+1. **Transient Error Auto-Retry (503 & 429)**:
+   When Google AI returns status 503 (High Demand) or 429 (Rate Limit), the service performs an automated 600ms backoff retry on the current model before triggering model failover.
+2. **Safe JSON Auto-Repair (`safeParseJson`)**:
+   Prevents `Unterminated string in JSON` parser crashes by automatically repairing unclosed quotes, brackets, and braces if an output stream is interrupted.
+3. **Parallel R2 Upload & AI Analysis**:
+   Concurrently streams uploaded media to Cloudflare R2 CDN while Gemini analyzes the image via `Promise.all`.
 
 To achieve instant response times on mobile networks, two key backend optimizations were introduced:
 
