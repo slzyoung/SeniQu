@@ -150,6 +150,7 @@ export function MessagesPage() {
 
     // Load followed users on mount
     useEffect(() => {
+        if (!myUserId) return;
         const loadFollowed = async () => {
             try {
                 const data = await messagingService.getFollowedUsers();
@@ -159,7 +160,7 @@ export function MessagesPage() {
             }
         };
         loadFollowed();
-    }, []);
+    }, [myUserId]);
 
     // Debounced user search
     useEffect(() => {

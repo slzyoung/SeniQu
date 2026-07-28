@@ -500,14 +500,46 @@ app.use(helmet({
 }));
 ```
 
-### 3.6 CORS Configuration
+### 3.6 CORS Configuration & Production Hardening
+
+Seniqu uses a dynamic origin callback on the NestJS Fastify adapter (`app.enableCors()`) to securely support production domains, preview environments, and local development without exposing wildcard access:
 
 ```typescript
 app.enableCors({
-    origin: process.env.CORS_ORIGINS.split(','),
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true); // Server-to-server / mobile requests
+
+        const isAllowed = 
+            allowedOrigins.includes(origin) ||
+            /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
+            /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin) ||
+            /^https:\/\/([a-zA-Z0-9-]+\.)*seniqu\.art$/.test(origin) ||
+            /^https:\/\/([a-zA-Z0-9-]+\.)*netlify\.app$/.test(origin);
+
+        if (isAllowed) {
+            callback(null, true);
+        } else {
+            logger.warn(`[CORS] Blocked request from unauthorized origin: ${origin}`);
+            callback(null, false);
+        }
+    },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "X-Privy-Token",
+        "X-Request-ID",
+        "X-CSRF-Token",
+        "X-Client-Fingerprint",
+        "X-Request-Timestamp",
+        "Accept",
+        "Origin",
+        "Access-Control-Request-Method",
+        "Access-Control-Request-Headers",
+    ],
+    exposedHeaders: ["Content-Length", "Content-Range", "X-Request-ID", "Content-Disposition"],
+    maxAge: 86400, // 24-hour preflight OPTIONS caching
 });
 ```
 

@@ -547,6 +547,8 @@ class AuthService {
      */
     async getPrivySyncToken(): Promise<{ privyToken: string | null }> {
         try {
+            const token = secureRetrieve('access_token');
+            if (!token) return { privyToken: null };
             const response = await apiGet<{ privyToken: string | null }>(
                 '/auth/sync-privy',
                 { headers: getSecurityHeaders() }
