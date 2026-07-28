@@ -7,7 +7,8 @@
  * Screen 3 (Edit):  Generated result details with comments/likes
  */
 
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Plus,
   X,
@@ -138,6 +139,18 @@ export default function AIDashboardPage() {
   const [aiReplyingTo, setAiReplyingTo] = useState<{ id: string; name: string } | null>(null);
   const [expandedAIReplies, setExpandedAIReplies] = useState<Record<string, boolean>>({});
   const aiCommentInputRef = useRef<HTMLInputElement>(null);
+
+  // Prevent background body scrolling when modal is open
+  useEffect(() => {
+    if (showModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showModal]);
 
 
 
@@ -1106,205 +1119,208 @@ export default function AIDashboardPage() {
       </motion.div>
 
       {/* ===== GENERATE MODAL ===== */}
-      <AnimatePresence>
-        {showModal && (
-          <motion.div
-            className="aic-modal-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
-          >
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {showModal && (
             <motion.div
-              className="aic-modal"
-              initial={{ y: 300, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 300, opacity: 0 }}
-              transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+              className="aic-modal-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
             >
-              <div className="aic-modal__header">
-                <h3 className="aic-modal__title">Create & Publish</h3>
-                <button className="aic-modal__close" onClick={closeModal}>
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Tab Selector */}
-              <div className="aic-modal__tabs">
-                <button
-                  type="button"
-                  className={`aic-modal__tab ${modalTab === 'generate' ? 'aic-modal__tab--active' : ''}`}
-                  onClick={() => setModalTab('generate')}
-                >
-                  <Wand2 className="w-4 h-4" />
-                  <span>AI Generator</span>
-                </button>
-                <button
-                  type="button"
-                  className={`aic-modal__tab ${modalTab === 'upload' ? 'aic-modal__tab--active' : ''}`}
-                  onClick={() => setModalTab('upload')}
-                >
-                  <Upload className="w-4 h-4" />
-                  <span>Upload Original</span>
-                </button>
-              </div>
-
-              {modalTab === 'generate' ? (
-                <>
-                  <div className="aic-modal__label-row">
-                    <p className="aic-modal__label">Describe your artwork</p>
-                    <span className={`aic-modal__char-count ${prompt.length >= 450 ? 'aic-modal__char-count--warning' : ''}`}>
-                      {prompt.length} / 500
-                    </span>
-                  </div>
-                  <textarea
-                    className="aic-modal__textarea"
-                    placeholder="A mystical dragon soaring through a nebula of stars..."
-                    value={prompt}
-                    onChange={(e) => setPrompt(sanitize(e.target.value))}
-                    maxLength={500}
-                    spellCheck={false}
-                    autoComplete="off"
-                  />
-
-                  <p className="aic-modal__label">Choose a style</p>
-                  <div className="aic-modal__chips">
-                    {STYLE_OPTIONS.map((s) => (
-                      <motion.button
-                        key={s.id}
-                        type="button"
-                        className={`aic-modal__chip ${selectedStyle === s.id ? 'aic-modal__chip--active' : ''}`}
-                        onClick={() => setSelectedStyle(s.id)}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        {s.label}
-                      </motion.button>
-                    ))}
-                  </div>
-
-                  <button
-                    className="aic-modal__submit"
-                    onClick={handleGenerate}
-                    disabled={generateMutation.isPending || prompt.trim().length < 3}
-                  >
-                    {generateMutation.isPending ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <Wand2 className="w-5 h-5" />
-                        Generate Artwork
-                      </>
-                    )}
+              <motion.div
+                className="aic-modal"
+                initial={{ y: 300, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 300, opacity: 0 }}
+                transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+              >
+                <div className="aic-modal__header">
+                  <h3 className="aic-modal__title">Create & Publish</h3>
+                  <button className="aic-modal__close" onClick={closeModal}>
+                    <X className="w-4 h-4" />
                   </button>
+                </div>
 
-                  {generateMutation.isError && (
-                    <p className="aic-modal__error">
-                      {(generateMutation.error as any)?.response?.data?.message || (generateMutation.error as any)?.message || 'Generation failed. Please try again.'}
-                    </p>
-                  )}
-                </>
-              ) : (
-                <>
-                  <p className="aic-modal__label">Select Artwork File</p>
-                  <div className="aic-modal__upload-zone">
-                    {uploadedFile ? (
-                      <div className="aic-modal__preview-container">
-                        <img
-                          src={URL.createObjectURL(uploadedFile)}
-                          alt="Upload Preview"
-                          className="aic-modal__upload-preview"
-                        />
-                        <button
+                {/* Tab Selector */}
+                <div className="aic-modal__tabs">
+                  <button
+                    type="button"
+                    className={`aic-modal__tab ${modalTab === 'generate' ? 'aic-modal__tab--active' : ''}`}
+                    onClick={() => setModalTab('generate')}
+                  >
+                    <Wand2 className="w-4 h-4" />
+                    <span>AI Generator</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`aic-modal__tab ${modalTab === 'upload' ? 'aic-modal__tab--active' : ''}`}
+                    onClick={() => setModalTab('upload')}
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Upload Original</span>
+                  </button>
+                </div>
+
+                {modalTab === 'generate' ? (
+                  <>
+                    <div className="aic-modal__label-row">
+                      <p className="aic-modal__label">Describe your artwork</p>
+                      <span className={`aic-modal__char-count ${prompt.length >= 450 ? 'aic-modal__char-count--warning' : ''}`}>
+                        {prompt.length} / 500
+                      </span>
+                    </div>
+                    <textarea
+                      className="aic-modal__textarea"
+                      placeholder="A mystical dragon soaring through a nebula of stars..."
+                      value={prompt}
+                      onChange={(e) => setPrompt(sanitize(e.target.value))}
+                      maxLength={500}
+                      spellCheck={false}
+                      autoComplete="off"
+                    />
+
+                    <p className="aic-modal__label">Choose a style</p>
+                    <div className="aic-modal__chips">
+                      {STYLE_OPTIONS.map((s) => (
+                        <motion.button
+                          key={s.id}
                           type="button"
-                          className="aic-modal__remove-file"
-                          onClick={() => setUploadedFile(null)}
+                          className={`aic-modal__chip ${selectedStyle === s.id ? 'aic-modal__chip--active' : ''}`}
+                          onClick={() => setSelectedStyle(s.id)}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
                         >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <label className="aic-modal__upload-label">
-                        <Upload className="w-8 h-8 opacity-60 mb-2" />
-                        <span className="text-sm opacity-80">Tap to select image</span>
-                        <span className="text-xs opacity-50 mt-1">JPEG, PNG, or WebP (max 5MB)</span>
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) setUploadedFile(file);
-                          }}
-                        />
-                      </label>
+                          {s.label}
+                        </motion.button>
+                      ))}
+                    </div>
+
+                    <button
+                      className="aic-modal__submit"
+                      onClick={handleGenerate}
+                      disabled={generateMutation.isPending || prompt.trim().length < 3}
+                    >
+                      {generateMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Wand2 className="w-5 h-5" />
+                          Generate Artwork
+                        </>
+                      )}
+                    </button>
+
+                    {generateMutation.isError && (
+                      <p className="aic-modal__error">
+                        {(generateMutation.error as any)?.response?.data?.message || (generateMutation.error as any)?.message || 'Generation failed. Please try again.'}
+                      </p>
                     )}
-                  </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="aic-modal__label">Select Artwork File</p>
+                    <div className="aic-modal__upload-zone">
+                      {uploadedFile ? (
+                        <div className="aic-modal__preview-container">
+                          <img
+                            src={URL.createObjectURL(uploadedFile)}
+                            alt="Upload Preview"
+                            className="aic-modal__upload-preview"
+                          />
+                          <button
+                            type="button"
+                            className="aic-modal__remove-file"
+                            onClick={() => setUploadedFile(null)}
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="aic-modal__upload-label">
+                          <Upload className="w-8 h-8 opacity-60 mb-2" />
+                          <span className="text-sm opacity-80">Tap to select image</span>
+                          <span className="text-xs opacity-50 mt-1">JPEG, PNG, or WebP (max 5MB)</span>
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) setUploadedFile(file);
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
 
-                  <div className="aic-modal__label-row">
-                    <p className="aic-modal__label">Title / Description</p>
-                    <span className={`aic-modal__char-count ${uploadTitle.length >= 90 ? 'aic-modal__char-count--warning' : ''}`}>
-                      {uploadTitle.length} / 100
-                    </span>
-                  </div>
-                  <input
-                    type="text"
-                    className="aic-modal__input"
-                    placeholder="Enter artwork title or description..."
-                    value={uploadTitle}
-                    onChange={(e) => setUploadTitle(sanitize(e.target.value, 100))}
-                    maxLength={100}
-                    autoComplete="off"
-                  />
+                    <div className="aic-modal__label-row">
+                      <p className="aic-modal__label">Title / Description</p>
+                      <span className={`aic-modal__char-count ${uploadTitle.length >= 90 ? 'aic-modal__char-count--warning' : ''}`}>
+                        {uploadTitle.length} / 100
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      className="aic-modal__input"
+                      placeholder="Enter artwork title or description..."
+                      value={uploadTitle}
+                      onChange={(e) => setUploadTitle(sanitize(e.target.value, 100))}
+                      maxLength={100}
+                      autoComplete="off"
+                    />
 
-                  <p className="aic-modal__label">Artwork Category / Style</p>
-                  <div className="aic-modal__chips">
-                    {STYLE_OPTIONS.map((s) => (
-                      <motion.button
-                        key={s.id}
-                        type="button"
-                        className={`aic-modal__chip ${selectedStyle === s.id ? 'aic-modal__chip--active' : ''}`}
-                        onClick={() => setSelectedStyle(s.id)}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        {s.label}
-                      </motion.button>
-                    ))}
-                  </div>
+                    <p className="aic-modal__label">Artwork Category / Style</p>
+                    <div className="aic-modal__chips">
+                      {STYLE_OPTIONS.map((s) => (
+                        <motion.button
+                          key={s.id}
+                          type="button"
+                          className={`aic-modal__chip ${selectedStyle === s.id ? 'aic-modal__chip--active' : ''}`}
+                          onClick={() => setSelectedStyle(s.id)}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          {s.label}
+                        </motion.button>
+                      ))}
+                    </div>
 
-                  <button
-                    className="aic-modal__submit"
-                    onClick={handleUpload}
-                    disabled={uploadMutation.isPending || !uploadedFile}
-                  >
-                    {uploadMutation.isPending ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Analyzing & Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-5 h-5" />
-                        Upload Artwork
-                      </>
+                    <button
+                      className="aic-modal__submit"
+                      onClick={handleUpload}
+                      disabled={uploadMutation.isPending || !uploadedFile}
+                    >
+                      {uploadMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Analyzing & Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-5 h-5" />
+                          Upload Artwork
+                        </>
+                      )}
+                    </button>
+
+                    {uploadMutation.isError && (
+                      <p className="aic-modal__error">
+                        {(uploadMutation.error as any)?.response?.data?.message || (uploadMutation.error as any)?.message || 'Upload failed. Please try again.'}
+                      </p>
                     )}
-                  </button>
-
-                  {uploadMutation.isError && (
-                    <p className="aic-modal__error">
-                      {(uploadMutation.error as any)?.response?.data?.message || (uploadMutation.error as any)?.message || 'Upload failed. Please try again.'}
-                    </p>
-                  )}
-                </>
-              )}
+                  </>
+                )}
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 }

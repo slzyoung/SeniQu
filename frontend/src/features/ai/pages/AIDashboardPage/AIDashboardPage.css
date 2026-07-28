@@ -797,7 +797,7 @@
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  z-index: 50;
+  z-index: 1000;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -815,7 +815,7 @@
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: 24px 24px 0 0;
-  padding: 24px 20px 32px;
+  padding: 24px 20px calc(36px + env(safe-area-inset-bottom, 0px));
   max-height: 85vh;
   overflow-y: auto;
   overscroll-behavior: contain;
