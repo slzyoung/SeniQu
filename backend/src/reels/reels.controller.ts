@@ -99,6 +99,9 @@ export class ReelsController {
                 caption: { type: "string", description: "Reel caption" },
                 hashtags: { type: "array", items: { type: "string" } },
                 audioMetadata: { type: "object" },
+                locationName: { type: "string", description: "Location name" },
+                locationLat: { type: "number", description: "Location latitude" },
+                locationLng: { type: "number", description: "Location longitude" },
             },
             required: ["filename", "mimeType", "fileSize"],
         },
@@ -111,6 +114,9 @@ export class ReelsController {
             caption?: string
             hashtags?: string[]
             audioMetadata?: any
+            locationName?: string
+            locationLat?: number
+            locationLng?: number
         },
         @GetUser("id") userId: string,
     ) {
@@ -123,6 +129,9 @@ export class ReelsController {
             caption: body.caption,
             hashtags: body.hashtags,
             audioMetadata: body.audioMetadata,
+            locationName: body.locationName,
+            locationLat: body.locationLat,
+            locationLng: body.locationLng,
         })
     }
 
@@ -168,6 +177,9 @@ export class ReelsController {
                 fileSize: 0,
                 aspectRatio: "9:16",
                 audioMetadata: session.audioMetadata,
+                locationName: session.locationName,
+                locationLat: session.locationLat,
+                locationLng: session.locationLng,
             })
 
             // Store reelId in session for status updates
@@ -247,7 +259,12 @@ export class ReelsController {
             const audioMetadataRaw = fields?.audioMetadata?.value || "{}"
             let audioMetadata: any = {}
             try { audioMetadata = JSON.parse(audioMetadataRaw) } catch { /* ignore */ }
-            return { caption, hashtags, audioMetadata }
+
+            const locationName = fields?.locationName?.value || undefined
+            const locationLat = fields?.locationLat?.value ? parseFloat(fields.locationLat.value) : undefined
+            const locationLng = fields?.locationLng?.value ? parseFloat(fields.locationLng.value) : undefined
+
+            return { caption, hashtags, audioMetadata, locationName, locationLat, locationLng }
         }
 
         // Extract initial fields (available if sent before file in multipart form)
@@ -275,6 +292,9 @@ export class ReelsController {
         const audioMetadata = (finalFields.audioMetadata && Object.keys(finalFields.audioMetadata).length > 2) 
             ? finalFields.audioMetadata 
             : initialFields.audioMetadata
+        const locationName = finalFields.locationName || initialFields.locationName
+        const locationLat = finalFields.locationLat ?? initialFields.locationLat
+        const locationLng = finalFields.locationLng ?? initialFields.locationLng
 
         // Enforce max 60 seconds for Reels
         if (result.metadata.duration > 60) {
@@ -297,6 +317,9 @@ export class ReelsController {
             fileSize: result.metadata.compressedFileSize,
             aspectRatio: result.metadata.aspectRatio,
             audioMetadata,
+            locationName,
+            locationLat,
+            locationLng,
         })
 
         return reel

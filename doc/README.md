@@ -34,4 +34,6 @@ Welcome to the SeniQu documentation hub. Below is an index of all architecture d
 * **[21-Content-Moderation-And-Notifications.md](21-Content-Moderation-And-Notifications.md)**: AI-driven image and video moderation, double-channel notifications (in-app and email), and spam-prevention throttling.
 * **[22-Mobile-Navigation-And-UI-Optimizations.md](22-Mobile-Navigation-And-UI-Optimizations.md)**: Mobile navigation restructuring, guest tab adjustments, brand gold light-mode theme fix, sidebar collections integration, and hamburger menu navigation optimization.
 * **[23-Albums-Feature-And-Premium-Comments-System.md](23-Albums-Feature-And-Premium-Comments-System.md)**: Detailed specification of user-created Albums, item types, public profile filtering, premium Instagram-style threaded comments bottom sheet (likes, replies, dismiss gestures), and light/dark theme visual and deletion optimizations.
+* **[24-Gemini-3-6-Flash-Realtime-Scan-And-Fastify-Optimizations.md](24-Gemini-3-6-Flash-Realtime-Scan-And-Fastify-Optimizations.md)**: Live AR Heritage Scanning using Gemini 3.6 Flash, Fastify parallel upload/AI execution, clean title parsing, and high-contrast responsive Light/Dark theme typography.
+
 

@@ -64,18 +64,18 @@ export function getAccessToken(): string | null {
 
 async function refreshAccessToken(): Promise<string> {
     if (refreshPromise) {
-        console.log('[API Token Refresh] Reuse active refresh token promise...');
+        if (import.meta.env.DEV) console.log('[API Token Refresh] Reuse active refresh token promise...');
         return refreshPromise;
     }
 
     // Get refresh token from secure storage
     const refreshToken = secureRetrieve('refresh_token');
     if (!refreshToken) {
-        console.warn('[API Token Refresh] No refresh token available in secure storage');
+        if (import.meta.env.DEV) console.warn('[API Token Refresh] No refresh token available in secure storage');
         return Promise.reject(new Error('No refresh token available'));
     }
 
-    console.log('[API Token Refresh] Launching refresh request to backend...');
+    if (import.meta.env.DEV) console.log('[API Token Refresh] Launching refresh request to backend...');
     refreshPromise = api
         .post('/auth/refresh', { refreshToken }, {
             __skipAuthInterceptor: true
@@ -84,7 +84,7 @@ async function refreshAccessToken(): Promise<string> {
             const newToken = response.data.accessToken;
             setAccessToken(newToken);
             secureStore('access_token', newToken); // Sync secure storage!
-            console.log(`[API Token Refresh] Successfully refreshed token! New token prefix: ${newToken.substring(0, 12)}...`);
+            if (import.meta.env.DEV) console.log('[API Token Refresh] Successfully refreshed token!');
             // Resolve all queued requests with the new token
             failedQueue.forEach(({ resolve }) => resolve(newToken));
             failedQueue = [];
@@ -126,9 +126,13 @@ api.interceptors.request.use(
             } else {
                 config.headers['Authorization'] = `Bearer ${accessToken}`;
             }
-            console.log(`[API Request] Sending authorized request to: ${config.url} | Token: ${accessToken.substring(0, 12)}...`);
+            if (import.meta.env.DEV) {
+                console.log(`[API Request] Sending authorized request to: ${config.url}`);
+            }
         } else {
-            console.log(`[API Request] Sending public/skipped request to: ${config.url}`);
+            if (import.meta.env.DEV) {
+                console.log(`[API Request] Sending public/skipped request to: ${config.url}`);
+            }
         }
 
         // Add CSRF token for mutating requests
@@ -192,15 +196,15 @@ api.interceptors.response.use(
 
         if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
             originalRequest._retry = true;
-            console.log(`[API Response] Received 401 for: ${originalRequest.url} | Attempting token refresh...`);
+            if (import.meta.env.DEV) console.log(`[API Response] Received 401 for: ${originalRequest.url} | Attempting token refresh...`);
 
             // If a refresh is already in progress, queue this request
             if (refreshPromise) {
-                console.log(`[API Response] Queuing request for: ${originalRequest.url} until active refresh completes.`);
+                if (import.meta.env.DEV) console.log(`[API Response] Queuing request for: ${originalRequest.url} until active refresh completes.`);
                 return new Promise<string>((resolve, reject) => {
                     failedQueue.push({ resolve, reject });
                 }).then((newToken) => {
-                    console.log(`[API Response] Retrying queued request for: ${originalRequest.url} with new token...`);
+                    if (import.meta.env.DEV) console.log(`[API Response] Retrying queued request for: ${originalRequest.url} with new token...`);
                     
                     if (originalRequest.headers.delete) {
                         originalRequest.headers.delete('Authorization');
@@ -224,7 +228,7 @@ api.interceptors.response.use(
 
             try {
                 const newToken = await refreshAccessToken();
-                console.log(`[API Response] Retrying primary request: ${originalRequest.url} with newly refreshed token...`);
+                if (import.meta.env.DEV) console.log(`[API Response] Retrying primary request: ${originalRequest.url} with newly refreshed token...`);
                 
                 if (originalRequest.headers.delete) {
                     originalRequest.headers.delete('Authorization');

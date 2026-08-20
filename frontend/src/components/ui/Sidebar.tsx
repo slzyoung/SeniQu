@@ -145,7 +145,7 @@ export function Sidebar({
                                                     w-full flex items-center gap-3 px-3 py-2.5 rounded-xl
                                                     transition-all duration-200 group relative
                                                     ${isParentActive(item)
-                                                        ? 'bg-gold/10 text-gold'
+                                                        ? 'sidebar-active'
                                                         : 'text-theme-muted hover:text-theme-text hover:bg-theme-elevated'
                                                     }
                                                 `}
@@ -191,7 +191,7 @@ export function Sidebar({
                                                                     className={`
                                                                         block px-3 py-2 rounded-lg text-sm transition-colors
                                                                         ${isActive(child.path)
-                                                                            ? 'text-gold bg-gold/5'
+                                                                            ? 'sidebar-active font-medium'
                                                                             : 'text-theme-muted hover:text-theme-text'
                                                                         }
                                                                     `}
@@ -211,7 +211,7 @@ export function Sidebar({
                                                 flex items-center gap-3 px-3 py-2.5 rounded-xl
                                                 transition-all duration-200 group relative
                                                 ${isActive
-                                                    ? 'bg-gold/10 text-gold shadow-lg shadow-gold/5'
+                                                    ? 'sidebar-active shadow-sm'
                                                     : 'text-theme-muted hover:text-theme-text hover:bg-theme-elevated'
                                                 }
                                             `}
@@ -224,7 +224,7 @@ export function Sidebar({
                                                         {item.label}
                                                     </span>
                                                     {item.badge !== undefined && item.badge > 0 && (
-                                                        <span className="px-2 py-0.5 text-xs font-bold bg-gold text-charcoal rounded-full">
+                                                        <span className="px-2 py-0.5 text-xs font-bold rounded-full text-white" style={{ backgroundColor: 'var(--active-text)' }}>
                                                             {item.badge > 99 ? '99+' : item.badge}
                                                         </span>
                                                     )}

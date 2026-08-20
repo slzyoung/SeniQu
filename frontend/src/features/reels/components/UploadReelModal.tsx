@@ -2,15 +2,32 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
     X, Play, Pause, Upload, Music, Search, Scissors, 
-    Sparkles, AlertCircle, Video, FastForward, Crop, LogOut
+    Palette, AlertCircle, Video, FastForward, Crop, LogOut, MapPin
 } from 'lucide-react';
 import '../reels.css';
 import { validateVideo, generateVideoThumbnail, formatFileSize } from '../../../lib/videoCompressor';
 import Button from '../../../components/ui/Button';
 import { useUploadStore } from '../../../stores/useUploadStore';
 import { useToast } from '../../../stores/useNotificationStore';
+import { museumService } from '../../../services/museumService';
 
 interface Props { onClose: () => void; }
+
+const HERITAGE_LOCATIONS = [
+    { name: 'Museum Nasional Indonesia, Jakarta', lat: -6.1764, lng: 106.8215 },
+    { name: 'Candi Borobudur, Magelang', lat: -7.6079, lng: 110.2038 },
+    { name: 'Kawasan Kota Tua, Jakarta', lat: -6.1352, lng: 106.8133 },
+    { name: 'Candi Prambanan, Sleman', lat: -7.7520, lng: 110.4915 },
+    { name: 'Gedung Sate, Bandung', lat: -6.9025, lng: 107.6187 },
+    { name: 'Taman Mini Indonesia Indah, Jakarta', lat: -6.3024, lng: 106.8952 },
+    { name: 'Galeri Nasional Indonesia, Jakarta', lat: -6.1772, lng: 106.8326 },
+    { name: 'Keraton Yogyakarta, DIY', lat: -7.8053, lng: 110.3642 },
+    { name: 'Museum Benteng Vredeburg, Yogyakarta', lat: -7.8003, lng: 110.3661 },
+    { name: 'Museum MACAN, Jakarta', lat: -6.1912, lng: 106.7679 },
+    { name: 'Museum Ullen Sentalu, Sleman', lat: -7.5976, lng: 110.4234 },
+    { name: 'Museum ARMA (Agung Rai), Ubud Bali', lat: -8.5202, lng: 115.2638 },
+    { name: 'Museum Blanco Renaissance, Ubud Bali', lat: -8.5036, lng: 115.2554 },
+];
 
 const CURATED_TRACKS = [
     { id: '1', title: 'Gending Sriwijaya Lofi', artist: 'SeniQu Heritage', artwork: 'https://images.unsplash.com/photo-1578301978018-3005759f48f7?w=100&q=80', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', duration: 180 },
@@ -77,9 +94,9 @@ export default function UploadReelModal({ onClose }: Props) {
     const [preview, setPreview] = useState<string | null>(null);
     const [caption, setCaption] = useState('');
     const [hashtags, setHashtags] = useState('');
-    const [progress, setProgress] = useState(0);
-    const [uploading, setUploading] = useState(false);
-    const [uploadStatus, setUploadStatus] = useState<string>('');
+    const [progress] = useState(0);
+    const [uploading] = useState(false);
+    const [uploadStatus] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
     const [warning, setWarning] = useState<string | null>(null);
     const [meta, setMeta] = useState<any>(null);
@@ -91,6 +108,113 @@ export default function UploadReelModal({ onClose }: Props) {
     const [selectedFilter, setSelectedFilter] = useState('none');
     const [aspectRatio, setAspectRatio] = useState('9/16');
     const [originalVolume, setOriginalVolume] = useState(1);
+
+    // Location state & real-time search
+    const [selectedLocation, setSelectedLocation] = useState<{ name: string; address?: string; lat?: number; lng?: number } | null>(null);
+    const [locationSearch, setLocationSearch] = useState('');
+    const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+    const [liveLocationResults, setLiveLocationResults] = useState<{ name: string; address?: string; lat?: number; lng?: number }[]>([]);
+    const [searchingLocation, setSearchingLocation] = useState(false);
+    const locationDropdownRef = useRef<HTMLDivElement>(null);
+
+    // Click outside listener for location dropdown
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (locationDropdownRef.current && !locationDropdownRef.current.contains(event.target as Node)) {
+                setShowLocationDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Real-time location search via Nominatim (instant) + Google Places API with AbortController & fast timeout
+    useEffect(() => {
+        const query = locationSearch.trim();
+        if (!query || query.length < 2 || (selectedLocation && selectedLocation.name.toLowerCase() === query.toLowerCase())) {
+            setLiveLocationResults([]);
+            setSearchingLocation(false);
+            return;
+        }
+
+        const controller = new AbortController();
+        setSearchingLocation(true);
+
+        const timer = setTimeout(async () => {
+            try {
+                const results: { name: string; address?: string; lat?: number; lng?: number }[] = [];
+
+                // 1. Query Nominatim OpenStreetMap API FIRST (Instant, ~200ms)
+                try {
+                    const nomRes = await fetch(
+                        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=8&countrycodes=id,sg,my`,
+                        { 
+                            signal: controller.signal,
+                            headers: { 
+                                'User-Agent': 'SeniQu-ArtHeritage/1.0 (contact@seniqu.art)',
+                                'Accept-Language': 'id,en-US;q=0.9,en;q=0.8'
+                            } 
+                        }
+                    );
+                    if (nomRes.ok && !controller.signal.aborted) {
+                        const data = await nomRes.json();
+                        data.forEach((item: any) => {
+                            const lat = parseFloat(item.lat);
+                            const lng = parseFloat(item.lon);
+                            const name = item.name || item.display_name.split(',')[0].trim();
+                            const address = item.display_name;
+                            if (!results.some(r => r.name.toLowerCase() === name.toLowerCase())) {
+                                results.push({ name, address, lat, lng });
+                            }
+                        });
+                    }
+                } catch (e: any) {
+                    if (e.name !== 'AbortError') {
+                        console.warn('Nominatim search warning:', e);
+                    }
+                }
+
+                // 2. Query Backend Google Places API via museumService with a strict 1-second timeout race
+                if (!controller.signal.aborted) {
+                    try {
+                        const backendPromise = museumService.searchNearbyPlaces(-6.1754, 106.8272, 70000, query);
+                        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Backend timeout')), 1000));
+                        const placeRes = await Promise.race([backendPromise, timeoutPromise]) as any;
+                        if (placeRes?.places && placeRes.places.length > 0) {
+                            placeRes.places.forEach((p: any) => {
+                                const name = p.name || p.displayName?.text || query;
+                                const address = p.address || p.formattedAddress || '';
+                                const lat = p.latitude || p.location?.latitude;
+                                const lng = p.longitude || p.location?.longitude;
+                                if (!results.some(r => r.name.toLowerCase() === name.toLowerCase())) {
+                                    results.unshift({ name, address, lat, lng });
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        // Silent catch on timeout so Nominatim results show immediately without hanging
+                    }
+                }
+
+                if (!controller.signal.aborted) {
+                    setLiveLocationResults(results);
+                }
+            } catch (err: any) {
+                if (err.name !== 'AbortError') {
+                    console.error('Location search error:', err);
+                }
+            } finally {
+                if (!controller.signal.aborted) {
+                    setSearchingLocation(false);
+                }
+            }
+        }, 250);
+
+        return () => {
+            clearTimeout(timer);
+            controller.abort();
+        };
+    }, [locationSearch, selectedLocation]);
 
     // Audio selection states
     const [audioSource, setAudioSource] = useState<'original' | 'spotify' | 'internal'>('original');
@@ -538,6 +662,10 @@ export default function UploadReelModal({ onClose }: Props) {
             }
         };
 
+        const locationName = selectedLocation ? selectedLocation.name : (locationSearch.trim() || undefined);
+        const locationLat = selectedLocation?.lat;
+        const locationLng = selectedLocation?.lng;
+
         const taskId = 'reel-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
 
         addUpload({
@@ -548,6 +676,9 @@ export default function UploadReelModal({ onClose }: Props) {
             file,
             caption,
             hashtags: tags,
+            locationName,
+            locationLat,
+            locationLng,
             audioMetadata,
             thumbnailUrl: preview || undefined,
         });
@@ -557,27 +688,24 @@ export default function UploadReelModal({ onClose }: Props) {
             'Proses upload video Anda sedang berjalan. Anda bisa melanjutkan aktivitas di SeniQu.'
         );
 
+        // Auto-expand background upload manager widget
+        window.dispatchEvent(new CustomEvent('open_upload_manager'));
+
         onClose();
     };
-
-    // Curated filtering
-    const filteredTracks = CURATED_TRACKS.filter(t => 
-        t.title.toLowerCase().includes(spotifySearch.toLowerCase()) || 
-        t.artist.toLowerCase().includes(spotifySearch.toLowerCase())
-    );
 
     const displayTracks = spotifySearch.trim() ? liveSpotifyTracks : CURATED_TRACKS;
 
     return createPortal(
         <div className="reel-upload-overlay" onClick={e => { if (e.target === e.currentTarget && !uploading) onClose(); }}>
-            <div className="reel-upload-modal !max-w-xl md:!max-w-2xl" style={{ height: 'auto', maxHeight: '90dvh' }}>
+            <div className="reel-upload-modal !max-w-xl md:!max-w-2xl font-sans" style={{ height: 'auto', maxHeight: '90dvh' }}>
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border/30">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-theme-border/20">
                     <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500/20 to-amber-600/10 flex items-center justify-center">
-                            <Play style={{ width: 16, height: 16, fill: '#C9A84C', color: '#C9A84C' }} />
+                        <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                            <Video className="w-4 h-4 text-amber-500" />
                         </div>
-                        <h3 className="text-theme-text font-bold text-sm">
+                        <h3 className="text-theme-text font-semibold text-sm tracking-tight font-sans">
                             {step === 1 ? 'Create Reel' : step === 2 ? 'Edit Reel & Soundtrack' : 'Post Details'}
                         </h3>
                     </div>
@@ -593,11 +721,11 @@ export default function UploadReelModal({ onClose }: Props) {
                     {step === 1 && (
                         <div className="w-full p-8 flex flex-col items-center justify-center min-h-[300px]">
                             <button type="button" onClick={() => fileRef.current?.click()} className="reel-upload-dropzone w-full max-w-sm flex-1 flex flex-col justify-center items-center py-10">
-                                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/15 to-amber-600/5 flex items-center justify-center mb-3">
-                                    <Upload style={{ width: 28, height: 28, color: '#C9A84C' }} />
+                                <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-3">
+                                    <Upload className="w-6 h-6 text-amber-500" />
                                 </div>
                                 <span className="text-theme-text text-sm font-semibold mt-1">Upload short video</span>
-                                <span className="text-theme-muted text-[11px] text-center max-w-[220px] mt-1">Max 60s · 100MB · Portrait ratio recommended</span>
+                                <span className="text-theme-muted text-[11px] text-center max-w-[220px] mt-1">Max 60s · 150MB · Portrait ratio recommended</span>
                             </button>
                             {error && <p className="text-xs text-red-500 bg-red-500/10 p-3 rounded-lg border border-red-500/20 mt-4 w-full max-w-sm text-center">{error}</p>}
                         </div>
@@ -607,9 +735,9 @@ export default function UploadReelModal({ onClose }: Props) {
                     {step === 2 && file && (
                         <div className="flex-1 flex flex-col md:flex-row overflow-hidden w-full">
                             {/* Left: Video Preview with filters applied */}
-                            <div className="w-full md:w-1/2 p-4 flex flex-col items-center justify-center bg-black/40 border-r border-theme-border/20">
+                            <div className="w-full md:w-1/2 p-4 flex flex-col items-center justify-center bg-slate-100 dark:bg-zinc-950/50 border-r border-theme-border/20">
                                 <div 
-                                    className="relative rounded-2xl overflow-hidden border border-theme-border/30 bg-black flex items-center justify-center w-full max-w-[240px] shadow-lg"
+                                    className="relative rounded-2xl overflow-hidden border border-theme-border/30 bg-black flex items-center justify-center w-full max-w-[240px] shadow-sm"
                                     style={{ 
                                         aspectRatio: aspectRatio === 'original' ? undefined : aspectRatio,
                                         maxHeight: '320px'
@@ -627,7 +755,7 @@ export default function UploadReelModal({ onClose }: Props) {
                                     />
                                 </div>
 
-                                <div className="mt-3 flex gap-2 text-[10px] text-theme-muted">
+                                <div className="mt-3 flex gap-2 text-[11px] text-theme-muted font-medium">
                                     <span>{formatFileSize(file.size)}</span>
                                     <span>·</span>
                                     <span>Trim: {trimStart.toFixed(1)}s - {trimEnd.toFixed(1)}s</span>
@@ -635,20 +763,20 @@ export default function UploadReelModal({ onClose }: Props) {
                             </div>
 
                             {/* Right: Detailed Editor */}
-                            <div className="w-full md:w-1/2 p-5 overflow-y-auto space-y-5 max-h-[420px] md:max-h-none">
+                            <div className="w-full md:w-1/2 p-5 overflow-y-auto space-y-5 max-h-[420px] md:max-h-none font-sans">
                                 {/* Trimming controls */}
                                 <div className="space-y-2">
-                                    <h4 className="text-xs font-bold text-theme-text flex items-center gap-1.5 uppercase tracking-wider">
+                                    <h4 className="text-xs font-semibold text-theme-text flex items-center gap-1.5 font-sans">
                                         <Scissors className="w-3.5 h-3.5 text-amber-500" /> Video Trim
                                     </h4>
                                     <div className="space-y-1">
-                                        <div className="flex justify-between text-[10px] text-theme-muted">
+                                        <div className="flex justify-between text-[11px] text-theme-muted font-medium">
                                             <span>Start: {trimStart.toFixed(1)}s</span>
                                             <span>End: {trimEnd.toFixed(1)}s</span>
                                         </div>
                                         <div className="grid grid-cols-2 gap-3">
                                             <div>
-                                                <label className="text-[10px] text-theme-muted">Start Offset</label>
+                                                <label className="text-[10px] text-theme-muted font-medium">Start Offset</label>
                                                 <input 
                                                     type="range" 
                                                     min={0} 
@@ -659,11 +787,11 @@ export default function UploadReelModal({ onClose }: Props) {
                                                         const val = parseFloat(e.target.value);
                                                         if (val < trimEnd) setTrimStart(val);
                                                     }}
-                                                    className="w-full accent-amber-500"
+                                                    className="w-full accent-amber-500 cursor-pointer"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="text-[10px] text-theme-muted">End Offset</label>
+                                                <label className="text-[10px] text-theme-muted font-medium">End Offset</label>
                                                 <input 
                                                     type="range" 
                                                     min={0} 
@@ -674,7 +802,7 @@ export default function UploadReelModal({ onClose }: Props) {
                                                         const val = parseFloat(e.target.value);
                                                         if (val > trimStart) setTrimEnd(val);
                                                     }}
-                                                    className="w-full accent-amber-500"
+                                                    className="w-full accent-amber-500 cursor-pointer"
                                                 />
                                             </div>
                                         </div>
@@ -683,8 +811,8 @@ export default function UploadReelModal({ onClose }: Props) {
 
                                 {/* Filters Carousel */}
                                 <div className="space-y-2">
-                                    <h4 className="text-xs font-bold text-theme-text flex items-center gap-1.5 uppercase tracking-wider">
-                                        <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Aesthetic Filters
+                                    <h4 className="text-xs font-semibold text-theme-text flex items-center gap-1.5 font-sans">
+                                        <Palette className="w-3.5 h-3.5 text-amber-500" /> Aesthetic Filters
                                     </h4>
                                     <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
                                         {FILTERS.map(f => (
@@ -692,10 +820,10 @@ export default function UploadReelModal({ onClose }: Props) {
                                                 key={f.name}
                                                 type="button"
                                                 onClick={() => setSelectedFilter(f.name)}
-                                                className={`px-3 py-1.5 text-[11px] font-semibold rounded-full border transition-all whitespace-nowrap ${
+                                                className={`px-3 py-1.5 text-[11px] font-medium rounded-full border transition-all whitespace-nowrap ${
                                                     selectedFilter === f.name 
-                                                        ? 'bg-amber-500 text-black border-transparent font-bold' 
-                                                        : 'bg-theme-border/20 text-theme-muted border-theme-border/30 hover:text-theme-text'
+                                                        ? 'bg-amber-500 text-white border-amber-500 shadow-sm font-semibold' 
+                                                        : 'bg-slate-100 dark:bg-zinc-800/80 text-slate-600 dark:text-zinc-300 border-slate-200 dark:border-zinc-700 hover:bg-slate-200 dark:hover:bg-zinc-700'
                                                 }`}
                                             >
                                                 {f.label}
@@ -707,17 +835,17 @@ export default function UploadReelModal({ onClose }: Props) {
                                 {/* Speed & Aspect Ratio */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-bold text-theme-muted uppercase tracking-wider flex items-center gap-1"><FastForward className="w-3 h-3"/> Speed</label>
-                                        <div className="flex rounded-lg overflow-hidden border border-theme-border/30">
+                                        <label className="text-[11px] font-semibold text-theme-muted flex items-center gap-1 font-sans"><FastForward className="w-3 h-3 text-amber-500"/> Speed</label>
+                                        <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-700 p-0.5 bg-slate-100 dark:bg-zinc-800/80">
                                             {[0.5, 1, 1.5, 2].map(speed => (
                                                 <button
                                                     key={speed}
                                                     type="button"
                                                     onClick={() => setPlaybackSpeed(speed)}
-                                                    className={`flex-1 py-1 text-xs transition-colors ${
+                                                    className={`flex-1 py-1 text-xs font-medium rounded-lg transition-colors ${
                                                         playbackSpeed === speed 
-                                                            ? 'bg-amber-500 text-black font-bold' 
-                                                            : 'bg-theme-border/10 text-theme-muted hover:bg-theme-border/20'
+                                                            ? 'bg-amber-500 text-white font-semibold shadow-sm' 
+                                                            : 'text-slate-600 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-zinc-100'
                                                     }`}
                                                 >
                                                     {speed}x
@@ -727,23 +855,129 @@ export default function UploadReelModal({ onClose }: Props) {
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-bold text-theme-muted uppercase tracking-wider flex items-center gap-1"><Crop className="w-3 h-3"/> Crop</label>
+                                        <label className="text-[11px] font-semibold text-theme-muted flex items-center gap-1 font-sans"><Crop className="w-3 h-3 text-amber-500"/> Crop</label>
                                         <select 
                                             value={aspectRatio} 
                                             onChange={e => setAspectRatio(e.target.value)}
-                                            className="w-full bg-theme-border/15 border border-theme-border/30 text-theme-text rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-amber-500"
+                                            className="w-full bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-100 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
                                         >
-                                            <option value="9/16">9:16 Portrait</option>
-                                            <option value="1/1">1:1 Square</option>
-                                            <option value="16/9">16:9 Landscape</option>
-                                            <option value="original">Original Size</option>
+                                            <option value="9/16" className="bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-100">9:16 Portrait</option>
+                                            <option value="1/1" className="bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-100">1:1 Square</option>
+                                            <option value="16/9" className="bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-100">16:9 Landscape</option>
+                                            <option value="original" className="bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-100">Original Size</option>
                                         </select>
                                     </div>
                                 </div>
 
+                                {/* Location Tagging integrated in Step 2 */}
+                                <div className="space-y-2 pt-3 border-t border-theme-border/20">
+                                    <h4 className="text-xs font-semibold text-theme-text flex items-center gap-1.5 font-sans">
+                                        <MapPin className="w-3.5 h-3.5 text-amber-500" /> Tag Location (Explore Maps)
+                                    </h4>
+                                    {selectedLocation ? (
+                                        <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400">
+                                            <MapPin className="w-4 h-4 flex-shrink-0 text-amber-500" />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-semibold truncate">{selectedLocation.name}</p>
+                                                {selectedLocation.lat !== undefined && selectedLocation.lng !== undefined && (
+                                                    <p className="text-[10px] opacity-75 font-mono">{selectedLocation.lat.toFixed(4)}, {selectedLocation.lng.toFixed(4)} • Linked to Explore Maps</p>
+                                                )}
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => { setSelectedLocation(null); setLocationSearch(''); }}
+                                                className="w-5 h-5 rounded-full bg-amber-500/20 hover:bg-amber-500/40 flex items-center justify-center text-amber-700 dark:text-amber-300"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                value={locationSearch}
+                                                onChange={e => {
+                                                    setLocationSearch(e.target.value);
+                                                    setShowLocationDropdown(true);
+                                                }}
+                                                onFocus={() => setShowLocationDropdown(true)}
+                                                placeholder="Tag a museum, gallery, or landmark..."
+                                                className="w-full bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-100 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
+                                            />
+                                            <MapPin className="w-4 h-4 text-theme-muted absolute left-3 top-1/2 -translate-y-1/2" />
+
+                                            {showLocationDropdown && (
+                                                <div className="absolute top-full left-0 right-0 mt-1 z-30 max-h-56 overflow-y-auto rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xl p-1.5 space-y-1">
+                                                    {searchingLocation && (
+                                                        <p className="text-xs text-amber-500 px-2 py-1.5 font-medium animate-pulse flex items-center gap-1.5">
+                                                            <MapPin className="w-3.5 h-3.5 animate-spin" />
+                                                            Mencari lokasi real-time (Google Maps)...
+                                                        </p>
+                                                    )}
+
+                                                    {liveLocationResults.length > 0 && (
+                                                        <div>
+                                                            <p className="text-[10px] text-amber-600 dark:text-amber-400 px-2 py-1 uppercase tracking-wider font-semibold">Google Maps / Live Locations</p>
+                                                            {liveLocationResults.map((loc, idx) => (
+                                                                <button
+                                                                    key={'live-' + idx}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setSelectedLocation(loc);
+                                                                        setLocationSearch(loc.name);
+                                                                        setShowLocationDropdown(false);
+                                                                    }}
+                                                                    className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-start gap-2 transition-colors text-xs text-slate-800 dark:text-zinc-200"
+                                                                >
+                                                                    <MapPin className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <p className="truncate font-medium">{loc.name}</p>
+                                                                        {loc.address && <p className="truncate text-[10px] text-theme-muted">{loc.address}</p>}
+                                                                    </div>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+
+                                                    <p className="text-[10px] text-theme-muted px-2 py-1 uppercase tracking-wider font-semibold mt-1">Explore Heritage Presets</p>
+                                                    {HERITAGE_LOCATIONS.filter(loc => loc.name.toLowerCase().includes(locationSearch.toLowerCase())).map((loc, idx) => (
+                                                        <button
+                                                            key={'preset-' + idx}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSelectedLocation(loc);
+                                                                setLocationSearch(loc.name);
+                                                                setShowLocationDropdown(false);
+                                                            }}
+                                                            className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2 transition-colors text-xs text-slate-800 dark:text-zinc-200"
+                                                        >
+                                                            <MapPin className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                                                            <span className="truncate">{loc.name}</span>
+                                                        </button>
+                                                    ))}
+
+                                                    {locationSearch.trim() && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSelectedLocation({ name: locationSearch.trim() });
+                                                                setShowLocationDropdown(false);
+                                                            }}
+                                                            className="w-full text-left px-2.5 py-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-medium text-xs flex items-center gap-2"
+                                                        >
+                                                            <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                                                            <span>Gunakan lokasi kustom: "{locationSearch.trim()}"</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
                                 {/* Audio Source Picker */}
                                 <div className="space-y-3 pt-3 border-t border-theme-border/20">
-                                    <h4 className="text-xs font-bold text-theme-text flex items-center gap-1.5 uppercase tracking-wider">
+                                    <h4 className="text-xs font-semibold text-theme-text flex items-center gap-1.5 font-sans">
                                         <Music className="w-3.5 h-3.5 text-amber-500" /> Audio Soundtrack
                                     </h4>
 
@@ -751,10 +985,10 @@ export default function UploadReelModal({ onClose }: Props) {
                                         <button
                                             type="button"
                                             onClick={() => { setAudioSource('original'); stopAudioPreviews(); }}
-                                            className={`flex-1 py-2 text-xs font-semibold rounded-xl border transition-all ${
+                                            className={`flex-1 py-2 text-xs font-medium rounded-xl border transition-all ${
                                                 audioSource === 'original'
-                                                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
-                                                    : 'bg-theme-border/10 text-theme-muted border-transparent hover:bg-theme-border/20'
+                                                    ? 'bg-amber-500 text-white border-amber-500 shadow-sm font-semibold'
+                                                    : 'bg-slate-100 dark:bg-zinc-800/80 text-slate-600 dark:text-zinc-300 border-slate-200 dark:border-zinc-700 hover:bg-slate-200 dark:hover:bg-zinc-700'
                                             }`}
                                         >
                                             Original Video Sound
@@ -762,10 +996,10 @@ export default function UploadReelModal({ onClose }: Props) {
                                         <button
                                             type="button"
                                             onClick={() => { setAudioSource('spotify'); stopAudioPreviews(); }}
-                                            className={`flex-1 py-2 text-xs font-semibold rounded-xl border transition-all ${
+                                            className={`flex-1 py-2 text-xs font-medium rounded-xl border transition-all ${
                                                 audioSource === 'spotify'
-                                                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
-                                                    : 'bg-theme-border/10 text-theme-muted border-transparent hover:bg-theme-border/20'
+                                                    ? 'bg-amber-500 text-white border-amber-500 shadow-sm font-semibold'
+                                                    : 'bg-slate-100 dark:bg-zinc-800/80 text-slate-600 dark:text-zinc-300 border-slate-200 dark:border-zinc-700 hover:bg-slate-200 dark:hover:bg-zinc-700'
                                             }`}
                                         >
                                             Search Soundtrack
@@ -773,10 +1007,10 @@ export default function UploadReelModal({ onClose }: Props) {
                                         <button
                                             type="button"
                                             onClick={() => { setAudioSource('internal'); stopAudioPreviews(); }}
-                                            className={`flex-1 py-2 text-xs font-semibold rounded-xl border transition-all ${
+                                            className={`flex-1 py-2 text-xs font-medium rounded-xl border transition-all ${
                                                 audioSource === 'internal'
-                                                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
-                                                    : 'bg-theme-border/10 text-theme-muted border-transparent hover:bg-theme-border/20'
+                                                    ? 'bg-amber-500 text-white border-amber-500 shadow-sm font-semibold'
+                                                    : 'bg-slate-100 dark:bg-zinc-800/80 text-slate-600 dark:text-zinc-300 border-slate-200 dark:border-zinc-700 hover:bg-slate-200 dark:hover:bg-zinc-700'
                                             }`}
                                         >
                                             Internal Device Audio
@@ -1123,21 +1357,21 @@ export default function UploadReelModal({ onClose }: Props) {
 
                     {/* STEP 3: Caption, Hashtags & Publish */}
                     {step === 3 && (
-                        <form onSubmit={handleSubmit} className="reel-upload-form flex-1 w-full">
+                        <form onSubmit={handleSubmit} className="reel-upload-form flex-1 w-full font-sans">
                             {/* Summary of edits */}
-                            <div className="p-4 rounded-2xl bg-theme-border/10 border border-theme-border/20 flex items-center justify-between">
+                            <div className="p-4 rounded-2xl bg-slate-100 dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-800 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/25 flex items-center justify-center text-amber-500">
-                                        <Video className="w-5 h-5" />
+                                    <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500">
+                                        <Video className="w-4 h-4" />
                                     </div>
                                     <div>
-                                        <p className="text-xs font-bold text-theme-text">Video Configured</p>
-                                        <p className="text-[10px] text-theme-muted">Speed: {playbackSpeed}x · Crop: {aspectRatio} · Filter: {selectedFilter}</p>
+                                        <p className="text-xs font-semibold text-theme-text font-sans">Video Configured</p>
+                                        <p className="text-[11px] text-theme-muted font-medium">Speed: {playbackSpeed}x · Crop: {aspectRatio} · Filter: {selectedFilter}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 text-right">
                                     {audioSource !== 'original' && (
-                                        <div className="text-xs text-amber-500 flex items-center gap-1 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+                                        <div className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20 font-medium">
                                             <Music className="w-3 h-3" /> Soundtrack
                                         </div>
                                     )}
@@ -1146,23 +1380,153 @@ export default function UploadReelModal({ onClose }: Props) {
 
                             {/* Caption with Thumbnail Preview */}
                             <div>
-                                <label className="reel-label">Caption</label>
+                                <label className="text-xs font-semibold text-theme-text mb-1.5 block font-sans">Caption</label>
                                 <div className="flex gap-4 items-start">
                                     {preview && (
-                                        <div className="w-20 h-28 rounded-xl overflow-hidden border border-theme-border/30 bg-black flex-shrink-0 shadow-md">
+                                        <div className="w-20 h-28 rounded-xl overflow-hidden border border-theme-border/30 bg-black flex-shrink-0 shadow-sm">
                                             <img src={preview} alt="Thumbnail preview" className="w-full h-full object-cover" />
                                         </div>
                                     )}
                                     <div className="flex-1">
-                                        <textarea value={caption} onChange={e => setCaption(e.target.value)} placeholder="Write an inspiring caption for your art heritage reel..." className="reel-textarea !h-[112px]" maxLength={2200} />
+                                        <textarea 
+                                            value={caption} 
+                                            onChange={e => setCaption(e.target.value)} 
+                                            placeholder="Write an inspiring caption for your art heritage reel..." 
+                                            className="w-full bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-100 rounded-xl p-3 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 placeholder:text-slate-400 dark:placeholder:text-zinc-500 !h-[112px] resize-none" 
+                                            maxLength={2200} 
+                                        />
                                     </div>
                                 </div>
                             </div>
 
                             {/* Hashtags */}
                             <div>
-                                <label className="reel-label">Hashtags</label>
-                                <input value={hashtags} onChange={e => setHashtags(e.target.value)} placeholder="indonesia, heritage, digitalart, seniqu" className="reel-input" />
+                                <label className="text-xs font-semibold text-theme-text mb-1.5 block font-sans">Hashtags</label>
+                                <input 
+                                    value={hashtags} 
+                                    onChange={e => setHashtags(e.target.value)} 
+                                    placeholder="indonesia, heritage, digitalart, seniqu" 
+                                    className="w-full bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-100 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 placeholder:text-slate-400 dark:placeholder:text-zinc-500" 
+                                />
+                            </div>
+
+                            {/* Location Selector */}
+                            <div ref={locationDropdownRef} className="relative">
+                                <label className="flex items-center justify-between mb-1.5 font-sans">
+                                    <span className="flex items-center gap-1.5 font-semibold text-xs text-theme-text">
+                                        <MapPin className="w-3.5 h-3.5 text-amber-500" /> Tag Location (Explore Maps)
+                                    </span>
+                                    {selectedLocation && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setSelectedLocation(null); setLocationSearch(''); }}
+                                            className="text-[11px] font-medium text-amber-500 hover:underline"
+                                        >
+                                            Remove Location
+                                        </button>
+                                    )}
+                                </label>
+
+                                {selectedLocation ? (
+                                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800/60 text-amber-950 dark:text-amber-200">
+                                        <MapPin className="w-4 h-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-xs font-semibold truncate">{selectedLocation.name}</p>
+                                            {selectedLocation.lat !== undefined && selectedLocation.lng !== undefined && (
+                                                <p className="text-[10px] text-slate-600 dark:text-zinc-400 font-mono">{selectedLocation.lat.toFixed(4)}, {selectedLocation.lng.toFixed(4)} • Linked to Explore Maps</p>
+                                            )}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setSelectedLocation(null); setLocationSearch(''); }}
+                                            className="w-5 h-5 rounded-full bg-amber-200/60 dark:bg-amber-500/20 hover:bg-amber-300 dark:hover:bg-amber-500/40 flex items-center justify-center text-amber-900 dark:text-amber-200"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={locationSearch}
+                                            onChange={e => {
+                                                setLocationSearch(e.target.value);
+                                                setShowLocationDropdown(true);
+                                            }}
+                                            onFocus={() => setShowLocationDropdown(true)}
+                                            placeholder="Tag a museum, gallery, or landmark..."
+                                            className="w-full bg-slate-100 dark:bg-zinc-800/80 border border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-zinc-100 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 placeholder:text-slate-500 dark:placeholder:text-zinc-500 font-medium"
+                                        />
+                                        <MapPin className="w-4 h-4 text-slate-500 dark:text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+
+                                        {/* Dropdown Suggestions */}
+                                        {showLocationDropdown && (
+                                            <div className="absolute top-full left-0 right-0 mt-1 z-30 max-h-56 overflow-y-auto rounded-xl bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-800 shadow-2xl p-1.5 space-y-1">
+                                                {searchingLocation && (
+                                                    <p className="text-xs text-amber-800 dark:text-amber-300 px-2 py-1.5 font-semibold animate-pulse flex items-center gap-1.5">
+                                                        <MapPin className="w-3.5 h-3.5 animate-spin text-amber-600 dark:text-amber-400" />
+                                                        Mencari lokasi real-time (Google Maps / OSM)...
+                                                    </p>
+                                                )}
+
+                                                {liveLocationResults.length > 0 && (
+                                                    <div>
+                                                        <p className="text-[10px] text-amber-800 dark:text-amber-400 px-2 py-1 uppercase tracking-wider font-bold">Google Maps / Live Locations</p>
+                                                        {liveLocationResults.map((loc, idx) => (
+                                                            <button
+                                                                key={'live-step3-' + idx}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setSelectedLocation(loc);
+                                                                    setLocationSearch(loc.name);
+                                                                    setShowLocationDropdown(false);
+                                                                }}
+                                                                className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-start gap-2 transition-colors text-xs text-slate-900 dark:text-zinc-100 font-medium"
+                                                            >
+                                                                <MapPin className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                                                                <div className="min-w-0 flex-1">
+                                                                    <p className="truncate font-semibold text-slate-900 dark:text-zinc-100">{loc.name}</p>
+                                                                    {loc.address && <p className="truncate text-[10px] text-slate-600 dark:text-zinc-400 font-normal">{loc.address}</p>}
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                <p className="text-[10px] text-slate-600 dark:text-zinc-400 px-2 py-1 uppercase tracking-wider font-bold mt-1">Explore Heritage Presets</p>
+                                                {HERITAGE_LOCATIONS.filter(loc => loc.name.toLowerCase().includes(locationSearch.toLowerCase())).map((loc, idx) => (
+                                                    <button
+                                                        key={'preset-step3-' + idx}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedLocation(loc);
+                                                            setLocationSearch(loc.name);
+                                                            setShowLocationDropdown(false);
+                                                        }}
+                                                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 flex items-center gap-2 transition-colors text-xs text-slate-900 dark:text-zinc-100 font-medium"
+                                                    >
+                                                        <MapPin className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                                                        <span className="truncate">{loc.name}</span>
+                                                    </button>
+                                                ))}
+
+                                                {locationSearch.trim() && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedLocation({ name: locationSearch.trim() });
+                                                            setShowLocationDropdown(false);
+                                                        }}
+                                                        className="w-full text-left px-2.5 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/60 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-950 dark:text-amber-200 font-semibold text-xs flex items-center gap-2 transition-colors"
+                                                    >
+                                                        <MapPin className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                                                        <span>Gunakan lokasi kustom: "{locationSearch.trim()}"</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Warning message if any */}

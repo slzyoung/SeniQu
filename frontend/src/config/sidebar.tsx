@@ -10,7 +10,6 @@ import {
     ShoppingCart,
     Wallet,
     MessageSquare,
-    CreditCard,
     Building2,
     Users,
     BarChart3,
@@ -33,7 +32,6 @@ import {
     Megaphone,
     Images,
     Camera,
-    Mail,
     Play,
     GalleryHorizontal,
     Library
@@ -115,6 +113,12 @@ export const userSidebarSections: SidebarSection[] = [
                 path: ROUTES.USER_MARKETPLACE,
             },
             {
+                id: 'wallet',
+                label: 'My Wallet',
+                icon: <Wallet className="w-5 h-5" />,
+                path: ROUTES.USER_WALLET,
+            },
+            {
                 id: 'my-arts',
                 label: 'My Arts',
                 icon: <Palette className="w-5 h-5" />,
@@ -125,12 +129,6 @@ export const userSidebarSections: SidebarSection[] = [
     {
         title: 'Community',
         items: [
-            {
-                id: 'reels',
-                label: 'Reels',
-                icon: <Play className="w-5 h-5" />,
-                path: ROUTES.REELS,
-            },
             {
                 id: 'community',
                 label: 'Forum',
@@ -166,12 +164,6 @@ export const userSidebarSections: SidebarSection[] = [
                 label: 'Bookmarks',
                 icon: <Bookmark className="w-5 h-5" />,
                 path: ROUTES.USER_BOOKMARKS,
-            },
-            {
-                id: 'wallet',
-                label: 'Wallet',
-                icon: <CreditCard className="w-5 h-5" />,
-                path: ROUTES.USER_WALLET,
             },
         ],
     },

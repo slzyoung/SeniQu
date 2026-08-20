@@ -6,6 +6,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
+import * as https from 'https';
+
+// Concurrency queue for HEIC conversion to prevent blocking Node event loop
+let currentConversionPromise: Promise<any> = Promise.resolve();
+
 @ApiTags('Root')
 @Controller()
 export class AppController {
@@ -54,9 +59,11 @@ export class AppController {
                     
                     if (typeof res.header === 'function') {
                         res.header('Content-Type', 'image/jpeg');
+                        res.header('Cache-Control', 'public, max-age=31536000, immutable');
                         res.header('Access-Control-Allow-Origin', '*');
                     } else if (typeof res.setHeader === 'function') {
                         res.setHeader('Content-Type', 'image/jpeg');
+                        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
                         res.setHeader('Access-Control-Allow-Origin', '*');
                     }
                     
@@ -68,26 +75,48 @@ export class AppController {
                 }
             }
 
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new BadRequestException(`CDN returned status ${response.status}`);
-            }
+            // Use standard node https module to avoid native fetch / undici DNS lookup bugs
+            const { buffer: fetchedBuffer, contentType: fetchedContentType } = await new Promise<{ buffer: Buffer; contentType: string }>((resolve, reject) => {
+                https.get(url, (cdnRes) => {
+                    if (cdnRes.statusCode !== 200) {
+                        reject(new Error(`CDN returned status ${cdnRes.statusCode}`));
+                        return;
+                    }
+                    const contentType = cdnRes.headers['content-type'] || 'application/octet-stream';
+                    const chunks: any[] = [];
+                    cdnRes.on('data', (chunk) => chunks.push(chunk));
+                    cdnRes.on('end', () => resolve({ buffer: Buffer.concat(chunks), contentType }));
+                }).on('error', reject);
+            });
 
-            let contentType = response.headers.get('content-type') || 'application/octet-stream';
-            const arrayBuffer = await response.arrayBuffer();
-            let buffer = Buffer.from(arrayBuffer);
+            let buffer = fetchedBuffer;
+            let contentType = fetchedContentType;
 
             // Convert HEIC to JPEG on the fly
             if (isHeic) {
                 try {
-                    // eslint-disable-next-line @typescript-eslint/no-var-requires
-                    const heicConvert = require('heic-convert');
-                    const convertedBuffer = await heicConvert({
-                        buffer,
-                        format: 'JPEG',
-                        quality: 0.85
+                    // Queue the conversion to avoid blocking the event loop with parallel CPU-bound tasks
+                    const convertTask = () => new Promise<Buffer>(async (resolveConvert, rejectConvert) => {
+                        try {
+                            // eslint-disable-next-line @typescript-eslint/no-var-requires
+                            const heicConvert = require('heic-convert');
+                            const convertedBuffer = await heicConvert({
+                                buffer,
+                                format: 'JPEG',
+                                quality: 0.85
+                            });
+                            resolveConvert(Buffer.from(convertedBuffer));
+                        } catch (convError) {
+                            rejectConvert(convError);
+                        }
                     });
-                    buffer = Buffer.from(convertedBuffer);
+
+                    // Chain the promise to serialize execution
+                    const convertedBuffer = await (currentConversionPromise = currentConversionPromise
+                        .then(convertTask)
+                        .catch(convertTask)); // continue queue even if previous failed
+
+                    buffer = convertedBuffer;
                     contentType = 'image/jpeg';
                     
                     // Save to local cache
@@ -96,15 +125,16 @@ export class AppController {
                     }
                 } catch (convError: any) {
                     console.error('Failed to convert HEIC to JPEG in proxy:', convError);
-                    // Fallback to original buffer if conversion fails
                 }
             }
             
             if (typeof res.header === 'function') {
                 res.header('Content-Type', contentType);
+                res.header('Cache-Control', 'public, max-age=31536000, immutable');
                 res.header('Access-Control-Allow-Origin', '*');
             } else if (typeof res.setHeader === 'function') {
                 res.setHeader('Content-Type', contentType);
+                res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
                 res.setHeader('Access-Control-Allow-Origin', '*');
             }
             

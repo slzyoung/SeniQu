@@ -8,10 +8,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useSearchParams } from 'react-router-dom';
-import { Search, Loader2, Play, Link2, X, SlidersHorizontal, PlusCircle } from 'lucide-react';
+import { Search, Loader2, Play, Link2, X, SlidersHorizontal, Plus } from 'lucide-react';
 import { useReelsFeed, useReel } from '../../hooks/useReels';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useToast } from '../../stores/useNotificationStore';
+import { useAuthModalStore } from '../../stores/useAuthModalStore';
 import ReelItem from './components/ReelItem';
 import CommentsDrawer from './components/CommentsDrawer';
 import UploadReelModal from './components/UploadReelModal';
@@ -22,9 +23,19 @@ const REEL_CATEGORIES = ['All', 'Art', 'Music', 'Dance', 'Nature', 'Culture', 'P
 
 export function ReelsPage() {
     const { user, isAuthenticated } = useAuthStore();
+    const { openAuthModal } = useAuthModalStore();
     const toast = useToast();
     const location = useLocation();
     const [searchParams] = useSearchParams();
+
+    const handleCreateClick = useCallback(() => {
+        if (!isAuthenticated) {
+            toast.error('Login Required', 'Sign in to create a Reel');
+            openAuthModal();
+        } else {
+            setShowUpload(true);
+        }
+    }, [isAuthenticated, openAuthModal, toast]);
 
     // Extract query/state parameters
     const initialReelId = useMemo(() => {
@@ -293,6 +304,7 @@ export function ReelsPage() {
                             onOpenComments={() => setCommentsReel(reel.id)}
                             onShare={() => handleShare(reel.id)}
                             observerRef={el => { if (el) observer.current?.observe(el); }}
+                            onCreateClick={handleCreateClick}
                         />
                     ))}
                 </div>
@@ -303,22 +315,6 @@ export function ReelsPage() {
 
             {/* ═══ Upload Modal ═══ */}
             {showUpload && <UploadReelModal onClose={() => setShowUpload(false)} />}
-
-            {/* ═══ Create Reel FAB — Portal for clean z-index ═══ */}
-            {isAuthenticated && !showUpload && !commentsReel && !shareReel && createPortal(
-                <button
-                    className="reels-fab"
-                    onClick={() => setShowUpload(true)}
-                    aria-label="Create new reel"
-                >
-                    <span className="reels-fab-pulse" />
-                    <span className="reels-fab-inner">
-                        <PlusCircle style={{ width: 22, height: 22 }} />
-                        <span className="reels-fab-label">Create</span>
-                    </span>
-                </button>,
-                document.body
-            )}
 
             {/* ═══ Share Bottom Sheet ═══ */}
             {shareReel && createPortal(
@@ -401,6 +397,18 @@ export function ReelsPage() {
                     </div>
                 </div>,
                 document.body
+            )}
+
+            {/* ═══ Create Reel Sidebar FAB (Fixed above mute button) ═══ */}
+            {isAuthenticated && !showUpload && !commentsReel && !shareReel && (
+                <button
+                    className="reels-sidebar-fab"
+                    onClick={handleCreateClick}
+                    aria-label="Create new reel"
+                    title="Create Reel"
+                >
+                    <Plus style={{ width: 18, height: 18 }} />
+                </button>
             )}
         </div>
     );

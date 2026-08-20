@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Heart, MessageCircle, Share2, Volume2, VolumeX, Play, Pause, Trash2, Bookmark, MoreVertical, Music, X } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Volume2, VolumeX, Play, Pause, Trash2, Bookmark, MoreVertical, Music, X, Plus, MapPin } from 'lucide-react';
 import { useToggleReelLike, useToggleReelReshare, useRecordReelView, useDeleteReel } from '../../../hooks/useReels';
 import { useAuthStore } from '../../../stores/useAuthStore';
 import { useToast } from '../../../stores/useNotificationStore';
@@ -33,9 +33,10 @@ interface Props {
     onOpenComments: () => void;
     onShare: () => void;
     observerRef: (el: HTMLDivElement | null) => void;
+    onCreateClick?: () => void;
 }
 
-export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpenComments, onShare, observerRef }: Props) {
+export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpenComments, onShare, observerRef, onCreateClick }: Props) {
     const navigate = useNavigate();
     const videoRef = useRef<HTMLVideoElement>(null);
     const audioTrackRef = useRef<HTMLAudioElement | null>(null);
@@ -407,12 +408,54 @@ export default function ReelItem({ reel, isActive, isMuted, onMuteToggle, onOpen
                         </button>
                     )}
 
-                    <div style={{ flex: 1 }} />
-
-                    <button onClick={() => setShowOptions(true)} className="reel-options-btn">
-                        <MoreVertical style={{ width: 20, height: 20 }} />
+                    <button
+                        onClick={() => setShowOptions(true)}
+                        className="reel-options-btn"
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '6px',
+                            marginLeft: '4px',
+                            opacity: 0.85,
+                            transition: 'opacity 0.2s, transform 0.2s',
+                        }}
+                    >
+                        <MoreVertical style={{ width: 18, height: 18 }} />
                     </button>
+
+                    <div style={{ flex: 1 }} />
                 </div>
+
+                {/* Location Badge */}
+                {(reel.locationName || reel.location_name) && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (!user) {
+                                toast.error('Login Required', 'Sign in to explore location details and nearby heritage sites.');
+                                openAuthModal();
+                                return;
+                            }
+                            const locName = reel.locationName || reel.location_name;
+                            const lat = reel.locationLat ?? reel.location_lat;
+                            const lng = reel.locationLng ?? reel.location_lng;
+                            if (lat !== undefined && lng !== undefined) {
+                                navigate(`/nearby?lat=${lat}&lng=${lng}&query=${encodeURIComponent(locName)}`);
+                            } else {
+                                navigate(`/nearby?query=${encodeURIComponent(locName)}`);
+                            }
+                        }}
+                        className="reel-location-badge flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium transition-all mb-1.5 w-fit"
+                    >
+                        <MapPin className="w-3 h-3 text-amber-400 flex-shrink-0" />
+                        <span className="truncate max-w-[200px]">{reel.locationName || reel.location_name}</span>
+                    </button>
+                )}
 
                 {/* Caption */}
                 {reel.caption && <p className="reel-caption">{reel.caption}</p>}

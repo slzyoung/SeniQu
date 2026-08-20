@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -239,48 +239,30 @@ const generateLocalArtworks = () => {
 
 const LOCAL_FALLBACK_ARTWORKS: Artwork[] = generateLocalArtworks();
 
-const HeicImage = ({ src, alt, className, style }: { src: string; alt?: string; className?: string; style?: React.CSSProperties }) => {
-    const [loading, setLoading] = useState(true);
+const HeicImage = ({ src, alt, className, style, priority = false }: { src: string; alt?: string; className?: string; style?: React.CSSProperties; priority?: boolean }) => {
     const [error, setError] = useState(false);
+    const [loaded, setLoaded] = useState(false);
 
     const isHeic = src?.toLowerCase().endsWith('.heic');
+
+    // Check if the browser supports HEIC natively (Safari or Apple device user agent)
+    const supportsHeicNatively = useMemo(() => {
+        if (typeof window === 'undefined') return false;
+        const ua = window.navigator.userAgent.toLowerCase();
+        const isSafari = ua.includes('safari') && !ua.includes('chrome') && !ua.includes('android');
+        const isApple = ua.includes('iphone') || ua.includes('ipad') || ua.includes('macintosh') || ua.includes('ipod');
+        return isSafari || isApple;
+    }, []);
+
     const displaySrc = isHeic
-        ? `${API_BASE_URL}/proxy?url=${encodeURIComponent(src)}`
+        ? (supportsHeicNatively ? src : `${API_BASE_URL}/proxy?url=${encodeURIComponent(src)}`)
         : src;
 
+    // Reset state when src changes
     useEffect(() => {
-        if (!displaySrc) {
-            setLoading(false);
-            setError(true);
-            return;
-        }
-
-        setLoading(true);
         setError(false);
-        
-        const img = new Image();
-        img.src = displaySrc;
-        img.onload = () => {
-            setLoading(false);
-        };
-        img.onerror = () => {
-            setLoading(false);
-            setError(true);
-        };
-        
-        return () => {
-            img.onload = null;
-            img.onerror = null;
-        };
+        setLoaded(false);
     }, [displaySrc]);
-
-    if (loading) {
-        return (
-            <div className={`flex items-center justify-center bg-theme-surface/50 ${className}`} style={style}>
-                <div className="w-5 h-5 border-2 border-gold border-t-transparent rounded-full animate-spin" />
-            </div>
-        );
-    }
 
     if (error || !displaySrc) {
         return (
@@ -291,13 +273,22 @@ const HeicImage = ({ src, alt, className, style }: { src: string; alt?: string; 
     }
 
     return (
-        <img
-            src={displaySrc}
-            alt={alt}
-            className={className}
-            style={style}
-            loading="lazy"
-        />
+        <div className={`relative overflow-hidden ${className}`} style={style}>
+            {/* CSS shimmer skeleton — shows until image loads */}
+            {!loaded && (
+                <div className="absolute inset-0 bg-theme-surface/60 animate-pulse" />
+            )}
+            <img
+                src={displaySrc}
+                alt={alt || ''}
+                className={`w-full h-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+                loading={priority ? 'eager' : 'lazy'}
+                decoding="async"
+                {...{ fetchpriority: priority ? 'high' : 'auto' }}
+                onLoad={() => setLoaded(true)}
+                onError={() => setError(true)}
+            />
+        </div>
     );
 };
 
@@ -508,6 +499,7 @@ const FeaturedArtCard = ({ artwork, delay, onClick }: { artwork: Artwork; delay:
                     alt={artwork.title}
                     className="w-full h-full object-cover group-hover:scale-[1.06] transition-transform duration-[800ms] ease-out"
                     loading="lazy"
+                    decoding="async"
                 />
                 
                 {/* Overlay gradient - fades in on hover */}
@@ -617,6 +609,7 @@ export default function CollectionsPage() {
     const [selectedArtwork, setSelectedArtwork] = useState<Artwork | null>(null);
     const [followedInstitutions, setFollowedInstitutions] = useState<Record<string, boolean>>({});
     const [activeModalTab, setActiveModalTab] = useState<'info' | 'security'>('info');
+    const [isTransitioning, setIsTransitioning] = useState(false);
 
     // Breadcrumb state navigation
     const [activeCity, setActiveCity] = useState<{ name: string; key: string } | null>(null);
@@ -643,6 +636,48 @@ export default function CollectionsPage() {
     const isLoading = isLoadingArtworks || isLoadingMuseums;
     const artworks = useMemo(() => [...(dbArtworks?.data || []), ...LOCAL_FALLBACK_ARTWORKS], [dbArtworks?.data]);
     const museums = useMemo(() => dbMuseums?.data || [], [dbMuseums?.data]);
+
+    // Helper to find/seed corresponding museum of an artwork
+    const getArtworkInstitution = useCallback((artwork: Artwork) => {
+        if (artwork.institutionId) {
+            const found = museums.find(m => m.id === artwork.institutionId);
+            if (found) return found;
+        }
+        if (artwork.museum) return artwork.museum;
+        if (artwork.gallery) {
+            return {
+                id: artwork.gallery.id,
+                name: artwork.gallery.name,
+                type: 'gallery',
+                isVerified: true
+            } as any;
+        }
+        const parsed = parseArtworkCDNPath(artwork.primaryImageUrl);
+        if (parsed) {
+            return {
+                id: parsed.instName.toLowerCase().replace(/\s+/g, '-'),
+                name: parsed.instName,
+                type: parsed.type,
+                city: parsed.city.toLowerCase(),
+                isVerified: true
+            } as any;
+        }
+        return {
+            id: 'heritage-archive',
+            name: 'Heritage Archive',
+            type: 'heritage',
+            isVerified: true
+        } as any;
+    }, [museums]);
+
+    const institutionLookup = useMemo(() => {
+        const cache = new Map<string, any>();
+        artworks.forEach(art => {
+            if (cache.has(art.id)) return;
+            cache.set(art.id, getArtworkInstitution(art));
+        });
+        return cache;
+    }, [artworks, getArtworkInstitution]);
 
     const [randomArtworks, setRandomArtworks] = useState<Artwork[]>([]);
 
@@ -682,7 +717,7 @@ export default function CollectionsPage() {
                 const museumQuery = searchParams.get('museum');
                 if (museumQuery) {
                     const instArtworks = artworks.filter(art => {
-                        const inst = getArtworkInstitution(art);
+                        const inst = institutionLookup.get(art.id);
                         return inst && inst.name.toLowerCase() === museumQuery.toLowerCase();
                     });
                     const instInfo = museums.find(m => m.name.toLowerCase() === museumQuery.toLowerCase()) || {
@@ -697,6 +732,12 @@ export default function CollectionsPage() {
                         info: instInfo,
                         list: instArtworks
                     });
+                    
+                    // Resolve and set subdistrict synchronously to avoid layout shifts / race conditions
+                    const subD = getInstitutionSubDistrict(instInfo, matchedCity.key);
+                    if (subD) {
+                        setActiveSubDistrict(subD);
+                    }
                 } else {
                     setActiveInstitution(null);
                 }
@@ -724,6 +765,24 @@ export default function CollectionsPage() {
 
     const { user } = useAuthStore();
     const [searchQuery, setSearchQuery] = useState<string>('');
+    const [debouncedQuery, setDebouncedQuery] = useState<string>('');
+    const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Debounce search input — only filter after 300ms of no typing
+    const handleSearchChange = useCallback((value: string) => {
+        setSearchQuery(value);
+        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = setTimeout(() => {
+            setDebouncedQuery(value);
+        }, 300);
+    }, []);
+
+    // Cleanup debounce timer on unmount
+    useEffect(() => {
+        return () => {
+            if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+        };
+    }, []);
 
     const storageKey = useMemo(() => {
         return user?.id ? `collections_recent_searches_${user.id}` : `collections_recent_searches_guest`;
@@ -740,6 +799,80 @@ export default function CollectionsPage() {
         }
     }, [storageKey]);
 
+
+
+    const searchIndex = useMemo(() => {
+        const index = new Map<string, string>();
+        artworks.forEach(art => {
+            const inst = institutionLookup.get(art.id);
+            const searchable = [
+                art.title || '',
+                art.region || '',
+                art.artist?.displayName || '',
+                art.category || '',
+                inst?.name || '',
+            ].join('\x00').toLowerCase();
+            index.set(art.id, searchable);
+        });
+        return index;
+    }, [artworks, institutionLookup]);
+
+    // ════════════════════════════════════════════════
+    // MEMOIZED SEARCH RESULTS (only recomputes on debouncedQuery change)
+    // ════════════════════════════════════════════════
+    const searchResults = useMemo(() => {
+        const q = debouncedQuery.trim().toLowerCase();
+        if (!q) return null;
+
+        const filtered: Artwork[] = [];
+        artworks.forEach(art => {
+            const text = searchIndex.get(art.id);
+            if (text && text.includes(q)) {
+                filtered.push(art);
+            }
+        });
+
+        const instGroups: Record<string, { info: any; list: Artwork[] }> = {};
+        filtered.forEach(art => {
+            const inst = institutionLookup.get(art.id) || { name: 'Heritage Archive' };
+            const key = inst.name || 'Heritage Archive';
+            if (!instGroups[key]) {
+                instGroups[key] = { info: inst, list: [] };
+            }
+            instGroups[key].list.push(art);
+        });
+
+        return { filtered, instGroups };
+    }, [debouncedQuery, artworks, searchIndex, institutionLookup]);
+
+    // ════════════════════════════════════════════════
+    // MEMOIZED CURATOR COUNTS (avoids O(n²) per render)
+    // ════════════════════════════════════════════════
+    const cityCuratorsMap = useMemo(() => {
+        const result: Record<string, number> = {};
+        CITIES.forEach(city => {
+            const cityKey = city.key;
+            const cityArtworks = artworks.filter(art => {
+                const artRegion = (art.region || '').toLowerCase();
+                return artRegion === cityKey ||
+                    (cityKey === 'dki jakarta' && artRegion.includes('jakarta')) ||
+                    (cityKey === 'jawa tengah' && artRegion.includes('tengah'));
+            });
+
+            const activeInstNames = new Set<string>();
+            cityArtworks.forEach(art => {
+                const parsed = parseArtworkCDNPath(art.primaryImageUrl);
+                const name = parsed ? parsed.instName : (institutionLookup.get(art.id)?.name || '');
+                if (name) activeInstNames.add(name.toLowerCase());
+            });
+
+            result[cityKey] = VERIFIED_CDN_INSTITUTIONS.filter(
+                inst => inst.city === cityKey && activeInstNames.has(inst.name.toLowerCase())
+            ).length;
+        });
+        return result;
+    }, [artworks, institutionLookup]);
+
     const { ref, isVisible } = useScrollAnimation();
 
     const toggleFavorite = (id: string) => {
@@ -755,40 +888,12 @@ export default function CollectionsPage() {
         }));
     };
 
-    // Helper to find/seed corresponding museum of an artwork
-    const getArtworkInstitution = (artwork: Artwork) => {
-        if (artwork.institutionId) {
-            const found = museums.find(m => m.id === artwork.institutionId);
-            if (found) return found;
-        }
-        if (artwork.museum) return artwork.museum;
-        if (artwork.gallery) {
-            return {
-                id: artwork.gallery.id,
-                name: artwork.gallery.name,
-                type: 'gallery',
-                isVerified: true
-            } as any;
-        }
-        const parsed = parseArtworkCDNPath(artwork.primaryImageUrl);
-        if (parsed) {
-            return {
-                id: parsed.instName.toLowerCase().replace(/\s+/g, '-'),
-                name: parsed.instName,
-                type: parsed.type,
-                city: parsed.city.toLowerCase(),
-                isVerified: true
-            } as any;
-        }
-        return {
-            id: 'heritage-archive',
-            name: 'Heritage Archive',
-            type: 'heritage',
-            isVerified: true
-        } as any;
-    };
 
-    const getCityCuratorsCount = (cityKey: string) => {
+    const getCityCuratorsCount = useCallback((cityKey: string) => {
+        return cityCuratorsMap[cityKey] || 0;
+    }, [cityCuratorsMap]);
+
+    const getSubDistrictCuratorsCount = useCallback((cityKey: string, region: any) => {
         const cityArtworks = artworks.filter(art => {
             const artRegion = (art.region || '').toLowerCase();
             return artRegion === cityKey ||
@@ -799,47 +904,17 @@ export default function CollectionsPage() {
         const activeInstNames = new Set<string>();
         cityArtworks.forEach(art => {
             const parsed = parseArtworkCDNPath(art.primaryImageUrl);
-            let name = '';
-            if (parsed) {
-                name = parsed.instName;
-            } else {
-                name = getArtworkInstitution(art).name;
-            }
-            if (name) activeInstNames.add(name.toLowerCase());
-        });
-
-        return VERIFIED_CDN_INSTITUTIONS.filter(
-            inst => inst.city === cityKey && activeInstNames.has(inst.name.toLowerCase())
-        ).length;
-    };
-
-    const getSubDistrictCuratorsCount = (cityKey: string, region: any) => {
-        const cityArtworks = artworks.filter(art => {
-            const artRegion = (art.region || '').toLowerCase();
-            return artRegion === cityKey ||
-                (cityKey === 'dki jakarta' && artRegion.includes('jakarta')) ||
-                (cityKey === 'jawa tengah' && artRegion.includes('tengah'));
-        });
-
-        const activeInstNames = new Set<string>();
-        cityArtworks.forEach(art => {
-            const parsed = parseArtworkCDNPath(art.primaryImageUrl);
-            let name = '';
-            if (parsed) {
-                name = parsed.instName;
-            } else {
-                name = getArtworkInstitution(art).name;
-            }
+            const name = parsed ? parsed.instName : (institutionLookup.get(art.id)?.name || '');
             if (name) activeInstNames.add(name.toLowerCase());
         });
 
         return VERIFIED_CDN_INSTITUTIONS.filter(
             inst => inst.city === cityKey && inst.subDistrict === region.id && activeInstNames.has(inst.name.toLowerCase())
         ).length;
-    };
+    }, [artworks, institutionLookup]);
 
-    // Process and group artworks by institution
-    const getCuratorsInSubDistrict = (cityKey: string, subDistrictId: string) => {
+    // Process and group artworks by institution (memoized via useCallback + institutionLookup)
+    const getCuratorsInSubDistrict = useCallback((cityKey: string, subDistrictId: string) => {
         const subDistInsts = VERIFIED_CDN_INSTITUTIONS.filter(
             inst => inst.city === cityKey && inst.subDistrict === subDistrictId
         );
@@ -868,14 +943,9 @@ export default function CollectionsPage() {
 
         cityArtworks.forEach(art => {
             const parsed = parseArtworkCDNPath(art.primaryImageUrl);
-            let targetInstName = '';
-
-            if (parsed) {
-                targetInstName = parsed.instName;
-            } else {
-                const instInfo = getArtworkInstitution(art);
-                targetInstName = instInfo.name;
-            }
+            const targetInstName = parsed
+                ? parsed.instName
+                : (institutionLookup.get(art.id)?.name || '');
 
             const matchedInst = VERIFIED_CDN_INSTITUTIONS.find(
                 v => v.name.toLowerCase() === targetInstName.toLowerCase()
@@ -907,7 +977,7 @@ export default function CollectionsPage() {
         });
 
         return filteredGroups;
-    };
+    }, [artworks, institutionLookup]);
 
     const addRecentSearch = (query: string) => {
         if (!query.trim()) return;
@@ -931,7 +1001,31 @@ export default function CollectionsPage() {
     };
 
     return (
-        <PageContainer className="max-w-7xl mx-auto pt-4 pb-20 px-4 bg-theme-bg min-h-screen text-theme-text transition-colors duration-300">
+        <PageContainer className="max-w-7xl mx-auto pt-4 pb-20 px-4 bg-theme-bg min-h-screen text-theme-text transition-colors duration-300 relative">
+            <AnimatePresence>
+                {isTransitioning && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-theme-bg/80 backdrop-blur-md z-50 flex flex-col items-center justify-center gap-3"
+                    >
+                        <div className="relative w-12 h-12 flex items-center justify-center">
+                            <div className="absolute inset-0 border-4 border-gold/20 rounded-full" />
+                            <div className="absolute inset-0 border-4 border-t-gold rounded-full animate-spin" />
+                        </div>
+                        <motion.span
+                            initial={{ opacity: 0, y: 5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.1 }}
+                            className="text-xs font-serif font-bold text-gold uppercase tracking-widest"
+                        >
+                            Opening Collection...
+                        </motion.span>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <SEOHead
                 title="Regional Museum & Heritage Collections"
                 description="Preserved historical artifacts and digital art collections from Indonesian cities, powered securely by Cloudflare R2 CDN."
@@ -957,7 +1051,7 @@ export default function CollectionsPage() {
                         <input
                             type="text"
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onChange={(e) => handleSearchChange(e.target.value)}
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                     addRecentSearch(searchQuery);
@@ -968,7 +1062,7 @@ export default function CollectionsPage() {
                         />
                         {searchQuery && (
                             <button
-                                onClick={() => setSearchQuery('')}
+                                onClick={() => handleSearchChange('')}
                                 className="absolute right-4 text-theme-muted hover:text-theme-text transition-colors"
                             >
                                 <X className="w-4 h-4" />
@@ -979,7 +1073,7 @@ export default function CollectionsPage() {
             )}
 
             {/* Breadcrumb Path Navigation Bar */}
-            {(activeCity || activeSubDistrict || activeInstitution) && !searchQuery.trim() && (
+            {(activeCity || activeSubDistrict || activeInstitution) && !debouncedQuery.trim() && (
                 <div className="flex items-center flex-wrap gap-1.5 text-[10px] sm:text-xs font-semibold text-theme-muted mb-4 bg-theme-surface/40 p-2 rounded-lg border border-theme-border/30">
                     <button
                         onClick={() => {
@@ -1007,7 +1101,7 @@ export default function CollectionsPage() {
                             <ChevronRight className="w-3.5 h-3.5 text-theme-muted/50" />
                             <button
                                 onClick={() => {
-                                    setActiveInstitution(null);
+                                    navigate(`/collections/${activeCity!.key.replace(/\s+/g, '-')}`);
                                 }}
                                 className={`hover:text-gold transition-colors ${!activeInstitution ? 'text-gold' : ''}`}
                             >
@@ -1041,31 +1135,9 @@ export default function CollectionsPage() {
                 </div>
             ) : (() => {
                 // SEARCH STATE: If search query has value, bypass hierarchy
-                if (searchQuery.trim()) {
-                    const searchLower = searchQuery.toLowerCase().trim();
-                    const filteredArtworks = artworks.filter(art => {
-                        const artRegion = (art.region || '').toLowerCase();
-                        const artTitle = (art.title || '').toLowerCase();
-                        const artistName = (art.artist?.displayName || '').toLowerCase();
-                        const inst = getArtworkInstitution(art);
-                        const instName = (inst.name || '').toLowerCase();
-                        return (
-                            artRegion.includes(searchLower) ||
-                            artTitle.includes(searchLower) ||
-                            artistName.includes(searchLower) ||
-                            instName.includes(searchLower)
-                        );
-                    });
-
-                    const instGroups: Record<string, { info: any; list: Artwork[] }> = {};
-                    filteredArtworks.forEach(art => {
-                        const inst = getArtworkInstitution(art);
-                        const key = inst.name || 'Heritage Archive';
-                        if (!instGroups[key]) {
-                            instGroups[key] = { info: inst, list: [] };
-                        }
-                        instGroups[key].list.push(art);
-                    });
+                if (debouncedQuery.trim() && searchResults) {
+                    const filteredArtworks = searchResults.filtered;
+                    const instGroups = searchResults.instGroups;
 
 
 
@@ -1093,19 +1165,25 @@ export default function CollectionsPage() {
                                     {Object.entries(instGroups).map(([instName, group]) => (
                                         <div
                                             key={instName}
-                                            onClick={() => {
+                                            onClick={async () => {
                                                 addRecentSearch(searchQuery);
-                                                setActiveInstitution({ name: instName, info: group.info, list: group.list });
+                                                setIsTransitioning(true);
+                                                
+                                                // Clear search queries to immediately exit search state view
+                                                setSearchQuery('');
+                                                setDebouncedQuery('');
+
                                                 const primaryArt = group.list[0];
                                                 if (primaryArt) {
                                                     const regKey = (primaryArt.region || '').toLowerCase();
                                                     const matchedCity = CITIES.find(c => c.key === regKey || (c.key === 'dki jakarta' && regKey.includes('jakarta')) || (c.key === 'jawa tengah' && regKey.includes('tengah')));
                                                     if (matchedCity) {
-                                                        navigate(`/collections/${matchedCity.key.replace(/\s+/g, '-')}`);
-                                                        const subD = getInstitutionSubDistrict(group.info, matchedCity.key);
-                                                        if (subD) setActiveSubDistrict(subD);
+                                                        // Brief async delay for smooth visual transition
+                                                        await new Promise(resolve => setTimeout(resolve, 200));
+                                                        navigate(`/collections/${matchedCity.key.replace(/\s+/g, '-')}?museum=${encodeURIComponent(instName)}`);
                                                     }
                                                 }
+                                                setIsTransitioning(false);
                                             }}
                                             className="bg-theme-surface border border-theme-border rounded-xl p-4 shadow-md relative overflow-hidden transition-all duration-300 hover:border-gold/30 hover:scale-[1.01] cursor-pointer group"
                                         >
@@ -1156,6 +1234,7 @@ export default function CollectionsPage() {
                                         src={primaryBanner}
                                         alt={instName}
                                         className="w-full h-full object-cover opacity-80"
+                                        priority
                                     />
                                 )}
                                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent flex flex-col justify-end p-4 sm:p-6">
@@ -1265,8 +1344,8 @@ export default function CollectionsPage() {
                 }
 
                 // HIERARCHY LEVEL 3: Museum / Institution list in the selected Sub-District
-                if (activeSubDistrict) {
-                    const cityKey = activeCity!.key;
+                if (activeSubDistrict && activeCity) {
+                    const cityKey = activeCity.key;
                     const instGroups = getCuratorsInSubDistrict(cityKey, activeSubDistrict.id);
 
                     return (
@@ -1308,11 +1387,22 @@ export default function CollectionsPage() {
                                         return (
                                             <div
                                                 key={instName}
-                                                onClick={() => setActiveInstitution({ name: instName, info: group.info, list: group.list })}
+                                                onClick={async () => {
+                                                    setIsTransitioning(true);
+                                                    await new Promise(resolve => setTimeout(resolve, 200));
+                                                    navigate(`/collections/${cityId}?museum=${encodeURIComponent(instName)}`);
+                                                    setIsTransitioning(false);
+                                                }}
                                                 className="bg-theme-surface border border-theme-border rounded-xl overflow-hidden shadow-md cursor-pointer hover:border-gold/30 hover:scale-[1.01] transition-all duration-300 flex flex-col group h-[200px]"
                                             >
                                                 <div className="relative h-[65%] w-full bg-black overflow-hidden">
-                                                    <img src={cover} alt={instName} className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-500" />
+                                                    <img 
+                                                        src={cover} 
+                                                        alt={instName} 
+                                                        className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-500" 
+                                                        loading="lazy" 
+                                                        decoding="async" 
+                                                    />
                                                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
                                                     <span className={`absolute top-2 left-2 px-2 py-0.5 text-[8px] font-bold rounded text-black ${instType === 'museum' ? 'bg-[#7C6BD4]' : instType === 'gallery' ? 'bg-gold' : 'bg-emerald-500'
                                                         }`}>
@@ -1397,7 +1487,7 @@ export default function CollectionsPage() {
                                 <div className="flex flex-col gap-2">
                                     {recentSearches.map(q => (
                                         <div key={q} className="flex items-center justify-between border-b border-theme-border/20 pb-2 text-xs text-theme-muted hover:text-theme-text transition-colors">
-                                            <button onClick={() => setSearchQuery(q)} className="text-left flex-1 font-medium">
+                                            <button onClick={() => handleSearchChange(q)} className="text-left flex-1 font-medium">
                                                 {q}
                                             </button>
                                             <button onClick={() => removeRecentSearch(q)} className="hover:text-red-500 transition-colors p-1">
@@ -1436,6 +1526,8 @@ export default function CollectionsPage() {
                                             src={bgImage}
                                             alt={city.name}
                                             className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-500"
+                                            loading="lazy"
+                                            decoding="async"
                                         />
                                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent p-4 flex flex-col justify-end" />
                                         <div className="absolute bottom-3 left-3 right-3 z-20">
@@ -1455,8 +1547,12 @@ export default function CollectionsPage() {
                                 </h3>
                             </div>
                             <CurationCarousel 
-                                onSelectCuration={(curation) => {
+                                toughness-optimized="true"
+                                onSelectCuration={async (curation) => {
+                                    setIsTransitioning(true);
+                                    await new Promise(resolve => setTimeout(resolve, 200));
                                     navigate(`/collections/${curation.cityKey.replace(/\s+/g, '-')}?museum=${encodeURIComponent(curation.institutionName)}`);
+                                    setIsTransitioning(false);
                                 }} 
                             />
                         </div>
@@ -1478,7 +1574,7 @@ export default function CollectionsPage() {
                                 </div>
                                 <button
                                     onClick={() => {
-                                        setSearchQuery(' '); // space triggers showing all arts in search list
+                                        handleSearchChange(' '); // space triggers showing all arts in search list
                                     }}
                                     className="text-[10px] font-bold text-gold hover:text-gold/80 transition-colors uppercase tracking-wider"
                                 >
@@ -1540,6 +1636,7 @@ export default function CollectionsPage() {
                                     src={selectedArtwork.primaryImageUrl || selectedArtwork.images?.[0]?.url}
                                     alt={selectedArtwork.title}
                                     className="w-full h-full object-cover"
+                                    priority
                                 />
                                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/40 to-transparent p-4 flex flex-col justify-end h-24">
                                     <span className="px-2 py-0.5 bg-gold text-black text-[9px] font-bold rounded w-max uppercase tracking-wider mb-1">

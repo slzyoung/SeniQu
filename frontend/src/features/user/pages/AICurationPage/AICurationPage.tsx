@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Upload,
@@ -93,7 +94,7 @@ export function AICurationPage() {
     const [isPlayingSimulation, setIsPlayingSimulation] = useState(false);
     const [isGeneratingSimulation, setIsGeneratingSimulation] = useState(false);
     const [simulationProgress, setSimulationProgress] = useState(0);
-    const [showSimulationOverlay, setShowSimulationOverlay] = useState(true);
+
 
     // Interactive Brush Reveal Mode state
     const [isBrushMode, setIsBrushMode] = useState(false);
@@ -111,7 +112,7 @@ export function AICurationPage() {
     });
     const [replyingTo, setReplyingTo] = useState<{ id: string; name: string } | null>(null);
     const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
-    const commentInputRef = useRef<HTMLTextAreaElement>(null);
+    const commentInputRef = useRef<HTMLInputElement>(null);
 
     // Queries and Mutations
     const quotaQuery = useCurationQuota();
@@ -124,9 +125,7 @@ export function AICurationPage() {
     const likeMutation = useLikeHeritageCuration();
     const addCommentMutation = useAddHeritageCurationComment();
 
-    const getBaseLikes = (commentId: string) => {
-        return 0;
-    };
+
 
     // Modal Before/After slider handlers
     const handleModalMove = (clientX: number) => {
@@ -824,7 +823,7 @@ Dibuat secara otomatis menggunakan SeniQu Digital Curation Engine.`;
                                                 loading="lazy"
                                             />
                                             <div className="masterpiece-card__badge">
-                                                Terkurasi
+                                                Curated
                                             </div>
                                         </div>
                                         <div className="masterpiece-card__body">
@@ -1928,425 +1927,411 @@ Dibuat secara otomatis menggunakan SeniQu Digital Curation Engine.`;
             </div>
 
             {/* ====== CURATION DETAIL MODAL ====== */}
-            <AnimatePresence>
-                {selectedDetailCuration && (
-                    <motion.div
-                        className="curation-modal-overlay"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => {
-                            setSelectedDetailCuration(null);
-                            window.speechSynthesis.cancel();
-                            setIsPlayingAudio(false);
-                        }}
-                    >
+            {typeof document !== 'undefined' && createPortal(
+                <AnimatePresence>
+                    {selectedDetailCuration && (
                         <motion.div
-                            className="curation-modal-container"
-                            initial={{ scale: 0.9, y: 30, opacity: 0 }}
-                            animate={{ scale: 1, y: 0, opacity: 1 }}
-                            exit={{ scale: 0.9, y: 30, opacity: 0 }}
-                            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-                            onClick={(e) => e.stopPropagation()}
+                            className="curation-modal-overlay"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => {
+                                setSelectedDetailCuration(null);
+                                window.speechSynthesis.cancel();
+                                setIsPlayingAudio(false);
+                            }}
                         >
-                            {/* Modal Close Button */}
-                            <button
-                                className="curation-modal-close"
-                                onClick={() => {
-                                    setSelectedDetailCuration(null);
-                                    window.speechSynthesis.cancel();
-                                    setIsPlayingAudio(false);
-                                }}
+                            <motion.div
+                                className="curation-modal-container"
+                                initial={{ scale: 0.9, y: 30, opacity: 0 }}
+                                animate={{ scale: 1, y: 0, opacity: 1 }}
+                                exit={{ scale: 0.9, y: 30, opacity: 0 }}
+                                transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                                onClick={(e) => e.stopPropagation()}
                             >
-                                <X className="w-5 h-5" />
-                            </button>
+                                {/* Modal Close Button */}
+                                <button
+                                    className="curation-modal-close"
+                                    onClick={() => {
+                                        setSelectedDetailCuration(null);
+                                        window.speechSynthesis.cancel();
+                                        setIsPlayingAudio(false);
+                                    }}
+                                    aria-label="Close modal"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
 
-                            <div className="curation-modal-layout">
-                                {/* Left side: Image and Restoration Viewer */}
-                                <div className="curation-modal-left">
-                                    <div className="modal-slider-box">
-                                        <div
-                                            className="modal-slider-container"
-                                            ref={modalContainerRef}
-                                            onMouseMove={handleModalMouseMove}
-                                            onTouchMove={handleModalTouchMove}
-                                            onMouseDown={() => setIsModalDragging(true)}
-                                            onMouseUp={() => setIsModalDragging(false)}
-                                            onMouseLeave={() => setIsModalDragging(false)}
-                                        >
-                                            {/* Restored image (After) */}
-                                            <img
-                                                src={selectedDetailCuration.image_url}
-                                                alt={selectedDetailCuration.curation_name}
-                                                className="modal-slider-img base"
-                                                style={{ filter: `hue-rotate(${modalWarmth}deg) saturate(${modalSaturation}%)` }}
-                                            />
-
-                                            {/* Original image (Before - Grayscale simulation) */}
+                                <div className="curation-modal-layout">
+                                    {/* Left side: Image and Restoration Viewer */}
+                                    <div className="curation-modal-left">
+                                        <div className="modal-slider-box">
                                             <div
-                                                className="modal-slider-img overlay-wrap"
-                                                style={{ clipPath: `polygon(0 0, ${modalSliderPosition}% 0, ${modalSliderPosition}% 100%, 0 100%)` }}
+                                                className="modal-slider-container"
+                                                ref={modalContainerRef}
+                                                onMouseMove={handleModalMouseMove}
+                                                onTouchMove={handleModalTouchMove}
+                                                onMouseDown={() => setIsModalDragging(true)}
+                                                onMouseUp={() => setIsModalDragging(false)}
+                                                onMouseLeave={() => setIsModalDragging(false)}
                                             >
+                                                {/* Restored image (After) */}
                                                 <img
                                                     src={selectedDetailCuration.image_url}
                                                     alt={selectedDetailCuration.curation_name}
-                                                    className="modal-slider-img overlay"
+                                                    className="modal-slider-img base"
+                                                    style={{ filter: `hue-rotate(${modalWarmth}deg) saturate(${modalSaturation}%)` }}
                                                 />
-                                            </div>
 
-                                            {/* Slider handle */}
-                                            <div
-                                                className="modal-slider-handle"
-                                                style={{ left: `${modalSliderPosition}%` }}
-                                            >
-                                                <div className="modal-handle-knob">
-                                                    <span className="knob-arrow-left">◀</span>
-                                                    <span className="knob-arrow-right">▶</span>
-                                                </div>
-                                            </div>
-
-                                            <span className="modal-slider-label label-before">Before (Historical Archive)</span>
-                                            <span className="modal-slider-label label-after">After (Restored by AI)</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Quick Info Badges */}
-                                    <div className="modal-quick-info">
-                                        <div className="quick-info-card">
-                                            <span className="info-title-lbl">Original Era</span>
-                                            <span className="info-val-lbl text-gold">{selectedDetailCuration.original_era}</span>
-                                        </div>
-                                        <div className="quick-info-card">
-                                            <span className="info-title-lbl">Cultural Valuation</span>
-                                            <span className="info-val-lbl">{selectedDetailCuration.valuation_estimate || 'Rarity Grade A'}</span>
-                                        </div>
-                                        <div className="quick-info-card">
-                                            <span className="info-title-lbl">Curation Status</span>
-                                            <span className="info-val-lbl text-green-500">Verified Nusantara</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Spectral / X-Ray Tools for detail modal */}
-                                    <div className="modal-adjustment-panel">
-                                        <h4 className="adjustment-title">Archive Restoration Inspector</h4>
-                                        <div className="adjustment-row">
-                                            <span>Spectral Warmth</span>
-                                            <input
-                                                type="range"
-                                                min="-40"
-                                                max="40"
-                                                value={modalWarmth}
-                                                onChange={(e) => setModalWarmth(parseInt(e.target.value))}
-                                                className="adjustment-slider"
-                                            />
-                                        </div>
-                                        <div className="adjustment-row">
-                                            <span>Restoration Saturation</span>
-                                            <input
-                                                type="range"
-                                                min="40"
-                                                max="160"
-                                                value={modalSaturation}
-                                                onChange={(e) => setModalSaturation(parseInt(e.target.value))}
-                                                className="adjustment-slider"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Right side: Details, Audio guide, Likes, Comments */}
-                                <div className="curation-modal-right">
-                                    <div className="modal-right-header">
-                                        <span className="modal-era-badge">{selectedDetailCuration.original_era}</span>
-                                        <h2 className="modal-curation-title">{selectedDetailCuration.curation_name}</h2>
-                                        
-                                        {/* Curator Info */}
-                                        <div className="modal-curator-profile">
-                                            <div 
-                                                className="cursor-pointer hover:opacity-85 transition-opacity"
-                                                onClick={() => {
-                                                    const userId = selectedDetailCuration.user_id;
-                                                    if (userId) {
-                                                        setSelectedDetailCuration(null);
-                                                        navigate(`/profile/${userId}`);
-                                                    }
-                                                }}
-                                            >
-                                                {selectedDetailCuration.users?.avatar_url ? (
+                                                {/* Original image (Before - Grayscale simulation) */}
+                                                <div
+                                                    className="modal-slider-img overlay-wrap"
+                                                    style={{ clipPath: `polygon(0 0, ${modalSliderPosition}% 0, ${modalSliderPosition}% 100%, 0 100%)` }}
+                                                >
                                                     <img
-                                                        src={selectedDetailCuration.users.avatar_url}
-                                                        alt={selectedDetailCuration.users.display_name}
-                                                        className="modal-curator-avatar"
+                                                        src={selectedDetailCuration.image_url}
+                                                        alt={selectedDetailCuration.curation_name}
+                                                        className="modal-slider-img overlay"
                                                     />
-                                                ) : (
-                                                    <div className="modal-curator-avatar-placeholder">
-                                                        <User className="w-4 h-4 text-gold" />
+                                                </div>
+
+                                                {/* Slider handle */}
+                                                <div
+                                                    className="modal-slider-handle"
+                                                    style={{ left: `${modalSliderPosition}%` }}
+                                                >
+                                                    <div className="modal-handle-knob">
+                                                        <span className="knob-arrow-left">◀</span>
+                                                        <span className="knob-arrow-right">▶</span>
                                                     </div>
-                                                )}
-                                            </div>
-                                            <div className="modal-curator-text">
-                                                <p className="modal-curator-name">
-                                                    @{selectedDetailCuration.users?.username || selectedDetailCuration.users?.display_name || 'slzyoung'}
-                                                </p>
-                                                <p className="modal-curator-role">Nusantara Heritage Curator</p>
-                                            </div>
+                                                </div>
 
-                                            {/* Action Button to Load in Lab */}
-                                            <button
-                                                className="modal-open-lab-btn"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleLoadCuration(selectedDetailCuration);
-                                                    setSelectedDetailCuration(null);
-                                                }}
-                                            >
-                                                <Sliders className="w-4 h-4 mr-1.5" /> Restore Lab
-                                            </button>
+                                                <span className="modal-slider-label label-before">Before (Historical Archive)</span>
+                                                <span className="modal-slider-label label-after">After (Restored by AI)</span>
+                                            </div>
                                         </div>
-                                    </div>
 
-                                    {/* Action Stats (Likes & Comments counts) */}
-                                    <div className="modal-action-bar">
-                                        <button
-                                            className={`modal-action-btn ${likesState.liked ? 'modal-action-btn--liked' : ''}`}
-                                            onClick={handleToggleLike}
-                                        >
-                                            <Heart
-                                                className="w-5 h-5 heart-icon"
-                                                fill={likesState.liked ? 'currentColor' : 'none'}
-                                            />
-                                            <span>{likesState.count} Likes</span>
-                                        </button>
-                                        
-                                        <div className="modal-action-btn">
-                                            <svg
-                                                className="w-5 h-5"
-                                                fill="none"
-                                                viewBox="0 0 24 24"
-                                                stroke="currentColor"
-                                                strokeWidth={2}
-                                            >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                                        {/* Quick Info Badges */}
+                                        <div className="modal-quick-info">
+                                            <div className="quick-info-card">
+                                                <span className="info-title-lbl">Original Era</span>
+                                                <span className="info-val-lbl text-gold">{selectedDetailCuration.original_era}</span>
+                                            </div>
+                                            <div className="quick-info-card">
+                                                <span className="info-title-lbl">Cultural Valuation</span>
+                                                <span className="info-val-lbl">{selectedDetailCuration.valuation_estimate || 'Rarity Grade A'}</span>
+                                            </div>
+                                            <div className="quick-info-card">
+                                                <span className="info-title-lbl">Curation Status</span>
+                                                <span className="info-val-lbl text-green-500">Verified Nusantara</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Spectral / X-Ray Tools for detail modal */}
+                                        <div className="modal-adjustment-panel">
+                                            <h4 className="adjustment-title">Archive Restoration Inspector</h4>
+                                            <div className="adjustment-row">
+                                                <span>Spectral Warmth</span>
+                                                <input
+                                                    type="range"
+                                                    min="-40"
+                                                    max="40"
+                                                    value={modalWarmth}
+                                                    onChange={(e) => setModalWarmth(parseInt(e.target.value))}
+                                                    className="adjustment-slider"
                                                 />
-                                            </svg>
-                                            <span>{serverComments.length} Comments</span>
+                                            </div>
+                                            <div className="adjustment-row">
+                                                <span>Restoration Saturation</span>
+                                                <input
+                                                    type="range"
+                                                    min="40"
+                                                    max="160"
+                                                    value={modalSaturation}
+                                                    onChange={(e) => setModalSaturation(parseInt(e.target.value))}
+                                                    className="adjustment-slider"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
 
-                                    {/* Audio Guide Card */}
-                                    <div className="modal-audio-guide">
-                                        <div className="audio-guide-header">
-                                            <h4 className="audio-title">AI Museum Audio Guide</h4>
+                                    {/* Right side: Details, Audio guide, Likes, Comments */}
+                                    <div className="curation-modal-right">
+                                        <div className="modal-right-header">
+                                            <span className="modal-era-badge">{selectedDetailCuration.original_era}</span>
+                                            <h2 className="modal-curation-title">{selectedDetailCuration.curation_name}</h2>
+                                            
+                                            {/* Curator Info */}
+                                            <div className="modal-curator-profile">
+                                                <div 
+                                                    className="cursor-pointer hover:opacity-85 transition-opacity"
+                                                    onClick={() => {
+                                                        const userId = selectedDetailCuration.user_id;
+                                                        if (userId) {
+                                                            setSelectedDetailCuration(null);
+                                                            navigate(`/profile/${userId}`);
+                                                        }
+                                                    }}
+                                                >
+                                                    {selectedDetailCuration.users?.avatar_url ? (
+                                                        <img
+                                                            src={selectedDetailCuration.users.avatar_url}
+                                                            alt={selectedDetailCuration.users.display_name}
+                                                            className="modal-curator-avatar"
+                                                        />
+                                                    ) : (
+                                                        <div className="modal-curator-avatar-placeholder">
+                                                            <User className="w-4 h-4 text-gold" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="modal-curator-text">
+                                                    <p className="modal-curator-name">
+                                                        @{selectedDetailCuration.users?.username || selectedDetailCuration.users?.display_name || 'slzyoung'}
+                                                    </p>
+                                                    <p className="modal-curator-role">Nusantara Heritage Curator</p>
+                                                </div>
+
+                                                {/* Action Button to Load in Lab */}
+                                                <button
+                                                    className="modal-open-lab-btn"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleLoadCuration(selectedDetailCuration);
+                                                        setSelectedDetailCuration(null);
+                                                    }}
+                                                >
+                                                    <Sliders className="w-4 h-4 mr-1.5" /> Restore Lab
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Action Stats (Likes & Comments counts) */}
+                                        <div className="modal-action-bar">
                                             <button
-                                                className={`audio-play-btn ${isPlayingAudio ? 'playing' : ''}`}
-                                                onClick={() => handleToggleAudio(selectedDetailCuration.audio_script)}
+                                                className={`modal-action-btn ${likesState.liked ? 'modal-action-btn--liked' : ''}`}
+                                                onClick={handleToggleLike}
                                             >
-                                                {isPlayingAudio ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                                                <span>{isPlayingAudio ? 'Pause Narration' : 'Listen Narration'}</span>
+                                                <Heart
+                                                    className="w-5 h-5 heart-icon"
+                                                    fill={likesState.liked ? 'currentColor' : 'none'}
+                                                />
+                                                <span>{likesState.count} Likes</span>
+                                            </button>
+                                            
+                                            <div className="modal-action-btn">
+                                                <svg
+                                                    className="w-5 h-5"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                    stroke="currentColor"
+                                                    strokeWidth={2}
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                                                    />
+                                                </svg>
+                                                <span>{serverComments.length} Comments</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Audio Guide Card */}
+                                        <div className="modal-audio-guide">
+                                            <div className="audio-guide-header">
+                                                <h4 className="audio-title">AI Museum Audio Guide</h4>
+                                                <button
+                                                    className={`audio-play-btn ${isPlayingAudio ? 'playing' : ''}`}
+                                                    onClick={() => handleToggleAudio(selectedDetailCuration.audio_script)}
+                                                >
+                                                    {isPlayingAudio ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                                                    <span>{isPlayingAudio ? 'Pause Narration' : 'Listen Narration'}</span>
+                                                </button>
+                                            </div>
+                                            {isPlayingAudio && (
+                                                <div className="audio-wave-animation">
+                                                    <span className="wave-bar bar-1" />
+                                                    <span className="wave-bar bar-2" />
+                                                    <span className="wave-bar bar-3" />
+                                                    <span className="wave-bar bar-4" />
+                                                    <span className="wave-bar bar-5" />
+                                                </div>
+                                            )}
+                                            <p className="audio-description-preview">
+                                                {selectedDetailCuration.curation_description || selectedDetailCuration.historical_significance}
+                                            </p>
+                                        </div>
+
+                                        {/* Tabs for detailed content */}
+                                        <div className="modal-tabs">
+                                            <button
+                                                className={`modal-tab-trigger ${modalActiveTab === 'details' ? 'active' : ''}`}
+                                                onClick={() => setModalActiveTab('details')}
+                                            >
+                                                Curation Details
+                                            </button>
+                                            <button
+                                                className={`modal-tab-trigger ${modalActiveTab === 'restoration' ? 'active' : ''}`}
+                                                onClick={() => setModalActiveTab('restoration')}
+                                            >
+                                                Restoration Timeline
+                                            </button>
+                                            <button
+                                                className={`modal-tab-trigger ${modalActiveTab === 'metadata' ? 'active' : ''}`}
+                                                onClick={() => setModalActiveTab('metadata')}
+                                            >
+                                                Dublin Core Metadata
                                             </button>
                                         </div>
-                                        {isPlayingAudio && (
-                                            <div className="audio-wave-animation">
-                                                <span className="wave-bar bar-1" />
-                                                <span className="wave-bar bar-2" />
-                                                <span className="wave-bar bar-3" />
-                                                <span className="wave-bar bar-4" />
-                                                <span className="wave-bar bar-5" />
-                                            </div>
-                                        )}
-                                        <p className="audio-description-preview">
-                                            {selectedDetailCuration.curation_description || selectedDetailCuration.historical_significance}
-                                        </p>
-                                    </div>
 
-                                    {/* Tabs for detailed content */}
-                                    <div className="modal-tabs">
-                                        <button
-                                            className={`modal-tab-trigger ${modalActiveTab === 'details' ? 'active' : ''}`}
-                                            onClick={() => setModalActiveTab('details')}
-                                        >
-                                            Curation Details
-                                        </button>
-                                        <button
-                                            className={`modal-tab-trigger ${modalActiveTab === 'restoration' ? 'active' : ''}`}
-                                            onClick={() => setModalActiveTab('restoration')}
-                                        >
-                                            Restoration Timeline
-                                        </button>
-                                        <button
-                                            className={`modal-tab-trigger ${modalActiveTab === 'metadata' ? 'active' : ''}`}
-                                            onClick={() => setModalActiveTab('metadata')}
-                                        >
-                                            Dublin Core Metadata
-                                        </button>
-                                    </div>
-
-                                    {/* Tab content panel */}
-                                    <div className="modal-tab-panel">
-                                        {modalActiveTab === 'details' && (
-                                            <div className="modal-details-view animate-fade-in">
-                                                <div className="details-block">
-                                                    <h5 className="details-section-title">Historical Significance</h5>
-                                                    <p className="details-text">{selectedDetailCuration.historical_significance}</p>
+                                        {/* Tab content panel */}
+                                        <div className="modal-tab-panel">
+                                            {modalActiveTab === 'details' && (
+                                                <div className="modal-details-view animate-fade-in">
+                                                    <div className="details-block">
+                                                        <h5 className="details-section-title">Historical Significance</h5>
+                                                        <p className="details-text">{selectedDetailCuration.historical_significance}</p>
+                                                    </div>
+                                                    <div className="details-block" style={{ marginTop: 16 }}>
+                                                        <h5 className="details-section-title">Valuation & Cultural Rarity</h5>
+                                                        <p className="details-text">
+                                                            Estimated scarcity rank is rated at <strong>{selectedDetailCuration.valuation_estimate || 'Rarity Grade A'}</strong>. 
+                                                            This represents priceless cultural heritage value contributing to Nusantara's historical archive.
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                                <div className="details-block" style={{ marginTop: 16 }}>
-                                                    <h5 className="details-section-title">Valuation & Cultural Rarity</h5>
-                                                    <p className="details-text">
-                                                        Estimated scarcity rank is rated at <strong>{selectedDetailCuration.valuation_estimate || 'Rarity Grade A'}</strong>. 
-                                                        This represents priceless cultural heritage value contributing to Nusantara's historical archive.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        )}
+                                            )}
 
-                                        {modalActiveTab === 'restoration' && (
-                                            <div className="modal-timeline-view animate-fade-in">
-                                                <div className="restoration-timeline">
-                                                    {(selectedDetailCuration.restoration_steps || [
-                                                        { step: 1, title: 'Damage Assessment', description: 'AI scanned archive and marked scratches, mold spots, and physical tear regions.' },
-                                                        { step: 2, title: 'Color Infilling', description: 'Generative algorithms reconstructed missing chroma bands based on historical region models.' },
-                                                        { step: 3, title: 'Contrast & Enhancement', description: 'Equalized local histograms to reveal hidden architectural or facial details.' }
-                                                    ]).map((step: any, index: number) => (
-                                                        <div key={index} className="timeline-step-item">
-                                                            <div className="step-number-bullet">{step.step}</div>
-                                                            <div className="step-content">
-                                                                <h6 className="step-title">{step.title}</h6>
-                                                                <p className="step-description">{step.description}</p>
+                                            {modalActiveTab === 'restoration' && (
+                                                <div className="modal-timeline-view animate-fade-in">
+                                                    <div className="restoration-timeline">
+                                                        {(selectedDetailCuration.restoration_steps || [
+                                                            { step: 1, title: 'Damage Assessment', description: 'AI scanned archive and marked scratches, mold spots, and physical tear regions.' },
+                                                            { step: 2, title: 'Color Infilling', description: 'Generative algorithms reconstructed missing chroma bands based on historical region models.' },
+                                                            { step: 3, title: 'Contrast & Enhancement', description: 'Equalized local histograms to reveal hidden architectural or facial details.' }
+                                                        ]).map((step: any, index: number) => (
+                                                            <div key={index} className="timeline-step-item">
+                                                                <div className="step-number-bullet">{step.step}</div>
+                                                                <div className="step-content">
+                                                                    <h6 className="step-title">{step.title}</h6>
+                                                                    <p className="step-description">{step.description}</p>
+                                                                </div>
                                                             </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {modalActiveTab === 'metadata' && (
+                                                <div className="modal-metadata-view animate-fade-in">
+                                                    <div className="metadata-grid">
+                                                        <div className="meta-row">
+                                                            <span className="meta-label">Title (dc:title)</span>
+                                                            <span className="meta-val">{selectedDetailCuration.metadata?.Title || selectedDetailCuration.curation_name}</span>
                                                         </div>
+                                                        <div className="meta-row">
+                                                            <span className="meta-label">Creator (dc:creator)</span>
+                                                            <span className="meta-val">{selectedDetailCuration.metadata?.Creator || 'Historical Archive'}</span>
+                                                        </div>
+                                                        <div className="meta-row">
+                                                            <span className="meta-label">Publisher (dc:publisher)</span>
+                                                            <span className="meta-val">{selectedDetailCuration.metadata?.Publisher || 'SeniQu AI Curation Lab'}</span>
+                                                        </div>
+                                                        <div className="meta-row">
+                                                            <span className="meta-label">Format (dc:format)</span>
+                                                            <span className="meta-val">{selectedDetailCuration.metadata?.Format || 'image/jpeg'}</span>
+                                                        </div>
+                                                        <div className="meta-row">
+                                                            <span className="meta-label">Language (dc:language)</span>
+                                                            <span className="meta-val">{selectedDetailCuration.metadata?.Language || 'id, en'}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Discussion / Comments Section */}
+                                            <div className="modal-discussion-section">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <h4 className="discussion-title flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-theme-muted">
+                                                        <span>Community Discussion</span>
+                                                        <span className="text-[11px] font-normal text-theme-muted">({serverComments.length})</span>
+                                                    </h4>
+                                                </div>
+                                                
+                                                {/* Quick Emoji Bar */}
+                                                <div className="flex items-center gap-1.5 pb-2 overflow-x-auto scrollbar-none border-b border-theme-border/30 mb-3">
+                                                    {['❤️', '🙌', '🔥', '😮', '👏', '😍', '💡', '🎨'].map(emoji => (
+                                                        <button
+                                                            key={emoji}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setNewCommentText(prev => prev + emoji);
+                                                                commentInputRef.current?.focus();
+                                                            }}
+                                                            className="text-sm p-1 rounded hover:bg-theme-muted/10 transition-colors"
+                                                        >
+                                                            {emoji}
+                                                        </button>
                                                     ))}
                                                 </div>
-                                            </div>
-                                        )}
 
-                                        {modalActiveTab === 'metadata' && (
-                                            <div className="modal-metadata-view animate-fade-in">
-                                                <div className="metadata-grid">
-                                                    <div className="meta-row">
-                                                        <span className="meta-label">Title (dc:title)</span>
-                                                        <span className="meta-val">{selectedDetailCuration.metadata?.Title || selectedDetailCuration.curation_name}</span>
+                                                {/* Replying to indicator */}
+                                                {replyingTo && (
+                                                    <div className="flex items-center justify-between bg-gold/10 border border-gold/20 px-3 py-1.5 rounded-lg mb-2">
+                                                        <span className="text-[11px] text-gold font-medium">
+                                                            Replying to @{replyingTo.name}
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setReplyingTo(null)}
+                                                            className="text-theme-muted hover:text-text-primary"
+                                                        >
+                                                            <X className="w-3 h-3" />
+                                                        </button>
                                                     </div>
-                                                    <div className="meta-row">
-                                                        <span className="meta-label">Creator (dc:creator)</span>
-                                                        <span className="meta-val">{selectedDetailCuration.metadata?.Creator || 'Historical Archive'}</span>
-                                                    </div>
-                                                    <div className="meta-row">
-                                                        <span className="meta-label">Publisher (dc:publisher)</span>
-                                                        <span className="meta-val">{selectedDetailCuration.metadata?.Publisher || 'SeniQu AI Curation Lab'}</span>
-                                                    </div>
-                                                    <div className="meta-row">
-                                                        <span className="meta-label">Format (dc:format)</span>
-                                                        <span className="meta-val">{selectedDetailCuration.metadata?.Format || 'image/jpeg'}</span>
-                                                    </div>
-                                                    <div className="meta-row">
-                                                        <span className="meta-label">Language (dc:language)</span>
-                                                        <span className="meta-val">{selectedDetailCuration.metadata?.Language || 'id, en'}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                                                    {/* Discussion / Comments Section */}
-                                    <div className="modal-discussion-section">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <h4 className="discussion-title flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-theme-muted">
-                                                <span>Community Discussion</span>
-                                                <span className="text-[11px] font-normal text-theme-muted">({serverComments.length})</span>
-                                            </h4>
-                                        </div>
-                                        
-                                        {/* Quick Emoji Bar */}
-                                        <div className="flex items-center gap-1.5 pb-2 overflow-x-auto scrollbar-none border-b border-theme-border/30 mb-3">
-                                            {['❤️', '🙌', '🔥', '😮', '👏', '😍', '💡', '🎨'].map(emoji => (
-                                                <button
-                                                    key={emoji}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setNewCommentText(prev => prev + emoji);
-                                                        commentInputRef.current?.focus();
-                                                    }}
-                                                    className="text-sm p-1 rounded hover:bg-theme-muted/10 transition-colors"
-                                                >
-                                                    {emoji}
-                                                </button>
-                                            ))}
-                                        </div>
+                                                )}
 
-                                        {/* Replying to indicator */}
-                                        {replyingTo && (
-                                            <div className="flex items-center justify-between bg-gold/10 border border-gold/20 px-3 py-1.5 rounded-lg mb-2">
-                                                <span className="text-[11px] text-gold font-medium">
-                                                    Replying to @{replyingTo.name}
-                                                </span>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setReplyingTo(null)}
-                                                    className="text-theme-muted hover:text-text-primary"
-                                                >
-                                                    <X className="w-3 h-3" />
-                                                </button>
-                                            </div>
-                                        )}
+                                                {/* Post comment form */}
+                                                <form onSubmit={handleSubmitComment} className="flex gap-2 mb-4">
+                                                    <input
+                                                        ref={commentInputRef}
+                                                        type="text"
+                                                        className="flex-1 px-3 py-2.5 rounded-xl bg-theme-bg/60 border border-theme-border text-xs text-text-primary placeholder-theme-muted outline-none focus:border-gold"
+                                                        placeholder={replyingTo ? `Write a reply...` : "Write your curatorial analysis..."}
+                                                        value={newCommentText}
+                                                        onChange={(e) => setNewCommentText(e.target.value)}
+                                                        maxLength={500}
+                                                    />
+                                                    <button
+                                                        type="submit"
+                                                        disabled={!newCommentText.trim() || addCommentMutation.isPending}
+                                                        className="px-4 py-2.5 rounded-xl bg-gold text-charcoal font-bold text-xs hover:bg-gold/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-sm shrink-0"
+                                                    >
+                                                        {addCommentMutation.isPending ? (
+                                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                        ) : (
+                                                            <Send className="w-3.5 h-3.5" />
+                                                        )}
+                                                        <span>Post</span>
+                                                    </button>
+                                                </form>
 
-                                        {/* Post comment form */}
-                                        <form onSubmit={handleSubmitComment} className="flex gap-2 mb-4">
-                                            <input
-                                                ref={commentInputRef}
-                                                type="text"
-                                                className="flex-1 px-3 py-2.5 rounded-xl bg-theme-bg/60 border border-theme-border text-xs text-text-primary placeholder-theme-muted outline-none focus:border-gold"
-                                                placeholder={replyingTo ? `Write a reply...` : "Write your curatorial analysis..."}
-                                                value={newCommentText}
-                                                onChange={(e) => setNewCommentText(e.target.value)}
-                                                maxLength={500}
-                                            />
-                                            <button
-                                                type="submit"
-                                                disabled={!newCommentText.trim()}
-                                                className="p-2.5 rounded-xl bg-gold text-[#1a1a1a] hover:bg-gold-dark transition-all disabled:opacity-40 shrink-0 flex items-center justify-center"
-                                            >
-                                                <Send className="w-4 h-4" />
-                                            </button>
-                                        </form>
+                                                {/* Comments list */}
+                                                <div className="comments-list-box max-h-[350px] overflow-y-auto pr-1">
+                                                    {parsedComments.topLevel.length > 0 ? (
+                                                        parsedComments.topLevel.map((comment) => {
+                                                            const isCommentLiked = !!localLikedCurationComments[comment.id];
+                                                            const likes = isCommentLiked ? 1 : 0;
+                                                            const commentReplies = parsedComments.replies.filter((r: any) => r.parentId === comment.id);
 
-                                        {/* Comments list */}
-                                        <div className="comments-list-box max-h-[350px] overflow-y-auto pr-1">
-                                            {parsedComments.topLevel.length > 0 ? (
-                                                parsedComments.topLevel.map((comment) => {
-                                                    const isCommentLiked = !!localLikedCurationComments[comment.id];
-                                                    const likes = isCommentLiked ? 1 : 0;
-                                                    const commentReplies = parsedComments.replies.filter((r: any) => r.parentId === comment.id);
-
-                                                    return (
-                                                        <div key={comment.id} className="comment-thread-group mb-3 border-b border-theme-border/10 pb-3 last:border-0 last:pb-0">
-                                                            {/* Main Comment Bubble */}
-                                                            <div className="comment-bubble-item relative flex items-start gap-2.5 p-2.5 rounded-xl bg-theme-muted/5 hover:bg-theme-muted/10 transition-all">
-                                                                {/* Avatar */}
-                                                                <div 
-                                                                    className="commenter-avatar-box cursor-pointer hover:opacity-85 shrink-0"
-                                                                    onClick={() => {
-                                                                        const userId = comment.user_id || comment.user?.id;
-                                                                        if (userId) {
-                                                                            setSelectedDetailCuration(null);
-                                                                            navigate(`/profile/${userId}`);
-                                                                        }
-                                                                    }}
-                                                                >
-                                                                    {comment.user?.avatar_url ? (
-                                                                        <img src={comment.user.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover" />
-                                                                    ) : (
-                                                                        <div className="w-7 h-7 rounded-full bg-theme-bg border border-theme-border flex items-center justify-center">
-                                                                            <User className="w-3.5 h-3.5 text-gold" />
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-
-                                                                {/* Body */}
-                                                                <div className="flex-1 min-w-0">
-                                                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                                                        <span 
-                                                                            className="commenter-name font-semibold text-xs cursor-pointer hover:underline text-text-primary"
+                                                            return (
+                                                                <div key={comment.id} className="comment-thread-group mb-3 border-b border-theme-border/10 pb-3 last:border-0 last:pb-0">
+                                                                    {/* Main Comment Bubble */}
+                                                                    <div className="comment-bubble-item relative flex items-start gap-2.5 p-2.5 rounded-xl bg-theme-muted/5 hover:bg-theme-muted/10 transition-all">
+                                                                        {/* Avatar */}
+                                                                        <div 
+                                                                            className="commenter-avatar-box cursor-pointer hover:opacity-85 shrink-0"
                                                                             onClick={() => {
                                                                                 const userId = comment.user_id || comment.user?.id;
                                                                                 if (userId) {
@@ -2355,75 +2340,82 @@ Dibuat secara otomatis menggunakan SeniQu Digital Curation Engine.`;
                                                                                 }
                                                                             }}
                                                                         >
-                                                                            {comment.user?.display_name || 'Anonymous'}
-                                                                        </span>
-                                                                        <span className="comment-date text-[9px] text-theme-muted">
-                                                                            {new Date(comment.created_at).toLocaleDateString('id-ID', {
-                                                                                hour: '2-digit',
-                                                                                minute: '2-digit'
-                                                                            })}
-                                                                        </span>
-                                                                    </div>
-                                                                    <p className="comment-body-text text-xs text-text-primary mt-1 pr-6 leading-relaxed whitespace-pre-wrap break-words">{comment.content}</p>
-                                                                    
-                                                                    {/* Action Row */}
-                                                                    <div className="flex items-center gap-3 mt-2">
+                                                                            {comment.user?.avatar_url ? (
+                                                                                <img src={comment.user.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover" />
+                                                                            ) : (
+                                                                                <div className="w-7 h-7 rounded-full bg-gold/10 flex items-center justify-center text-gold font-bold text-xs">
+                                                                                    {(comment.user?.display_name || 'U').charAt(0).toUpperCase()}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* Content */}
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <div className="flex items-center gap-1 flex-wrap">
+                                                                                <span 
+                                                                                    className="commenter-name font-semibold text-xs cursor-pointer hover:underline text-text-primary"
+                                                                                    onClick={() => {
+                                                                                        const userId = comment.user_id || comment.user?.id;
+                                                                                        if (userId) {
+                                                                                            setSelectedDetailCuration(null);
+                                                                                            navigate(`/profile/${userId}`);
+                                                                                        }
+                                                                                    }}
+                                                                                >
+                                                                                    {comment.user?.display_name || 'Anonymous'}
+                                                                                </span>
+                                                                                <span className="comment-date text-[9px] text-theme-muted">
+                                                                                    {new Date(comment.created_at).toLocaleDateString('id-ID', {
+                                                                                        hour: '2-digit',
+                                                                                        minute: '2-digit'
+                                                                                    })}
+                                                                                </span>
+                                                                            </div>
+                                                                            <p className="comment-body-text text-xs text-text-primary mt-1 pr-6 leading-relaxed whitespace-pre-wrap break-words">{comment.content}</p>
+                                                                            
+                                                                            {/* Action Row */}
+                                                                            <div className="flex items-center gap-3 mt-2">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        setReplyingTo({ id: comment.id, name: comment.user?.display_name || 'User' });
+                                                                                        setNewCommentText(`@${comment.user?.display_name || 'User'} `);
+                                                                                        commentInputRef.current?.focus();
+                                                                                    }}
+                                                                                    className="text-[10px] font-bold text-gold uppercase tracking-wider hover:opacity-85 transition-opacity"
+                                                                                >
+                                                                                    Reply
+                                                                                </button>
+                                                                                {likes > 0 && (
+                                                                                    <span className="text-[10px] text-theme-muted font-medium">{likes} {likes === 1 ? 'like' : 'likes'}</span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Heart Icon to Like */}
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => {
-                                                                                setReplyingTo({ id: comment.id, name: comment.user?.display_name || 'User' });
-                                                                                setNewCommentText(`@${comment.user?.display_name || 'User'} `);
-                                                                                commentInputRef.current?.focus();
+                                                                                const commentId = comment.id;
+                                                                                const isLiked = !localLikedCurationComments[commentId];
+                                                                                const updatedLiked = { ...localLikedCurationComments, [commentId]: isLiked };
+                                                                                setLocalLikedCurationComments(updatedLiked);
+                                                                                localStorage.setItem('liked_curation_comments', JSON.stringify(updatedLiked));
                                                                             }}
-                                                                            className="text-[10px] font-bold text-gold uppercase tracking-wider hover:opacity-85 transition-opacity"
+                                                                            className={`shrink-0 p-1.5 rounded-full hover:bg-theme-muted/10 transition-colors ${isCommentLiked ? 'text-red-500' : 'text-theme-muted hover:text-red-500'}`}
                                                                         >
-                                                                            Reply
+                                                                            <Heart className={`w-3.5 h-3.5 ${isCommentLiked ? 'fill-red-500 text-red-500' : ''}`} />
                                                                         </button>
-                                                                        {likes > 0 && (
-                                                                            <span className="text-[10px] text-theme-muted font-medium">{likes} {likes === 1 ? 'like' : 'likes'}</span>
-                                                                        )}
                                                                     </div>
-                                                                </div>
 
-                                                                {/* Heart Icon to Like */}
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        const commentId = comment.id;
-                                                                        const isLiked = !localLikedCurationComments[commentId];
-                                                                        const updatedLiked = { ...localLikedCurationComments, [commentId]: isLiked };
-                                                                        setLocalLikedCurationComments(updatedLiked);
-                                                                        localStorage.setItem('liked_curation_comments', JSON.stringify(updatedLiked));
-                                                                    }}
-                                                                    className={`shrink-0 p-1.5 rounded-full hover:bg-theme-muted/10 transition-colors ${isCommentLiked ? 'text-red-500' : 'text-theme-muted hover:text-red-500'}`}
-                                                                >
-                                                                    <Heart className={`w-3.5 h-3.5 ${isCommentLiked ? 'fill-red-500 text-red-500' : ''}`} />
-                                                                </button>
-                                                            </div>
-
-                                                            {/* Nested Replies */}
-                                                            {commentReplies.length > 0 && (
-                                                                <div className="ml-9 mt-2 space-y-2">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            setExpandedReplies(prev => ({ ...prev, [comment.id]: !prev[comment.id] }));
-                                                                        }}
-                                                                        className="flex items-center gap-1 text-[10px] font-bold text-theme-muted hover:text-text-primary transition-colors"
-                                                                    >
-                                                                        <span className="w-4 h-[1px] bg-theme-muted/40 inline-block mr-1"></span>
-                                                                        {expandedReplies[comment.id] ? `Hide replies` : `View replies (${commentReplies.length})`}
-                                                                    </button>
-
-                                                                    {expandedReplies[comment.id] && (
-                                                                        <div className="space-y-2">
-                                                                            {commentReplies.map((reply) => {
+                                                                    {/* Nested Replies */}
+                                                                    {commentReplies.length > 0 && (
+                                                                        <div className="replies-list-box ml-6 mt-2 space-y-2 border-l-2 border-theme-border/20 pl-3">
+                                                                            {commentReplies.map((reply: any) => {
                                                                                 const isReplyLiked = !!localLikedCurationComments[reply.id];
-                                                                                const replyLikes = isReplyLiked ? 1 : 0;
 
                                                                                 return (
-                                                                                    <div key={reply.id} className="comment-bubble-item relative flex items-start gap-2 p-2 rounded-xl bg-theme-muted/3 hover:bg-theme-muted/5 transition-all">
-                                                                                        {/* Avatar */}
+                                                                                    <div key={reply.id} className="comment-bubble-item relative flex items-start gap-2 p-2 rounded-lg bg-theme-muted/5">
                                                                                         <div 
                                                                                             className="commenter-avatar-box cursor-pointer hover:opacity-85 shrink-0"
                                                                                             onClick={() => {
@@ -2435,10 +2427,10 @@ Dibuat secara otomatis menggunakan SeniQu Digital Curation Engine.`;
                                                                                             }}
                                                                                         >
                                                                                             {reply.user?.avatar_url ? (
-                                                                                                <img src={reply.user.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
+                                                                                                <img src={reply.user.avatar_url} alt="" className="w-5 h-5 rounded-full object-cover" />
                                                                                             ) : (
-                                                                                                <div className="w-6 h-6 rounded-full bg-theme-bg border border-theme-border flex items-center justify-center">
-                                                                                                    <User className="w-3 h-3 text-gold" />
+                                                                                                <div className="w-5 h-5 rounded-full bg-gold/10 flex items-center justify-center text-gold font-bold text-[9px]">
+                                                                                                    {(reply.user?.display_name || 'U').charAt(0).toUpperCase()}
                                                                                                 </div>
                                                                                             )}
                                                                                         </div>
@@ -2480,19 +2472,15 @@ Dibuat secara otomatis menggunakan SeniQu Digital Curation Engine.`;
                                                                                                 >
                                                                                                     Reply
                                                                                                 </button>
-                                                                                                {replyLikes > 0 && (
-                                                                                                    <span className="text-[9px] text-theme-muted font-medium">{replyLikes} {replyLikes === 1 ? 'like' : 'likes'}</span>
-                                                                                                )}
                                                                                             </div>
                                                                                         </div>
 
-                                                                                        {/* Heart Icon to Like */}
                                                                                         <button
                                                                                             type="button"
                                                                                             onClick={() => {
-                                                                                                const replyId = reply.id;
-                                                                                                const isLiked = !localLikedCurationComments[replyId];
-                                                                                                const updatedLiked = { ...localLikedCurationComments, [replyId]: isLiked };
+                                                                                                const commentId = reply.id;
+                                                                                                const isLiked = !localLikedCurationComments[commentId];
+                                                                                                const updatedLiked = { ...localLikedCurationComments, [commentId]: isLiked };
                                                                                                 setLocalLikedCurationComments(updatedLiked);
                                                                                                 localStorage.setItem('liked_curation_comments', JSON.stringify(updatedLiked));
                                                                                             }}
@@ -2506,23 +2494,24 @@ Dibuat secara otomatis menggunakan SeniQu Digital Curation Engine.`;
                                                                         </div>
                                                                     )}
                                                                 </div>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })
-                                            ) : (
-                                                <p className="no-comments-fallback text-center py-4 text-theme-muted text-xs">
-                                                    No comments yet. Start the conversation!
-                                                </p>
-                                            )}
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <p className="no-comments-fallback text-center py-4 text-theme-muted text-xs">
+                                                            No comments yet. Start the conversation!
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>      </div>
+                                    </div>
                                 </div>
-                            </div>
+                            </motion.div>
                         </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
         </motion.div>
     );
 }

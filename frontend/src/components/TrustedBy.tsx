@@ -42,12 +42,16 @@ const partners = [
   }
 ];
 
+import { useLanguage } from '../hooks/useLanguage';
+
 export function TrustedBy() {
+  const { t } = useLanguage();
+
   return (
     <section className="py-8 md:py-12 bg-theme-bg border-b border-theme-border overflow-hidden relative z-10">
       <div className="max-w-7xl mx-auto px-4 md:px-6 mb-6 md:mb-8 text-center">
         <p className="text-[10px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-theme-muted">
-          Trusted by Leading Institutions
+          {t('trustedBy')}
         </p>
       </div>
 

@@ -278,7 +278,29 @@ export class PrivyService implements OnModuleInit {
 
             if (envKey) {
                 // Remove surrounding quotes if they exist
-                let key = envKey.replace(/^"|"$/g, '');
+                let key = envKey.replace(/^"|"$/g, '').trim();
+                
+                // If the key is a file path, read the file content
+                try {
+                    const fs = await import("fs");
+                    const path = await import("path");
+                    const resolvedPath = path.resolve(key);
+                    if (fs.existsSync(resolvedPath) && fs.lstatSync(resolvedPath).isFile()) {
+                        key = fs.readFileSync(resolvedPath, "utf-8").trim();
+                    }
+                } catch (e: any) {
+                    // Ignore and treat as raw key
+                }
+                
+                // Decode base64 if key doesn't start with -----BEGIN
+                if (!key.startsWith('-----BEGIN') && /^[a-zA-Z0-9+/=\s]+$/.test(key)) {
+                    try {
+                        key = Buffer.from(key, 'base64').toString('utf-8').trim();
+                    } catch (e: any) {
+                        this.logger.error(`Failed to decode base64 PRIVY_SIGNING_KEY: ${e.message}`);
+                    }
+                }
+
                 // Handle both literal newlines and escaped "\n" strings
                 privateKey = key.includes("\\n")
                     ? key.replace(/\\n/g, "\n")

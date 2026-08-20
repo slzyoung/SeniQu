@@ -4,12 +4,14 @@ import { motion } from 'framer-motion';
 import { useAuthModalStore } from '../stores/useAuthModalStore';
 import { useAuthStore } from '../stores/useAuthStore';
 import { ROUTES } from '../lib/constants';
+import { useLanguage } from '../hooks/useLanguage';
 
 export function MobileNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const { openAuthModal } = useAuthModalStore();
   const { isAuthenticated } = useAuthStore();
+  const { t } = useLanguage();
 
   const getActiveTab = (pathname: string) => {
     if (pathname === ROUTES.HOME) return 'Home';
@@ -47,11 +49,11 @@ export function MobileNav() {
   };
 
   const navItems = [
-    { icon: Home, label: 'Home' },
-    { icon: Play, label: 'Reels' },
-    ...(isAuthenticated ? [{ icon: MapPin, label: 'Nearby' }] : []),
-    { icon: Library, label: 'Collections' },
-    { icon: Compass, label: 'Explore' }
+    { icon: Home, label: 'Home', translationKey: 'navbar.home' },
+    { icon: Play, label: 'Reels', translationKey: 'navbar.reels' },
+    ...(isAuthenticated ? [{ icon: MapPin, label: 'Nearby', translationKey: 'navbar.nearby' }] : []),
+    { icon: Library, label: 'Collections', translationKey: 'navbar.collections' },
+    { icon: Compass, label: 'Explore', translationKey: 'navbar.explore' }
   ];
 
   return (
@@ -70,7 +72,7 @@ export function MobileNav() {
                 key={item.label}
                 onClick={() => handleNavClick(item.label)}
                 whileTap={{ scale: 0.9 }}
-                className={`relative flex flex-col items-center justify-center min-w-[56px] h-[48px] space-y-0.5 z-10 ${isActive ? 'text-seniqu-gold dark:text-gold' : 'text-theme-muted'}`}>
+                className={`relative flex flex-col items-center justify-center min-w-[56px] h-[48px] space-y-0.5 z-10 ${isActive ? 'text-seniqu-gold dark:text-gold' : 'text-theme-muted'} cursor-pointer`}>
 
                 {isActive && (
                   <motion.div
@@ -80,7 +82,7 @@ export function MobileNav() {
                 )}
                 <item.icon className={`w-5 h-5 transition-all duration-300 ${isActive ? 'scale-110' : ''}`} />
                 <span className="text-[9px] font-medium leading-none">
-                  {item.label}
+                  {t(item.translationKey)}
                 </span>
               </motion.button>
             );

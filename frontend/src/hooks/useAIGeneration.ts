@@ -103,7 +103,11 @@ export function useAIFeed() {
     queryFn: () => apiGet<ApiWrapped<AIFeedResponse>>('/ai/feed'),
     select: (res) => res?.data ?? { forYou: [], featuredStyles: [], communityFeed: [] },
     staleTime: 30 * 1000, // 30s stale time to keep it fresh
-    retry: 2,
+    retry: (failureCount, error) => {
+      // Don't retry on 401 — auth interceptor handles logout
+      if ((error as any)?.response?.status === 401) return false;
+      return failureCount < 2;
+    },
   });
 }
 
@@ -162,7 +166,10 @@ export function useAIHistory() {
     queryFn: () => apiGet<ApiWrapped<AIArtwork[]>>('/ai/history'),
     select: (res) => res?.data ?? [],
     staleTime: 2 * 60 * 1000, // 2 min
-    retry: 2,
+    retry: (failureCount, error) => {
+      if ((error as any)?.response?.status === 401) return false;
+      return failureCount < 2;
+    },
   });
 }
 

@@ -17,6 +17,7 @@ import {
     HttpStatus,
     Req,
     BadRequestException,
+    Header,
 } from "@nestjs/common"
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiConsumes, ApiBody } from "@nestjs/swagger"
 import { Throttle, SkipThrottle } from "@nestjs/throttler"
@@ -50,6 +51,7 @@ export class ForumController {
     @Public()
     @SkipThrottle()
     @Get("categories")
+    @Header("Cache-Control", "public, max-age=60, stale-while-revalidate=120")
     @ApiOperation({ summary: "Get all forum categories" })
     async getCategories() {
         return this.forumService.getCategories()
@@ -62,6 +64,7 @@ export class ForumController {
     @Public()
     @SkipThrottle()
     @Get("trending")
+    @Header("Cache-Control", "public, max-age=15, stale-while-revalidate=60")
     @ApiOperation({ summary: "Get trending threads" })
     @ApiQuery({ name: "limit", required: false, type: Number })
     async getTrending(@Query("limit") limit?: number) {
@@ -71,6 +74,7 @@ export class ForumController {
     @Public()
     @SkipThrottle()
     @Get("featured")
+    @Header("Cache-Control", "public, max-age=15, stale-while-revalidate=60")
     @ApiOperation({ summary: "Get featured threads" })
     async getFeatured() {
         return this.forumService.getFeatured()
@@ -263,6 +267,7 @@ export class ForumController {
     @Public()
     @SkipThrottle()
     @Get("threads")
+    @Header("Cache-Control", "public, max-age=5, stale-while-revalidate=20")
     @ApiOperation({ summary: "List forum threads" })
     @ApiQuery({ name: "categoryId", required: false })
     @ApiQuery({ name: "page", required: false })
@@ -282,6 +287,7 @@ export class ForumController {
     @Public()
     @SkipThrottle()
     @Get("threads/:idOrSlug")
+    @Header("Cache-Control", "public, max-age=5, stale-while-revalidate=20")
     @ApiOperation({ summary: "Get thread by ID or slug" })
     async getThread(@Param("idOrSlug") idOrSlug: string) {
         // UUID v4 pattern detection
@@ -361,6 +367,7 @@ export class ForumController {
     @Public()
     @SkipThrottle()
     @Get("threads/:threadId/posts")
+    @Header("Cache-Control", "public, max-age=3, stale-while-revalidate=15")
     @ApiOperation({ summary: "Get posts in a thread" })
     async getPosts(
         @Param("threadId", ParseUUIDPipe) threadId: string,

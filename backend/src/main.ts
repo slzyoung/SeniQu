@@ -93,9 +93,7 @@ async function bootstrap() {
         "https://seniquapp.netlify.app",
         "https://seniqu.art",
         "https://www.seniqu.art",
-        "https://rpc.ankr.com/solana",
         "https://api.seniqu.art",
-        "https://solana-mainnet.rpc.extrnode.com/",
     ]
 
     const allowedOrigins = [...new Set([...cleanOrigins, ...defaultOrigins])]
@@ -103,7 +101,27 @@ async function bootstrap() {
     logger.log(`Allowed CORS Origins: ${JSON.stringify(allowedOrigins)}`)
 
     app.enableCors({
-        origin: allowedOrigins,
+        origin: (origin, callback) => {
+            // Allow requests with no origin (like mobile apps, curl, server-to-server)
+            if (!origin) {
+                return callback(null, true);
+            }
+
+            // Check if origin matches exact list or regex patterns for subdomains & preview deployments
+            const isAllowed = 
+                allowedOrigins.includes(origin) ||
+                /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
+                /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin) ||
+                /^https:\/\/([a-zA-Z0-9-]+\.)*seniqu\.art$/.test(origin) ||
+                /^https:\/\/([a-zA-Z0-9-]+\.)*netlify\.app$/.test(origin);
+
+            if (isAllowed) {
+                callback(null, true);
+            } else {
+                logger.warn(`[CORS] Blocked request from unauthorized origin: ${origin}`);
+                callback(null, false);
+            }
+        },
         credentials: true,
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allowedHeaders: [
@@ -114,7 +132,18 @@ async function bootstrap() {
             "X-CSRF-Token",
             "X-Client-Fingerprint",
             "X-Request-Timestamp",
+            "Accept",
+            "Origin",
+            "Access-Control-Request-Method",
+            "Access-Control-Request-Headers",
         ],
+        exposedHeaders: [
+            "Content-Length",
+            "Content-Range",
+            "X-Request-ID",
+            "Content-Disposition",
+        ],
+        maxAge: 86400, // 24 hour preflight cache
     })
 
     // ===========================================

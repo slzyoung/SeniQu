@@ -723,6 +723,10 @@ export class AiService {
    * Moderate and validate an uploaded image using Gemini Vision API.
    * Checks if the image contains actual artwork and is appropriate.
    */
+  /**
+   * Moderate and validate an uploaded image using Gemini Vision API.
+   * Checks if the image contains actual artwork and is appropriate.
+   */
   async moderateImage(buffer: Buffer, mimeType: string): Promise<{ isArtwork: boolean; isAppropriate: boolean; reason: string }> {
     try {
       const geminiApiKey = this.configService.get<string>('ai.geminiApiKey');
@@ -731,50 +735,10 @@ export class AiService {
       }
 
       const base64Data = buffer.toString('base64');
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: 'Analyze the provided image. Determine if the image is a genuine piece of artwork (e.g., a painting, drawing, sculpture, digital design, traditional craft, or photography of physical art) and is appropriate for a public gallery (no NSFW, no hate speech, not a random personal selfie/meme, not a screenshot of text/unrelated app). Respond ONLY with a JSON object containing keys: isArtwork (boolean), isAppropriate (boolean), and reason (string describing the analysis).'
-                  },
-                  {
-                    inlineData: {
-                      mimeType: mimeType,
-                      data: base64Data,
-                    }
-                  }
-                ]
-              }
-            ],
-            generationConfig: {
-              responseMimeType: 'application/json'
-            }
-          })
-        }
-      );
+      const prompt = 'Analyze the provided image. Determine if the image is a genuine piece of artwork (e.g., a painting, drawing, sculpture, digital design, traditional craft, or photography of physical art) and is appropriate for a public gallery (no NSFW, no hate speech, not a random personal selfie/meme, not a screenshot of text/unrelated app). Respond ONLY with a JSON object containing keys: isArtwork (boolean), isAppropriate (boolean), and reason (string describing the analysis).';
 
-      if (!response.ok) {
-        const errText = await response.text();
-        this.logger.error(`Gemini Moderation API error (status ${response.status}): ${errText}`);
-        return { isArtwork: true, isAppropriate: true, reason: 'API call failed, bypassing moderation.' };
-      }
+      const parsed = await this.executeGeminiWithFallback(geminiApiKey, prompt, mimeType, base64Data, { maxTokens: 1024, temperature: 0.1 });
 
-      const result = await response.json();
-      const textResponse = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!textResponse) {
-        throw new Error('Empty response from Gemini Moderation API.');
-      }
-
-      const parsed = JSON.parse(textResponse.trim());
       return {
         isArtwork: !!parsed.isArtwork,
         isAppropriate: !!parsed.isAppropriate,
@@ -879,6 +843,9 @@ export class AiService {
   /**
    * Helper to strip markdown formatting and return clean JSON string.
    */
+  /**
+   * Helper to strip markdown formatting and return clean JSON string.
+   */
   cleanJsonResponse(raw: string): string {
     let clean = raw.trim();
     if (clean.startsWith('```json')) {
@@ -896,6 +863,181 @@ export class AiService {
       clean = clean.substring(firstOpen, lastClose + 1);
     }
     return clean;
+  }
+
+  /**
+   * Parse JSON safely with auto-repair for truncated strings / unterminated brackets.
+   */
+  safeParseJson<T = any>(raw: string): T {
+    const cleaned = this.cleanJsonResponse(raw);
+    try {
+      return JSON.parse(cleaned);
+    } catch (firstErr) {
+      let repaired = cleaned;
+
+      // Fix unclosed quotes if odd number of unescaped quotes exist
+      const quoteMatches = repaired.match(/(?<!\\)"/g);
+      if (quoteMatches && quoteMatches.length % 2 !== 0) {
+        repaired += '"';
+      }
+
+      // Count open/close braces & brackets outside strings
+      let openBraces = 0;
+      let openBrackets = 0;
+      let inString = false;
+
+      for (let i = 0; i < repaired.length; i++) {
+        const char = repaired[i];
+        if (char === '"' && (i === 0 || repaired[i - 1] !== '\\')) {
+          inString = !inString;
+        } else if (!inString) {
+          if (char === '{') openBraces++;
+          else if (char === '}') openBraces = Math.max(0, openBraces - 1);
+          else if (char === '[') openBrackets++;
+          else if (char === ']') openBrackets = Math.max(0, openBrackets - 1);
+        }
+      }
+
+      while (openBrackets > 0) {
+        repaired += ']';
+        openBrackets--;
+      }
+      while (openBraces > 0) {
+        repaired += '}';
+        openBraces--;
+      }
+
+      try {
+        return JSON.parse(repaired);
+      } catch {
+        throw firstErr;
+      }
+    }
+  }
+
+  /**
+   * Safe Supabase DB Insert wrapper with exponential backoff retries for transient fetch errors.
+   */
+  private async safeDbInsert(
+    tableName: string,
+    insertPayload: any,
+    maxRetries = 3
+  ): Promise<{ data: any; error: any }> {
+    let lastError: any = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const supabase = this.databaseService.getAdminClient();
+        const { data, error } = await supabase
+          .from(tableName)
+          .insert(insertPayload)
+          .select()
+          .single();
+
+        if (!error) {
+          return { data, error: null };
+        }
+
+        lastError = error;
+        this.logger.warn(`Supabase DB insert to '${tableName}' failed (attempt ${attempt}/${maxRetries}): ${error.message}`);
+      } catch (err: any) {
+        lastError = err;
+        this.logger.warn(`Supabase network fetch error inserting to '${tableName}' (attempt ${attempt}/${maxRetries}): ${err.message}`);
+      }
+
+      if (attempt < maxRetries) {
+        await new Promise((res) => setTimeout(res, 300 * Math.pow(2, attempt - 1)));
+      }
+    }
+
+    return { data: null, error: lastError };
+  }
+
+  /**
+   * Enterprise Gemini API Executor with per-model 503/429 retry and fallback models.
+   * Primary: gemini-3.6-flash -> Secondary: gemini-3.5-flash -> Backup: gemini-2.5-flash -> gemini-2.0-flash
+   */
+  private async executeGeminiWithFallback(
+    geminiApiKey: string,
+    promptText: string,
+    mimeType: string,
+    base64Data: string,
+    options?: { maxTokens?: number; temperature?: number }
+  ): Promise<any> {
+    const models = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+    const maxOutputTokens = options?.maxTokens || 4096;
+    const temperature = options?.temperature ?? 0.1;
+
+    let lastErrorMsg = '';
+
+    for (let modelIdx = 0; modelIdx < models.length; modelIdx++) {
+      const model = models[modelIdx];
+
+      // Retry up to 2 times for 503/429 transient errors per model
+      for (let retry = 0; retry < 2; retry++) {
+        try {
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [
+                  {
+                    parts: [
+                      { text: promptText },
+                      { inlineData: { mimeType, data: base64Data } }
+                    ]
+                  }
+                ],
+                generationConfig: {
+                  responseMimeType: 'application/json',
+                  temperature,
+                  maxOutputTokens,
+                }
+              })
+            }
+          );
+
+          if (res.status === 503 || res.status === 429) {
+            const errBody = await res.text().catch(() => '');
+            lastErrorMsg = `Gemini (${model}) status ${res.status}: ${errBody.substring(0, 150)}`;
+            this.logger.warn(`Gemini (${model}) temporary issue (${res.status}). Retrying in 600ms... (attempt ${retry + 1}/2)`);
+            await new Promise(resolve => setTimeout(resolve, 600));
+            continue;
+          }
+
+          if (!res.ok) {
+            const errBody = await res.text().catch(() => '');
+            lastErrorMsg = `Gemini (${model}) status ${res.status}: ${errBody.substring(0, 150)}`;
+            this.logger.warn(lastErrorMsg);
+            break; // Skip to next model on non-transient status (e.g. 400, 404)
+          }
+
+          const data = await res.json();
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          if (!text) {
+            lastErrorMsg = `Gemini (${model}) returned empty text response`;
+            this.logger.warn(lastErrorMsg);
+            break;
+          }
+
+          const parsed = this.safeParseJson(text);
+          this.logger.log(`✅ Gemini request succeeded using model ${model}`);
+          return parsed;
+        } catch (err: any) {
+          lastErrorMsg = err.message || String(err);
+          this.logger.warn(`Gemini attempt for model ${model} failed: ${lastErrorMsg}`);
+          if (retry === 0 && (lastErrorMsg.includes('503') || lastErrorMsg.includes('429') || lastErrorMsg.includes('fetch'))) {
+            await new Promise(resolve => setTimeout(resolve, 600));
+          } else {
+            break;
+          }
+        }
+      }
+    }
+
+    throw new Error(`All Gemini models failed. Last error: ${lastErrorMsg}`);
   }
 
   /**
@@ -940,7 +1082,7 @@ export class AiService {
   }
 
   /**
-   * Curate and digitally restore a heritage artifact image using Gemini 2.5 Flash.
+   * Curate and digitally restore a heritage artifact image using Gemini AI.
    */
   async curateHeritage(userId: string, buffer: Buffer, mimeType: string) {
     try {
@@ -956,7 +1098,7 @@ export class AiService {
 
       this.logger.log(`Heritage curation for user ${userId} (quota: ${quota.remaining}/${quota.limit} remaining)...`);
 
-      // 2. Call Gemini 2.5 Flash with fallback/retries
+      // 2. Call Gemini AI with fallback/retries
       const geminiApiKey = this.configService.get<string>('ai.geminiApiKey');
       if (!geminiApiKey) {
         throw new InternalServerErrorException('API Key Gemini tidak terkonfigurasi.');
@@ -971,7 +1113,7 @@ You MUST respond ONLY with a valid JSON object matching the following keys (writ
   "historicalSignificance": "In-depth explanation of its cultural, historical, and national significance for Indonesian heritage",
   "valuationEstimate": "Cultural valuation or rarity tier (e.g., Extremely High / Rarity Grade A)",
   "curationDescription": "Artistic, poetic, and deep curatorial description of the aesthetics of this work",
-  "audioScript": "A poetic, flowing, and engaging museum audio guide narrative script in English (at least 3 paragraphs long)",
+  "audioScript": "A poetic, flowing, and engaging museum audio guide narrative script in English (at least 2-3 concise paragraphs)",
   "colorPalette": ["Hex color code 1", "Hex color code 2", "Hex color code 3", "Hex color code 4", "Hex color code 5"],
   "restorationSteps": [
     { "step": 1, "title": "Spectral Analysis", "description": "Analyzing basic color contrast, shadows, and base image degradation parameters." },
@@ -999,89 +1141,47 @@ Ensure your JSON output is valid, complete, and not truncated. Do not include an
 
       const base64Data = buffer.toString('base64');
       let curationResult: any;
-      let textResponse = '';
 
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                contents: [
-                  {
-                    parts: [
-                      { text: curationPrompt },
-                      {
-                        inlineData: {
-                          mimeType: mimeType,
-                          data: base64Data,
-                        }
-                      }
-                    ]
-                  }
-                ],
-                generationConfig: {
-                  responseMimeType: 'application/json',
-                  temperature: attempt === 1 ? 0.3 : attempt === 2 ? 0.6 : 0.1,
-                }
-              })
-            }
-          );
-
-          if (!response.ok) {
-            throw new Error(`Gemini status ${response.status}`);
+      try {
+        curationResult = await this.executeGeminiWithFallback(
+          geminiApiKey,
+          curationPrompt,
+          mimeType,
+          base64Data,
+          { maxTokens: 4096, temperature: 0.2 }
+        );
+      } catch (err: any) {
+        this.logger.warn(`Heritage curation Gemini models failed: ${err.message}. Using safe curation fallback...`);
+        curationResult = {
+          name: 'Curated Nusantara Archive',
+          era: 'Classic / Colonial Era',
+          historicalSignificance: 'A highly significant cultural heritage artifact documenting the rich history of Nusantara. It holds outstanding value for historical and social study.',
+          valuationEstimate: 'High (Cultural Value Grade A)',
+          curationDescription: 'An exceptional visual document preserving our collective memory. Digital restoration enhances structural details and highlights its authentic aesthetic qualities.',
+          audioScript: 'Welcome to the SeniQu audio guide. The object you are observing is one of Nusantara’s most valuable treasures. Through advanced digital restoration, we can appreciate its original form, colors, and craftsmanship that had faded over time.',
+          colorPalette: ['#1A1A1D', '#6F2232', '#950740', '#C3073F', '#4E4E50'],
+          restorationSteps: [
+            { step: 1, title: 'Spectral Analysis', description: 'Analyzing basic color contrast, shadows, and base image degradation parameters.' },
+            { step: 2, title: 'Contrast Restoration', description: 'Optimizing dynamic range to reveal faded structural lines and visual artifacts.' },
+            { step: 3, title: 'Authentic Colorization', description: 'Applying authentic color palette pigments matching the geographical and temporal context.' }
+          ],
+          metadata: {
+            Title: 'Curated Nusantara Archive',
+            Creator: 'Unknown',
+            Subject: 'Heritage / Historical Archive',
+            Description: 'AI curation and digital restoration generated by SeniQu Curation Lab.',
+            Date: 'Unknown',
+            Type: 'Image',
+            Format: mimeType,
+            Source: 'SeniQu Digital Lab',
+            Language: 'en',
+            Coverage: 'Indonesia',
+            Rights: 'Public Domain / SeniQu Curated',
+            EraConfidence: 92,
+            PreservationState: 88,
+            CulturalSignificanceScore: 95
           }
-
-          const result = await response.json();
-          textResponse = result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-          if (!textResponse) {
-            throw new Error('Gemini return empty text response');
-          }
-
-          const cleaned = this.cleanJsonResponse(textResponse);
-          curationResult = JSON.parse(cleaned);
-          break; // success!
-        } catch (err: any) {
-          this.logger.warn(`Heritage curation Gemini attempt ${attempt} failed: ${err.message}`);
-          if (attempt === 3) {
-            // Safe fallback structure
-            curationResult = {
-              name: 'Curated Nusantara Archive',
-              era: 'Classic / Colonial Era',
-              historicalSignificance: 'A highly significant cultural heritage artifact documenting the rich history of Nusantara. It holds outstanding value for historical and social study.',
-              valuationEstimate: 'High (Cultural Value Grade A)',
-              curationDescription: 'An exceptional visual document preserving our collective memory. Digital restoration enhances structural details and highlights its authentic aesthetic qualities.',
-              audioScript: 'Welcome to the SeniQu audio guide. The object you are observing is one of Nusantara’s most valuable treasures. Through advanced digital restoration, we can appreciate its original form, colors, and craftsmanship that had faded over time.',
-              colorPalette: ['#1A1A1D', '#6F2232', '#950740', '#C3073F', '#4E4E50'],
-              restorationSteps: [
-                { step: 1, title: 'Spectral Analysis', description: 'Analyzing basic color contrast, shadows, and base image degradation parameters.' },
-                { step: 2, title: 'Contrast Restoration', description: 'Optimizing dynamic range to reveal faded structural lines and visual artifacts.' },
-                { step: 3, title: 'Authentic Colorization', description: 'Applying authentic color palette pigments matching the geographical and temporal context.' }
-              ],
-              metadata: {
-                Title: 'Curated Nusantara Archive',
-                Creator: 'Unknown',
-                Subject: 'Heritage / Historical Archive',
-                Description: 'AI curation and digital restoration generated by SeniQu Curation Lab.',
-                Date: 'Unknown',
-                Type: 'Image',
-                Format: mimeType,
-                Source: 'SeniQu Digital Lab',
-                Language: 'en',
-                Coverage: 'Indonesia',
-                Rights: 'Public Domain / SeniQu Curated',
-                EraConfidence: 92,
-                PreservationState: 88,
-                CulturalSignificanceScore: 95
-              }
-            };
-          }
-        }
+        };
       }
 
       // 3. Upload Original Image to Cloudflare R2
@@ -1108,10 +1208,26 @@ Ensure your JSON output is valid, complete, and not truncated. Do not include an
       );
       const imageUrl = uploadResult.url;
 
-      // 4. Save Curation to Database
-      const { data, error: insertError } = await supabase
-        .from('heritage_curations')
-        .insert({
+      // 4. Save Curation to Database with retry backoff
+      const { data, error: insertError } = await this.safeDbInsert('heritage_curations', {
+        user_id: userId,
+        image_url: imageUrl,
+        curation_name: curationResult.name || 'Untitled Archive',
+        original_era: curationResult.era || 'Unknown',
+        historical_significance: curationResult.historicalSignificance || '',
+        restoration_steps: curationResult.restorationSteps || [],
+        color_palette: curationResult.colorPalette || [],
+        curation_description: curationResult.curationDescription || '',
+        audio_script: curationResult.audioScript || '',
+        valuation_estimate: curationResult.valuationEstimate || '',
+        metadata: curationResult.metadata || {},
+        is_public: false
+      });
+
+      if (insertError) {
+        this.logger.warn(`Could not save heritage curation to database: ${insertError.message || insertError}. Returning result to client.`);
+        return {
+          id: uuidv4(),
           user_id: userId,
           image_url: imageUrl,
           curation_name: curationResult.name || 'Untitled Archive',
@@ -1123,14 +1239,9 @@ Ensure your JSON output is valid, complete, and not truncated. Do not include an
           audio_script: curationResult.audioScript || '',
           valuation_estimate: curationResult.valuationEstimate || '',
           metadata: curationResult.metadata || {},
-          is_public: false
-        })
-        .select()
-        .single();
-
-      if (insertError) {
-        this.logger.error(`Failed to save heritage curation: ${insertError.message}`);
-        throw new InternalServerErrorException('Gagal menyimpan hasil kurasi.');
+          is_public: false,
+          created_at: new Date().toISOString()
+        };
       }
 
       return data;
@@ -1455,94 +1566,13 @@ Ensure your JSON output is valid, complete, and not truncated. Do not include an
 
       this.logger.log(`Heritage scan for user ${userId} (quota: ${quota.remaining}/${quota.limit} remaining)...`);
 
-      // 2. Call Gemini 2.5 Flash
       const geminiApiKey = this.configService.get<string>('ai.geminiApiKey');
       if (!geminiApiKey) {
         throw new InternalServerErrorException('API Key Gemini tidak terkonfigurasi.');
       }
 
-      const scanPrompt = `Kamu adalah ahli arkeolog, sejarawan, dan kurator museum nasional Indonesia yang sangat berpengalaman.
-Analisis gambar karya seni, arsip sejarah, artefak, candi, relief, batik, tenun, atau objek budaya Nusantara ini dengan sangat detail.
+      // 2. Prepare R2 Upload Promise & Gemini Prompt in parallel
 
-Kamu HARUS merespon HANYA dengan objek JSON valid berikut (gunakan bahasa Indonesia untuk semua teks deskripsi):
-{
-  "name": "Nama spesifik dari objek yang teridentifikasi (misal: Candi Borobudur, Batik Parang Rusak, Keris Pusaka, dll.)",
-  "origin": "Asal daerah/provinsi/kerajaan (misal: Yogyakarta, Sumatera Utara, Kerajaan Majapahit)",
-  "century": "Abad atau periode pembuatan (misal: Abad ke-8, Abad ke-13 hingga ke-15, Era Kolonial 1930-an)",
-  "type": "Jenis/kategori objek (misal: Candi Buddha, Tekstil Tradisional, Senjata Tradisional, Relief Batu, Foto Arsip)",
-  "confidence": 85,
-  "description": "Deskripsi mendalam dan komprehensif tentang objek ini, termasuk sejarah, fungsi, dan konteks budayanya. Minimal 3 paragraf.",
-  "audioScript": "Naskah narasi audio guide puitis yang memikat untuk memandu pengunjung museum memahami objek ini. Seperti seorang pemandu museum kelas dunia yang menceritakan kisah di balik objek ini. Minimal 3 paragraf dalam bahasa Indonesia.",
-  "patternMeaning": "Penjelasan detail tentang pola, motif, relief, atau elemen artistik yang terlihat pada objek ini dan makna filosofis/kultural di baliknya.",
-  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-  "genres": [
-    { "name": "Nama Genre/Kategori Utama", "confidence": 0.92 },
-    { "name": "Nama Genre/Kategori Sekunder", "confidence": 0.78 }
-  ],
-  "style": "Gaya artistik utama (misal: Klasik Jawa, Barok Kolonial, Majapahit Late Period)",
-  "medium": "Medium/bahan fisik objek (misal: Batu Andesit, Kain Katun, Kulit Kerbau, Perunggu)",
-  "collection": "Koleksi/sumber arsip yang relevan (misal: Museum Nasional, Keraton Yogyakarta, Arsip Kemendikbud)"
-}
-
-PENTING:
-- Nilai confidence harus integer 0-100 berdasarkan seberapa yakin identifikasi ini
-- Berikan analisis yang sangat spesifik dan terperinci, bukan generik
-- Jika gambar buram atau tidak jelas, tetap berikan identifikasi terbaik yang mungkin
-- Pastikan format JSON valid dan lengkap
-- Jangan sertakan teks tambahan di luar JSON`;
-
-      const base64Data = buffer.toString('base64');
-      let scanResult: any;
-
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{
-                  parts: [
-                    { text: scanPrompt },
-                    { inlineData: { mimeType, data: base64Data } }
-                  ]
-                }],
-                generationConfig: {
-                  responseMimeType: 'application/json',
-                  temperature: attempt === 1 ? 0.2 : attempt === 2 ? 0.5 : 0.1,
-                }
-              })
-            }
-          );
-
-          if (!response.ok) {
-            const errText = await response.text().catch(() => '');
-            throw new Error(`Gemini status ${response.status}: ${errText.substring(0, 200)}`);
-          }
-
-          const result = await response.json();
-          const textResponse = result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-          if (!textResponse) {
-            throw new Error('Gemini returned empty response');
-          }
-
-          const cleaned = this.cleanJsonResponse(textResponse);
-          scanResult = JSON.parse(cleaned);
-          break; // success
-        } catch (err: any) {
-          this.logger.warn(`Heritage scan Gemini attempt ${attempt} failed: ${err.message}`);
-          if (attempt === 3) {
-            this.logger.error(`All 3 Gemini scan attempts failed for user ${userId}`);
-            throw new InternalServerErrorException(
-              'Gagal menganalisis gambar setelah beberapa percobaan. Silakan coba lagi.'
-            );
-          }
-        }
-      }
-
-      // 3. Upload image to R2 CDN
       const extension = mimeType.split('/')[1] || 'jpg';
       const filename = `scan_${uuidv4()}.${extension}`;
       const fakeFile: Express.Multer.File = {
@@ -1558,32 +1588,83 @@ PENTING:
         path: '',
       };
 
-      this.logger.log(`Uploading heritage scan image to R2 CDN...`);
-      const uploadResult = await this.storageService.uploadFile(fakeFile, 'ai-scans', userId);
-      const imageUrl = uploadResult.url;
+      // Execute R2 CDN Upload in background parallel with Gemini API
+      const r2UploadPromise = this.storageService.uploadFile(fakeFile, 'ai-scans', userId)
+        .catch(err => {
+          this.logger.warn(`R2 upload warning: ${err.message}`);
+          return { url: '' };
+        });
 
-      // 4. Save scan to database
-      const { data, error: insertError } = await supabase
-        .from('heritage_scans')
-        .insert({
-          user_id: userId,
-          image_url: imageUrl,
-          heritage_name: scanResult.name || 'Unknown Heritage',
-          heritage_type: scanResult.type || 'Unknown',
-          confidence: typeof scanResult.confidence === 'number' ? scanResult.confidence : 80,
-          result: scanResult,
-        })
-        .select()
-        .single();
+      const scanPrompt = `Kamu adalah ahli arkeolog, sejarawan, dan kurator museum nasional Indonesia yang sangat berpengalaman.
+Analisis gambar karya seni, arsip sejarah, artefak, candi, relief, batik, tenun, atau objek budaya ini dengan sangat detail.
 
+Kamu HARUS merespon HANYA dengan objek JSON valid berikut (gunakan bahasa Indonesia untuk semua teks deskripsi):
+{
+  "name": "Nama spesifik dari objek yang teridentifikasi (misal: Candi Borobudur, Batik Parang Rusak, Keris Pusaka, dll.)",
+  "origin": "Asal daerah/provinsi/kerajaan (misal: Yogyakarta, Sumatera Utara, Kerajaan Majapahit)",
+  "century": "Abad atau periode pembuatan (misal: Abad ke-8, Abad ke-13 hingga ke-15, Era Kolonial 1930-an)",
+  "type": "Jenis/kategori objek (misal: Candi Buddha, Tekstil Tradisional, Senjata Tradisional, Relief Batu, Foto Arsip)",
+  "confidence": 85,
+  "description": "Deskripsi mendalam dan komprehensif tentang objek ini, termasuk sejarah, fungsi, dan konteks budayanya. Ringkas dan padat 2-3 paragraf.",
+  "audioScript": "Naskah narasi audio guide puitis yang memikat untuk memandu pengunjung museum memahami objek ini. Seperti seorang pemandu museum kelas dunia. Ringkas dan padat 2-3 paragraf dalam bahasa Indonesia.",
+  "patternMeaning": "Penjelasan detail tentang pola, motif, relief, atau elemen artistik yang terlihat pada objek ini dan makna filosofis/kultural di baliknya.",
+  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+  "genres": [
+    { "name": "Nama Genre/Kategori Utama", "confidence": 0.92 },
+    { "name": "Nama Genre/Kategori Sekunder", "confidence": 0.78 }
+  ],
+  "style": "Gaya artistik utama (misal: Klasik Jawa, Barok Kolonial, Majapahit Late Period)",
+  "medium": "Medium/bahan fisik objek (misal: Batu Andesit, Kain Katun, Kulit Kerbau, Perunggu)",
+  "collection": "Koleksi/sumber arsip yang relevan (misal: Museum Nasional, Keraton Yogyakarta, Arsip Kemendikbud)"
+}
+
+PENTING:
+- Nilai confidence harus integer 0-100 berdasarkan seberapa yakin identifikasi ini
+- Berikan analisis yang sangat spesifik dan terperinci, bukan generik
+- Jangan sertakan teks tambahan di luar JSON`;
+
+      const base64Data = buffer.toString('base64');
+
+      // Start Gemini processing with parallel R2 CDN Upload
+      const geminiPromise = this.executeGeminiWithFallback(
+        geminiApiKey,
+        scanPrompt,
+        mimeType,
+        base64Data,
+        { maxTokens: 4096, temperature: 0.1 }
+      ).catch(err => {
+        this.logger.error(`Heritage scan Gemini models failed: ${err.message}`);
+        throw new InternalServerErrorException(
+          'Gagal menganalisis gambar setelah beberapa percobaan. Silakan coba lagi.'
+        );
+      });
+
+      // Await both parallel operations (Gemini AI analysis + R2 CDN upload)
+      const [resResult, uploadResult] = await Promise.all([geminiPromise, r2UploadPromise]);
+      const scanResult = resResult;
+      const imageUrl = uploadResult?.url || '';
+
+
+      // 4. Save scan to database with safe retry backoff
+      const { data, error: insertError } = await this.safeDbInsert('heritage_scans', {
+        user_id: userId,
+        image_url: imageUrl,
+        heritage_name: scanResult.name || 'Unknown Heritage',
+        heritage_type: scanResult.type || 'Unknown',
+        confidence: typeof scanResult.confidence === 'number' ? scanResult.confidence : 80,
+        result: scanResult,
+      });
+
+      let scanId = uuidv4();
       if (insertError) {
-        this.logger.error(`Failed to save heritage scan: ${insertError.message}`);
-        throw new InternalServerErrorException('Gagal menyimpan hasil analisis.');
+        this.logger.warn(`Could not save heritage scan to database: ${insertError.message || insertError}. Returning scan result directly to client.`);
+      } else if (data && data.id) {
+        scanId = data.id;
       }
 
       // 5. Return enriched result
       return {
-        id: data.id,
+        id: scanId,
         name: scanResult.name,
         origin: scanResult.origin,
         century: scanResult.century,

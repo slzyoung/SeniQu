@@ -882,7 +882,7 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
         }
     };
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-md">
             <div className="w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[90vh] overflow-y-auto bg-white dark:bg-[#111111] border border-gray-200/60 dark:border-white/10 shadow-2xl rounded-t-2xl sm:rounded-2xl relative"
                 style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
@@ -1250,7 +1250,8 @@ function CreateThreadModalPublic({ onClose, categories }: { onClose: () => void,
                 </form>
             </div>
             <style>{`@keyframes shimmer { 0%,100% { background-position: 0% 0%; } 50% { background-position: 100% 0%; } }`}</style>
-        </div>
+        </div>,
+        document.body
     );
 }
 

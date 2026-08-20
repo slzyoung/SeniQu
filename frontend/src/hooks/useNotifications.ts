@@ -38,7 +38,7 @@ export function useNotifications(limit = 10) {
             setUnreadCount(countRes.count);
             setError(null);
         } catch (err: any) {
-            console.error('Failed to fetch notifications:', err);
+            if (import.meta.env.DEV) console.error('Failed to fetch notifications:', err);
             // Don't show error for background polling
             if (!isBackground) setError('Failed to load notifications');
         } finally {

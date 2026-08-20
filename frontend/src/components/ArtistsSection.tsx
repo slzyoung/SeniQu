@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
 import { GlowCard } from './GlowCard';
 import { ArrowRight, Trophy, Star, X, ExternalLink } from 'lucide-react';
@@ -6,13 +7,13 @@ import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../lib/constants';
 import { useState, useEffect } from 'react';
 import { museumService } from '../services/museumService';
+import { useLanguage } from '../hooks/useLanguage';
 
 interface Artist {
     id: string;
     name: string;
     title: string;
     avatar: string;
-    // cover: removed as per request
     verified: boolean;
     rank: number;
     wikipediaTitle: string;
@@ -52,6 +53,7 @@ function BioModal({ artist, onClose }: { artist: Artist; onClose: () => void }) 
     const [bio, setBio] = useState<string>('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
+    const { t } = useLanguage();
 
     useEffect(() => {
         const fetchBio = async () => {
@@ -83,78 +85,77 @@ function BioModal({ artist, onClose }: { artist: Artist; onClose: () => void }) 
         }
     }, [artist.wikipediaTitle, artist.name]);
 
-    return (
-        <AnimatePresence>
+    return createPortal(
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={onClose}
+        >
             <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-                onClick={onClose}
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="relative w-full max-w-2xl bg-theme-surface border border-theme-border rounded-2xl shadow-2xl overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
             >
-                <motion.div
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.9, opacity: 0 }}
-                    className="relative w-full max-w-2xl bg-theme-surface border border-theme-border rounded-2xl shadow-2xl overflow-hidden"
-                    onClick={(e) => e.stopPropagation()}
+                <button
+                    onClick={onClose}
+                    className="absolute top-4 right-4 p-2 rounded-full hover:bg-theme-bg/50 transition-colors z-10 cursor-pointer"
                 >
-                    <button
-                        onClick={onClose}
-                        className="absolute top-4 right-4 p-2 rounded-full hover:bg-theme-bg/50 transition-colors z-10"
-                    >
-                        <X className="w-6 h-6 text-theme-muted hover:text-theme-text" />
-                    </button>
+                    <X className="w-6 h-6 text-theme-muted hover:text-theme-text" />
+                </button>
 
-                    <div className="flex flex-col md:flex-row h-full">
-                        {/* Left Side: Image & Info */}
-                        <div className="w-full md:w-1/3 bg-theme-bg/50 p-6 flex flex-col items-center justify-center text-center border-b md:border-b-0 md:border-r border-theme-border">
-                            <div className="relative mb-4">
-                                <div className="w-32 h-32 rounded-full border-4 border-gold/20 overflow-hidden shadow-xl">
-                                    <img src={artist.avatar} alt={artist.name} className="w-full h-full object-cover" />
-                                </div>
-                                {artist.verified && (
-                                    <div className="absolute bottom-1 right-1 bg-blue-500 text-white p-1.5 rounded-full border-4 border-theme-surface" title="Verified Artist">
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                        </svg>
-                                    </div>
-                                )}
+                <div className="flex flex-col md:flex-row h-full">
+                    {/* Left Side: Image & Info */}
+                    <div className="w-full md:w-1/3 bg-theme-bg/50 p-6 flex flex-col items-center justify-center text-center border-b md:border-b-0 md:border-r border-theme-border">
+                        <div className="relative mb-4">
+                            <div className="w-32 h-32 rounded-full border-4 border-gold/20 overflow-hidden shadow-xl">
+                                <img src={artist.avatar} alt={artist.name} className="w-full h-full object-cover" />
                             </div>
-                            <h3 className="text-2xl font-serif font-bold text-theme-text mb-1">{artist.name}</h3>
-                            <p className="text-sm text-theme-muted mb-4">{artist.title}</p>
-
-                            <a
-                                href={`https://en.wikipedia.org/wiki/${artist.wikipediaTitle}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 text-gold hover:text-gold-light text-sm font-medium transition-colors"
-                            >
-                                Read on Wikipedia <ExternalLink className="w-3 h-3" />
-                            </a>
-                        </div>
-
-                        {/* Right Side: Bio */}
-                        <div className="w-full md:w-2/3 p-6 md:p-8 max-h-[60vh] overflow-y-auto">
-                            <h4 className="text-lg font-bold text-theme-text mb-4 border-b border-theme-border pb-2">Biography</h4>
-                            {loading ? (
-                                <div className="space-y-3 animate-pulse">
-                                    <div className="h-4 bg-theme-border/30 rounded w-full"></div>
-                                    <div className="h-4 bg-theme-border/30 rounded w-5/6"></div>
-                                    <div className="h-4 bg-theme-border/30 rounded w-4/6"></div>
+                            {artist.verified && (
+                                <div className="absolute bottom-1 right-1 bg-blue-500 text-white p-1.5 rounded-full border-4 border-theme-surface" title="Verified Artist">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                    </svg>
                                 </div>
-                            ) : error ? (
-                                <p className="text-red-400">Failed to load biography.</p>
-                            ) : (
-                                <p className="text-theme-text/80 leading-relaxed text-sm md:text-base">
-                                    {bio}
-                                </p>
                             )}
                         </div>
+                        <h3 className="text-2xl font-serif font-bold text-theme-text mb-1">{artist.name}</h3>
+                        <p className="text-sm text-theme-muted mb-4">{artist.title}</p>
+
+                        <a
+                            href={`https://en.wikipedia.org/wiki/${artist.wikipediaTitle}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 text-gold hover:text-gold-light text-sm font-medium transition-colors cursor-pointer"
+                        >
+                            {t('artists.readWiki')} <ExternalLink className="w-3 h-3" />
+                        </a>
                     </div>
-                </motion.div>
+
+                    {/* Right Side: Bio */}
+                    <div className="w-full md:w-2/3 p-6 md:p-8 max-h-[60vh] overflow-y-auto">
+                        <h4 className="text-lg font-bold text-theme-text mb-4 border-b border-theme-border pb-2">{t('artists.bio')}</h4>
+                        {loading ? (
+                            <div className="space-y-3 animate-pulse">
+                                <div className="h-4 bg-theme-border/30 rounded w-full"></div>
+                                <div className="h-4 bg-theme-border/30 rounded w-5/6"></div>
+                                <div className="h-4 bg-theme-border/30 rounded w-4/6"></div>
+                            </div>
+                        ) : error ? (
+                            <p className="text-red-400">{t('artists.failedBio')}</p>
+                        ) : (
+                            <p className="text-theme-text/80 leading-relaxed text-sm md:text-base">
+                                {bio}
+                            </p>
+                        )}
+                    </div>
+                </div>
             </motion.div>
-        </AnimatePresence>
+        </motion.div>,
+        document.body
     );
 }
 
@@ -165,7 +166,7 @@ function ArtistCard({ artist, index, onSelect }: { artist: Artist; index: number
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: index * 0.1 }}
             viewport={{ once: true }}
-            className="group relative h-[280px] w-full cursor-pointer" // Reduced height since cover is gone
+            className="group relative h-[280px] w-full cursor-pointer"
             onClick={() => onSelect(artist)}
         >
             <GlowCard className="h-full overflow-hidden rounded-2xl border-theme-border/50 transition-all duration-300 group-hover:border-gold/30 bg-theme-surface" hover={true}>
@@ -210,6 +211,14 @@ export function ArtistsSection() {
     const { ref, isVisible } = useScrollAnimation();
     const navigate = useNavigate();
     const [selectedArtist, setSelectedArtist] = useState<Artist | null>(null);
+    const { t } = useLanguage();
+
+    const localizedArtists = FEATURED_ARTISTS.map((artist) => ({
+        ...artist,
+        title: artist.id === '1' ? t('artists.radenSalehTitle') :
+               artist.id === '2' ? t('artists.affandiTitle') :
+               artist.id === '3' ? t('artists.basukiAbdullahTitle') : artist.title
+    }));
 
     return (
         <section id="artists" className="py-16 md:py-24 bg-theme-surface relative">
@@ -222,25 +231,30 @@ export function ArtistsSection() {
                     <div className="text-center md:text-left">
                         <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
                             <Star className="w-4 h-4 text-gold fill-gold" />
-                            <span className="text-gold text-xs uppercase tracking-widest font-bold">Top Creators</span>
+                            <span className="text-gold text-xs uppercase tracking-widest font-bold">{t('artists.label')}</span>
                         </div>
                         <h2 className="text-3xl md:text-4xl font-serif text-theme-text">
-                            Featured <span className="text-gold italic">Artists</span>
+                            {t('artists.title').split(' ').map((word, i, arr) => {
+                                if (i === arr.length - 1) {
+                                    return <span key={i} className="text-gold italic">{word}</span>;
+                                }
+                                return word + ' ';
+                            })}
                         </h2>
                     </div>
 
                     <button
                         onClick={() => navigate(ROUTES.GALLERY)}
-                        className="group flex items-center gap-2 px-6 py-3 rounded-full border border-theme-border hover:border-gold/50 hover:bg-gold/5 transition-all"
+                        className="group flex items-center gap-2 px-6 py-3 rounded-full border border-theme-border hover:border-gold/50 hover:bg-gold/5 transition-all cursor-pointer"
                     >
-                        <span className="text-sm font-medium text-theme-text group-hover:text-gold">View All Artists</span>
+                        <span className="text-sm font-medium text-theme-text group-hover:text-gold">{t('artists.viewAll')}</span>
                         <ArrowRight className="w-4 h-4 text-theme-muted group-hover:text-gold group-hover:translate-x-1 transition-all" />
                     </button>
                 </div>
 
                 {/* Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-                    {FEATURED_ARTISTS.map((artist, index) => (
+                    {localizedArtists.map((artist, index) => (
                         <ArtistCard
                             key={artist.id}
                             artist={artist}
@@ -252,12 +266,14 @@ export function ArtistsSection() {
             </div>
 
             {/* Modal */}
-            {selectedArtist && (
-                <BioModal
-                    artist={selectedArtist}
-                    onClose={() => setSelectedArtist(null)}
-                />
-            )}
+            <AnimatePresence>
+                {selectedArtist && (
+                    <BioModal
+                        artist={localizedArtists.find(a => a.id === selectedArtist.id) || selectedArtist}
+                        onClose={() => setSelectedArtist(null)}
+                    />
+                )}
+            </AnimatePresence>
         </section>
     );
 }

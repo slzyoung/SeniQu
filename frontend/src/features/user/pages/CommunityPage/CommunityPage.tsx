@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
     Search,
     MessageSquare,
@@ -428,7 +429,7 @@ function CreateThreadModal({
 
     if (!isOpen) return null;
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
             {/* Mobile: bottom sheet | Desktop: centered modal */}
             <div
@@ -710,7 +711,7 @@ function CreateThreadModal({
                                             type="button"
                                             onClick={() => setLayout('separate')}
                                             className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center gap-1.5 ${layout === 'separate'
-                                                ? 'bg-amber-500 dark:bg-gold text-charcoal border-transparent shadow-sm'
+                                                ? 'bg-amber-50 dark:bg-gold text-charcoal border-transparent shadow-sm'
                                                 : 'bg-white dark:bg-white/5 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10'}`}
                                         >
                                             <Layers className="w-4 h-4" />
@@ -720,7 +721,7 @@ function CreateThreadModal({
                                             type="button"
                                             onClick={() => setLayout('grid')}
                                             className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center gap-1.5 ${layout === 'grid'
-                                                ? 'bg-amber-500 dark:bg-gold text-charcoal border-transparent shadow-sm'
+                                                ? 'bg-amber-50 dark:bg-gold text-charcoal border-transparent shadow-sm'
                                                 : 'bg-white dark:bg-white/5 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10'}`}
                                         >
                                             <Grid className="w-4 h-4" />
@@ -730,7 +731,7 @@ function CreateThreadModal({
                                             type="button"
                                             onClick={() => setLayout('carousel')}
                                             className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center gap-1.5 ${layout === 'carousel'
-                                                ? 'bg-amber-500 dark:bg-gold text-charcoal border-transparent shadow-sm'
+                                                ? 'bg-amber-50 dark:bg-gold text-charcoal border-transparent shadow-sm'
                                                 : 'bg-white dark:bg-white/5 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10'}`}
                                         >
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -837,7 +838,8 @@ function CreateThreadModal({
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
 

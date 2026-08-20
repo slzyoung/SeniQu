@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, ChevronLeft, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '../stores/useAuthStore';
 import { useAuthModalStore } from '../stores/useAuthModalStore';
+import { useLanguage } from '../hooks/useLanguage';
 import { CITY_WHITELIST } from '../features/gallery/data/citiesRegistry';
 import './LandingPage.css';
 
@@ -33,10 +34,12 @@ function CityCard({
   city,
   index,
   onClick,
+  discoverText,
 }: {
   city: CityData;
   index: number;
   onClick: () => void;
+  discoverText: string;
 }) {
   return (
     <motion.div
@@ -60,7 +63,7 @@ function CityCard({
         )}
         {city.featured && (
           <button className="landing-city-card__explore-btn">
-            Discover More <ArrowRight />
+            {discoverText} <ArrowRight />
           </button>
         )}
       </div>
@@ -72,6 +75,7 @@ export function ExploreCities() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
   const { openAuthModal } = useAuthModalStore();
+  const { t, language } = useLanguage();
   
   const [page, setPage] = useState(0);
   const [direction, setDirection] = useState(1); // 1 for next, -1 for prev
@@ -102,12 +106,17 @@ export function ExploreCities() {
     })
   };
 
+  const discoverText = language === 'en' ? 'Discover More' : 'Temukan Lebih Banyak';
+  const exploreMoreText = language === 'en' ? 'Explore More' : 'Jelajahi Lebih Banyak';
+  const showFirstText = language === 'en' ? 'Show First 7' : 'Tampilkan 7 Pertama';
+  const showMoreText = language === 'en' ? 'Show More (7)' : 'Tampilkan Lebih (7)';
+
   return (
     <div className="landing-section">
       <div className="landing-section__header">
         <div>
-          <p className="landing-section__eyebrow">Cultural Atlas</p>
-          <h2 className="landing-section__title">Explore by City</h2>
+          <p className="landing-section__eyebrow">{t('cities.label')}</p>
+          <h2 className="landing-section__title">{t('cities.title')}</h2>
         </div>
         <button
           className="landing-section__see-all"
@@ -119,7 +128,7 @@ export function ExploreCities() {
             }
           }}
         >
-          View All Districts <ChevronRight style={{ width: 14, height: 14 }} />
+          {t('cities.viewAll')} <ChevronRight style={{ width: 14, height: 14 }} />
         </button>
       </div>
 
@@ -141,6 +150,7 @@ export function ExploreCities() {
                 city={city}
                 index={i}
                 onClick={() => navigate(`/gallery/city/${city.id}`)}
+                discoverText={discoverText}
               />
             ))}
           </motion.div>
@@ -154,7 +164,7 @@ export function ExploreCities() {
             onClick={() => openAuthModal()}
             className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-medium tracking-wide text-gold/80 hover:text-gold border border-gold/20 hover:border-gold/40 bg-transparent hover:bg-gold/[0.05] transition-all duration-200 active:scale-[0.97] cursor-pointer"
           >
-            Explore More
+            {exploreMoreText}
             <ChevronRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
           </button>
         </div>
@@ -208,7 +218,7 @@ export function ExploreCities() {
             }}
             className="px-5 py-2.5 rounded-full border border-gold/40 text-xs font-semibold text-gold hover:border-gold active:scale-95 transition-all duration-300 flex items-center gap-1.5 cursor-pointer"
           >
-            {page === pageCount - 1 ? 'Show First 7' : 'Show More (7)'}
+            {page === pageCount - 1 ? showFirstText : showMoreText}
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

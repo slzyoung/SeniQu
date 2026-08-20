@@ -1036,27 +1036,21 @@ function MuseumListCard({
 // ============================================
 
 export default function PublicNearbyPage({ isDashboard = false }: { isDashboard?: boolean }) {
-    const { isAuthenticated } = useAuthStore();
     const [mapsApiKey, setMapsApiKey] = useState<string | null>(null);
     const [keyLoading, setKeyLoading] = useState(true);
 
     useEffect(() => {
-        if (!isAuthenticated && !isDashboard) {
-            setMapsApiKey('');
-            setKeyLoading(false);
-            return;
-        }
-
         museumService.getMapsApiKey()
             .then(key => {
-                setMapsApiKey(key);
+                setMapsApiKey(key || import.meta.env.VITE_GOOGLE_MAPS_KEY || '');
                 setKeyLoading(false);
             })
             .catch(() => {
-                setMapsApiKey('');
+                // Fallback to env var if API fails
+                setMapsApiKey(import.meta.env.VITE_GOOGLE_MAPS_KEY || '');
                 setKeyLoading(false);
             });
-    }, [isAuthenticated, isDashboard]);
+    }, []);
 
     if (keyLoading) {
         return (
@@ -1957,6 +1951,37 @@ function NearbyPageInner({ apiKey, isDashboard = false }: { apiKey: string; isDa
             }
         };
     }, [mapProvider]);
+
+    // Parse URL location parameters on mount (?lat=...&lng=...&search=...)
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const qLat = params.get('lat');
+        const qLng = params.get('lng');
+        const qSearch = params.get('search');
+
+        if (qSearch) {
+            setSearchQuery(qSearch);
+            setDebouncedSearchQuery(qSearch);
+        }
+
+        if (qLat && qLng) {
+            const lat = parseFloat(qLat);
+            const lng = parseFloat(qLng);
+            if (!isNaN(lat) && !isNaN(lng)) {
+                const targetCenter = { lat, lng };
+                setMapCenter(targetCenter);
+                setUserLocation({ latitude: lat, longitude: lng });
+                setLocationReady(true);
+                if (mapRef.current) {
+                    mapRef.current.panTo(targetCenter);
+                    mapRef.current.setZoom(14);
+                }
+                if (mapProvider === 'openstreetmap' && leafletMapRef.current) {
+                    leafletMapRef.current.setView([lat, lng], 14);
+                }
+            }
+        }
+    }, []);
 
     // Wait for geolocation attempt resolved before running the initial search.
     useEffect(() => {

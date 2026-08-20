@@ -379,7 +379,7 @@ out center body;`;
                         'Content-Type': 'application/x-www-form-urlencoded',
                         'User-Agent': 'SeniQuApp/1.0 (contact@seniqu.art)'
                     },
-                    signal: AbortSignal.timeout(12000) // 12s timeout
+                    signal: AbortSignal.timeout(2500) // 2.5s fast timeout per mirror
                 });
 
                 if (res.ok) {
@@ -390,7 +390,7 @@ out center body;`;
                 } else {
                     this.logger.warn(`[OVERPASS] Mirror returned HTTP ${res.status}: ${url}`);
                 }
-            } catch (e) {
+            } catch (e: any) {
                 this.logger.warn(`[OVERPASS] Failed to query mirror ${url}: ${e.message}`);
             }
         }

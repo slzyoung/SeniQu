@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Compass } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuthModalStore } from '../stores/useAuthModalStore';
+import { useLanguage } from '../hooks/useLanguage';
 import './LandingPage.css';
 
 const heroSlides = [
@@ -36,6 +37,7 @@ const heroSlides = [
 export function HeroSection() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const { openAuthModal } = useAuthModalStore();
+  const { t } = useLanguage();
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -72,16 +74,16 @@ export function HeroSection() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.5 }}
         >
-          SeniQu Gallery
+          {t('hero.label')}
         </motion.span>
 
         <motion.h1
-          className="landing-hero__title"
+          className="landing-hero__title whitespace-pre-line"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.6 }}
         >
-          Preserving{'\n'}Nusantara's Soul
+          {t('hero.title')}
         </motion.h1>
 
         <motion.p
@@ -90,9 +92,7 @@ export function HeroSection() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.45, duration: 0.6 }}
         >
-          A digital sanctuary for Indonesia's heritage spanning museums,
-          galleries, & historical sites. Verified, digitized, and curated for
-          cultural exploration.
+          {t('hero.subtitle')}
         </motion.p>
 
         <motion.div
@@ -103,13 +103,13 @@ export function HeroSection() {
         >
           <Link to="/collections" className="landing-hero__cta">
             <Compass style={{ width: 16, height: 16 }} />
-            Explore Collections
+            {t('hero.explore')}
           </Link>
           <button
             onClick={() => openAuthModal()}
             className="landing-hero__cta-secondary"
           >
-            Sign In
+            {t('hero.signIn')}
             <ArrowRight style={{ width: 16, height: 16 }} />
           </button>
         </motion.div>

@@ -3,8 +3,9 @@
  * API service for AI-powered features
  */
 
-import { apiGet, apiPost, uploadFile } from '../lib/api';
+import { apiGet, apiPost } from '../lib/api';
 import api from '../lib/api';
+
 
 // ============================================
 // TYPES
@@ -179,23 +180,19 @@ export const aiService = {
     // GENRE DETECTION
     // ==========================================
 
-    detectGenre: async (file: File, onProgress?: (progress: number) => void): Promise<GenreDetectionResult> => {
-        // Upload image first
-        const uploadResult = await uploadFile(file, 'general', onProgress);
-
-        // Then analyze
-        return apiPost('/ai/detect-genre', { imageUrl: uploadResult.url });
+    detectGenre: async (file: File, onProgress?: (progress: number) => void): Promise<any> => {
+        return aiService.scanHeritage(file, onProgress);
     },
 
-    detectGenreFromUrl: async (imageUrl: string): Promise<GenreDetectionResult> => {
-        return apiPost('/ai/detect-genre', { imageUrl });
+    detectGenreFromUrl: async (_imageUrl: string): Promise<any> => {
+        throw new Error('Direct URL detection is deprecated. Please upload or scan image frame directly.');
     },
 
     getDetectionHistory: async (params?: {
         page?: number;
         limit?: number;
     }): Promise<{
-        data: AIDetectionHistory[];
+        data: any[];
         meta: {
             total: number;
             page: number;
@@ -203,8 +200,19 @@ export const aiService = {
             totalPages: number;
         };
     }> => {
-        return apiGet('/ai/detection-history', { params });
+        const history = await aiService.getScanHistory(params?.limit || 20);
+        const data = Array.isArray(history) ? history : [];
+        return {
+            data,
+            meta: {
+                total: data.length,
+                page: params?.page || 1,
+                limit: params?.limit || 20,
+                totalPages: 1,
+            },
+        };
     },
+
 
     // ==========================================
     // AI CURATION

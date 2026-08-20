@@ -6,7 +6,7 @@
  */
 
 import { useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { HeroSection } from '../components/HeroSection';
 import { LandingSearchBar } from '../components/LandingSearchBar';
@@ -31,13 +31,16 @@ interface LandingPageProps {
 export function LandingPage({ openAuthModal: shouldOpenModal }: LandingPageProps) {
     const { openAuthModal } = useAuthModalStore();
     const location = useLocation();
+    const navigate = useNavigate();
 
     // Open auth modal if redirected from /auth/login, /auth/register, or attempting to access a protected route
     useEffect(() => {
         if (shouldOpenModal || (location.state as { from?: any })?.from) {
             openAuthModal();
+            // Clear router state to prevent opening the modal on refresh
+            navigate('/', { replace: true, state: {} });
         }
-    }, [shouldOpenModal, location.state, openAuthModal]);
+    }, [shouldOpenModal, location.state, openAuthModal, navigate]);
 
     // Handle hash fragment scrolling for SPA routing
     useEffect(() => {

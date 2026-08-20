@@ -1,14 +1,14 @@
 /**
  * MobileBottomNav Component
  * Role-based bottom navigation with centered "Analyze" (AI Heritage Analyzer) button
- * Inspired by Google Arts & Culture mobile nav
+ * Premium design supporting light mode (professional slate/indigo) and dark mode (luxury gold)
+ * Refined subtle shadows for optimal visual comfort in both light and dark themes.
  */
 
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     Home,
-    Search,
     User,
     Palette,
     BarChart3,
@@ -18,12 +18,9 @@ import {
     Users,
     Building2,
     Bell,
-    Grid,
-    MapPin,
     ScanLine,
-    Bookmark,
-    Wallet,
     Play,
+    Compass,
     type LucideIcon,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -46,17 +43,17 @@ interface NavItem {
 
 const guestNavItems: NavItem[] = [
     { path: ROUTES.HOME, icon: Home, label: 'Home' },
-    { path: ROUTES.GALLERY, icon: Grid, label: 'Gallery' },
+    { path: ROUTES.NEARBY_PUBLIC, icon: Compass, label: 'Explore' },
     { path: ROUTES.AI_GENRE, icon: ScanLine, label: 'Analyze', isCenter: true },
     { path: ROUTES.REELS, icon: Play, label: 'Reels' },
-    { path: ROUTES.LOGIN, icon: Search, label: 'Explore' },
+    { path: ROUTES.LOGIN, icon: User, label: 'Profile' },
 ];
 
 const userNavItems: NavItem[] = [
     { path: ROUTES.USER_DASHBOARD, icon: Home, label: 'Home' },
-    { path: ROUTES.USER_NEARBY, icon: Search, label: 'Explore' },
+    { path: ROUTES.USER_NEARBY, icon: Compass, label: 'Explore' },
     { path: ROUTES.USER_GENRE_IDENTIFIER, icon: ScanLine, label: 'Analyze', isCenter: true },
-    { path: ROUTES.USER_WALLET, icon: Wallet, label: 'Wallet' },
+    { path: ROUTES.REELS, icon: Play, label: 'Reels' },
     { path: ROUTES.USER_PROFILE, icon: User, label: 'Profile' },
 ];
 
@@ -122,7 +119,49 @@ export function MobileBottomNav() {
     };
 
     return (
-        <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-theme-surface/90 backdrop-blur-xl border-t border-theme-border/50 pb-[env(safe-area-inset-bottom)] shadow-lg shadow-theme-bg/20">
+        <nav
+            className="fixed bottom-0 left-0 right-0 z-50 md:hidden pb-[env(safe-area-inset-bottom)]"
+            style={{
+                background: 'var(--nav-bg, rgba(255, 255, 255, 0.95))',
+                borderTop: '1px solid var(--nav-border, rgba(0, 0, 0, 0.06))',
+                boxShadow: '0 -2px 10px var(--nav-shadow, rgba(0,0,0,0.03))',
+                backdropFilter: 'blur(16px) saturate(160%)',
+                WebkitBackdropFilter: 'blur(16px) saturate(160%)',
+            }}
+        >
+            {/* CSS Variables: Softened shadows & professional high-contrast styling */}
+            <style>{`
+                :root {
+                    --nav-bg: rgba(255, 255, 255, 0.95);
+                    --nav-border: rgba(0, 0, 0, 0.06);
+                    --nav-shadow: rgba(0, 0, 0, 0.04);
+                    --nav-text-active: #0F172A;
+                    --nav-text-inactive: #64748B;
+                    --nav-indicator-bg: rgba(15, 23, 42, 0.05);
+                    --nav-center-gradient-from: #4F46E5;
+                    --nav-center-gradient-to: #3730A3;
+                    --nav-center-active-from: #0F172A;
+                    --nav-center-active-to: #1E293B;
+                    --nav-center-shadow: rgba(79, 70, 229, 0.15);
+                    --nav-center-active-shadow: rgba(15, 23, 42, 0.18);
+                    --nav-dot-color: #0F172A;
+                }
+                .dark {
+                    --nav-bg: rgba(18, 18, 20, 0.94);
+                    --nav-border: rgba(255, 255, 255, 0.06);
+                    --nav-shadow: rgba(0, 0, 0, 0.25);
+                    --nav-text-active: #C9A84C;
+                    --nav-text-inactive: #9CA3AF;
+                    --nav-indicator-bg: rgba(201, 168, 76, 0.1);
+                    --nav-center-gradient-from: #7C6BD4;
+                    --nav-center-gradient-to: #5B4CB0;
+                    --nav-center-active-from: #C9A84C;
+                    --nav-center-active-to: #A68A3A;
+                    --nav-center-shadow: rgba(124, 107, 212, 0.2);
+                    --nav-center-active-shadow: rgba(201, 168, 76, 0.25);
+                    --nav-dot-color: #C9A84C;
+                }
+            `}</style>
             <div
                 className="grid h-16 items-end px-1"
                 style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}
@@ -156,31 +195,38 @@ export function MobileBottomNav() {
                             >
                                 {/* Elevated circle */}
                                 <motion.div
-                                    className={`relative -mt-4 mb-0.5 w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${
-                                        isActive
-                                            ? 'bg-gradient-to-br from-[#C9A84C] to-[#A68A3A] shadow-[0_4px_20px_rgba(201,168,76,0.45)]'
-                                            : 'bg-gradient-to-br from-[#7C6BD4] to-[#5B4CB0] shadow-[0_4px_16px_rgba(124,107,212,0.35)]'
-                                    }`}
-                                    whileTap={{ scale: 0.9 }}
-                                    whileHover={{ scale: 1.08 }}
+                                    className="relative -mt-3.5 mb-0.5 w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300"
+                                    style={{
+                                        background: isActive
+                                            ? `linear-gradient(135deg, var(--nav-center-active-from), var(--nav-center-active-to))`
+                                            : `linear-gradient(135deg, var(--nav-center-gradient-from), var(--nav-center-gradient-to))`,
+                                        boxShadow: isActive
+                                            ? `0 3px 10px var(--nav-center-active-shadow)`
+                                            : `0 2px 8px var(--nav-center-shadow)`,
+                                    }}
+                                    whileTap={{ scale: 0.92 }}
+                                    whileHover={{ scale: 1.05 }}
                                 >
                                     <Icon className="w-5 h-5 text-white" />
-                                    {/* Glow ring */}
+                                    {/* Soft pulse ring */}
                                     {isActive && (
                                         <motion.div
                                             className="absolute inset-0 rounded-full"
                                             style={{
-                                                boxShadow: '0 0 18px rgba(201,168,76,0.5)',
+                                                boxShadow: '0 0 10px var(--nav-center-active-shadow)',
                                             }}
-                                            animate={{ opacity: [0.4, 0.8, 0.4] }}
-                                            transition={{ duration: 2, repeat: Infinity }}
+                                            animate={{ opacity: [0.3, 0.6, 0.3] }}
+                                            transition={{ duration: 2.5, repeat: Infinity }}
                                         />
                                     )}
                                 </motion.div>
                                 <span
-                                    className={`text-[10px] font-semibold mb-1.5 transition-colors duration-300 ${
-                                        isActive ? 'text-seniqu-gold' : 'text-[#7C6BD4]'
-                                    }`}
+                                    className="text-[10px] font-semibold mb-1.5 transition-colors duration-300"
+                                    style={{
+                                        color: isActive
+                                            ? 'var(--nav-text-active)'
+                                            : 'var(--nav-center-gradient-from)',
+                                    }}
                                 >
                                     {item.label}
                                 </span>
@@ -199,34 +245,40 @@ export function MobileBottomNav() {
                                 {isActive && (
                                     <motion.div
                                         layoutId="nav-indicator"
-                                        className="absolute inset-0 bg-theme-primary/10 rounded-xl"
+                                        className="absolute inset-0 rounded-xl"
+                                        style={{ backgroundColor: 'var(--nav-indicator-bg)' }}
                                         transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                                     />
                                 )}
 
                                 {isProfile ? (
-                                    <div className={`relative transition-all duration-300 ${isActive ? 'ring-2 ring-seniqu-gold rounded-full p-0.5' : ''}`}>
+                                    <div className={`relative transition-all duration-300 ${isActive ? 'ring-2 rounded-full p-0.5' : ''}`}
+                                        style={isActive ? { '--tw-ring-color': 'var(--nav-text-active)' } as React.CSSProperties : undefined}
+                                    >
                                         <Avatar
                                             src={user?.avatar}
                                             name={user?.displayName || 'User'}
                                             size="xs"
-                                            className={isActive ? 'opacity-100' : 'opacity-70'}
+                                            className={isActive ? 'opacity-100' : 'opacity-60'}
                                         />
                                     </div>
                                 ) : (
                                     <Icon
-                                        className={`w-5 h-5 transition-all duration-300 ${isActive
-                                            ? 'text-seniqu-gold stroke-[2.5px]'
-                                            : 'text-theme-muted stroke-[2px] opacity-70'
-                                            }`}
+                                        className="w-5 h-5 transition-all duration-300"
+                                        style={{
+                                            color: isActive ? 'var(--nav-text-active)' : 'var(--nav-text-inactive)',
+                                            strokeWidth: isActive ? 2.3 : 1.8,
+                                            opacity: isActive ? 1 : 0.7,
+                                        }}
                                     />
                                 )}
                             </div>
                             <span
-                                className={`text-[10px] font-medium transition-all duration-300 mb-1 ${isActive
-                                    ? 'text-seniqu-gold'
-                                    : 'text-theme-muted opacity-70'
-                                    }`}
+                                className="text-[10px] font-semibold transition-all duration-300 mb-1"
+                                style={{
+                                    color: isActive ? 'var(--nav-text-active)' : 'var(--nav-text-inactive)',
+                                    opacity: isActive ? 1 : 0.7,
+                                }}
                             >
                                 {item.label}
                             </span>
@@ -235,7 +287,10 @@ export function MobileBottomNav() {
                             {isActive && (
                                 <motion.div
                                     layoutId="nav-dot"
-                                    className="absolute top-0.5 w-1 h-1 rounded-full bg-seniqu-gold shadow-[0_0_8px_rgba(201,168,76,0.6)]"
+                                    className="absolute top-0.5 w-1 h-1 rounded-full"
+                                    style={{
+                                        backgroundColor: 'var(--nav-dot-color)',
+                                    }}
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
                                     transition={{ type: 'spring', stiffness: 500, damping: 25 }}
